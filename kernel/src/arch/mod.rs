@@ -1,4 +1,3 @@
-// src/arch/mod.rs
 #[cfg(target_arch = "riscv64")]
 #[path = "riscv64/mod.rs"]
 mod platform;
@@ -7,4 +6,5 @@ mod platform;
 #[path = "loongarch64/mod.rs"]
 mod platform;
 
+#[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
 pub use platform::*;

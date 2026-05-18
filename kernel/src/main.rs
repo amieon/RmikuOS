@@ -5,13 +5,54 @@
 mod arch;
 mod sync;
 mod uart;
-mod io;
-
 
 use core::sync::atomic::{AtomicBool, Ordering};
-use crate::print;
-use crate::println;
-use io::panic_handler;
+use core::panic::PanicInfo;
+
+
+macro_rules! print {
+    ($($arg:tt)*) => {{
+        let _ = core::fmt::write(&mut uart::get_uart(), format_args!($($arg)*));
+    }};
+}
+
+macro_rules! println {
+    () => { print!("\n"); };
+    ($($arg:tt)*) => {{
+        print!("[CPU{}] ", arch::hartid());
+        print!($($arg)*);
+        print!("\n");
+    }};
+}
+
+#[panic_handler]
+fn panic_handler(info: &PanicInfo) -> ! {
+
+    uart::puts_raw("\nKERNEL PANIC\n");
+    uart::puts_raw("CPU: ");
+
+    // 手动输出 hartid 数字
+    let id = arch::hartid();
+    let mut buf = [0u8; 20];
+    let mut n = id;
+    let mut i = 0;
+    if n == 0 {
+        buf[i] = b'0';
+        i += 1;
+    }
+    while n > 0 {
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+        i += 1;
+    }
+    buf[..i].reverse();
+    uart::puts_raw(core::str::from_utf8(&buf[..i]).unwrap_or("?"));
+
+    uart::puts_raw("\n");
+    loop {
+        core::hint::spin_loop();
+    }
+}
 
 static MASTER_READY: AtomicBool = AtomicBool::new(false);
 
