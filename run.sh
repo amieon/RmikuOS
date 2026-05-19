@@ -30,7 +30,7 @@ case "$ARCH" in
     loongarch64)
         TARGET="loongarch64-unknown-none"
         QEMU="qemu-system-loongarch64"
-        QEMU_ARGS="-machine virt -cpu la464 -m 128M -smp 4 -nographic"
+        QEMU_ARGS="-machine virt -cpu la464 -m 2G -smp 4 -nographic"
         ;;
 
     *)
