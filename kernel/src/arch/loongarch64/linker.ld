@@ -1,25 +1,51 @@
-/* src/arch/loongarch64/linker.ld */
 OUTPUT_ARCH(loongarch64)
 ENTRY(_entry)
 
-SECTIONS {
-    . = 0x90000000;            /* DMW1 映射起始 */
+MEMORY
+{
+    RAM (rwx) : ORIGIN = 0x0000000001000000, LENGTH = 128M
+}
 
-    .text : {
-        *(.text.init)
+SECTIONS
+{
+    . = ORIGIN(RAM);
+    _kernel_start = .;
+
+    /* 强制 .text.boot 在最前面，_entry 就在 0x1000000 */
+    .text : ALIGN(16) {
+        *(.text.boot)
+        *(.text*)
         *(.text.*)
-    }
+    } > RAM
 
-    .rodata : { *(.rodata.*) }
-    .data   : { *(.data.*) }
+    .rodata : ALIGN(16) {
+        *(.rodata*)
+        *(.srodata*)
+    } > RAM
 
-    .bss : {
-        *(.bss.*)
+    .data : ALIGN(16) {
+        *(.data*)
+        *(.sdata*)
+    } > RAM
+
+    . = ALIGN(16);
+    .bss (NOLOAD) : ALIGN(16) {
+        _bss_start = .;
+        *(.bss*)
+        *(.sbss*)
         *(COMMON)
-    }
-
-    . = ALIGN(4096);
-    .bss.stack (NOLOAD) : {
+        . = ALIGN(12);
         *(.bss.stack)
+        . = ALIGN(16);
+        _bss_end = .;
+    } > RAM
+
+    . = ALIGN(16);
+    _kernel_end = .;
+
+    /DISCARD/ : {
+        *(.comment)
+        *(.note*)
+        *(.eh_frame*)
     }
 }

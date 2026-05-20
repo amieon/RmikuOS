@@ -1,0 +1,10 @@
+[build]
+target = "loongarch64-unknown-none"
+
+[target.loongarch64-unknown-none]
+linker = "/opt/cross-tools/bin/loongarch64-unknown-linux-gnu-gcc"
+rustflags = [
+    "-C", "link-arg=-Tkernel/src/arch/loongarch64/linker.ld",
+    "-C", "relocation-model=static",
+    "-C", "debuginfo=2", 
+]

@@ -1,4 +1,4 @@
-// src/main.rs
+// kernel/src/main.rs
 #![no_std]
 #![no_main]
 

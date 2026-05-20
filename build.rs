@@ -10,6 +10,6 @@ fn main() {
             .compile("boot_riscv64");
         println!("cargo:rustc-link-arg=-Tkernel/src/arch/riscv64/linker.ld");
     } else if target.contains("loongarch64") {
-        println!("cargo:rustc-link-arg=-Tkernel/src/arch/loongarch64/linker.ld");
+        
     }
 }
