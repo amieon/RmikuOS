@@ -2,22 +2,22 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!();
-    println!("\x1b[31m KERNEL PANIC \x1b[0m");
+    crate::println!();
+    crate::println!("\x1b[31m KERNEL PANIC \x1b[0m");
 
     if let Some(location) = info.location() {
-        println!(
+        crate::println!(
             "\x1b[31mPANIC at {}:{}:{}\x1b[0m",
             location.file(),
             location.line(),
             location.column()
         );
     } else {
-        println!("\x1b[31mPANIC at unknown location\x1b[0m");
+        crate::println!("\x1b[31mPANIC at unknown location\x1b[0m");
     }
 
-    println!("\x1b[31m{}\x1b[0m", info.message());
-    println!("\x1b[31mPANIC END\x1b[0m");
+    crate::println!("\x1b[31m{}\x1b[0m", info.message());
+    crate::println!("\x1b[31mPANIC END\x1b[0m");
 
     halt()
 }

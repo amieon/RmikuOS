@@ -11,7 +11,7 @@ mod panic;
 #[macro_use]
 mod io;
 
-use core::panic::PanicInfo;
+
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 
