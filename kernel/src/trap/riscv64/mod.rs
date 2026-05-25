@@ -59,7 +59,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         match code {
             INTERRUPT_SUPERVISOR_TIMER => {
                 trap_println!("[trap] supervisor timer interrupt");
-                // Later: set_next_timer(); scheduler_tick();
+                crate::timer::tick();
             }
             _ => {
                 trap_println!(

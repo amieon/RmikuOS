@@ -70,6 +70,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
             trap_println!("[trap] breakpoint at era={:#x}", cx.era);
             cx.era += 4;
         }
+    
         ECODE_PIL
         | ECODE_PIS
         | ECODE_PIF
@@ -111,9 +112,7 @@ fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
 
     if pending & ESTAT_IS_TIMER != 0 {
-        clear_timer_interrupt();
-        trap_println!("[trap] timer interrupt");
-        // Later: set_next_timer(); scheduler_tick();
+        crate::timer::tick();
         return;
     }
 

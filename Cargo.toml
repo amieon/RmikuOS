@@ -17,4 +17,5 @@ panic = "abort"
 panic = "abort"
 opt-level = "s"
 
-
+[dependencies]
+log = { version = "0.4", default-features = false }

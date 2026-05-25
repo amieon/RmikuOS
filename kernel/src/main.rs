@@ -4,27 +4,15 @@
 
 mod arch;
 mod sync;
-mod uart;
 mod trap;
 mod timer;
+
+#[macro_use]
+mod io;
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-macro_rules! print {
-    ($($arg:tt)*) => {{
-        let _ = core::fmt::write(&mut uart::get_uart(), format_args!($($arg)*));
-    }};
-}
-
-macro_rules! println {
-    () => { print!("\n"); };
-    ($($arg:tt)*) => {{
-        print!("[CPU{}] ", arch::hartid());
-        print!($($arg)*);
-        print!("\n");
-    }};
-}
 
 #[panic_handler]
 fn panic_handler(_info: &PanicInfo) -> ! {
@@ -118,13 +106,14 @@ pub extern "C" fn rust_main(id: usize) -> ! {
 fn primary_init() {
     // 初始化 UART，之后所有核都能用 println!。
     uart::init(); trap::init();timer::init();
-
+    logger::init();
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
-    println!("==== ChCore-Rust 多核启动 ====");
-    println!("架构: {}", arch::NAME);
-    println!("最大支持核数: {}", arch::MAX_HARTS);
-    println!("==============================");
+    log::info!("logger initialized");
+    log::info!("==== RmikuOS 多核启动 ====");
+    log::info!("架构: {}", arch::NAME);
+    log::info!("最大支持核数: {}", arch::MAX_HARTS);
+
 
     // 未来在这里初始化：
     // - 内存分配器
