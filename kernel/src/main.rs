@@ -115,7 +115,7 @@ pub extern "C" fn rust_main(id: usize) -> ! {
 
 fn primary_init() {
     // 初始化 UART，之后所有核都能用 println!。
-    uart::init();
+    uart::init(); arch::trap::init();
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
