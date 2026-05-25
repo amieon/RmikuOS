@@ -1,4 +1,4 @@
-pub mod trap; // src/arch/riscv64/mod.rs
+ // src/arch/riscv64/mod.rs
 pub const NAME: &str = "RISC-V 64";
 pub const UART_BASE: usize = 0x1000_0000;
 pub const MAX_HARTS: usize = 8;
