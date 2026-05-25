@@ -6,6 +6,7 @@ mod arch;
 mod sync;
 mod uart;
 mod trap;
+mod timer;
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -116,7 +117,7 @@ pub extern "C" fn rust_main(id: usize) -> ! {
 
 fn primary_init() {
     // 初始化 UART，之后所有核都能用 println!。
-    uart::init(); trap::init();
+    uart::init(); trap::init();timer::init();
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 

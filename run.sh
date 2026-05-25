@@ -63,7 +63,6 @@ case "$ARCH" in
       -cpu rv64
       -m 128M
       -nographic
-      -s -S
       -kernel "$KERNEL_ELF"
     )
     ;;
