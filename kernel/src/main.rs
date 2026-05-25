@@ -6,6 +6,7 @@ mod arch;
 mod sync;
 mod trap;
 mod timer;
+mod panic;
 
 #[macro_use]
 mod io;
@@ -14,33 +15,7 @@ use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 
-#[panic_handler]
-fn panic_handler(_info: &PanicInfo) -> ! {
-    crate::io::uart::puts_raw("\nKERNEL PANIC\n");
-    crate::io::uart::puts_raw("CPU: ");
 
-    let id = arch::hartid();
-    let mut buf = [0u8; 20];
-    let mut n = id;
-    let mut i = 0;
-
-    if n == 0 {
-        buf[i] = b'0';
-        i += 1;
-    }
-
-    while n > 0 {
-        buf[i] = b'0' + (n % 10) as u8;
-        n /= 10;
-        i += 1;
-    }
-
-    buf[..i].reverse();
-    crate::io::uart::puts_raw(core::str::from_utf8(&buf[..i]).unwrap_or("?"));
-    crate::io::uart::puts_raw("\n");
-
-    park_forever();
-}
 
 static MASTER_READY: AtomicBool = AtomicBool::new(false);
 
