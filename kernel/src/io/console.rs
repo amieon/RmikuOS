@@ -1,5 +1,9 @@
 use core::fmt::{self, Write};
 
+use crate::sync::SpinLock;
+
+static CONSOLE_LOCK: SpinLock = SpinLock::new();
+
 struct Console;
 
 impl Write for Console {
@@ -10,8 +14,12 @@ impl Write for Console {
 }
 
 pub fn _print(args: fmt::Arguments) {
-    use core::fmt::Write;
-    Console.write_fmt(args).unwrap();
+    CONSOLE_LOCK.lock();
+
+    let mut console = Console;
+    let _ = console.write_fmt(args);
+
+    CONSOLE_LOCK.unlock();
 }
 
 #[macro_export]
@@ -24,10 +32,21 @@ macro_rules! print {
 #[macro_export]
 macro_rules! println {
     () => {
-        $crate::print!("\n")
+        $crate::io::console::_print(format_args!("\n"))
     };
-    ($($arg:tt)*) => {{
+    ($($arg:tt)*) => {
         $crate::io::console::_print(format_args!($($arg)*));
         $crate::io::console::_print(format_args!("\n"));
-    }};
+    };
+}
+
+pub fn _trap_log(args: fmt::Arguments<'_>) {
+    CONSOLE_LOCK.lock();
+
+    let mut console = Console;
+    let _ = write!(console, "[CPU{}] ", crate::arch::hartid());
+    let _ = console.write_fmt(args);
+    let _ = console.write_str("\n");
+
+    CONSOLE_LOCK.unlock();
 }

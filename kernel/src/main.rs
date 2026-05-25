@@ -16,8 +16,8 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 #[panic_handler]
 fn panic_handler(_info: &PanicInfo) -> ! {
-    uart::puts_raw("\nKERNEL PANIC\n");
-    uart::puts_raw("CPU: ");
+    crate::io::uart::puts_raw("\nKERNEL PANIC\n");
+    crate::io::uart::puts_raw("CPU: ");
 
     let id = arch::hartid();
     let mut buf = [0u8; 20];
@@ -36,8 +36,8 @@ fn panic_handler(_info: &PanicInfo) -> ! {
     }
 
     buf[..i].reverse();
-    uart::puts_raw(core::str::from_utf8(&buf[..i]).unwrap_or("?"));
-    uart::puts_raw("\n");
+    crate::io::uart::puts_raw(core::str::from_utf8(&buf[..i]).unwrap_or("?"));
+    crate::io::uart::puts_raw("\n");
 
     park_forever();
 }

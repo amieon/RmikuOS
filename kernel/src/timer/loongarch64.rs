@@ -42,6 +42,6 @@ pub fn tick() {
 
     let n = TICKS.fetch_add(1, Ordering::Relaxed) + 1;
     if n % 100 == 0 {
-        crate::uart::puts_raw("[timer] tick\n");
+        crate::print!("[timer] tick\n");
     }
 }
