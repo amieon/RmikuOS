@@ -105,8 +105,10 @@ pub extern "C" fn rust_main(id: usize) -> ! {
 
 fn primary_init() {
     // 初始化 UART，之后所有核都能用 println!。
-    uart::init(); trap::init();timer::init();
-    logger::init();
+    io::uart::init();
+    io::logger::init();
+    trap::init();timer::init();
+    
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
     log::info!("logger initialized");

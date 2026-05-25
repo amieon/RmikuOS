@@ -7,22 +7,6 @@ static LOGGER: SimpleLogger = SimpleLogger;
 
 
 
-macro_rules! print {
-    ($($arg:tt)*) => {{
-        let _ = core::fmt::write(&mut uart::get_uart(), format_args!($($arg)*));
-    }};
-}
-
-macro_rules! println {
-    () => { print!("\n"); };
-    ($($arg:tt)*) => {{
-        print!("[CPU{}] ", arch::hartid());
-        print!($($arg)*);
-        print!("\n");
-    }};
-}
-
-
 
 impl Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
@@ -43,7 +27,7 @@ impl Log for SimpleLogger {
             
         };
 
-        println!(
+        crate::println!(
             "\x1b[{}m[{:>5}] {}\x1b[0m",
             color,
             record.level(),
