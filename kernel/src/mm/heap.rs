@@ -23,20 +23,6 @@ pub fn init(heap_start: usize) {
     );
 }
 
-pub fn heap_test() {
-    use alloc::boxed::Box;
-    use alloc::vec::Vec;
-
-    let b = Box::new(0x2333usize);
-    log::info!("[heap] Box test: {:#x}", *b);
-
-    let mut v = Vec::new();
-    for i in 0..16 {
-        v.push(i);
-    }
-    log::info!("[heap] Vec test: len={}, sum={}", v.len(), v.iter().sum::<usize>());
-}
-
 
 fn alloc_error_handler(layout: Layout) -> ! {
     panic!("allocation error: {:?}", layout);

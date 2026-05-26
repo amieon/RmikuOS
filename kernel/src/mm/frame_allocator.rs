@@ -1,6 +1,7 @@
+use alloc::vec::Vec;
+
 use crate::sync::SpinLock;
-use super::config::{PAGE_SIZE, PAGE_SIZE_BITS};
-use super::address::{PhysAddr, PhysPageNum};
+use super::address::PhysPageNum;
 
 pub trait FrameAllocator {
     fn alloc(&mut self) -> Option<PhysPageNum>;
@@ -8,38 +9,60 @@ pub trait FrameAllocator {
 }
 
 pub struct StackFrameAllocator {
+    start: usize,
     current: usize,
     end: usize,
+    recycled: Vec<usize>,
 }
 
 impl StackFrameAllocator {
     pub const fn new() -> Self {
         Self {
+            start: 0,
             current: 0,
             end: 0,
+            recycled: Vec::new(),
         }
     }
 
     pub fn init(&mut self, start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
+        self.start = start_ppn.0;
         self.current = start_ppn.0;
         self.end = end_ppn.0;
+        self.recycled.clear();
     }
 }
 
 impl FrameAllocator for StackFrameAllocator {
     fn alloc(&mut self) -> Option<PhysPageNum> {
-        if self.current == self.end {
-            None
-        } else {
+        if let Some(ppn) = self.recycled.pop() {
+            Some(PhysPageNum(ppn))
+        } else if self.current < self.end {
             let ppn = PhysPageNum(self.current);
             self.current += 1;
             Some(ppn)
+        } else {
+            None
         }
     }
 
-    fn dealloc(&mut self, _ppn: PhysPageNum) {
-        // 第一版先不实现回收
-        // 后面可以加 recycled Vec/栈
+    fn dealloc(&mut self, ppn: PhysPageNum) {
+        let ppn = ppn.0;
+
+        if ppn < self.start || ppn >= self.current {
+            panic!(
+                "[mm] invalid frame dealloc: ppn={:#x}, valid={:#x}..{:#x}",
+                ppn,
+                self.start,
+                self.current
+            );
+        }
+
+        if self.recycled.iter().any(|&x| x == ppn) {
+            panic!("[mm] frame double free: ppn={:#x}", ppn);
+        }
+
+        self.recycled.push(ppn);
     }
 }
 
