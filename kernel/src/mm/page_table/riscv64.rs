@@ -1,10 +1,68 @@
+/// QEMU virt DRAM starts at 0x8000_0000.
+pub const MEMORY_START: usize = 0x8000_0000;
+
+/// run.sh uses `-m 128M` for RISC-V.
+pub const MEMORY_SIZE: usize = 128 * 1024 * 1024;
+
+pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
+
+/// UART0 on QEMU virt.
+pub const UART0: usize = 0x1000_0000;
+
+use core::arch::asm;
+
+use super::FrameTracker;
+
+const SATP_MODE_SV39: usize = 8usize << 60;
+
+pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
+    let satp = SATP_MODE_SV39 | root_ppn.0;
+
+    unsafe {
+        asm!(
+            "csrw satp, {satp}",
+            "sfence.vma",
+            satp = in(reg) satp,
+            options(nostack)
+        );
+    }
+
+    log::info!(
+        "[mm] RISC-V paging enabled: satp={:#x}, root_ppn={:#x}",
+        satp,
+        root_ppn.0
+    );
+}
+
+
 use alloc::vec;
 use alloc::vec::Vec;
 
-
-use super::{
+use crate::mm::address::*;
+use crate::mm::config::*;
+use crate::mm::{
     alloc_frame, dealloc_frame, PhysPageNum, VirtPageNum,
 };
+
+
+fn vpn_indexes(vpn: VirtPageNum) -> [usize; 3] {
+    let mut vpn = vpn.0;
+    let mut idx = [0usize; 3];
+
+    for i in (0..3).rev() {
+        idx[i] = vpn & 0x1ff;
+        vpn >>= 9;
+    }
+
+    idx
+}
+
+fn pte_array(ppn: PhysPageNum) -> &'static mut [PageTableEntry] {
+    let pa = ppn.0 << crate::mm::PAGE_SIZE_BITS;
+    unsafe {
+        core::slice::from_raw_parts_mut(pa as *mut PageTableEntry, 512)
+    }
+}
 
 pub struct PageTable {
     root_ppn: PhysPageNum,
@@ -98,42 +156,18 @@ pub fn map_range_identity(
     end: usize,
     flags: PteFlags,
 ) {
-    let mut va = super::align_down(start, super::PAGE_SIZE);
-    let end = super::align_up(end, super::PAGE_SIZE);
+    let mut va = align_down(start, PAGE_SIZE);
+    let end = align_up(end, PAGE_SIZE);
 
     while va < end {
         pt.map(
-            super::VirtAddr::from(va).floor(),
-            super::PhysAddr::from(va).floor(),
+            VirtAddr::from(va).floor(),
+            PhysAddr::from(va).floor(),
             flags,
         );
-        va += super::PAGE_SIZE;
+        va += PAGE_SIZE;
     }
 }
-
-
-
-pub struct FrameTracker {
-    pub ppn: PhysPageNum,
-}
-
-impl FrameTracker {
-    pub fn new(ppn: PhysPageNum) -> Self {
-        // 清空页表页
-        let bytes = ppn.bytes_array();
-        for b in bytes {
-            *b = 0;
-        }
-        Self { ppn }
-    }
-}
-
-impl Drop for FrameTracker {
-    fn drop(&mut self) {
-        dealloc_frame(self.ppn);
-    }
-}
-
 
 
 
@@ -152,11 +186,11 @@ impl PageTable {
     }
 
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&'static mut PageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs = vpn_indexes(vpn);
         let mut ppn = self.root_ppn;
 
         for i in 0..2 {
-            let pte = &mut ppn.pte_array()[idxs[i]];
+            let pte = &mut pte_array(ppn)[idxs[i]];
 
             if !pte.is_valid() {
                 let frame = alloc_frame()?;
@@ -168,7 +202,7 @@ impl PageTable {
             ppn = pte.ppn();
         }
 
-        Some(&mut ppn.pte_array()[idxs[2]])
+        Some(&mut pte_array(ppn)[idxs[2]])
     }
 
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PteFlags) {
@@ -188,11 +222,11 @@ impl PageTable {
     }
 
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&'static mut PageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs = vpn_indexes(vpn);
         let mut ppn = self.root_ppn;
 
         for i in 0..3 {
-            let pte = &mut ppn.pte_array()[idxs[i]];
+            let pte = &mut pte_array(ppn)[idxs[i]];
             if !pte.is_valid() {
                 return None;
             }

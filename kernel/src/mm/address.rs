@@ -1,7 +1,5 @@
 use core::fmt::{self, Debug, Formatter};
 
-use crate::mm::page_table::PageTableEntry;
-
 use super::config::{PAGE_SIZE, PAGE_SIZE_BITS};
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -135,12 +133,6 @@ impl PhysPageNum {
     }
 
 
-    pub fn pte_array(self) -> &'static mut [PageTableEntry] {
-        let pa = self.addr().0;
-        unsafe {
-            core::slice::from_raw_parts_mut(pa as *mut PageTableEntry, 512)
-        }
-    }
 
 }
 
@@ -148,16 +140,6 @@ impl PhysPageNum {
 impl VirtPageNum {
     pub fn addr(self) -> VirtAddr {
         VirtAddr(self.0 << PAGE_SIZE_BITS)
-    }
-
-    pub fn indexes(self) -> [usize; 3] {
-        let mut vpn = self.0;
-        let mut idx = [0usize; 3];
-        for i in (0..3).rev() {
-            idx[i] = vpn & 0x1ff;
-            vpn >>= 9;
-        }
-        idx
     }
 }
 
