@@ -93,8 +93,9 @@ fn primary_init() {
     test::frame_alloc_test::frame_alloc_test();
     test::riscv64_page_table_test::riscv64_page_table_test();
 
+    mm::init_paging();
     timer::init();
-    
+
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
     log::info!("logger initialized");

@@ -92,6 +92,27 @@ impl PteFlags {
     }
 }
 
+pub fn map_range_identity(
+    pt: &mut PageTable,
+    start: usize,
+    end: usize,
+    flags: PteFlags,
+) {
+    let mut va = super::align_down(start, super::PAGE_SIZE);
+    let end = super::align_up(end, super::PAGE_SIZE);
+
+    while va < end {
+        pt.map(
+            super::VirtAddr::from(va).floor(),
+            super::PhysAddr::from(va).floor(),
+            flags,
+        );
+        va += super::PAGE_SIZE;
+    }
+}
+
+
+
 pub struct FrameTracker {
     pub ppn: PhysPageNum,
 }
