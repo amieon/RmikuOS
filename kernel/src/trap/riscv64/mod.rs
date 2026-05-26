@@ -24,6 +24,7 @@ const CAUSE_STORE_PAGE_FAULT: usize = 15;
 
 const INTERRUPT_SUPERVISOR_TIMER: usize = 5;
 
+
 macro_rules! trap_println {
     ($($arg:tt)*) => {{
         let _ = trap_log(format_args!($($arg)*));
@@ -31,11 +32,10 @@ macro_rules! trap_println {
 }
 
 fn trap_log(args: fmt::Arguments<'_>) -> fmt::Result {
-    let mut uart = crate::uart::get_uart();
-    write!(uart, "[CPU{}] ", crate::arch::hartid())?;
-    uart.write_fmt(args)?;
-    uart.write_str("\n")
+    crate::io::console::_trap_log(args);
+    Ok(())
 }
+
 
 pub fn init() {
     unsafe extern "C" {

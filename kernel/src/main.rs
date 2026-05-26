@@ -91,6 +91,7 @@ fn primary_init() {
     mm::init();
     test::heap_test::heap_test();
     test::frame_alloc_test::frame_alloc_test();
+    test::riscv64_page_table_test::riscv64_page_table_test();
 
     timer::init();
     
