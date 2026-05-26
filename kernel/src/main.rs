@@ -10,6 +10,7 @@ mod trap;
 mod timer;
 mod mm;
 mod panic;
+mod test;
 
 #[macro_use]
 mod io;
@@ -85,7 +86,12 @@ fn primary_init() {
     // 初始化 UART，之后所有核都能用 println!。
     io::uart::init();
     io::logger::init();
-    trap::init();timer::init();
+    trap::init();
+
+    mm::init();
+    test::heap_test::heap_test();
+
+    timer::init();
     
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
