@@ -24,7 +24,7 @@ impl Log for SimpleLogger {
             Level::Warn => 93,  // yellow
             Level::Trace => 90, // gray
             Level::Info => 36,  // aqua
-            
+
         };
 
         crate::println!(

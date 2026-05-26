@@ -18,6 +18,7 @@ pub use frame_allocator::{alloc_frame, dealloc_frame};
 pub use arch_mm::*;
 pub mod config;
 pub use config::*;
+pub mod page_table;
 
 extern "C" {
     fn _kernel_start();
