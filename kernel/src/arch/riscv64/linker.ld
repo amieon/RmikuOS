@@ -1,25 +1,50 @@
-/* src/arch/riscv64/linker.ld */
+/* kernel/src/arch/riscv64/linker.ld */
 OUTPUT_ARCH(riscv64)
 ENTRY(_start)
 
+BASE_ADDRESS = 0x80200000;
+
 SECTIONS {
-    . = 0x80200000;          
+    . = BASE_ADDRESS;
+    _kernel_start = .;
 
-    .text : {
-        *(.text.init)       
-        *(.text.*)
+    .text : ALIGN(4K) {
+        _stext = .;
+        *(.text.init)
+        *(.text .text.*)
+        _etext = .;
     }
 
-    .rodata : { *(.rodata.*) }
-    .data   : { *(.data.*) }
+    .rodata : ALIGN(4K) {
+        _srodata = .;
+        *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
+        _erodata = .;
+    }
 
-    .bss : {
-        *(.bss.*)
+    .data : ALIGN(4K) {
+        _sdata = .;
+        *(.data .data.*)
+        *(.sdata .sdata.*)
+        _edata = .;
+    }
+
+    .bss (NOLOAD) : ALIGN(4K) {
+        _sbss = .;
+        *(.bss .bss.*)
+        *(.sbss .sbss.*)
         *(COMMON)
+        . = ALIGN(4K);
+        *(.bss.stack)
+        _ebss = .;
     }
 
-    . = ALIGN(4096);
-    .bss.stack (NOLOAD) : {
-        *(.bss.stack)
+    . = ALIGN(4K);
+    _kernel_end = .;
+
+    /DISCARD/ : {
+        *(.eh_frame)
+        *(.comment)
+        *(.note*)
     }
 }

@@ -6,6 +6,7 @@ mod arch;
 mod sync;
 mod trap;
 mod timer;
+mod mm;
 mod panic;
 
 #[macro_use]

@@ -1,46 +1,50 @@
+/* kernel/src/arch/loongarch64/linker.ld */
 OUTPUT_ARCH(loongarch64)
 ENTRY(_entry)
 
-MEMORY
-{
+MEMORY {
     RAM (rwx) : ORIGIN = 0x0000000001000000, LENGTH = 128M
 }
 
-SECTIONS
-{
+SECTIONS {
     . = ORIGIN(RAM);
     _kernel_start = .;
 
-    /* 强制 .text.boot 在最前面，_entry 就在 0x1000000 */
-    .text : ALIGN(16) {
+    .text : ALIGN(4K) {
+        _stext = .;
         *(.text.boot)
-        *(.text*)
-        *(.text.*)
+        *(.text .text.*)
+        _etext = .;
     } > RAM
 
-    .rodata : ALIGN(16) {
-        *(.rodata*)
-        *(.srodata*)
+    .rodata : ALIGN(4K) {
+        _srodata = .;
+        *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
+        _erodata = .;
     } > RAM
 
-    .data : ALIGN(16) {
-        *(.data*)
-        *(.sdata*)
+    .data : ALIGN(4K) {
+        _sdata = .;
+        *(.data .data.*)
+        *(.sdata .sdata.*)
+        _edata = .;
     } > RAM
 
-    . = ALIGN(16);
-    .bss (NOLOAD) : ALIGN(16) {
+    .bss (NOLOAD) : ALIGN(4K) {
+        _sbss = .;
         _bss_start = .;
-        *(.bss*)
-        *(.sbss*)
+        *(.bss .bss.*)
+        *(.sbss .sbss.*)
         *(COMMON)
-        . = ALIGN(12);
+        . = ALIGN(4K);
         *(.bss.stack)
-        . = ALIGN(16);
+        . = ALIGN(4K);
         _bss_end = .;
+        _ebss = .;
     } > RAM
 
-    . = ALIGN(16);
+    . = ALIGN(4K);
     _kernel_end = .;
 
     /DISCARD/ : {
