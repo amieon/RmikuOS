@@ -52,30 +52,43 @@ pub fn init() {
     log::info!("[mm] kernel: {:#x}..{:#x}", kernel_start, kernel_end);
 }
 
+#[cfg(target_arch = "loongarch64")]
 pub fn init_paging() {
+    use alloc::boxed::Box;
+    use self::page_table::{
+        map_range_identity,
+        PageTable,
+        kernel_rwx_flags,
+        mmio_rw_flags,
+    };
+
     let mut pt = PageTable::new();
 
-    map_range_identity(
+    let uart_start = align_down(crate::arch::UART_BASE, PAGE_SIZE);
+    let uart_end = uart_start + PAGE_SIZE;
+
+    map_range_identity_exclude(
         &mut pt,
         MEMORY_START,
         MEMORY_END,
-        kernel_pte_flags(),
+        uart_start,
+        uart_end,
+        kernel_rwx_flags(),
     );
 
     map_range_identity(
         &mut pt,
-        crate::arch::UART_BASE,
-        crate::arch::UART_BASE + PAGE_SIZE,
-        kernel_pte_flags(),
+        uart_start,
+        uart_end,
+        mmio_rw_flags(),
     );
 
     let root = pt.root_ppn();
-
     let _pt = Box::leak(Box::new(pt));
 
     activate_kernel_page_table(root);
 
-    log::info!("[mm] paging activated");
+    log::info!("[mm] LoongArch paging activated");
 }
 
 #[cfg(target_arch = "riscv64")]
