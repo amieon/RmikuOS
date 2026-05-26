@@ -191,3 +191,14 @@ where
 
 pub type PPNRange = SimpleRange<PhysPageNum>;
 pub type VPNRange = SimpleRange<VirtPageNum>;
+
+
+pub fn align_up(value: usize, align: usize) -> usize {
+    assert!(align.is_power_of_two());
+    (value + align - 1) & !(align - 1)
+}
+
+pub fn align_down(value: usize, align: usize) -> usize {
+    assert!(align.is_power_of_two());
+    value & !(align - 1)
+}

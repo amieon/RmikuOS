@@ -12,6 +12,7 @@ mod arch_mm;
 #[path = "loongarch64.rs"]
 mod arch_mm;
 
+pub mod heap;
 pub use address::*;
 pub use frame_allocator::{alloc_frame, dealloc_frame};
 pub use arch_mm::*;
@@ -37,8 +38,15 @@ extern "C" {
 pub fn init() {
     let kernel_start = _kernel_start as usize;
     let kernel_end = _kernel_end as usize;
-    let free_start = PhysAddr::from(kernel_end).ceil();
+    let heap_start = align_up(kernel_end, PAGE_SIZE);
+    let heap_end = heap_start + KERNEL_HEAP_SIZE;
+
+    heap::init(heap_start);
+
+    let free_start = PhysAddr::from(heap_end).ceil();
     let free_end = PhysAddr::from(MEMORY_END).floor();
+
+  
 
     log::info!("[mm] kernel: {:#x}..{:#x}", kernel_start, kernel_end);
     log::info!(
