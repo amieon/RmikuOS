@@ -25,6 +25,8 @@ use self::page_table::{activate_kernel_page_table ,map_range_identity, PageTable
 unsafe extern "C" {
     fn _kernel_start();
     fn _kernel_end();
+    fn _kernel_start_phys();
+    fn _kernel_end_phys();
     fn _stext();
     fn _etext();
     fn _srodata();
@@ -36,20 +38,27 @@ unsafe extern "C" {
 }
 
 pub fn init() {
-    let kernel_start = _kernel_start as usize;
-    let kernel_end = _kernel_end as usize;
+    let kernel_start_va = _kernel_start as usize;
+    let kernel_end_va = _kernel_end as usize;
 
-    let heap_start = align_up(kernel_end, PAGE_SIZE);
-    let heap_end = heap_start + KERNEL_HEAP_SIZE;
+    let kernel_start_pa = _kernel_start_phys as usize;
+    let kernel_end_pa = _kernel_end_phys as usize;
 
-    heap::init(heap_start);
+    let heap_start_pa = align_up(kernel_end_pa, PAGE_SIZE);
+    let heap_end_pa = heap_start_pa + KERNEL_HEAP_SIZE;
 
-    let free_start = PhysAddr::from(heap_end).ceil();
+    let heap_start_va = phys_to_virt(heap_start_pa);
+
+    heap::init(heap_start_va);
+
+    let free_start = PhysAddr::from(heap_end_pa).ceil();
     let free_end = PhysAddr::from(MEMORY_END).floor();
 
     frame_allocator::init_frame_allocator(free_start, free_end);
 
-    log::info!("[mm] kernel: {:#x}..{:#x}", kernel_start, kernel_end);
+
+    log::info!("[mm] physical kernel: {:#x}..{:#x}", kernel_start_pa, kernel_end_pa);
+    log::info!("[mm] virtual  kernel: {:#x}..{:#x}", kernel_start_va, kernel_end_va);
 }
 
 #[cfg(target_arch = "loongarch64")]
