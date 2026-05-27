@@ -56,23 +56,42 @@ impl MemorySet {
             .union(MapPermission::W)
             .union(MapPermission::X);
 
-        let rw_perm = MapPermission::R
+        let mmio_perm = MapPermission::R
             .union(MapPermission::W);
 
-        // LoongArch 现阶段低地址运行，先做 identity kernel mapping。
+        let uart_start = crate::mm::align_down(crate::arch::UART_BASE, crate::mm::PAGE_SIZE);
+        let uart_end = crate::mm::align_up(
+            crate::arch::UART_BASE + crate::mm::PAGE_SIZE,
+            crate::mm::PAGE_SIZE,
+        );
+
+        // 普通内存：UART 前半段
+        if crate::arch::MEMORY_START < uart_start {
+            memory_set.insert_area(MapArea::new(
+                VirtAddr(crate::arch::MEMORY_START),
+                VirtAddr(uart_start),
+                MapType::Identical,
+                kernel_perm,
+            ));
+        }
+
+        // UART/MMIO 页
         memory_set.insert_area(MapArea::new(
-            VirtAddr(crate::arch::MEMORY_START),
-            VirtAddr(crate::arch::MEMORY_END),
+            VirtAddr(uart_start),
+            VirtAddr(uart_end),
             MapType::Identical,
-            kernel_perm,
+            mmio_perm,
         ));
 
-        memory_set.insert_area(MapArea::new(
-            VirtAddr(crate::arch::UART_BASE),
-            VirtAddr(crate::arch::UART_BASE + PAGE_SIZE),
-            MapType::Identical,
-            rw_perm,
-        ));
+        // 普通内存：UART 后半段
+        if uart_end < crate::arch::MEMORY_END {
+            memory_set.insert_area(MapArea::new(
+                VirtAddr(uart_end),
+                VirtAddr(crate::arch::MEMORY_END),
+                MapType::Identical,
+                kernel_perm,
+            ));
+        }
 
         memory_set
     }

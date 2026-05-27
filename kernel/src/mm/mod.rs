@@ -47,13 +47,13 @@ pub fn init() {
     let kernel_start_va = unsafe { core::ptr::addr_of!(_kernel_start) as usize };
     let kernel_end_va = unsafe { core::ptr::addr_of!(_kernel_end) as usize };
 
-    let kernel_start_pa = virt_to_phys(kernel_start_va);
-    let kernel_end_pa = virt_to_phys(kernel_end_va);
+    let kernel_start_pa = kernel_virt_to_phys(kernel_start_va);
+    let kernel_end_pa = kernel_virt_to_phys(kernel_end_va);
 
     let heap_start_pa = align_up(kernel_end_pa, PAGE_SIZE);
     let heap_end_pa = heap_start_pa + KERNEL_HEAP_SIZE;
 
-    let heap_start_va = phys_to_virt(heap_start_pa);
+    let heap_start_va = kernel_phys_to_virt(heap_start_pa);
 
     heap::init(heap_start_va);
 
@@ -62,14 +62,28 @@ pub fn init() {
 
     frame_allocator::init_frame_allocator(free_start, free_end);
 
-
-    log::info!("[mm] physical kernel: {:#x}..{:#x}", kernel_start_pa, kernel_end_pa);
-    log::info!("[mm] virtual  kernel: {:#x}..{:#x}", kernel_start_va, kernel_end_va);
+    log::info!(
+        "[mm] physical kernel: {:#x}..{:#x}",
+        kernel_start_pa,
+        kernel_end_pa
+    );
+    log::info!(
+        "[mm] virtual  kernel: {:#x}..{:#x}",
+        kernel_start_va,
+        kernel_end_va
+    );
+    log::info!(
+        "[mm] heap: pa={:#x}..{:#x}, va={:#x}",
+        heap_start_pa,
+        heap_end_pa,
+        heap_start_va
+    );
 }
 
 #[cfg(target_arch = "loongarch64")]
 pub fn init_paging() {
     use alloc::boxed::Box;
+    
     use self::page_table::{
         map_range_identity,
         PageTable,
@@ -147,6 +161,26 @@ pub fn phys_to_virt(pa: usize) -> usize {
 
 pub fn virt_to_phys(va: usize) -> usize {
     va - KERNEL_OFFSET
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn kernel_virt_to_phys(va: usize) -> usize {
+    virt_to_phys(va)
+}
+
+#[cfg(target_arch = "loongarch64")]
+pub fn kernel_virt_to_phys(va: usize) -> usize {
+    va
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn kernel_phys_to_virt(pa: usize) -> usize {
+    phys_to_virt(pa)
+}
+
+#[cfg(target_arch = "loongarch64")]
+pub fn kernel_phys_to_virt(pa: usize) -> usize {
+    pa
 }
 
 pub fn align_up(value: usize, align: usize) -> usize {

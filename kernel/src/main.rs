@@ -112,6 +112,7 @@ fn primary_init() {
     test::page_table_test::page_table_test();
 
     test::memory_set_test::memory_set_test();
+
     mm::init_paging();
     timer::init();
 
