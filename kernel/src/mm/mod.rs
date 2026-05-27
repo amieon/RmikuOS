@@ -19,6 +19,12 @@ pub use frame_allocator::{alloc_frame, dealloc_frame};
 pub use page_table::*;
 pub use arch_mm::*;
 
+pub mod memory_set;
+pub use memory_set::*;
+pub mod map_area;
+pub use map_area::*;
+
+
 use alloc::boxed::Box;
 use self::page_table::{activate_kernel_page_table ,map_range_identity, PageTable, PteFlags};
 

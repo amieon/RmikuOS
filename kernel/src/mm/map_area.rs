@@ -133,3 +133,50 @@ impl MapArea {
         page_table.map(vpn, ppn, map_perm_to_pte_flags(self.permission));
     }
 }
+
+#[cfg(target_arch = "riscv64")]
+fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
+    let mut flags = PteFlags::empty();
+
+    if permission.contains(MapPermission::R) {
+        flags = flags.union(PteFlags::R);
+    }
+    if permission.contains(MapPermission::W) {
+        flags = flags.union(PteFlags::W);
+    }
+    if permission.contains(MapPermission::X) {
+        flags = flags.union(PteFlags::X);
+    }
+    if permission.contains(MapPermission::U) {
+        flags = flags.union(PteFlags::U);
+    }
+
+    
+    //第一版直接置 A/D，避免硬件或 QEMU 因 A/D 位触发异常。
+    flags.union(PteFlags::A).union(PteFlags::D)
+}
+
+#[cfg(target_arch = "loongarch64")]
+fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
+    let mut flags = PteFlags::MAT_CC.union(PteFlags::G);
+
+    if permission.contains(MapPermission::W) {
+        flags = flags.union(PteFlags::W).union(PteFlags::D);
+    }
+
+    if !permission.contains(MapPermission::R) {
+        flags = flags.union(PteFlags::NR);
+    }
+
+    if !permission.contains(MapPermission::X) {
+        flags = flags.union(PteFlags::NX);
+    }
+
+    if permission.contains(MapPermission::U) {
+        flags = flags.union(PteFlags::PLV3);
+    } else {
+        flags = flags.union(PteFlags::PLV0);
+    }
+
+    flags
+}
