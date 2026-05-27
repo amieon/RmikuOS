@@ -108,36 +108,16 @@ pub fn init_paging() {
 #[cfg(target_arch = "riscv64")]
 pub fn init_paging() {
     use alloc::boxed::Box;
-    use crate::mm::page_table::{map_range, PageTable, PteFlags};
 
-    let mut pt = PageTable::new();
+    let kernel_space = MemorySet::new_kernel();
+    let root = kernel_space.root_ppn();
 
-    let flags = kernel_pte_flags();
-    map_range(
-        &mut pt,
-        phys_to_virt(MEMORY_START),
-        MEMORY_START,
-        MEMORY_END - MEMORY_START,
-        flags,
-    );
-
-    map_range(
-        &mut pt,
-        crate::arch::UART_BASE,
-        crate::arch::UART_PADDR,
-        PAGE_SIZE,
-        flags,
-    );
-
-    let root = pt.root_ppn();
-
-    let _pt = Box::leak(Box::new(pt));
+    let _kernel_space = Box::leak(Box::new(kernel_space));
 
     activate_kernel_page_table(root);
 
-    log::info!("[mm] paging activated");
+    log::info!("[mm] kernel MemorySet activated");
 }
-
 
 
 #[cfg(target_arch = "riscv64")]

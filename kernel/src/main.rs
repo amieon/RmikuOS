@@ -111,6 +111,7 @@ fn primary_init() {
     test::frame_alloc_test::frame_alloc_test();
     test::page_table_test::page_table_test();
 
+    test::memory_set_test::memory_set_test();
     mm::init_paging();
     timer::init();
 
