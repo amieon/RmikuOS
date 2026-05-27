@@ -7,4 +7,6 @@ rustflags = [
     "-C", "link-arg=-Tkernel/src/arch/loongarch64/linker.ld",
     "-C", "relocation-model=static",
     "-C", "debuginfo=2", 
+    "-C", "link-arg=-nostartfiles",
+    "-C", "link-arg=-nostdlib",
 ]
