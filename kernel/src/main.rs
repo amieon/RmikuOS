@@ -73,6 +73,7 @@ unsafe extern "C" {
 
 #[no_mangle]
 pub extern "C" fn rust_main(id: usize) -> ! {
+
     if id >= arch::MAX_HARTS {
         park_forever();
     }
@@ -80,6 +81,25 @@ pub extern "C" fn rust_main(id: usize) -> ! {
     HART_LOCALS[id].id.store(id, Ordering::Relaxed);
 
     if id == 0 {
+        let rm = rust_main as usize;
+        let ks = unsafe { core::ptr::addr_of!(_kernel_start) as usize };
+        let ke = unsafe { core::ptr::addr_of!(_kernel_end) as usize };
+        let sp: usize;
+
+        unsafe {
+            core::arch::asm!("move {}, $sp", out(reg) sp);
+        }
+
+        crate::println!(
+            "[boot] rust_main={:#x}, kernel={:#x}..{:#x}, sp={:#x}, offset={:#x}",
+            rm,
+            ks,
+            ke,
+            sp,
+            crate::mm::config::KERNEL_OFFSET
+        );
+
+
         log::info!("rust_main at high half");
         log::info!("kernel va: {:#x}..{:#x}", { core::ptr::addr_of!(_kernel_start) as usize } as usize, { core::ptr::addr_of!(_kernel_end) as usize } as usize);
         // 主核路径

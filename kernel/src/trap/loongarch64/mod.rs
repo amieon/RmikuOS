@@ -46,14 +46,20 @@ pub fn init() {
         fn __alltraps();
     }
 
-    let entry = __alltraps as usize;
+    let eentry = __alltraps as usize;
+
     unsafe {
-        // CSR.EENTRY = 0x0c.  With ECFG.VS=0, ordinary exceptions and
-        // interrupts enter this single direct entry.
-        asm!("csrwr {0}, 0xc", in(reg) entry, options(nostack));
+        core::arch::asm!(
+            "csrwr {0}, 0xc",
+            in(reg) eentry,
+            options(nostack)
+        );
     }
-    trap_println!("LoongArch trap initialized: eentry={:#x}", entry);
+
+    log::info!("LoongArch trap initialized: eentry={:#x}", eentry);
 }
+
+
 
 #[no_mangle]
 pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
