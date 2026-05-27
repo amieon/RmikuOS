@@ -9,6 +9,15 @@ unsafe extern "C" {
 const CRMD_DA: usize = 1 << 3;
 const CRMD_PG: usize = 1 << 4;
 
+pub fn early_putc(ch: u8) {
+    let uart = crate::arch::UART_BASE as *mut u8;
+
+    unsafe {
+        while uart.add(5).read_volatile() & 0x20 == 0 {}
+        uart.write_volatile(ch);
+    }
+}
+
 pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
     let root_pa = root_ppn.0 << PAGE_SIZE_BITS;
 
@@ -25,17 +34,13 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
         (39usize << 0)  | // Dir3_base
         (9usize  << 6)  | // Dir3_width
         (0usize  << 12) | // Dir4_base
-        (0usize  << 18);  // Dir4_width = no Dir4
+        (0usize  << 18);  // no Dir4
 
     let refill_va = __tlb_refill as usize;
     let refill_pa = crate::mm::virt_to_phys(refill_va);
 
-    unsafe {
-        /*
-         * 注意：这里先不要清 DMW。
-         * 当前高半内核还靠 DMW1 跑。
-         */
 
+    unsafe {
         asm!(
             "csrwr {pgdl}, 0x19",
             "csrwr {pgdh}, 0x1a",
@@ -52,12 +57,11 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
             options(nostack)
         );
 
+   
         asm!("tlbflush", options(nostack));
 
-        /*
-         * boot.S 已经设置过 DA=0, PG=1。
-         * 这里再设置一次没问题，但不是关键。
-         */
+
+
         let mut crmd: usize;
         asm!("csrrd {0}, 0x0", out(reg) crmd, options(nostack));
 
@@ -66,6 +70,19 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
 
         asm!("csrwr {0}, 0x0", in(reg) crmd, options(nostack));
         asm!("ibar 0", "dbar 0", options(nostack));
+
+
+
+
+        asm!(
+            "csrwr $zero, 0x180", // DMW0
+            "csrwr $zero, 0x181", // DMW1
+            "csrwr $zero, 0x182", // DMW2
+            "csrwr $zero, 0x183", // DMW3
+            options(nostack)
+        );
+
+     
     }
 
     log::info!(
