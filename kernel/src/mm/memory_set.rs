@@ -2,8 +2,9 @@ use alloc::vec::Vec;
 
 use crate::mm::{
     alloc_frame, phys_to_virt, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum,
-    FrameTracker, KERNEL_OFFSET, MEMORY_END, MEMORY_START, PAGE_SIZE,
+    FrameTracker, KERNEL_OFFSET, PAGE_SIZE,
 };
+use crate::arch::{MEMORY_END, MEMORY_START};
 use crate::mm::page_table::{PageTable, PteFlags};
 use crate::mm::map_area::{MapArea,MapPermission,MapType};
 

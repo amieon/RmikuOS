@@ -1,4 +1,5 @@
-use crate::mm::{VirtAddr,PhysAddr,MemorySet,MEMORY_START,phys_to_virt};
+use crate::mm::{VirtAddr,PhysAddr,MemorySet,phys_to_virt};
+use crate::arch::{MEMORY_START};
 
 pub fn memory_set_test() {
     let ms = MemorySet::new_kernel();

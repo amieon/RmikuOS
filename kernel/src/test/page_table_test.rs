@@ -34,8 +34,8 @@ pub fn page_table_test() {
 
     let mut pt = PageTable::new();
 
-    let va = VirtAddr(crate::mm::page_table::MEMORY_START);
-    let pa = PhysAddr(crate::mm::page_table::MEMORY_START);
+    let va = VirtAddr(crate::arch::MEMORY_START);
+    let pa = PhysAddr(crate::arch::MEMORY_START);
 
     pt.map(
         va.floor(),

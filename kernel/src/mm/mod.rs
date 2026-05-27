@@ -24,6 +24,7 @@ pub use memory_set::*;
 pub mod map_area;
 pub use map_area::*;
 
+use crate::arch::{MEMORY_END, MEMORY_START};
 
 use alloc::boxed::Box;
 use self::page_table::{activate_kernel_page_table ,map_range_identity, PageTable, PteFlags};

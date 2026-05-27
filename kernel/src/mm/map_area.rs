@@ -2,9 +2,11 @@ use alloc::vec::Vec;
 
 use crate::mm::{
     alloc_frame, phys_to_virt, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum,
-    FrameTracker, KERNEL_OFFSET, MEMORY_END, MEMORY_START, PAGE_SIZE,
+    FrameTracker, PAGE_SIZE, KERNEL_OFFSET
 };
 use crate::mm::page_table::{PageTable, PteFlags};
+
+use crate::arch::{MEMORY_END, MEMORY_START};
 
 
 #[derive(Clone, Copy, Debug)]
