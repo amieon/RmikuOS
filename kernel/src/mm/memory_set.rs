@@ -14,6 +14,72 @@ pub struct MemorySet {
     areas: Vec<MapArea>,
 }
 
+
+impl MemorySet {
+    #[cfg(target_arch = "riscv64")]
+    pub fn new_kernel() -> Self {
+        let mut memory_set = Self::new_bare();
+
+        let kernel_perm = MapPermission::R
+            .union(MapPermission::W)
+            .union(MapPermission::X);
+
+        let rw_perm = MapPermission::R
+            .union(MapPermission::W);
+
+        memory_set.insert_area(MapArea::new(
+            VirtAddr(crate::mm::phys_to_virt(crate::arch::MEMORY_START)),
+            VirtAddr(crate::mm::phys_to_virt(crate::arch::MEMORY_END)),
+            MapType::Linear {
+                offset: crate::mm::KERNEL_OFFSET,
+            },
+            kernel_perm,
+        ));
+
+        memory_set.insert_area(MapArea::new(
+            VirtAddr(crate::arch::UART_BASE),
+            VirtAddr(crate::arch::UART_BASE + PAGE_SIZE),
+            MapType::Linear {
+                offset: crate::mm::KERNEL_OFFSET,
+            },
+            rw_perm,
+        ));
+
+        memory_set
+    }
+
+    #[cfg(target_arch = "loongarch64")]
+    pub fn new_kernel() -> Self {
+        let mut memory_set = Self::new_bare();
+
+        let kernel_perm = MapPermission::R
+            .union(MapPermission::W)
+            .union(MapPermission::X);
+
+        let rw_perm = MapPermission::R
+            .union(MapPermission::W);
+
+        // LoongArch 现阶段低地址运行，先做 identity kernel mapping。
+        memory_set.insert_area(MapArea::new(
+            VirtAddr(crate::arch::MEMORY_START),
+            VirtAddr(crate::arch::MEMORY_END),
+            MapType::Identical,
+            kernel_perm,
+        ));
+
+        memory_set.insert_area(MapArea::new(
+            VirtAddr(crate::arch::UART_BASE),
+            VirtAddr(crate::arch::UART_BASE + PAGE_SIZE),
+            MapType::Identical,
+            rw_perm,
+        ));
+
+        memory_set
+    }
+}
+
+
+
 impl MemorySet {
     pub fn new_bare() -> Self {
         Self {
@@ -31,36 +97,6 @@ impl MemorySet {
         self.areas.push(area);
     }
 
-    pub fn new_kernel() -> Self {
-        let mut memory_set = Self::new_bare();
-
-        let kernel_perm = MapPermission::R
-            .union(MapPermission::W)
-            .union(MapPermission::X);
-
-        let rw_perm = MapPermission::R
-            .union(MapPermission::W);
-
-        memory_set.insert_area(MapArea::new(
-            VirtAddr(phys_to_virt(MEMORY_START)),
-            VirtAddr(phys_to_virt(MEMORY_END)),
-            MapType::Linear {
-                offset: KERNEL_OFFSET,
-            },
-            kernel_perm,
-        ));
-
-        memory_set.insert_area(MapArea::new(
-            VirtAddr(crate::arch::UART_BASE),
-            VirtAddr(crate::arch::UART_BASE + PAGE_SIZE),
-            MapType::Linear {
-                offset: KERNEL_OFFSET,
-            },
-            rw_perm,
-        ));
-
-        memory_set
-    }
 
     pub fn translate(&self, vpn: VirtPageNum) -> Option<crate::mm::page_table::PageTableEntry> {
         self.page_table.translate(vpn)

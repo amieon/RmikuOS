@@ -401,3 +401,27 @@ fn vpn_indexes(vpn: VirtPageNum) -> [usize; 4] {
     ]
 }
 
+
+
+pub fn map_range(
+    pt: &mut PageTable,
+    va_start: usize,
+    pa_start: usize,
+    size: usize,
+    flags: PteFlags,
+) {
+    let mut va = align_down(va_start, PAGE_SIZE);
+    let mut pa = align_down(pa_start, PAGE_SIZE);
+    let end = align_up(va_start + size, PAGE_SIZE);
+
+    while va < end {
+        pt.map(
+            crate::mm::VirtAddr::from(va).floor(),
+            PhysAddr::from(pa).floor(),
+            flags,
+        );
+
+        va += PAGE_SIZE;
+        pa += PAGE_SIZE;
+    }
+}
