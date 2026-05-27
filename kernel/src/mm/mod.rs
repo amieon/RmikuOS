@@ -27,7 +27,8 @@ pub use map_area::*;
 use crate::arch::{MEMORY_END, MEMORY_START};
 
 use alloc::boxed::Box;
-use self::page_table::{activate_kernel_page_table ,map_range_identity, PageTable, PteFlags};
+use self::page_table::{map_range_identity, PageTable, PteFlags};
+use self::{activate_kernel_page_table};
 
 unsafe extern "C" {
     static _kernel_start: u8;
