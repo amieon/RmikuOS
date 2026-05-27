@@ -56,18 +56,16 @@ static HART_LOCALS: [HartLocal; arch::MAX_HARTS] = [
 ];
 
 unsafe extern "C" {
-    fn _kernel_start();
-    fn _kernel_end();
-    fn _kernel_start_phys();
-    fn _kernel_end_phys();
-    fn _stext();
-    fn _etext();
-    fn _srodata();
-    fn _erodata();
-    fn _sdata();
-    fn _edata();
-    fn _sbss();
-    fn _ebss();
+    static _kernel_start: u8;
+    static _kernel_end: u8;
+    static _stext: u8;
+    static _etext: u8;
+    static _srodata: u8;
+    static _erodata: u8;
+    static _sdata: u8;
+    static _edata: u8;
+    static _sbss: u8;
+    static _ebss: u8;
 }
 
 
@@ -83,7 +81,7 @@ pub extern "C" fn rust_main(id: usize) -> ! {
 
     if id == 0 {
         log::info!("rust_main at high half");
-        log::info!("kernel va: {:#x}..{:#x}", _kernel_start as usize, _kernel_end as usize);
+        log::info!("kernel va: {:#x}..{:#x}", { core::ptr::addr_of!(_kernel_start) as usize } as usize, { core::ptr::addr_of!(_kernel_end) as usize } as usize);
         // 主核路径
         primary_init();
 

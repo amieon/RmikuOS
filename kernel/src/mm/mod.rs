@@ -23,26 +23,24 @@ use alloc::boxed::Box;
 use self::page_table::{activate_kernel_page_table ,map_range_identity, PageTable, PteFlags};
 
 unsafe extern "C" {
-    fn _kernel_start();
-    fn _kernel_end();
-    fn _kernel_start_phys();
-    fn _kernel_end_phys();
-    fn _stext();
-    fn _etext();
-    fn _srodata();
-    fn _erodata();
-    fn _sdata();
-    fn _edata();
-    fn _sbss();
-    fn _ebss();
+    static _kernel_start: u8;
+    static _kernel_end: u8;
+    static _stext: u8;
+    static _etext: u8;
+    static _srodata: u8;
+    static _erodata: u8;
+    static _sdata: u8;
+    static _edata: u8;
+    static _sbss: u8;
+    static _ebss: u8;
 }
 
 pub fn init() {
-    let kernel_start_va = _kernel_start as usize;
-    let kernel_end_va = _kernel_end as usize;
+    let kernel_start_va = unsafe { core::ptr::addr_of!(_kernel_start) as usize };
+    let kernel_end_va = unsafe { core::ptr::addr_of!(_kernel_end) as usize };
 
-    let kernel_start_pa = _kernel_start_phys as usize;
-    let kernel_end_pa = _kernel_end_phys as usize;
+    let kernel_start_pa = virt_to_phys(kernel_start_va);
+    let kernel_end_pa = virt_to_phys(kernel_end_va);
 
     let heap_start_pa = align_up(kernel_end_pa, PAGE_SIZE);
     let heap_end_pa = heap_start_pa + KERNEL_HEAP_SIZE;
