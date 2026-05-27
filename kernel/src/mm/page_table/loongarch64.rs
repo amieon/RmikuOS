@@ -389,7 +389,14 @@ pub fn mmio_rw_flags() -> PteFlags {
 
 fn raw_entry_array(ppn: PhysPageNum) -> &'static mut [usize] {
     let pa = ppn.0 << PAGE_SIZE_BITS;
-    unsafe { core::slice::from_raw_parts_mut(pa as *mut usize, PAGE_SIZE / core::mem::size_of::<usize>()) }
+    let va = crate::mm::phys_to_virt(pa);
+
+    unsafe {
+        core::slice::from_raw_parts_mut(
+            va as *mut usize,
+            PAGE_SIZE / core::mem::size_of::<usize>(),
+        )
+    }
 }
 
 fn vpn_indexes(vpn: VirtPageNum) -> [usize; 4] {

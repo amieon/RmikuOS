@@ -163,25 +163,17 @@ pub fn virt_to_phys(va: usize) -> usize {
     va - KERNEL_OFFSET
 }
 
-#[cfg(target_arch = "riscv64")]
+
 pub fn kernel_virt_to_phys(va: usize) -> usize {
     virt_to_phys(va)
 }
 
-#[cfg(target_arch = "loongarch64")]
-pub fn kernel_virt_to_phys(va: usize) -> usize {
-    va
-}
 
-#[cfg(target_arch = "riscv64")]
+
 pub fn kernel_phys_to_virt(pa: usize) -> usize {
     phys_to_virt(pa)
 }
 
-#[cfg(target_arch = "loongarch64")]
-pub fn kernel_phys_to_virt(pa: usize) -> usize {
-    pa
-}
 
 pub fn align_up(value: usize, align: usize) -> usize {
     assert!(align.is_power_of_two());

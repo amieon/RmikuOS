@@ -1,89 +1,93 @@
-/* kernel/src/arch/loongarch64/boot.S */
+    .section .text.boot, "ax"
+    .global _start
+    .type _start, @function
 
-.equ BOOT_STACK_SIZE, 4096 * 4
-.equ BOOT_MAX_HARTS, 8
+    .equ KERNEL_OFFSET, 0x9000000000000000
+    .equ STACK_SIZE,    65536
 
-.section .text.boot, "ax", @progbits
-.global _entry
-_entry:
+    
+    //CSR numbers
+    .equ CSR_CRMD, 0x0
+    .equ CSR_DMW0, 0x180
+    .equ CSR_DMW1, 0x181
+
+    
+    //CRMD bits
+    .equ CRMD_DA, 0x8
+    .equ CRMD_PG, 0x10
+
     /*
-     * QEMU/LoongArch 复位后通常处于直接地址翻译模式：
-     *   CSR.CRMD.DA = 1, CSR.CRMD.PG = 0
-     * 这里不要提前打开分页；先配置 DMW，后续内核初始化阶段再切换到映射地址模式。
+     * DMW:
+     * PLV0 = bit 0
+     * MAT_CC = 1 << 4
+     * VSEG in bits 63:60
      */
+    .equ DMW_PLV0,   0x1
+    .equ DMW_MAT_CC, 0x10
 
-    /* DMWIN0: 0x8000... -> 物理 0x0，uncached，常用于设备空间 */
-    li.d    $t0, 0x8000000000000001
-    csrwr   $t0, 0x180
+_start:
 
-    /* DMWIN1: 0x9000... -> 物理 0x0，cached，后续若使用高地址映射可用 */
-    li.d    $t0, 0x9000000000000011
-    csrwr   $t0, 0x181
+    //Read CPU id.
+    csrrd   $tp, 0x20
 
-    /* PRMD / EUEN 清零：早期启动阶段不启用浮点/向量等扩展 */
-    li.w    $t0, 0x0
-    csrwr   $t0, 0x1
-    csrwr   $t0, 0x2
+    
+    //Temporary low physical stack.
+    la.local $sp, boot_stack
+    li.d     $t0, STACK_SIZE
+    addi.d   $t1, $tp, 1
+    mul.d    $t0, $t0, $t1
+    add.d    $sp, $sp, $t0
 
-    /* 读取 CPUID，并在还没有栈之前先做边界检查 */
-    csrrd   $t0, 0x20
-    li.w    $t1, BOOT_MAX_HARTS
-    bgeu    $t0, $t1, .Lspin
+    
+    #  DMW0: low identity window, VSEG=0.
+    #  Keeps current low boot code executable after PG=1.
+    #  
+    #  DMW1: high direct map, VSEG=9.
+    #  VA 0x9000_0000_xxxx_xxxx -> PA 0x0000_0000_xxxx_xxxx
+    li.d    $t0, DMW_PLV0 | DMW_MAT_CC
+    csrwr   $t0, CSR_DMW0
 
-    /* CPU0 清零 BSS；其他 CPU 等待 CPU0 清零完成，避免提前进入 Rust 访问 BSS */
-    bnez    $t0, .Lwait_bss_done
+    li.d    $t0, 0x9000000000000000
+    ori     $t0, $t0, DMW_PLV0 | DMW_MAT_CC
+    csrwr   $t0, CSR_DMW1
 
-    la.global $t0, _bss_start
-    la.global $t1, _bss_end
-.Lzero_bss:
-    bgeu    $t0, $t1, .Lbss_done
-    st.d    $zero, $t0, 0
-    addi.d  $t0, $t0, 8
-    b       .Lzero_bss
-
-.Lbss_done:
-    dbar    0
-    la.global $t0, boot_bss_done
-    li.w    $t1, 1
-    st.w    $t1, $t0, 0
-    dbar    0
-    b       .Lstack_setup
-
-.Lwait_bss_done:
-    la.global $t1, boot_bss_done
-.Lwait_bss_done_loop:
-    ld.w    $t2, $t1, 0
-    beqz    $t2, .Lwait_bss_done_loop
+    
+    //Switch to mapped mode:
+    //DA=0, PG=1.
+    
+    csrrd   $t0, CSR_CRMD
+    li.d    $t1, -9            /* clear bit 3 DA */
+    and     $t0, $t0, $t1
+    ori     $t0, $t0, CRMD_PG
+    csrwr   $t0, CSR_CRMD
+    ibar    0
     dbar    0
 
-.Lstack_setup:
-    csrrd   $t1, 0x20
-    addi.d  $tp, $t1, 0
-
-    la.global $sp, boot_stack
-    li.d    $t0, BOOT_STACK_SIZE
-    addi.d  $t1, $t1, 1
-    mul.d   $t0, $t0, $t1
+    
+    //Switch stack to high alias.
+    
+    li.d    $t0, KERNEL_OFFSET
     add.d   $sp, $sp, $t0
 
-    /* LoongArch 调用约定：第一个参数放在 $a0，显式传 rust_main(id) */
-    addi.d  $a0, $tp, 0
-    bl      rust_main
+    
+    # Clear high-half .bss.
+    la.local $t0, _sbss
+    la.local $t1, _ebss
+1:
+    bgeu    $t0, $t1, 2f
+    st.d    $zero, $t0, 0
+    addi.d  $t0, $t0, 8
+    b       1b
+2:
 
-.Lspin:
-    b       .Lspin
+    /*
+     * Jump to high-half rust_main.
+     */
+    la.local $t0, rust_main
+    addi.d   $a0, $tp, 0
+    jirl     $zero, $t0, 0
 
-.section .data.boot, "aw", @progbits
-.align 3
-.global boot_bss_done
-boot_bss_done:
-    .word 0
-    .word 0
-
-.section .bss.stack, "aw", @nobits
-.align 12
-.global boot_stack
+    .section .bss.boot, "aw", @nobits
+    .align 12
 boot_stack:
-    .space BOOT_STACK_SIZE * BOOT_MAX_HARTS
-.global boot_stack_top
-boot_stack_top:
+    .space STACK_SIZE * 8

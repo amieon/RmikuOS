@@ -1,7 +1,6 @@
 // src/arch/loongarch64/mod.rs
 pub mod boot; 
 pub const NAME: &str = "LoongArch 64";
-pub const UART_BASE: usize = 0x1fe0_01e0;
 pub const MAX_HARTS: usize = 8;
 
 /// The kernel is loaded at 0x0100_0000 by the QEMU loader in run.sh.
@@ -11,6 +10,9 @@ pub const MEMORY_START: usize = 0x0100_0000;
 pub const MEMORY_SIZE: usize = 2 * 1024 * 1024 * 1024;
 
 pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
+
+pub const UART_PADDR: usize = 0x1fe0_01e0;
+pub const UART_BASE: usize = crate::mm::config::KERNEL_OFFSET + UART_PADDR;
 
 
 

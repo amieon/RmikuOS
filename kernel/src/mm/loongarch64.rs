@@ -6,6 +6,7 @@ unsafe extern "C" {
     fn __tlb_refill();
 }
 
+
 const CRMD_DA: usize = 1 << 3;
 const CRMD_PG: usize = 1 << 4;
 
@@ -58,7 +59,8 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
         (0usize  << 12) | // Dir4_base
         (0usize  << 18);  // Dir4_width = no Dir4
 
-    let refill_pa = __tlb_refill as usize;
+    let refill_va = __tlb_refill as usize;
+    let refill_pa = crate::mm::virt_to_phys(refill_va);
 
     unsafe {
         /*
