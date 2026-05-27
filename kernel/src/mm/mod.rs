@@ -91,6 +91,36 @@ pub fn init_paging() {
     log::info!("[mm] LoongArch paging activated");
 }
 
+
+#[cfg(target_arch = "riscv64")]
+pub fn init_paging() {
+    let mut pt = PageTable::new();
+
+    map_range_identity(
+        &mut pt,
+        MEMORY_START,
+        MEMORY_END,
+        kernel_pte_flags(),
+    );
+
+    map_range_identity(
+        &mut pt,
+        crate::arch::UART_BASE,
+        crate::arch::UART_BASE + PAGE_SIZE,
+        kernel_pte_flags(),
+    );
+
+    let root = pt.root_ppn();
+
+    let _pt = Box::leak(Box::new(pt));
+
+    activate_kernel_page_table(root);
+
+    log::info!("[mm] paging activated");
+}
+
+
+
 #[cfg(target_arch = "riscv64")]
 fn kernel_pte_flags() -> PteFlags {
     PteFlags::R
