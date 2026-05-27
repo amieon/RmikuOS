@@ -1,0 +1,135 @@
+use alloc::vec::Vec;
+
+use crate::mm::{
+    alloc_frame, phys_to_virt, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum,
+    FrameTracker, KERNEL_OFFSET, MEMORY_END, MEMORY_START, PAGE_SIZE,
+};
+use crate::mm::page_table::{PageTable, PteFlags};
+
+
+#[derive(Clone, Copy, Debug)]
+pub struct VPNRange {
+    current: usize,
+    end: usize,
+}
+
+impl VPNRange {
+    pub fn new(start: VirtPageNum, end: VirtPageNum) -> Self {
+        Self {
+            current: start.0,
+            end: end.0,
+        }
+    }
+}
+
+impl Iterator for VPNRange {
+    type Item = VirtPageNum;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current < self.end {
+            let vpn = VirtPageNum(self.current);
+            self.current += 1;
+            Some(vpn)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MapType {
+    Identical,
+    Linear {
+        offset: usize,
+    },
+    Framed,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MapPermission {
+    bits: u8,
+}
+
+impl MapPermission {
+    pub const R: Self = Self { bits: 1 << 0 };
+    pub const W: Self = Self { bits: 1 << 1 };
+    pub const X: Self = Self { bits: 1 << 2 };
+    pub const U: Self = Self { bits: 1 << 3 };
+
+    pub const fn empty() -> Self {
+        Self { bits: 0 }
+    }
+
+    pub const fn union(self, rhs: Self) -> Self {
+        Self {
+            bits: self.bits | rhs.bits,
+        }
+    }
+
+    pub fn contains(self, rhs: Self) -> bool {
+        self.bits & rhs.bits != 0
+    }
+}
+
+pub struct MapArea {
+    vpn_range: VPNRange,
+    map_type: MapType,
+    permission: MapPermission,
+    // 只有 Framed 映射拥有这些物理页。
+    data_frames: Vec<FrameTracker>,
+}
+
+impl MapArea {
+    pub fn new(
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        map_type: MapType,
+        permission: MapPermission,
+    ) -> Self {
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+
+        Self {
+            vpn_range: VPNRange::new(start_vpn, end_vpn),
+            map_type,
+            permission,
+            data_frames: Vec::new(),
+        }
+    }
+
+    pub fn map(&mut self, page_table: &mut PageTable) {
+        for vpn in self.vpn_range {
+            self.map_one(page_table, vpn);
+        }
+    }
+
+    pub fn unmap(&mut self, page_table: &mut PageTable) {
+        for vpn in self.vpn_range {
+            page_table.unmap(vpn);
+        }
+        self.data_frames.clear();
+    }
+
+    fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+        let ppn = match self.map_type {
+            MapType::Identical => PhysPageNum(vpn.0),
+
+            MapType::Linear { offset } => {
+                let va = vpn.addr().0;
+                let pa = va - offset;
+                PhysAddr::from(pa).floor()
+            }
+
+            MapType::Framed => {
+                let frame = FrameTracker::new(
+                    alloc_frame().expect("failed to allocate frame for MapArea"),
+                );
+                let ppn = frame.ppn;
+                self.data_frames.push(frame);
+                ppn
+            }
+        };
+
+        page_table.map(vpn, ppn, map_perm_to_pte_flags(self.permission));
+    }
+}
