@@ -128,8 +128,24 @@ impl PhysPageNum {
     }
 
     pub fn bytes_array(self) -> &'static mut [u8] {
-        let pa: usize = self.addr().into();
-        unsafe { core::slice::from_raw_parts_mut(pa as *mut u8, PAGE_SIZE) }
+        let pa = self.0 << crate::mm::PAGE_SIZE_BITS;
+        let va = crate::mm::kernel_phys_to_virt(pa);
+
+        assert!(pa != 0, "bytes_array: ppn is zero");
+        assert!(
+            va >= crate::mm::KERNEL_OFFSET,
+            "bytes_array: va is not high-half: ppn={:#x}, pa={:#x}, va={:#x}",
+            self.0,
+            pa,
+            va
+        );
+
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                va as *mut u8,
+                crate::mm::PAGE_SIZE,
+            )
+        }
     }
 
 

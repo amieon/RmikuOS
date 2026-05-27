@@ -9,6 +9,9 @@ pub const MEMORY_START: usize = 0x0100_0000;
 /// run.sh uses `-m 2G` for LoongArch.
 pub const MEMORY_SIZE: usize = 2 * 1024 * 1024 * 1024;
 
+pub const KERNEL_DIRECT_MAP_SIZE: usize = 2 * 1024 * 1024 * 1024;
+
+
 pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
 
 pub const UART_PADDR: usize = 0x1fe0_01e0;

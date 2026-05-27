@@ -59,39 +59,57 @@ impl MemorySet {
         let mmio_perm = MapPermission::R
             .union(MapPermission::W);
 
-        let uart_start = crate::mm::align_down(crate::arch::UART_BASE, crate::mm::PAGE_SIZE);
-        let uart_end = crate::mm::align_up(
-            crate::arch::UART_BASE + crate::mm::PAGE_SIZE,
-            crate::mm::PAGE_SIZE,
-        );
+        let map_start = crate::arch::MEMORY_START;
+        let map_end = crate::arch::MEMORY_START + crate::arch::KERNEL_DIRECT_MAP_SIZE;
 
-        // 普通内存：UART 前半段
-        if crate::arch::MEMORY_START < uart_start {
+        let uart_start = crate::mm::align_down(crate::arch::UART_PADDR, crate::mm::PAGE_SIZE);
+        let uart_end = uart_start + crate::mm::PAGE_SIZE;
+
+        // Case 1: direct map does not touch UART.
+        if map_end <= uart_start || map_start >= uart_end {
             memory_set.insert_area(MapArea::new(
-                VirtAddr(crate::arch::MEMORY_START),
-                VirtAddr(uart_start),
-                MapType::Identical,
+                VirtAddr(crate::mm::kernel_phys_to_virt(map_start)),
+                VirtAddr(crate::mm::kernel_phys_to_virt(map_end)),
+                MapType::Linear {
+                    offset: crate::mm::KERNEL_OFFSET,
+                },
                 kernel_perm,
             ));
+        } else {
+            // Case 2: direct map overlaps UART. Split it.
+
+            if map_start < uart_start {
+                memory_set.insert_area(MapArea::new(
+                    VirtAddr(crate::mm::kernel_phys_to_virt(map_start)),
+                    VirtAddr(crate::mm::kernel_phys_to_virt(uart_start)),
+                    MapType::Linear {
+                        offset: crate::mm::KERNEL_OFFSET,
+                    },
+                    kernel_perm,
+                ));
+            }
+
+            if uart_end < map_end {
+                memory_set.insert_area(MapArea::new(
+                    VirtAddr(crate::mm::kernel_phys_to_virt(uart_end)),
+                    VirtAddr(crate::mm::kernel_phys_to_virt(map_end)),
+                    MapType::Linear {
+                        offset: crate::mm::KERNEL_OFFSET,
+                    },
+                    kernel_perm,
+                ));
+            }
         }
 
-        // UART/MMIO 页
+        // UART is always mapped once, with MMIO permission.
         memory_set.insert_area(MapArea::new(
-            VirtAddr(uart_start),
-            VirtAddr(uart_end),
-            MapType::Identical,
+            VirtAddr(crate::mm::kernel_phys_to_virt(uart_start)),
+            VirtAddr(crate::mm::kernel_phys_to_virt(uart_end)),
+            MapType::Linear {
+                offset: crate::mm::KERNEL_OFFSET,
+            },
             mmio_perm,
         ));
-
-        // 普通内存：UART 后半段
-        if uart_end < crate::arch::MEMORY_END {
-            memory_set.insert_area(MapArea::new(
-                VirtAddr(uart_end),
-                VirtAddr(crate::arch::MEMORY_END),
-                MapType::Identical,
-                kernel_perm,
-            ));
-        }
 
         memory_set
     }

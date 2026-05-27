@@ -273,7 +273,17 @@ impl PageTable {
             .find_pte_create(vpn)
             .expect("failed to create LoongArch pte");
 
-        assert!(*pte == 0, "vpn {:?} is already mapped", vpn);
+        if *pte != 0 {
+            let old = PageTableEntry::from_bits(*pte);
+            panic!(
+                "[la64 map] vpn {:?} already mapped: old_ppn={:?}, old_bits={:#x}, new_ppn={:?}, new_flags={:#x}",
+                vpn,
+                old.ppn(),
+                old.bits(),
+                ppn,
+                flags.bits(),
+            );
+        }
 
         let flags = flags
             .union(PteFlags::V)
@@ -389,7 +399,16 @@ pub fn mmio_rw_flags() -> PteFlags {
 
 fn raw_entry_array(ppn: PhysPageNum) -> &'static mut [usize] {
     let pa = ppn.0 << PAGE_SIZE_BITS;
-    let va = crate::mm::phys_to_virt(pa);
+    let va = crate::mm::kernel_phys_to_virt(pa);
+
+    assert!(pa != 0, "raw_entry_array: ppn is zero");
+    assert!(
+        va >= crate::mm::KERNEL_OFFSET,
+        "raw_entry_array: va is not high-half: ppn={:#x}, pa={:#x}, va={:#x}",
+        ppn.0,
+        pa,
+        va
+    );
 
     unsafe {
         core::slice::from_raw_parts_mut(

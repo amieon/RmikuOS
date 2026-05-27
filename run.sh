@@ -74,7 +74,7 @@ case "$ARCH" in
       -machine virt
       -cpu la464
       -m 2G
-      -smp 4
+      -smp 1
       -nographic
       -bios trampoline.bin
       -device "loader,file=$KERNEL_BIN,addr=0x1000000"
