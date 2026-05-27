@@ -169,6 +169,27 @@ pub fn map_range_identity(
         va += PAGE_SIZE;
     }
 }
+pub fn map_range(
+    pt: &mut PageTable,
+    va_start: usize,
+    pa_start: usize,
+    size: usize,
+    flags: PteFlags,
+) {
+    let mut va = crate::mm::align_down(va_start, crate::mm::PAGE_SIZE);
+    let mut pa = crate::mm::align_down(pa_start, crate::mm::PAGE_SIZE);
+    let end = crate::mm::align_up(va_start + size, crate::mm::PAGE_SIZE);
+
+    while va < end {
+        pt.map(
+            crate::mm::VirtAddr::from(va).floor(),
+            crate::mm::PhysAddr::from(pa).floor(),
+            flags,
+        );
+        va += crate::mm::PAGE_SIZE;
+        pa += crate::mm::PAGE_SIZE;
+    }
+}
 
 
 
