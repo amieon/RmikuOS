@@ -1,6 +1,7 @@
  // src/arch/riscv64/mod.rs
 pub const NAME: &str = "RISC-V 64";
-pub const UART_BASE: usize = 0x1000_0000;
+pub const UART_PADDR: usize = 0x1000_0000;
+pub const UART_BASE: usize = crate::mm::config::KERNEL_OFFSET + UART_PADDR;
 pub const MAX_HARTS: usize = 8;
 
 /// 读取当前核的 hartid

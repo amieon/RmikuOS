@@ -55,15 +55,35 @@ static HART_LOCALS: [HartLocal; arch::MAX_HARTS] = [
     HartLocal::new(),
 ];
 
+unsafe extern "C" {
+    fn _kernel_start();
+    fn _kernel_end();
+    fn _kernel_start_phys();
+    fn _kernel_end_phys();
+    fn _stext();
+    fn _etext();
+    fn _srodata();
+    fn _erodata();
+    fn _sdata();
+    fn _edata();
+    fn _sbss();
+    fn _ebss();
+}
+
+
+
+
 #[no_mangle]
 pub extern "C" fn rust_main(id: usize) -> ! {
     if id >= arch::MAX_HARTS {
         park_forever();
     }
-
+    
     HART_LOCALS[id].id.store(id, Ordering::Relaxed);
 
     if id == 0 {
+        log::info!("rust_main at high half");
+        log::info!("kernel va: {:#x}..{:#x}", _kernel_start as usize, _kernel_end as usize);
         // 主核路径
         primary_init();
 

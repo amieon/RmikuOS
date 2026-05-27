@@ -58,9 +58,10 @@ fn vpn_indexes(vpn: VirtPageNum) -> [usize; 3] {
 }
 
 fn pte_array(ppn: PhysPageNum) -> &'static mut [PageTableEntry] {
-    let pa = ppn.0 << crate::mm::PAGE_SIZE_BITS;
-    unsafe {
-        core::slice::from_raw_parts_mut(pa as *mut PageTableEntry, 512)
+    let pa = ppn.0 << PAGE_SIZE_BITS;
+    let va = crate::mm::phys_to_virt(pa);
+        unsafe {
+        core::slice::from_raw_parts_mut(va as *mut PageTableEntry, 512)
     }
 }
 
