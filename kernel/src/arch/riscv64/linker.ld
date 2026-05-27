@@ -1,50 +1,53 @@
-/* kernel/src/arch/riscv64/linker.ld */
-OUTPUT_ARCH(riscv64)
+OUTPUT_ARCH(riscv)
 ENTRY(_start)
 
-BASE_ADDRESS = 0x80200000;
+KERNEL_PHYS_BASE = 0x80200000;
+KERNEL_OFFSET = 0xffffffc000000000;
+KERNEL_VIRT_BASE = KERNEL_PHYS_BASE + KERNEL_OFFSET;
 
 SECTIONS {
-    . = BASE_ADDRESS;
+    . = KERNEL_PHYS_BASE;
+
+    .text.boot : {
+        *(.text.boot)
+    }
+
+    .bss.boot : {
+        *(.bss.boot)
+    }
+
+    . = KERNEL_VIRT_BASE;
+
     _kernel_start = .;
 
-    .text : ALIGN(4K) {
+    .text : AT(ADDR(.text) - KERNEL_OFFSET) {
         _stext = .;
-        *(.text.init)
         *(.text .text.*)
         _etext = .;
     }
 
-    .rodata : ALIGN(4K) {
+    .rodata : AT(ADDR(.rodata) - KERNEL_OFFSET) {
         _srodata = .;
         *(.rodata .rodata.*)
-        *(.srodata .srodata.*)
         _erodata = .;
     }
 
-    .data : ALIGN(4K) {
+    .data : AT(ADDR(.data) - KERNEL_OFFSET) {
         _sdata = .;
         *(.data .data.*)
-        *(.sdata .sdata.*)
         _edata = .;
     }
 
-    .bss (NOLOAD) : ALIGN(4K) {
+    .bss : AT(ADDR(.bss) - KERNEL_OFFSET) {
         _sbss = .;
         *(.bss .bss.*)
-        *(.sbss .sbss.*)
         *(COMMON)
-        . = ALIGN(4K);
-        *(.bss.stack)
         _ebss = .;
     }
 
-    . = ALIGN(4K);
     _kernel_end = .;
 
-    /DISCARD/ : {
-        *(.eh_frame)
-        *(.comment)
-        *(.note*)
-    }
+    _kernel_start_phys = _kernel_start - KERNEL_OFFSET;
+    _kernel_end_phys = _kernel_end - KERNEL_OFFSET;
+    _rust_main_phys = rust_main - KERNEL_OFFSET;
 }
