@@ -78,6 +78,44 @@
         st.b    $t5, $t6, 0
     .endm
 
+    .macro PUTCH_REG reg
+            li.d    $t6, UART_PADDR
+    .Lputch_wait\@:
+            ld.bu   $t5, $t6, 5
+            andi    $t5, $t5, 0x20
+            beqz    $t5, .Lputch_wait\@
+            st.b    \reg, $t6, 0
+        .endm
+
+        .macro PUTHEX64 reg
+            /*
+            * Print 16 hex digits of \reg.
+            * Clobbers: t0, t1, t2, t3, t4, t5, t6
+            */
+            addi.d  $t3, \reg, 0
+            li.d    $t4, 60
+            li.d    $t0, 16
+
+    .Lhex_loop\@:
+            srl.d   $t1, $t3, $t4
+            andi    $t1, $t1, 0xf
+
+            li.d    $t2, 10
+            blt     $t1, $t2, .Lhex_digit\@
+            addi.d  $t1, $t1, 87          /* 'a' - 10 */
+            b       .Lhex_out\@
+
+    .Lhex_digit\@:
+            addi.d  $t1, $t1, 48          /* '0' */
+
+    .Lhex_out\@:
+            PUTCH_REG $t1
+
+            addi.d  $t4, $t4, -4
+            addi.d  $t0, $t0, -1
+            bnez    $t0, .Lhex_loop\@
+        .endm
+
     /*
      * LoongArch PTE bits.
      *
@@ -492,6 +530,20 @@ boot_dir2:
 boot_dir1:
     .space 4096
 
+
+    .section .text.highboot, "ax"
+
+    /*
+     * Force next code to page 0x...109000-like odd/even boundary is hard,
+     * but we can at least create a function on previous page by alignment tests.
+     */
+    .align 12
+odd_even_test_page1:
+    PUTCH_PHYS 'O'
+1:
+    b 1b
+
+
 /*
  * BOOT_MAP_SIZE / 2MiB PT pages.
  */
@@ -510,20 +562,78 @@ boot_stack:
 
 
 
-.section .text.highboot, "ax"
-.align 4
-.global boot_high_trampoline
+
+
+
+    .section .text.highboot, "ax"
+    .align 4
+    .global boot_high_trampoline
 boot_high_trampoline:
     PUTCH_PHYS 'H'
 
-    /*
-     * Do not use la.local rust_main here.
-     * Use physical symbol + KERNEL_OFFSET, same as early boot style.
-     */
-    la.local $t0, _rust_main_phys
-    li.d     $t1, KERNEL_OFFSET
-    add.d    $t0, $t0, $t1
-
-    PUTCH_PHYS 'h'
-
+    la.local $t0, rust_main
     jirl     $zero, $t0, 0
+
+
+
+
+    .section .text.highboot, "ax"
+    .align 4
+    .global rust_main
+    .type rust_main, @function
+    
+
+
+    .section .text.highboot, "ax"
+
+    /*
+     * Force next code to page 0x...109000-like odd/even boundary is hard,
+     * but we can at least create a function on previous page by alignment tests.
+     */
+    .align 12
+odd_even_test_page2:
+    PUTCH_PHYS 'O'
+1:
+    b 1b
+
+rust_main:
+    PUTCH_PHYS 'R'
+
+    la.local $r22, rust_main_real
+
+    PUTCH_PHYS '['
+    PUTHEX64 $r22
+    PUTCH_PHYS ']'
+
+    li.d     $r23, KERNEL_OFFSET
+    add.d    $r23, $r22, $r23
+
+    PUTCH_PHYS '<'
+    PUTHEX64 $r23
+    PUTCH_PHYS '>'
+
+    /*
+     * Test target page as data load.
+     * If this prints L, rust_main_real page is readable.
+     */
+    ld.d     $t0, $r23, 0
+    PUTCH_PHYS 'L'
+
+    /*
+     * Test current high-half stack.
+     * If this prints S, stack write/read is OK.
+     */
+    addi.d   $sp, $sp, -16
+    st.d     $ra, $sp, 8
+    ld.d     $ra, $sp, 8
+    addi.d   $sp, $sp, 16
+    PUTCH_PHYS 'S'
+
+    /*
+     * Call Rust as a normal function, not tail-jump.
+     * This gives rust_main_real a valid return address in ra.
+     */
+    jirl     $ra, $r23, 0
+
+1:
+    b 1b

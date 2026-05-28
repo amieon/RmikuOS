@@ -75,35 +75,24 @@ unsafe extern "C" {
 
 
 #[no_mangle]
-pub extern "C" fn rust_main(id: usize) -> ! {
+pub extern "C" fn rust_main_real(hart_id: usize) -> ! {
     #[cfg(target_arch = "loongarch64")]
-    crate::io::uart::putchar_phys_raw(b'R');
-
-    if id >= arch::MAX_HARTS {
-        park_forever();
+    unsafe {
+        core::arch::asm!(
+            "li.d  $t6, 0x1fe001e0",
+            "1:",
+            "ld.bu $t5, $t6, 5",
+            "andi  $t5, $t5, 0x20",
+            "beqz  $t5, 1b",
+            "li.w  $t5, 114",       // 'r'
+            "st.b  $t5, $t6, 0",
+            options(nostack)
+        );
     }
-    
-    HART_LOCALS[id].id.store(id, Ordering::Relaxed);
-
-    if id == 0 {
-        log::info!("rust_main at high half");
-        log::info!("kernel va: {:#x}..{:#x}", { core::ptr::addr_of!(_kernel_start) as usize } as usize, { core::ptr::addr_of!(_kernel_end) as usize } as usize);
-        // 主核路径
-        primary_init();
-
-        // 点亮信号灯：从核们，可以进来了！
-        // Release 保证上面的所有初始化对从核可见。
-        MASTER_READY.store(true, Ordering::Release);
-        println!("主核初始化完成，从核可以进入了。");
-    } else {
-        // 从核路径：Acquire 保证看到 true 时，主核初始化也都可见。
-        while !MASTER_READY.load(Ordering::Acquire) {
-            core::hint::spin_loop();
-        }
-        secondary_init(id);
+    loop {
+        
     }
-     test::user_test::user_test();
-    kernel_loop(id);
+    // 原来 rust_main 里的代码放这里
 }
 
 fn primary_init() {
