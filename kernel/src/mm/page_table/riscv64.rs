@@ -63,6 +63,10 @@ impl PageTableEntry {
         }
     }
 
+    pub fn bits(self) -> usize {
+        self.bits
+    }
+
     pub fn ppn(self) -> PhysPageNum {
         PhysPageNum((self.bits >> 10) & ((1usize << 44) - 1))
     }

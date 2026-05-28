@@ -159,12 +159,17 @@ fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
 }
 
 #[cfg(target_arch = "loongarch64")]
+#[cfg(target_arch = "loongarch64")]
 fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
-    let mut flags = PteFlags::MAT_CC.union(PteFlags::G);
+    let mut flags = PteFlags::MAT_CC;
 
-    if permission.contains(MapPermission::W) {
-        flags = flags.union(PteFlags::W).union(PteFlags::D);
+
+    if permission.contains(MapPermission::U) {
+        flags = flags.union(PteFlags::PLV3);
+    } else {
+        flags = flags.union(PteFlags::PLV0).union(PteFlags::G);
     }
+
 
     if !permission.contains(MapPermission::R) {
         flags = flags.union(PteFlags::NR);
@@ -174,10 +179,9 @@ fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
         flags = flags.union(PteFlags::NX);
     }
 
-    if permission.contains(MapPermission::U) {
-        flags = flags.union(PteFlags::PLV3);
-    } else {
-        flags = flags.union(PteFlags::PLV0);
+
+    if permission.contains(MapPermission::W) {
+        flags = flags.union(PteFlags::W).union(PteFlags::D);
     }
 
     flags

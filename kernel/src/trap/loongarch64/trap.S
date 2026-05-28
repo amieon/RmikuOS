@@ -43,6 +43,22 @@
     .equ PLV_USER, 0x3
 
 
+
+
+
+    .equ UART_BASE_HIGH, 0x900000001fe001e0
+
+    .macro PUTCH_HIGH ch
+        li.d    $r20, UART_BASE_HIGH
+1:
+        ld.bu   $r21, $r20, 5
+        andi    $r21, $r21, 0x20
+        beqz    $r21, 1b
+        li.w    $r21, \ch
+        st.b    $r21, $r20, 0
+    .endm
+
+
 /*
  * Trap entry.
  *
@@ -59,6 +75,7 @@
  *   as scratch registers.
  */
 __alltraps:
+    PUTCH_HIGH 'T'
     /*
      * Save original r12/r13 immediately.
      *
@@ -86,6 +103,7 @@ __alltraps:
  * We are already on a kernel stack.
  */
 .Ltrap_from_kernel:
+
     addi.d  $r3, $r3, -TRAP_CONTEXT_SIZE
 
     st.d    $r0,  $r3, 0
@@ -149,6 +167,8 @@ __alltraps:
      */
     csrwr   $zero, CSR_KSAVE0
 
+PUTCH_HIGH 'H'
+
     addi.d  $r4, $r3, 0
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
@@ -166,6 +186,7 @@ __alltraps:
  *   KSAVE2  = original user r13
  */
 .Ltrap_from_user:
+PUTCH_HIGH 'u'
     /*
      * Save user sp temporarily in r13.
      * Original user r13 is already in KSAVE2.
@@ -179,6 +200,8 @@ __alltraps:
      */
     csrrd   $r12, CSR_KSAVE0
     addi.d  $r3, $r12, -TRAP_CONTEXT_SIZE
+
+PUTCH_HIGH 's'
 
     st.d    $r0,  $r3, 0
     st.d    $r1,  $r3, 8
@@ -235,6 +258,8 @@ __alltraps:
      * Now we are in kernel handler.
      */
     csrwr   $zero, CSR_KSAVE0
+
+    PUTCH_HIGH 'H'
 
     addi.d  $r4, $r3, 0
     la.global $r12, loongarch_trap_handler
@@ -384,5 +409,6 @@ __restore:
      * Restore user sp last.
      */
     ld.d    $r3,  $r3, 24
+    PUTCH_HIGH 'U'
 
     ertn

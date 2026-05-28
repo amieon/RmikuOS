@@ -31,14 +31,11 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
         (0usize  << 30);  // PTEWidth = 64-bit
 
     let pwch =
-        (39usize << 0)  | // Dir3_base
-        (9usize  << 6)  | // Dir3_width
-        (0usize  << 12) | // Dir4_base
-        (0usize  << 18);  // no Dir4
+        (39usize << 0) | // Dir3_base
+        (9usize  << 6); // Dir3_width
 
     let refill_va = __tlb_refill as usize;
     let refill_pa = crate::mm::virt_to_phys(refill_va);
-
 
     unsafe {
         asm!(
@@ -57,13 +54,13 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
             options(nostack)
         );
 
-   
         asm!("tlbflush", options(nostack));
-
-
 
         let mut crmd: usize;
         asm!("csrrd {0}, 0x0", out(reg) crmd, options(nostack));
+
+        const CRMD_DA: usize = 1 << 3;
+        const CRMD_PG: usize = 1 << 4;
 
         crmd &= !CRMD_DA;
         crmd |= CRMD_PG;
@@ -71,28 +68,21 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
         asm!("csrwr {0}, 0x0", in(reg) crmd, options(nostack));
         asm!("ibar 0", "dbar 0", options(nostack));
 
-
-
-
+        /*
+         * Bring-up 阶段：
+         *
+         * 清 DMW0，保证低地址用户空间必须走页表。
+         * 保留 DMW1，让内核高半继续稳定运行。
+         */
         asm!(
             "csrwr $zero, 0x180", // DMW0
-            "csrwr $zero, 0x181", // DMW1
-            "csrwr $zero, 0x182", // DMW2
-            "csrwr $zero, 0x183", // DMW3
+            // "csrwr $zero, 0x181", // DMW1: keep high direct map
+            "csrwr $zero, 0x182",
+            "csrwr $zero, 0x183",
             options(nostack)
         );
-
-     
     }
-
-    log::info!(
-        "[mm] LoongArch page table prepared: root_pa={:#x}, refill_va={:#x}, refill_pa={:#x}",
-        root_pa,
-        refill_va,
-        refill_pa
-    );
 }
-
 
 
 pub fn activate_page_table(root_ppn: PhysPageNum) {

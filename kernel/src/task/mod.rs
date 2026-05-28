@@ -38,7 +38,25 @@ unsafe extern "C" {
 pub fn run_user(user_space: MemorySet, trap_cx: TrapContext) -> ! {
     let root = user_space.root_ppn();
 
+
+    let entry = trap_cx.user_pc();
+    let user_sp = trap_cx.user_sp();
+
+
+    let pte = user_space
+        .translate(crate::mm::VirtAddr(entry).floor())
+        .expect("user entry not mapped");
+
+    log::info!(
+        "[task] user entry pte: entry={:#x}, ppn={:?}, bits={:#x}",
+        entry,
+        pte.ppn(),
+        pte.bits(),
+    );
+
+
     let _user_space = Box::leak(Box::new(user_space));
+
 
     let trap_cx_ptr = unsafe {
         USER_KERNEL_STACK.push_context(trap_cx)
@@ -46,18 +64,14 @@ pub fn run_user(user_space: MemorySet, trap_cx: TrapContext) -> ! {
 
     log::info!(
         "[task] enter user: entry={:#x}, sp={:#x}, root={:?}, kstack_top={:#x}, trap_cx={:#x}",
-        unsafe { (*trap_cx_ptr).user_pc() },
-        unsafe { (*trap_cx_ptr).user_sp() },
+        entry,
+        user_sp,
         root,
         USER_KERNEL_STACK.top(),
         trap_cx_ptr as usize,
     );
 
-    //crate::io::uart::puts_raw("[task] before activate user page table\n");
-
     crate::mm::activate_page_table(root);
-
-    //crate::io::uart::puts_raw("[task] after activate user page table\n");
 
     unsafe {
         __restore_user(trap_cx_ptr as *const TrapContext);

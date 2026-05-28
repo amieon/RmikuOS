@@ -287,11 +287,11 @@ impl PageTable {
 
         let flags = flags
             .union(PteFlags::V)
-            .union(PteFlags::P)
-            .union(PteFlags::PLV0);
+            .union(PteFlags::P);
 
         *pte = PageTableEntry::new(ppn, flags).bits();
     }
+
 
     pub fn unmap(&mut self, vpn: VirtPageNum) {
         let pte = self.find_pte(vpn).expect("pte not found");
