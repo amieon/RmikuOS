@@ -11,6 +11,7 @@ mod timer;
 mod mm;
 mod panic;
 mod test;
+mod task;
 
 #[macro_use]
 mod io;

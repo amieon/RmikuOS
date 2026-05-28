@@ -92,3 +92,22 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
         refill_pa
     );
 }
+
+
+
+pub fn activate_page_table(root_ppn: PhysPageNum) {
+    let root_pa = root_ppn.0 << PAGE_SIZE_BITS;
+
+    unsafe {
+        asm!(
+            "csrwr {pgdl}, 0x19",
+            "csrwr {pgdh}, 0x1a",
+            pgdl = in(reg) root_pa,
+            pgdh = in(reg) root_pa,
+            options(nostack)
+        );
+
+        asm!("tlbflush", options(nostack));
+        asm!("ibar 0", "dbar 0", options(nostack));
+    }
+}

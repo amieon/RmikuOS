@@ -11,7 +11,9 @@ use core::fmt::{self, Write};
 pub use context::TrapContext;
 
 global_asm!(include_str!("trap.S"));
+global_asm!(include_str!("restore.S"));
 global_asm!(include_str!("tlb_refill.S"));
+
 
 const ECODE_INT: usize = 0x00;
 const ECODE_PIL: usize = 0x01;

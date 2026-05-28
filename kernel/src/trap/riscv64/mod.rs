@@ -11,6 +11,8 @@ use core::fmt::{self, Write};
 pub use context::TrapContext;
 
 global_asm!(include_str!("trap.S"));
+global_asm!(include_str!("restore.S"));
+
 
 const CAUSE_U_ECALL: usize = 8;
 const CAUSE_S_ECALL: usize = 9;
