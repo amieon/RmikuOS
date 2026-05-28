@@ -136,6 +136,7 @@ SECTIONS
         _ebss = .;
     } :data
 
+
     . = ALIGN(4K);
 
     _kernel_end = .;
@@ -148,6 +149,32 @@ SECTIONS
 
     _sbss_phys = _sbss - KERNEL_OFFSET;
     _ebss_phys = _ebss - KERNEL_OFFSET;
+
+
+
+    boot_pg_start = .;
+
+    boot_pgd = .;
+    . += 4096;
+
+    boot_dir2 = .;
+    . += 4096;
+
+    boot_dir1 = .;
+    . += 4096;
+
+    boot_pt_pool = .;
+    . += 4096 * BOOT_PT_PAGES;
+
+    boot_uart_pt = .;
+    . += 4096;
+
+    boot_pg_end = .;
+
+    . = ALIGN(4K);
+
+    boot_stack = .;
+    . += STACK_SIZE * MAX_HARTS;
 
     /DISCARD/ : {
         *(.eh_frame)

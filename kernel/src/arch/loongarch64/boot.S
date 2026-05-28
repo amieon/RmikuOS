@@ -79,42 +79,42 @@
     .endm
 
     .macro PUTCH_REG reg
-            li.d    $t6, UART_PADDR
+        li.d    $t6, UART_PADDR
     .Lputch_wait\@:
-            ld.bu   $t5, $t6, 5
-            andi    $t5, $t5, 0x20
-            beqz    $t5, .Lputch_wait\@
-            st.b    \reg, $t6, 0
-        .endm
+        ld.bu   $t5, $t6, 5
+        andi    $t5, $t5, 0x20
+        beqz    $t5, .Lputch_wait\@
+        st.b    \reg, $t6, 0
+    .endm
 
-        .macro PUTHEX64 reg
-            /*
-            * Print 16 hex digits of \reg.
-            * Clobbers: t0, t1, t2, t3, t4, t5, t6
-            */
-            addi.d  $t3, \reg, 0
-            li.d    $t4, 60
-            li.d    $t0, 16
+    .macro PUTHEX64 reg
+        /*
+         * Print 16 hex digits of \reg.
+         * Clobbers: t0, t1, t2, t3, t4, t5, t6
+         */
+        addi.d  $t3, \reg, 0
+        li.d    $t4, 60
+        li.d    $t0, 16
 
     .Lhex_loop\@:
-            srl.d   $t1, $t3, $t4
-            andi    $t1, $t1, 0xf
+        srl.d   $t1, $t3, $t4
+        andi    $t1, $t1, 0xf
 
-            li.d    $t2, 10
-            blt     $t1, $t2, .Lhex_digit\@
-            addi.d  $t1, $t1, 87          /* 'a' - 10 */
-            b       .Lhex_out\@
+        li.d    $t2, 10
+        blt     $t1, $t2, .Lhex_digit\@
+        addi.d  $t1, $t1, 87
+        b       .Lhex_out\@
 
     .Lhex_digit\@:
-            addi.d  $t1, $t1, 48          /* '0' */
+        addi.d  $t1, $t1, 48
 
     .Lhex_out\@:
-            PUTCH_REG $t1
+        PUTCH_REG $t1
 
-            addi.d  $t4, $t4, -4
-            addi.d  $t0, $t0, -1
-            bnez    $t0, .Lhex_loop\@
-        .endm
+        addi.d  $t4, $t4, -4
+        addi.d  $t0, $t0, -1
+        bnez    $t0, .Lhex_loop\@
+    .endm
 
     /*
      * LoongArch PTE bits.
@@ -135,8 +135,7 @@
     .equ PTE_W,            0x100
 
     /*
-     * Directory entries:
-     * use P | V for better compatibility with hardware page walk.
+     * Directory entries: P only.
      */
     .equ PTE_DIR,          0x80
 
@@ -178,71 +177,74 @@ _start:
      */
     la.local $t0, boot_pg_start
     la.local $t1, boot_pg_end
+
 .Lclear_boot_pg:
     bgeu    $t0, $t1, .Lclear_boot_pg_done
     st.d    $zero, $t0, 0
     addi.d  $t0, $t0, 8
     b       .Lclear_boot_pg
+
 .Lclear_boot_pg_done:
+    /*
+     * Clear kernel .bss through low physical addresses.
+     *
+     * DMW0 is enabled here, so low physical memory is directly accessible.
+     * Do this before switching to high-half paging to avoid early high VA
+     * symbol / TLB refill issues.
+     */
+    PUTCH_PHYS 'c'
+
+    la.local $t0, _sbss_phys
+    la.local $t1, _ebss_phys
+
+.Lclear_kernel_bss_phys:
+    bgeu    $t0, $t1, .Lclear_kernel_bss_phys_done
+    st.d    $zero, $t0, 0
+    addi.d  $t0, $t0, 8
+    b       .Lclear_kernel_bss_phys
+
+.Lclear_kernel_bss_phys_done:
+    PUTCH_PHYS 'C'
 
     /*
-    * Build bootstrap page table.
-    *
-    * Normally:
-    *   root[BOOT_DIR3_IDX] -> boot_dir2
-    *
-    * Debug/safe alias:
-    *   root[0] -> boot_dir2
-    *
-    * This helps detect whether the hardware page-walk uses the index
-    * we expected for 0xffff8000....
-    */
-
-    /*
-    * Debug-safe bootstrap:
-    * Fill every root entry with boot_dir2.
-    */
+     * Debug-safe bootstrap:
+     * Fill every root entry with boot_dir2.
+     */
     li.d     $t0, 0
     li.d     $t1, 512
     la.local $t2, boot_pgd
     la.local $t3, boot_dir2
     ori      $t3, $t3, PTE_DIR
 
-    .Lfill_root_all:
-        bgeu    $t0, $t1, .Lfill_root_all_done
-        slli.d  $t4, $t0, 3
-        add.d   $t5, $t2, $t4
-        st.d    $t3, $t5, 0
-        addi.d  $t0, $t0, 1
-        b       .Lfill_root_all
+.Lfill_root_all:
+    bgeu    $t0, $t1, .Lfill_root_all_done
+    slli.d  $t4, $t0, 3
+    add.d   $t5, $t2, $t4
+    st.d    $t3, $t5, 0
+    addi.d  $t0, $t0, 1
+    b       .Lfill_root_all
 
-    .Lfill_root_all_done:
-
-    /* root[0] = boot_dir2 | P */
-    la.local $t0, boot_pgd
-    la.local $t2, boot_dir2
-    ori      $t2, $t2, PTE_DIR
-    st.d     $t2, $t0, 0
+.Lfill_root_all_done:
 
     /*
-    * Debug-safe bootstrap:
-    * Fill every dir2 entry with boot_dir1.
-    */
+     * Debug-safe bootstrap:
+     * Fill every dir2 entry with boot_dir1.
+     */
     li.d     $t0, 0
     li.d     $t1, 512
     la.local $t2, boot_dir2
     la.local $t3, boot_dir1
     ori      $t3, $t3, PTE_DIR
 
-    .Lfill_dir2_all:
-        bgeu    $t0, $t1, .Lfill_dir2_all_done
-        slli.d  $t4, $t0, 3
-        add.d   $t5, $t2, $t4
-        st.d    $t3, $t5, 0
-        addi.d  $t0, $t0, 1
-        b       .Lfill_dir2_all
+.Lfill_dir2_all:
+    bgeu    $t0, $t1, .Lfill_dir2_all_done
+    slli.d  $t4, $t0, 3
+    add.d   $t5, $t2, $t4
+    st.d    $t3, $t5, 0
+    addi.d  $t0, $t0, 1
+    b       .Lfill_dir2_all
 
-    .Lfill_dir2_all_done:
+.Lfill_dir2_all_done:
 
     /*
      * Fill boot_dir1 entries:
@@ -251,6 +253,7 @@ _start:
      */
     li.d     $t0, 0
     li.d     $t1, BOOT_PT_PAGES
+
 .Lfill_dir1:
     bgeu     $t0, $t1, .Lfill_dir1_done
 
@@ -268,6 +271,7 @@ _start:
 
     addi.d   $t0, $t0, 1
     b        .Lfill_dir1
+
 .Lfill_dir1_done:
 
     /*
@@ -280,6 +284,7 @@ _start:
     li.d     $t1, BOOT_MAP_PAGES
     li.d     $t2, KERNEL_PHYS_BASE
     la.local $t3, boot_pt_pool
+
 .Lfill_leaf:
     bgeu     $t0, $t1, .Lfill_leaf_done
 
@@ -293,6 +298,7 @@ _start:
 
     addi.d   $t0, $t0, 1
     b        .Lfill_leaf
+
 .Lfill_leaf_done:
 
     /*
@@ -320,6 +326,11 @@ _start:
     st.d     $t1, $t0, 0
 
     /*
+     * Make page-table writes visible before enabling page walk.
+     */
+    dbar 0
+
+    /*
      * Configure page walk.
      *
      * PT    VA[20:12]
@@ -329,29 +340,24 @@ _start:
      *
      * TLB refill uses lddir 4,3,2.
      */
-   /*
-    * Make page-table writes visible before enabling page walk.
-    */
-    dbar 0
-
     la.local $t0, boot_pgd
 
-    li.d    $t1, (12 << 0)  | (9 << 5)  | (21 << 10) | (9 << 15) |  (30 << 20) | (9 << 25) |  (0 << 30)
+    li.d    $t1, (12 << 0)  | (9 << 5)  |  (21 << 10) | (9 << 15) |  (30 << 20) | (9 << 25) |  (0 << 30)
 
     li.d    $t2, (39 << 0) | (9 << 6)
 
     /*
-    * csrwr clobbers its source register.
-    * So reload boot_pgd before writing PGDH.
-    */
+     * csrwr clobbers its source register.
+     * Reload boot_pgd before writing PGDH.
+     */
     csrwr   $t0, CSR_PGDL
 
     la.local $t0, boot_pgd
     csrwr   $t0, CSR_PGDH
 
     /*
-    * Do NOT write these twice.
-    */
+     * Do NOT write these twice.
+     */
     csrwr   $t1, CSR_PWCL
     csrwr   $t2, CSR_PWCH
 
@@ -360,11 +366,16 @@ _start:
 
     /*
      * TLB refill entry must be physical address.
+     * In this boot/runtime layout, la.local already gives LMA/physical address.
      */
     la.local $t4, __tlb_refill
-    li.d     $t5, KERNEL_OFFSET
-    sub.d    $t4, $t4, $t5
     csrwr    $t4, CSR_TLBRENTRY
+
+    csrrd    $t0, CSR_TLBRENTRY
+    PUTCH_PHYS 'T'
+    PUTCH_PHYS '['
+    PUTHEX64 $t0
+    PUTCH_PHYS ']'
 
     /*
      * Emergency normal-exception entry during boot.
@@ -400,40 +411,29 @@ _start:
 
     /*
      * Prepare high-half .bss addresses.
-        */
-    /*
-    * Prepare high-half .bss addresses.
-    *
-    * Use high-half linker symbols directly.
-    * Do NOT use _sbss_phys + KERNEL_OFFSET here.
-    */
-    la.local $t0, _sbss
-    la.local $t1, _ebss
+     *
+     * Warning: la.local may give LMA-style address in this mixed layout.
+     * So use physical alias + KERNEL_OFFSET explicitly.
+     */
+
 
     PUTCH_PHYS 'b'
 
     /*
      * Test high-half rust_main read mapping.
-     * If this succeeds, print 'r'.
      */
-    la.local $t3, rust_main
+    la.local $t3, rust_main_false
     ld.d     $t5, $t3, 0
+
     PUTCH_PHYS 'r'
 
     /*
-     * Clear high-half .bss through page-table mapping.
+     * Kernel .bss was already cleared through low physical addresses.
      */
-.Lclear_bss:
-    bgeu    $t0, $t1, .Lclear_bss_done
-    st.d    $zero, $t0, 0
-    addi.d  $t0, $t0, 8
-    b       .Lclear_bss
-.Lclear_bss_done:
-
     PUTCH_PHYS 'B'
 
     /*
-     * Jump to high-half rust_main.
+     * Jump to high-half trampoline.
      */
     la.local $t0, boot_high_trampoline
 
@@ -443,50 +443,41 @@ _start:
     jirl     $zero, $t0, 0
 
 
-    .align 4
-boot_to_rust:
-    /*
-     * If you see R, high-half jirl works and we reached this trampoline.
-     */
-    PUTCH_PHYS 'R'
-
-    /*
-     * Now jump to real Rust entry.
-     */
-    la.local $t0, rust_main
-    jirl     $zero, $t0, 0
-
-
     /*
      * Emergency exception handler before Rust trap is initialized.
      * Prints E + ecode hex.
      */
     .align 12
+    .equ CSR_ESTAT, 0x5
+    .equ CSR_ERA,   0x6
+    .equ CSR_BADV,  0x7
+    .equ CSR_BADI,  0x8
+
+    .macro PRINT_CSR tag, csr
+        PUTCH_PHYS \tag
+        PUTCH_PHYS '['
+        csrrd   $t0, \csr
+        PUTHEX64 $t0
+        PUTCH_PHYS ']'
+    .endm
+
 boot_exception:
     PUTCH_PHYS 'E'
 
-    /*
-     * CSR.ESTAT = 0x5
-     * ecode = ESTAT[21:16]
-     */
-    csrrd   $t0, 0x5
-    srli.d  $t0, $t0, 16
-    andi    $t0, $t0, 0x3f
+    PRINT_CSR 'S', CSR_ESTAT
+    PRINT_CSR 'P', CSR_ERA
+    PRINT_CSR 'I', CSR_BADI
+    PRINT_CSR 'V', CSR_BADV
 
-    /*
-     * High hex nibble.
-     */
-    srli.d  $t1, $t0, 4
-    andi    $t1, $t1, 0xf
 
-    li.d    $t2, 10
-    blt     $t1, $t2, .Lecode_hi_digit
-    addi.d  $t1, $t1, 87
-    b       .Lecode_hi_out
+    b .Lboot_exception_hang
+
 .Lecode_hi_digit:
     addi.d  $t1, $t1, 48
+
 .Lecode_hi_out:
     li.d    $t6, UART_PADDR
+
 .Lecode_hi_wait:
     ld.bu   $t5, $t6, 5
     andi    $t5, $t5, 0x20
@@ -502,10 +493,13 @@ boot_exception:
     blt     $t1, $t2, .Lecode_lo_digit
     addi.d  $t1, $t1, 87
     b       .Lecode_lo_out
+
 .Lecode_lo_digit:
     addi.d  $t1, $t1, 48
+
 .Lecode_lo_out:
     li.d    $t6, UART_PADDR
+
 .Lecode_lo_wait:
     ld.bu   $t5, $t6, 5
     andi    $t5, $t5, 0x20
@@ -516,90 +510,47 @@ boot_exception:
     b .Lboot_exception_hang
 
 
-    .section .bss.boot, "aw", @nobits
-    .align 12
-
-boot_pg_start:
-
-boot_pgd:
-    .space 4096
-
-boot_dir2:
-    .space 4096
-
-boot_dir1:
-    .space 4096
 
 
-    .section .text.highboot, "ax"
 
     /*
-     * Force next code to page 0x...109000-like odd/even boundary is hard,
-     * but we can at least create a function on previous page by alignment tests.
+     * ============================================================
+     * Real high-half assembly code.
+     *
+     * This must be after .bss.boot block, in .text.highboot.
+     * ============================================================
      */
-    .align 12
-odd_even_test_page1:
-    PUTCH_PHYS 'O'
-1:
-    b 1b
-
-
-/*
- * BOOT_MAP_SIZE / 2MiB PT pages.
- */
-boot_pt_pool:
-    .space 4096 * BOOT_PT_PAGES
-
-boot_uart_pt:
-    .space 4096
-
-boot_pg_end:
-
-    .align 12
-boot_stack:
-    .space STACK_SIZE * 8
-
-
-
-
-
-
-
     .section .text.highboot, "ax"
     .align 4
+
     .global boot_high_trampoline
+    .type boot_high_trampoline, @function
+
 boot_high_trampoline:
     PUTCH_PHYS 'H'
 
-    la.local $t0, rust_main
-    jirl     $zero, $t0, 0
-
-
-
-
-    .section .text.highboot, "ax"
-    .align 4
-    .global rust_main
-    .type rust_main, @function
-    
-
-
-    .section .text.highboot, "ax"
-
     /*
-     * Force next code to page 0x...109000-like odd/even boundary is hard,
-     * but we can at least create a function on previous page by alignment tests.
+     * rust_main is in the same .text.highboot section.
+     * Use PC-relative branch; do not use la.local + KERNEL_OFFSET here.
      */
-    .align 12
-odd_even_test_page2:
-    PUTCH_PHYS 'O'
-1:
-    b 1b
+    b rust_main_false
 
-rust_main:
+
+    .align 4
+    .global rust_main_false
+    .type rust_main_false, @function
+
+    .align 4
+    .global rust_main_false
+    .type rust_main_false, @function
+
+rust_main_false:
     PUTCH_PHYS 'R'
 
-    la.local $r22, rust_main_real
+    /*
+     * la.local gives LMA-style address for Rust symbol here.
+     */
+    la.local $r22, rust_main
 
     PUTCH_PHYS '['
     PUTHEX64 $r22
@@ -612,28 +563,28 @@ rust_main:
     PUTHEX64 $r23
     PUTCH_PHYS '>'
 
-    /*
-     * Test target page as data load.
-     * If this prints L, rust_main_real page is readable.
-     */
     ld.d     $t0, $r23, 0
     PUTCH_PHYS 'L'
 
-    /*
-     * Test current high-half stack.
-     * If this prints S, stack write/read is OK.
-     */
     addi.d   $sp, $sp, -16
     st.d     $ra, $sp, 8
     ld.d     $ra, $sp, 8
     addi.d   $sp, $sp, 16
     PUTCH_PHYS 'S'
 
-    /*
-     * Call Rust as a normal function, not tail-jump.
-     * This gives rust_main_real a valid return address in ra.
-     */
+    PUTCH_PHYS 'Q'
+    PUTCH_PHYS '['
+    ld.wu    $t0, $r22, 0
+    PUTHEX64 $t0
+    PUTCH_PHYS ']'
+
+    PUTCH_PHYS 'M'
+    PUTCH_PHYS '['
+    ld.wu    $t0, $r23, 0
+    PUTHEX64 $t0
+    PUTCH_PHYS ']'
+
     jirl     $ra, $r23, 0
 
-1:
-    b 1b
+.Lrust_main_hang:
+    b .Lrust_main_hang
