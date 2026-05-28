@@ -11,7 +11,7 @@ use core::fmt::{self, Write};
 pub use context::TrapContext;
 
 global_asm!(include_str!("trap.S"));
-global_asm!(include_str!("restore.S"));
+
 
 
 const CAUSE_U_ECALL: usize = 8;
@@ -46,9 +46,10 @@ pub fn init() {
 
     let entry = __alltraps as usize;
     unsafe {
-        // stvec.MODE = 0 means Direct mode.  __alltraps is aligned, so the low
-        // two bits are already zero.
         asm!("csrw stvec, {0}", in(reg) entry, options(nostack));
+    }
+    unsafe {
+        asm!("csrw sscratch, zero", options(nostack));
     }
     trap_println!("RISC-V trap initialized: stvec={:#x}", entry);
 }
@@ -77,11 +78,16 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     }
 
     match code {
-        CAUSE_U_ECALL | CAUSE_S_ECALL => {
+        CAUSE_U_ECALL => {
             cx.sepc += 4;
-            let syscall_id = cx.x[17]; // a7
-            let args = [cx.x[10], cx.x[11], cx.x[12]]; // a0, a1, a2
-            cx.x[10] = handle_syscall(syscall_id, args) as usize; // return in a0
+            let syscall_id = cx.x[17];
+            let args = [cx.x[10], cx.x[11], cx.x[12]];
+            cx.x[10] = handle_syscall(syscall_id, args) as usize;
+        }
+
+        CAUSE_S_ECALL => {
+            trap_println!("[trap] unexpected supervisor ecall at sepc={:#x}", cx.sepc);
+            panic!("unexpected supervisor ecall");
         }
         CAUSE_BREAKPOINT => {
             trap_println!("[trap] breakpoint at sepc={:#x}", cx.sepc);
@@ -120,6 +126,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
 }
 
 fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
+    
     trap_println!(
         "[trap] syscall id={} args=[{:#x}, {:#x}, {:#x}]",
         id,

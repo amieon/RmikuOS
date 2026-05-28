@@ -19,6 +19,8 @@ mod io;
 
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+use crate::test::user_test;
+
 
 
 
@@ -98,7 +100,7 @@ pub extern "C" fn rust_main(id: usize) -> ! {
         }
         secondary_init(id);
     }
-
+     test::user_test::user_test();
     kernel_loop(id);
 }
 
@@ -119,6 +121,7 @@ fn primary_init() {
     timer::init();
 
     test::user_memory_set_test::user_memory_set_test();
+    
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
@@ -135,6 +138,7 @@ fn primary_init() {
     // - 进程调度器
     // ...
     println!("主核初始化完毕。");
+    
 }
 
 fn secondary_init(id: usize) {
