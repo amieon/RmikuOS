@@ -1,8 +1,4 @@
 //! RISC-V trap context.
-//!
-//! This is intentionally architecture-local.  It mirrors what trap.S saves
-//! on the current kernel stack.  Later, when user tasks are added, this can
-//! be embedded into a TaskControlBlock instead of using a global context array.
 
 #[repr(C)]
 #[derive(Debug)]
@@ -30,34 +26,78 @@ impl TrapContext {
         }
     }
 
-    /// RISC-V stack pointer is x2/sp.
     pub fn set_sp(&mut self, sp: usize) {
-        self.x[2] = sp;
+        self.x[REG_SP] = sp;
     }
 
-    /// Minimal user-context initializer for the future.
-    ///
-    /// SPP=0 means return to user mode on sret. SPIE=1 means interrupts will
-    /// be enabled after sret.  This function is not used by the current kernel
-    /// loop yet, but keeping it here makes the later user-mode step clear.
-    pub fn app_init_context(entry: usize, sp: usize) -> Self {
-        const SSTATUS_SPIE: usize = 1 << 5;
-        const SSTATUS_SPP: usize = 1 << 8;
+    pub fn user_sp(&self) -> usize {
+        self.x[REG_SP]
+    }
 
+    pub fn user_pc(&self) -> usize {
+        self.sepc
+    }
+
+    pub fn set_user_pc(&mut self, pc: usize) {
+        self.sepc = pc;
+    }
+
+    pub fn app_init_context(entry: usize, user_sp: usize) -> Self {
         let mut cx = Self::zero();
-        cx.sstatus = SSTATUS_SPIE & !SSTATUS_SPP;
+
+        /*
+         * sret 返回时：
+         *
+         * SPP = 0 -> 返回 U-mode
+         * SPIE = 1 -> sret 后打开中断
+         */
+        cx.sstatus = SSTATUS_SPIE;
+        cx.sstatus &= !SSTATUS_SPP;
+
         cx.sepc = entry;
-        cx.set_sp(sp);
+        cx.set_sp(user_sp);
+
         cx
     }
 
+    pub fn syscall_id(&self) -> usize {
+        self.x[REG_A7]
+    }
+
+    pub fn syscall_args(&self) -> [usize; 3] {
+        [
+            self.x[REG_A0],
+            self.x[REG_A1],
+            self.x[REG_A2],
+        ]
+    }
+
+    pub fn set_syscall_ret(&mut self, ret: usize) {
+        self.x[REG_A0] = ret;
+    }
+
+    pub fn advance_pc(&mut self) {
+        self.sepc += INSTRUCTION_SIZE;
+    }
+
     pub fn is_interrupt(&self) -> bool {
-        const INTERRUPT_BIT: usize = 1usize << (usize::BITS as usize - 1);
-        self.scause & INTERRUPT_BIT != 0
+        self.scause & SCAUSE_INTERRUPT_BIT != 0
     }
 
     pub fn cause_code(&self) -> usize {
-        const INTERRUPT_BIT: usize = 1usize << (usize::BITS as usize - 1);
-        self.scause & !INTERRUPT_BIT
+        self.scause & !SCAUSE_INTERRUPT_BIT
     }
 }
+
+const REG_SP: usize = 2;
+const REG_A0: usize = 10;
+const REG_A1: usize = 11;
+const REG_A2: usize = 12;
+const REG_A7: usize = 17;
+
+const INSTRUCTION_SIZE: usize = 4;
+
+const SSTATUS_SPIE: usize = 1 << 5;
+const SSTATUS_SPP: usize = 1 << 8;
+
+const SCAUSE_INTERRUPT_BIT: usize = 1usize << (usize::BITS as usize - 1);

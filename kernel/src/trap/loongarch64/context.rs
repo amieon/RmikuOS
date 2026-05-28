@@ -1,8 +1,4 @@
 //! LoongArch64 trap context.
-//!
-//! This mirrors what trap.S saves on the current kernel stack.  It is similar
-//! in spirit to rCore's TrapContext, but LoongArch uses PRMD/ERA instead of
-//! sstatus/sepc.
 
 #[repr(C)]
 #[derive(Debug)]
@@ -15,7 +11,7 @@ pub struct TrapContext {
     pub era: usize,
     /// CSR.BADV: bad virtual address.
     pub badv: usize,
-    /// CSR.ESTAT: exception status, including Ecode/EsubCode and interrupt bits.
+    /// CSR.ESTAT: exception status.
     pub estat: usize,
 }
 
@@ -30,24 +26,57 @@ impl TrapContext {
         }
     }
 
-    /// LoongArch stack pointer is r3/sp.
     pub fn set_sp(&mut self, sp: usize) {
-        self.r[3] = sp;
+        self.r[REG_SP] = sp;
     }
 
-    /// Minimal user-context initializer for the future.
-    ///
-    /// PRMD.PPLV=3 returns to user PLV3 on ertn.  PRMD.PIE=1 means interrupt
-    /// enable is restored to enabled after ertn.
-    pub fn app_init_context(entry: usize, sp: usize) -> Self {
-        const PRMD_PPLV_USER: usize = 3;
-        const PRMD_PIE: usize = 1 << 2;
+    pub fn user_sp(&self) -> usize {
+        self.r[REG_SP]
+    }
 
+    pub fn user_pc(&self) -> usize {
+        self.era
+    }
+
+    pub fn set_user_pc(&mut self, pc: usize) {
+        self.era = pc;
+    }
+
+    pub fn app_init_context(entry: usize, user_sp: usize) -> Self {
         let mut cx = Self::zero();
+
+        /*
+         * ertn 返回时：
+         *
+         * PRMD.PPLV = 3 -> 返回 PLV3 用户态
+         * PRMD.PIE  = 1 -> ertn 后恢复中断打开
+         */
         cx.prmd = PRMD_PPLV_USER | PRMD_PIE;
+
         cx.era = entry;
-        cx.set_sp(sp);
+        cx.set_sp(user_sp);
+
         cx
+    }
+
+    pub fn syscall_id(&self) -> usize {
+        self.r[REG_A7]
+    }
+
+    pub fn syscall_args(&self) -> [usize; 3] {
+        [
+            self.r[REG_A0],
+            self.r[REG_A1],
+            self.r[REG_A2],
+        ]
+    }
+
+    pub fn set_syscall_ret(&mut self, ret: usize) {
+        self.r[REG_A0] = ret;
+    }
+
+    pub fn advance_pc(&mut self) {
+        self.era += INSTRUCTION_SIZE;
     }
 
     pub fn ecode(&self) -> usize {
@@ -62,3 +91,14 @@ impl TrapContext {
         self.estat & 0x1fff
     }
 }
+
+const REG_SP: usize = 3;
+const REG_A0: usize = 4;
+const REG_A1: usize = 5;
+const REG_A2: usize = 6;
+const REG_A7: usize = 11;
+
+const INSTRUCTION_SIZE: usize = 4;
+
+const PRMD_PPLV_USER: usize = 3;
+const PRMD_PIE: usize = 1 << 2;
