@@ -24,6 +24,9 @@ pub use memory_set::*;
 pub mod map_area;
 pub use map_area::*;
 
+pub mod user_layout;
+pub use user_layout::*;
+
 use crate::arch::{MEMORY_END, MEMORY_START};
 
 use alloc::boxed::Box;

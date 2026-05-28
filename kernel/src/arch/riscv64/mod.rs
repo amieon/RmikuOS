@@ -10,8 +10,10 @@ pub const MEMORY_START: usize = 0x8000_0000;
 
 /// run.sh uses `-m 128M` for RISC-V.
 pub const MEMORY_SIZE: usize = 128 * 1024 * 1024;
+pub const KERNEL_DIRECT_MAP_SIZE: usize = 128 * 1024 * 1024;
 
 pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
+
 
 /// 读取当前核的 hartid
 /// 在 boot.S 里已经把 hartid 存到了 tp 寄存器
