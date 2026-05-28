@@ -11,7 +11,6 @@ use core::fmt::{self, Write};
 pub use context::TrapContext;
 
 global_asm!(include_str!("trap.S"));
-global_asm!(include_str!("restore.S"));
 global_asm!(include_str!("tlb_refill.S"));
 
 
@@ -57,6 +56,14 @@ pub fn init() {
             options(nostack)
         );
     }
+    unsafe {
+        core::arch::asm!(
+            "csrwr $zero, 0x30",
+            "csrwr $zero, 0x31",
+            "csrwr $zero, 0x32",
+            options(nostack)
+        );
+    }
 
     log::info!("LoongArch trap initialized: eentry={:#x}", eentry);
 }
@@ -65,6 +72,7 @@ pub fn init() {
 
 #[no_mangle]
 pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
+
     match cx.ecode() {
         ECODE_INT => handle_interrupt(cx),
         ECODE_SYS => {
@@ -119,6 +127,7 @@ fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
 
     if pending & ESTAT_IS_TIMER != 0 {
+        clear_timer_interrupt();
         crate::timer::tick();
         return;
     }

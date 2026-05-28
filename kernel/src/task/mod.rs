@@ -53,11 +53,11 @@ pub fn run_user(user_space: MemorySet, trap_cx: TrapContext) -> ! {
         trap_cx_ptr as usize,
     );
 
-    crate::io::uart::puts_raw("[task] before activate user page table\n");
+    //crate::io::uart::puts_raw("[task] before activate user page table\n");
 
     crate::mm::activate_page_table(root);
 
-    crate::io::uart::puts_raw("[task] after activate user page table\n");
+    //crate::io::uart::puts_raw("[task] after activate user page table\n");
 
     unsafe {
         __restore_user(trap_cx_ptr as *const TrapContext);
