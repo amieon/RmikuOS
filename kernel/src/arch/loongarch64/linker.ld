@@ -3,7 +3,7 @@ ENTRY(_start)
 EXTERN(rust_main)
 
 KERNEL_PHYS_BASE = 0x01000000;
-KERNEL_OFFSET    = 0x9000000000000000;
+KERNEL_OFFSET    = 0xffff800000000000;
 
 PHDRS
 {
@@ -84,6 +84,7 @@ SECTIONS
     _kernel_start_phys = _kernel_start - KERNEL_OFFSET;
     _kernel_end_phys   = _kernel_end   - KERNEL_OFFSET;
     _rust_main_phys    = rust_main     - KERNEL_OFFSET;
+    _tlb_refill_phys   = __tlb_refill  - KERNEL_OFFSET;
 
     _sbss_phys = _sbss - KERNEL_OFFSET;
     _ebss_phys = _ebss - KERNEL_OFFSET;

@@ -9,4 +9,4 @@ pub const KERNEL_HEAP_SIZE: usize = 8 * 1024 * 1024;
 pub const KERNEL_OFFSET: usize = 0xffff_ffc0_0000_0000;
 
 #[cfg(target_arch = "loongarch64")]
-pub const KERNEL_OFFSET: usize = 0x9000_0000_0000_0000;
+pub const KERNEL_OFFSET: usize = 0xffff_8000_0000_0000;

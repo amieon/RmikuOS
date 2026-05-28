@@ -42,3 +42,33 @@ pub fn puts_raw(s: &str) {
         UART_DEV.puts(s);
     }
 }
+
+use core::ptr::{read_volatile, write_volatile};
+
+const UART_THR: usize = 0; // Transmit Holding Register
+const UART_LSR: usize = 5; // Line Status Register
+const UART_LSR_THRE: u8 = 1 << 5; // Transmit Holding Register Empty
+
+#[inline]
+fn uart_base() -> *mut u8 {
+    crate::arch::UART_BASE as *mut u8
+}
+
+pub fn putchar_raw(ch: u8) {
+    let uart = uart_base();
+
+    unsafe {
+        while read_volatile(uart.add(UART_LSR)) & UART_LSR_THRE == 0 {}
+        write_volatile(uart.add(UART_THR), ch);
+    }
+}
+
+#[cfg(target_arch = "loongarch64")]
+pub fn putchar_phys_raw(ch: u8) {
+    let uart = crate::arch::UART_PADDR as *mut u8;
+
+    unsafe {
+        while read_volatile(uart.add(UART_LSR)) & UART_LSR_THRE == 0 {}
+        write_volatile(uart.add(UART_THR), ch);
+    }
+}

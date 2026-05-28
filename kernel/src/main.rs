@@ -76,6 +76,8 @@ unsafe extern "C" {
 
 #[no_mangle]
 pub extern "C" fn rust_main(id: usize) -> ! {
+    #[cfg(target_arch = "loongarch64")]
+    crate::io::uart::putchar_phys_raw(b'R');
 
     if id >= arch::MAX_HARTS {
         park_forever();
