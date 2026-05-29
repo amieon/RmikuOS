@@ -127,10 +127,15 @@ fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
 
     if pending & ESTAT_IS_TIMER != 0 {
-        clear_timer_interrupt();
-        crate::timer::tick();
+        let should_schedule = crate::timer::tick();
+
+        if should_schedule && cx.is_from_user() {
+            crate::task::preempt_current_and_run_next();
+        }
+
         return;
     }
+    
 
     trap_println!(
         "[trap] unsupported interrupt: pending={:#x}, era={:#x}, estat={:#x}",

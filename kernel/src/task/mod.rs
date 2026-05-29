@@ -11,4 +11,5 @@ pub use manager::{
     exit_current_and_run_next,
     suspend_current_and_run_next,
     read_current_user_bytes,
+    preempt_current_and_run_next,
 };

@@ -11,7 +11,7 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
             process::sys_exit(args[0] as i32);
         }
         SYSCALL_YIELD => {
-            process::sys_yield();
+            process::sys_yield()
         }
         SYSCALL_WRITE => fs::sys_write(args[0], args[1], args[2]),
         _ => {

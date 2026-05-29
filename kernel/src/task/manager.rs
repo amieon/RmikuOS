@@ -57,6 +57,47 @@ impl TaskManager {
         None
     }
 
+    fn find_next_ready_excluding_current(&self) -> Option<usize> {
+        if self.tasks.len() <= 1 {
+            return None;
+        }
+
+        let n = self.tasks.len();
+
+        for step in 1..n {
+            let id = (self.current + step) % n;
+            if self.tasks[id].status == TaskStatus::Ready {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    fn preempt_current_and_prepare_next(&mut self) -> Option<TaskRunInfo> {
+        let current = self.current;
+
+        if self.tasks[current].status == TaskStatus::Running {
+            self.tasks[current].status = TaskStatus::Ready;
+        }
+
+        let next = self.find_next_ready_excluding_current();
+
+        if let Some(next) = next {
+            log::info!(
+                "[task] task {} preempt -> task {}",
+                self.tasks[current].id,
+                self.tasks[next].id,
+            );
+
+            Some(self.prepare_run_task(next))
+        } else {
+
+            self.tasks[current].status = TaskStatus::Running;
+            None
+        }
+    }
+
     fn prepare_run_task(&mut self, id: usize) -> TaskRunInfo {
         self.current = id;
         self.tasks[id].status = TaskStatus::Running;
@@ -96,14 +137,24 @@ impl TaskManager {
     fn suspend_current_and_prepare_next(&mut self) -> Option<TaskRunInfo> {
         let current = self.current;
 
-        log::info!("[task] task {} yield", self.tasks[current].id);
-
         if self.tasks[current].status == TaskStatus::Running {
             self.tasks[current].status = TaskStatus::Ready;
         }
 
-        let next = self.find_next_ready()?;
-        Some(self.prepare_run_task(next))
+        let next = self.find_next_ready_excluding_current();
+
+        if let Some(next) = next {
+            log::info!(
+                "[task] task {} yield -> task {}",
+                self.tasks[current].id,
+                self.tasks[next].id,
+            );
+
+            Some(self.prepare_run_task(next))
+        } else {
+            self.tasks[current].status = TaskStatus::Running;
+            None
+        }
     }
 }
 static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
@@ -127,7 +178,7 @@ pub fn run_first_task() -> ! {
 
     run_task(info)
 }
-pub fn suspend_current_and_run_next() -> ! {
+pub fn suspend_current_and_run_next() -> isize {
     let next = {
         let mut manager = TASK_MANAGER.lock();
         manager.suspend_current_and_prepare_next()
@@ -137,7 +188,7 @@ pub fn suspend_current_and_run_next() -> ! {
         run_task(info);
     }
 
-    panic!("no ready task after yield");
+    0
 }
 pub fn exit_current_and_run_next(exit_code: i32) -> ! {
     let next = {
@@ -206,3 +257,14 @@ pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
     manager.read_current_user_bytes(user_buf, len)
 }
 
+pub fn preempt_current_and_run_next() {
+    let next = {
+        let mut manager = TASK_MANAGER.lock();
+        manager.preempt_current_and_prepare_next()
+    };
+
+    if let Some(info) = next {
+        run_task(info);
+    }
+
+}

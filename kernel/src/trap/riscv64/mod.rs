@@ -61,8 +61,11 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     if cx.is_interrupt() {
         match code {
             INTERRUPT_SUPERVISOR_TIMER => {
-                trap_println!("[trap] supervisor timer interrupt");
-                crate::timer::tick();
+                let should_schedule = crate::timer::tick();
+
+                if should_schedule && cx.is_from_user() {
+                    crate::task::preempt_current_and_run_next();
+                }
             }
             _ => {
                 trap_println!(
