@@ -134,8 +134,10 @@ fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
         args[1],
         args[2]
     );
-
-    // -ENOSYS for now.  Replace this with crate::syscall::syscall(...) after
-    // you add a real syscall table.
-    -38
+    match id {
+        0 => {
+            crate::task::exit_current_and_run_next(args[0] as i32);
+        }
+        _ => -38,
+    }
 }

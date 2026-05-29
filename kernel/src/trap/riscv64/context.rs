@@ -42,21 +42,14 @@ impl TrapContext {
         self.sepc = pc;
     }
 
-    pub fn app_init_context(entry: usize, user_sp: usize) -> Self {
+    pub fn app_init_context(entry: usize, sp: usize) -> Self {
+        const SSTATUS_SPIE: usize = 1 << 5;
+        const SSTATUS_SPP: usize = 1 << 8;
+
         let mut cx = Self::zero();
-
-        /*
-         * sret 返回时：
-         *
-         * SPP = 0 -> 返回 U-mode
-         * SPIE = 1 -> sret 后打开中断
-         */
-        cx.sstatus = SSTATUS_SPIE;
-        cx.sstatus &= !SSTATUS_SPP;
-
+        cx.sstatus = SSTATUS_SPIE & !SSTATUS_SPP;
         cx.sepc = entry;
-        cx.set_sp(user_sp);
-
+        cx.set_sp(sp);
         cx
     }
 
