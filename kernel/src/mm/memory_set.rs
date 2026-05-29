@@ -187,9 +187,11 @@ impl MemorySet {
          * 这些区域 U=0，用户态不能访问。
          * 但是 trap 进入内核后，内核代码/栈/UART 可以继续工作。
          */
-
-        //memory_set.map_kernel_areas();
-
+        #[cfg(target_arch = "riscv64")]
+        {
+            memory_set.map_kernel_areas();
+        }
+  
 
         /*
          * 用户程序区域。

@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::sync::SpinLock;
+use crate::sync::sync::SpinLock;
 use super::address::PhysPageNum;
 
 pub trait FrameAllocator {

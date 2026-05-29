@@ -1,5 +1,3 @@
-// kernel/src/task/kernel_stack.rs
-
 use crate::trap::TrapContext;
 
 pub const KERNEL_STACK_SIZE: usize = 16 * 1024;

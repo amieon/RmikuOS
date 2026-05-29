@@ -12,6 +12,7 @@ mod mm;
 mod panic;
 mod test;
 mod task;
+mod loader;
 
 #[macro_use]
 mod io;
@@ -19,7 +20,7 @@ mod io;
 
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use crate::test::user_test;
+use crate::sync::*;
 
 
 
@@ -139,7 +140,7 @@ fn primary_init() {
     // ...
     println!("主核初始化完毕。");
 
-    task::init_first_task(test::user_test::USER_TEST_APP);
+    task::init();
     task::run_first_task();
     
 }

@@ -1,6 +1,6 @@
 use core::fmt::{self, Write};
 
-use crate::sync::SpinLock;
+use crate::sync::sync::SpinLock;
 
 static CONSOLE_LOCK: SpinLock = SpinLock::new();
 

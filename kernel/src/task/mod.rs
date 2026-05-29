@@ -1,5 +1,3 @@
-// kernel/src/task/mod.rs
-
 mod kernel_stack;
 mod task;
 mod manager;
@@ -7,4 +5,8 @@ mod manager;
 pub use kernel_stack::KernelStack;
 pub use task::{TaskControlBlock, TaskStatus};
 
-pub use manager::{init_first_task, run_first_task};
+pub use manager::{
+    init,
+    run_first_task,
+    exit_current_and_run_next,
+};

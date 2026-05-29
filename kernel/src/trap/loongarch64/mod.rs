@@ -159,10 +159,7 @@ fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
 
     match id {
         0 => {
-            trap_println!("[task] user task exited with code {}", args[0]);
-            loop {
-                core::hint::spin_loop();
-            }
+            crate::task::exit_current_and_run_next(args[0] as i32);
         }
         _ => -38,
     }
