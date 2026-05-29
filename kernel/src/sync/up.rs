@@ -1,19 +1,19 @@
-use core::cell::{RefCell, RefMut};
+use core::cell::UnsafeCell;
 
 pub struct UPSafeCell<T> {
-    inner: RefCell<T>,
+    inner: UnsafeCell<T>,
 }
 
 unsafe impl<T> Sync for UPSafeCell<T> {}
 
 impl<T> UPSafeCell<T> {
-    pub const unsafe fn new(value: T) -> Self {
+    pub const fn new(value: T) -> Self {
         Self {
-            inner: RefCell::new(value),
+            inner: UnsafeCell::new(value),
         }
     }
 
-    pub fn exclusive_access(&self) -> RefMut<'_, T> {
-        self.inner.borrow_mut()
+    pub fn exclusive_access(&self) -> &mut T {
+        unsafe { &mut *self.inner.get() }
     }
 }

@@ -1,5 +1,7 @@
 use alloc::vec::Vec;
+use crate::sync::spin::Mutex;
 
+use crate::mm::PhysPageNum;
 use crate::trap::TrapContext;
 
 use super::task::{TaskControlBlock, TaskStatus};
@@ -8,13 +10,21 @@ unsafe extern "C" {
     fn __restore_user(cx: *const TrapContext) -> !;
 }
 
+#[derive(Clone, Copy)]
+struct TaskRunInfo {
+    id: usize,
+    root: PhysPageNum,
+    kstack_top: usize,
+    trap_cx_addr: usize,
+}
+
 pub struct TaskManager {
     tasks: Vec<TaskControlBlock>,
     current: usize,
 }
 
 impl TaskManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             tasks: Vec::new(),
             current: 0,
@@ -42,37 +52,29 @@ impl TaskManager {
         None
     }
 
-    fn run_task(&mut self, id: usize) -> ! {
+    fn prepare_run_task(&mut self, id: usize) -> TaskRunInfo {
         self.current = id;
         self.tasks[id].status = TaskStatus::Running;
 
         let task = &self.tasks[id];
 
-        log::info!(
-            "[task] run task {}: root={:?}, kstack_top={:#x}, trap_cx={:#x}",
-            task.id,
-            task.root_ppn(),
-            task.kernel_stack.top(),
-            task.trap_cx_ptr as usize,
-        );
-
-        crate::mm::activate_page_table(task.root_ppn());
-
-        unsafe {
-            __restore_user(task.trap_cx_ptr as *const TrapContext);
+        TaskRunInfo {
+            id: task.id,
+            root: task.root_ppn(),
+            kstack_top: task.kernel_stack.top(),
+            trap_cx_addr: task.trap_cx_addr,
         }
     }
 
-    pub fn run_first_task(&mut self) -> ! {
+    fn prepare_first_task(&mut self) -> TaskRunInfo {
         if self.tasks.is_empty() {
             panic!("no user task");
         }
 
-        self.current = 0;
-        self.run_task(0)
+        self.prepare_run_task(0)
     }
 
-    pub fn exit_current_and_run_next(&mut self, exit_code: i32) -> ! {
+    fn exit_current_and_prepare_next(&mut self, exit_code: i32) -> Option<TaskRunInfo> {
         let current = self.current;
 
         log::info!(
@@ -83,49 +85,61 @@ impl TaskManager {
 
         self.tasks[current].status = TaskStatus::Exited;
 
-        if let Some(next) = self.find_next_ready() {
-            self.run_task(next);
-        }
-
-        log::info!("[task] all user tasks exited");
-
-        loop {
-            core::hint::spin_loop();
-        }
+        let next = self.find_next_ready()?;
+        Some(self.prepare_run_task(next))
     }
 }
-
-static mut TASK_MANAGER: Option<TaskManager> = None;
+static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
 pub fn init() {
-    let mut manager = TaskManager::new();
+    let mut manager = TASK_MANAGER.lock();
 
     for id in 0..crate::loader::num_apps() {
         let app = crate::loader::get_app_data(id);
         manager.add_task(TaskControlBlock::new(id, app));
     }
 
-    unsafe {
-        TASK_MANAGER = Some(manager);
-    }
-
     log::info!("[task] loaded {} user tasks", crate::loader::num_apps());
 }
 
 pub fn run_first_task() -> ! {
-    unsafe {
-        TASK_MANAGER
-            .as_mut()
-            .expect("task manager not initialized")
-            .run_first_task()
-    }
+    let info = {
+        let mut manager = TASK_MANAGER.lock();
+        manager.prepare_first_task()
+    };
+
+    run_task(info)
 }
 
 pub fn exit_current_and_run_next(exit_code: i32) -> ! {
+    let next = {
+        let mut manager = TASK_MANAGER.lock();
+        manager.exit_current_and_prepare_next(exit_code)
+    };
+
+    if let Some(info) = next {
+        run_task(info);
+    }
+
+    log::info!("[task] all user tasks exited");
+
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
+fn run_task(info: TaskRunInfo) -> ! {
+    log::info!(
+        "[task] run task {}: root={:?}, kstack_top={:#x}, trap_cx={:#x}",
+        info.id,
+        info.root,
+        info.kstack_top,
+        info.trap_cx_addr,
+    );
+
+    crate::mm::activate_page_table(info.root);
+
     unsafe {
-        TASK_MANAGER
-            .as_mut()
-            .expect("task manager not initialized")
-            .exit_current_and_run_next(exit_code)
+        __restore_user(info.trap_cx_addr as *const TrapContext);
     }
 }
