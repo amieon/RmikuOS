@@ -1,10 +1,15 @@
 use alloc::vec::Vec;
 use crate::sync::spin::Mutex;
 
-use crate::mm::PhysPageNum;
+
 use crate::trap::TrapContext;
 
 use super::task::{TaskControlBlock, TaskStatus};
+
+
+use crate::mm::{PhysPageNum, VirtAddr};
+use crate::mm::config::{ PAGE_SIZE, PAGE_SIZE_BITS};
+
 
 unsafe extern "C" {
     fn __restore_user(cx: *const TrapContext) -> !;
@@ -165,5 +170,39 @@ fn run_task(info: TaskRunInfo) -> ! {
     unsafe {
         __restore_user(info.trap_cx_addr as *const TrapContext);
     }
+}
+
+impl TaskManager {
+    pub fn read_current_user_bytes(&self, user_buf: usize, len: usize) -> Option<Vec<u8>> {
+        let current = self.current;
+        let task = self.tasks.get(current)?;
+
+        let mut bytes = Vec::new();
+
+        for offset in 0..len {
+            let va = user_buf.checked_add(offset)?;
+            let vpn = VirtAddr(va).floor();
+            let page_offset = va & (PAGE_SIZE - 1);
+
+            let pte = task.user_space.translate(vpn)?;
+
+            let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
+            let kva = crate::mm::kernel_phys_to_virt(pa);
+
+            let byte = unsafe { core::ptr::read_volatile(kva as *const u8) };
+            bytes.push(byte);
+        }
+
+        Some(bytes)
+    }
+
+    // 你原来的其他方法保持不变
+}
+
+
+
+pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
+    let manager = TASK_MANAGER.lock();
+    manager.read_current_user_bytes(user_buf, len)
 }
 

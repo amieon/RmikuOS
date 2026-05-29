@@ -10,4 +10,5 @@ pub use manager::{
     run_first_task,
     exit_current_and_run_next,
     suspend_current_and_run_next,
+    read_current_user_bytes,
 };

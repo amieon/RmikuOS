@@ -12,6 +12,7 @@ mod mm;
 mod panic;
 mod test;
 mod task;
+mod syscall;
 
 
 #[macro_use]
