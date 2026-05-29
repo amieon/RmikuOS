@@ -94,3 +94,11 @@ const SSTATUS_SPIE: usize = 1 << 5;
 const SSTATUS_SPP: usize = 1 << 8;
 
 const SCAUSE_INTERRUPT_BIT: usize = 1usize << (usize::BITS as usize - 1);
+
+
+impl TrapContext {
+    pub fn is_from_user(&self) -> bool {
+        const SSTATUS_SPP: usize = 1 << 8;
+        self.sstatus & SSTATUS_SPP == 0
+    }
+}

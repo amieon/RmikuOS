@@ -96,3 +96,13 @@ const INSTRUCTION_SIZE: usize = 4;
 
 const PRMD_PPLV_USER: usize = 3;
 const PRMD_PIE: usize = 1 << 2;
+
+
+impl TrapContext {
+    pub fn is_from_user(&self) -> bool {
+        const PRMD_PPLV_MASK: usize = 0x3;
+        const PLV_USER: usize = 0x3;
+
+        self.prmd & PRMD_PPLV_MASK == PLV_USER
+    }
+}
