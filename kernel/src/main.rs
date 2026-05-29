@@ -117,10 +117,11 @@ fn primary_init() {
     test::memory_set_test::memory_set_test();
 
     mm::init_paging();
-    timer::init();
 
     test::user_memory_set_test::user_memory_set_test();
-    
+
+    timer::init();
+
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
@@ -137,6 +138,8 @@ fn primary_init() {
     // - 进程调度器
     // ...
     println!("主核初始化完毕。");
+
+    test::user_test::user_test();
     
 }
 

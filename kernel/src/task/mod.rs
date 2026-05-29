@@ -71,9 +71,15 @@ pub fn run_user(user_space: MemorySet, trap_cx: TrapContext) -> ! {
         trap_cx_ptr as usize,
     );
 
+
+
     crate::mm::activate_page_table(root);
 
+
+
     unsafe {
+  
         __restore_user(trap_cx_ptr as *const TrapContext);
+
     }
 }

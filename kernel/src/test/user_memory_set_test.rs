@@ -1,11 +1,14 @@
-use crate::mm::{MemorySet,user_layout::*,address::*};
+use crate::mm::{address::*, user_layout::*, MemorySet};
 
 pub fn user_memory_set_test() {
-    /*
-     * 这里先随便放几个字节。
-     * 之后换成真正的用户程序机器码。
-     */
-    let app: &[u8] = &[0u8; 16];
+    let app: &[u8] = &[
+        0x04, 0x00, 0xc0, 0x02,
+        0x05, 0x00, 0xc0, 0x02,
+        0x06, 0x00, 0xc0, 0x02,
+        0x0b, 0x00, 0xc0, 0x02,
+        0x00, 0x00, 0x2b, 0x00,
+        0x00, 0x00, 0x00, 0x50,
+    ];
 
     let (user_space, entry, user_sp) = MemorySet::new_user_test(app);
 
@@ -20,17 +23,37 @@ pub fn user_memory_set_test() {
         .translate(VirtAddr(USER_STACK_TOP - 1).floor())
         .expect("user stack is not mapped");
 
-    let kernel_va = crate::mm::kernel_phys_to_virt(crate::arch::MEMORY_START);
-    let kernel_pte = user_space
-        .translate(VirtAddr(kernel_va).floor())
-        .expect("kernel mapping is not mapped in user page table");
+    #[cfg(target_arch = "riscv64")]
+    {
+        let kernel_va = crate::mm::kernel_phys_to_virt(crate::arch::MEMORY_START);
+        let kernel_pte = user_space
+            .translate(VirtAddr(kernel_va).floor())
+            .expect("kernel mapping is not mapped in user page table");
 
-    log::info!(
-        "[mm] user MemorySet test passed: entry={:#x}, sp={:#x}, text_ppn={:?}, stack_ppn={:?}, kernel_ppn={:?}",
-        entry,
-        user_sp,
-        text_pte.ppn(),
-        stack_pte.ppn(),
-        kernel_pte.ppn(),
-    );
+        log::info!(
+            "[mm] user MemorySet test passed: entry={:#x}, sp={:#x}, text_ppn={:?}, stack_ppn={:?}, kernel_ppn={:?}",
+            entry,
+            user_sp,
+            text_pte.ppn(),
+            stack_pte.ppn(),
+            kernel_pte.ppn(),
+        );
+    }
+
+    #[cfg(target_arch = "loongarch64")]
+    {
+        let kernel_va = crate::mm::kernel_phys_to_virt(crate::arch::MEMORY_START);
+        assert!(
+            user_space.translate(VirtAddr(kernel_va).floor()).is_none(),
+            "LoongArch user page table should not contain kernel direct-map PTE in current design"
+        );
+
+        log::info!(
+            "[mm] user MemorySet test passed: entry={:#x}, sp={:#x}, text_ppn={:?}, stack_ppn={:?}, kernel direct-map handled by TLB refill",
+            entry,
+            user_sp,
+            text_pte.ppn(),
+            stack_pte.ppn(),
+        );
+    }
 }

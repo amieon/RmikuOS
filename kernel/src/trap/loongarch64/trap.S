@@ -21,11 +21,15 @@
     /*
      * CSR numbers.
      */
+    .equ CSR_CRMD,   0x0
     .equ CSR_PRMD,   0x1
     .equ CSR_ESTAT,  0x5
     .equ CSR_ERA,    0x6
     .equ CSR_BADV,   0x7
-    .equ CSR_CRMD, 0x0
+
+    /*
+     * CRMD bits.
+     */
     .equ CRMD_IE_CLEAR_MASK, -5     /* clear bit 2 */
 
     /*
@@ -44,20 +48,28 @@
 
 
 
+    /*
+     * KERNEL_OFFSET = 0xffff800000000000
+     * signed immediate form = -0x800000000000
+     */
+    .equ UART_PADDR, 0x1fe001e0
 
-
-    .equ UART_BASE_HIGH, 0x900000001fe001e0
-
-    .macro PUTCH_HIGH ch
-        li.d    $r20, UART_BASE_HIGH
-1:
+    .macro PUTCH_HIGH_SAFE ch
+        /*
+         * r20 = KERNEL_OFFSET + UART_PADDR
+         * Avoid .equ 0xffff8000... because GNU as may reject it as
+         * "literal value out of range".
+         */
+        li.d    $r20, -0x800000000000
+        li.d    $r21, UART_PADDR
+        add.d   $r20, $r20, $r21
+    1:
         ld.bu   $r21, $r20, 5
         andi    $r21, $r21, 0x20
         beqz    $r21, 1b
         li.w    $r21, \ch
         st.b    $r21, $r20, 0
     .endm
-
 
 /*
  * Trap entry.
@@ -75,7 +87,7 @@
  *   as scratch registers.
  */
 __alltraps:
-    PUTCH_HIGH 'T'
+
     /*
      * Save original r12/r13 immediately.
      *
@@ -103,7 +115,6 @@ __alltraps:
  * We are already on a kernel stack.
  */
 .Ltrap_from_kernel:
-
     addi.d  $r3, $r3, -TRAP_CONTEXT_SIZE
 
     st.d    $r0,  $r3, 0
@@ -167,8 +178,10 @@ __alltraps:
      */
     csrwr   $zero, CSR_KSAVE0
 
-PUTCH_HIGH 'H'
-
+    /*
+     * Call Rust trap handler:
+     *   a0/r4 = &mut TrapContext
+     */
     addi.d  $r4, $r3, 0
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
@@ -186,7 +199,6 @@ PUTCH_HIGH 'H'
  *   KSAVE2  = original user r13
  */
 .Ltrap_from_user:
-PUTCH_HIGH 'u'
     /*
      * Save user sp temporarily in r13.
      * Original user r13 is already in KSAVE2.
@@ -200,8 +212,6 @@ PUTCH_HIGH 'u'
      */
     csrrd   $r12, CSR_KSAVE0
     addi.d  $r3, $r12, -TRAP_CONTEXT_SIZE
-
-PUTCH_HIGH 's'
 
     st.d    $r0,  $r3, 0
     st.d    $r1,  $r3, 8
@@ -259,8 +269,10 @@ PUTCH_HIGH 's'
      */
     csrwr   $zero, CSR_KSAVE0
 
-    PUTCH_HIGH 'H'
-
+    /*
+     * Call Rust trap handler:
+     *   a0/r4 = &mut TrapContext
+     */
     addi.d  $r4, $r3, 0
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
@@ -283,6 +295,7 @@ PUTCH_HIGH 's'
  */
 __restore_user:
 __restore:
+
     addi.d  $r3, $r4, 0
 
     /*
@@ -309,6 +322,7 @@ __restore:
  * Restore to kernel mode.
  */
 .Lrestore_kernel:
+
     csrwr   $zero, CSR_KSAVE0
 
     ld.d    $r1,  $r3, 8
@@ -351,6 +365,7 @@ __restore:
  * Restore to user mode.
  */
 .Lrestore_user:
+
     /*
      * Disable current kernel interrupt before setting KSAVE0.
      *
@@ -371,7 +386,6 @@ __restore:
      */
     addi.d  $r12, $r3, TRAP_CONTEXT_SIZE
     csrwr   $r12, CSR_KSAVE0
-
 
     ld.d    $r1,  $r3, 8
     ld.d    $r2,  $r3, 16
@@ -407,8 +421,12 @@ __restore:
 
     /*
      * Restore user sp last.
+     *
+     * Do not do any debug printing after this point:
+     *   - r20/r21 and all user GPRs are already restored;
+     *   - r3 is about to become user sp;
+     *   - any UART macro here will corrupt user context or fault.
      */
     ld.d    $r3,  $r3, 24
-    PUTCH_HIGH 'U'
 
     ertn

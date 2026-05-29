@@ -76,7 +76,7 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
          * 清 DMW0，保证低地址用户空间必须走页表。
          * 保留 DMW1，让内核高半继续稳定运行。
          */
-        early_putc(b'1');
+
         asm!(
             "csrwr $zero, 0x180", // DMW0
             "csrwr $zero, 0x181", // DMW1: keep high direct map
@@ -84,7 +84,7 @@ pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
             "csrwr $zero, 0x183",
             options(nostack)
         );
-        early_putc(b'2');
+
     }
 }
 

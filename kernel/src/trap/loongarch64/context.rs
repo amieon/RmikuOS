@@ -42,20 +42,14 @@ impl TrapContext {
         self.era = pc;
     }
 
-    pub fn app_init_context(entry: usize, user_sp: usize) -> Self {
+    pub fn app_init_context(entry: usize, sp: usize) -> Self {
+        const PRMD_PPLV_USER: usize = 3;
+        const PRMD_PIE: usize = 1 << 2;
+
         let mut cx = Self::zero();
-
-        /*
-         * ertn 返回时：
-         *
-         * PRMD.PPLV = 3 -> 返回 PLV3 用户态
-         * PRMD.PIE  = 1 -> ertn 后恢复中断打开
-         */
         cx.prmd = PRMD_PPLV_USER | PRMD_PIE;
-
         cx.era = entry;
-        cx.set_sp(user_sp);
-
+        cx.set_sp(sp);
         cx
     }
 
