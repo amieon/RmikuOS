@@ -139,7 +139,8 @@ fn primary_init() {
     // ...
     println!("主核初始化完毕。");
 
-    test::user_test::user_test();
+    task::init_first_task(test::user_test::USER_TEST_APP);
+    task::run_first_task();
     
 }
 

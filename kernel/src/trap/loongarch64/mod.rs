@@ -157,7 +157,13 @@ fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
         args[2]
     );
 
-    // -ENOSYS for now.  Replace this with crate::syscall::syscall(...) after
-    // you add a real syscall table.
-    -38
+    match id {
+        0 => {
+            trap_println!("[task] user task exited with code {}", args[0]);
+            loop {
+                core::hint::spin_loop();
+            }
+        }
+        _ => -38,
+    }
 }
