@@ -162,12 +162,25 @@ static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 pub fn init() {
     let mut manager = TASK_MANAGER.lock();
 
-    for id in 0..crate::test::loader::loader::num_apps() {
-        let app = crate::test::loader::loader::get_app_data(id);
+    for id in 0..crate::loader::num_apps() {
+        let app = crate::loader::get_app_data(id);
+        let name = crate::loader::get_app_name(id);
+
+        log::info!(
+            "[task] load app {}: name={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
+            id,
+            name,
+            app.len(),
+            app.get(0).copied().unwrap_or(0),
+            app.get(1).copied().unwrap_or(0),
+            app.get(2).copied().unwrap_or(0),
+            app.get(3).copied().unwrap_or(0),
+        );
+
         manager.add_task(TaskControlBlock::new(id, app));
     }
 
-    log::info!("[task] loaded {} user tasks", crate::test::loader::loader::num_apps());
+    log::info!("[task] loaded {} user tasks", crate::loader::num_apps());
 }
 
 pub fn run_first_task() -> ! {

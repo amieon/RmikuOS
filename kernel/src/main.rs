@@ -13,7 +13,7 @@ mod panic;
 mod test;
 mod task;
 mod syscall;
-
+mod loader;
 
 #[macro_use]
 mod io;

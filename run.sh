@@ -31,6 +31,35 @@ LA_PREFIX="${LA_PREFIX:-/opt/cross-tools/bin/loongarch64-unknown-linux-gnu-}"
 LA_GCC="${LA_GCC:-${LA_PREFIX}gcc}"
 LA_OBJCOPY="${LA_OBJCOPY:-${LA_PREFIX}objcopy}"
 
+USER_BUILD_SCRIPT="user/build.py"
+GENERATED_LOADER="kernel/src/loader/generated.rs"
+
+build_user_apps() {
+  if [ "${SKIP_USER_BUILD:-0}" = "1" ]; then
+    echo "=== 跳过用户程序构建: SKIP_USER_BUILD=1 ==="
+    return
+  fi
+
+  if [ ! -f "$USER_BUILD_SCRIPT" ]; then
+    echo "错误: 找不到用户程序构建脚本: $USER_BUILD_SCRIPT" >&2
+    exit 1
+  fi
+
+  echo "=== 构建用户程序 ($ARCH) ==="
+  python3 "$USER_BUILD_SCRIPT" "$ARCH"
+
+  if [ ! -f "$GENERATED_LOADER" ]; then
+    echo "错误: 用户程序构建后仍找不到: $GENERATED_LOADER" >&2
+    exit 1
+  fi
+
+  if ! grep -q "arch = $ARCH" "$GENERATED_LOADER"; then
+    echo "错误: $GENERATED_LOADER 不是为当前架构 $ARCH 生成的" >&2
+    echo "请检查 user/build.py 是否写入了 // arch = $ARCH" >&2
+    exit 1
+  fi
+}
+
 build_loongarch_trampoline() {
   if [ ! -f trampoline.bin ] || [ trampoline.S -nt trampoline.bin ]; then
     echo "=== 编译 LoongArch trampoline ==="
@@ -40,10 +69,13 @@ build_loongarch_trampoline() {
   fi
 }
 
+build_user_apps
+
 if [ "$ARCH" = "loongarch64" ]; then
   build_loongarch_trampoline
 fi
 
+echo "=== 编译内核 ($ARCH, $MODE) ==="
 if [ "$MODE" = "release" ]; then
   cargo build --target "$TARGET" --release
 else
