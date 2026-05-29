@@ -161,6 +161,9 @@ fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
         0 => {
             crate::task::exit_current_and_run_next(args[0] as i32);
         }
+        1 => {
+            crate::task::suspend_current_and_run_next();
+        }
         _ => -38,
     }
 }

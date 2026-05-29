@@ -9,4 +9,5 @@ pub use manager::{
     init,
     run_first_task,
     exit_current_and_run_next,
+    suspend_current_and_run_next,
 };

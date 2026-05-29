@@ -1,7 +1,7 @@
 use crate::mm::{address::*, user_layout::*, MemorySet};
 
 pub fn user_memory_set_test() {
-    let app = crate::loader::get_app_data(0);
+    let app = crate::test::loader::loader::get_app_data(0);
 
     let (user_space, entry, user_sp) = MemorySet::new_user_test(app);
 

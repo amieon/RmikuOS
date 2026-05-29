@@ -88,18 +88,30 @@ impl TaskManager {
         let next = self.find_next_ready()?;
         Some(self.prepare_run_task(next))
     }
+    fn suspend_current_and_prepare_next(&mut self) -> Option<TaskRunInfo> {
+        let current = self.current;
+
+        log::info!("[task] task {} yield", self.tasks[current].id);
+
+        if self.tasks[current].status == TaskStatus::Running {
+            self.tasks[current].status = TaskStatus::Ready;
+        }
+
+        let next = self.find_next_ready()?;
+        Some(self.prepare_run_task(next))
+    }
 }
 static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
 pub fn init() {
     let mut manager = TASK_MANAGER.lock();
 
-    for id in 0..crate::loader::num_apps() {
-        let app = crate::loader::get_app_data(id);
+    for id in 0..crate::test::loader::loader::num_apps() {
+        let app = crate::test::loader::loader::get_app_data(id);
         manager.add_task(TaskControlBlock::new(id, app));
     }
 
-    log::info!("[task] loaded {} user tasks", crate::loader::num_apps());
+    log::info!("[task] loaded {} user tasks", crate::test::loader::loader::num_apps());
 }
 
 pub fn run_first_task() -> ! {
@@ -110,7 +122,18 @@ pub fn run_first_task() -> ! {
 
     run_task(info)
 }
+pub fn suspend_current_and_run_next() -> ! {
+    let next = {
+        let mut manager = TASK_MANAGER.lock();
+        manager.suspend_current_and_prepare_next()
+    };
 
+    if let Some(info) = next {
+        run_task(info);
+    }
+
+    panic!("no ready task after yield");
+}
 pub fn exit_current_and_run_next(exit_code: i32) -> ! {
     let next = {
         let mut manager = TASK_MANAGER.lock();
@@ -143,3 +166,4 @@ fn run_task(info: TaskRunInfo) -> ! {
         __restore_user(info.trap_cx_addr as *const TrapContext);
     }
 }
+
