@@ -1,39 +1,26 @@
 use alloc::vec::Vec;
+
+use crate::mm::{PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
+use crate::mm::config::PAGE_SIZE;
 use crate::sync::spin::Mutex;
-
-
 use crate::trap::TrapContext;
 
+use super::context::TaskContext;
+use super::processor;
+use super::switch::__switch;
 use super::task::{TaskControlBlock, TaskStatus};
-
-
-use crate::mm::{PhysPageNum, VirtAddr};
-use crate::mm::config::{ PAGE_SIZE, PAGE_SIZE_BITS};
-
 
 unsafe extern "C" {
     fn __restore_user(cx: *const TrapContext) -> !;
 }
 
-#[derive(Clone, Copy)]
-struct TaskRunInfo {
-    id: usize,
-    root: PhysPageNum,
-    kstack_top: usize,
-    trap_cx_addr: usize,
-}
-
 pub struct TaskManager {
     tasks: Vec<TaskControlBlock>,
-    current: usize,
 }
 
 impl TaskManager {
     pub const fn new() -> Self {
-        Self {
-            tasks: Vec::new(),
-            current: 0,
-        }
+        Self { tasks: Vec::new() }
     }
 
     pub fn add_task(&mut self, task: TaskControlBlock) {
@@ -41,204 +28,44 @@ impl TaskManager {
     }
 
     fn find_next_ready(&self) -> Option<usize> {
-        if self.tasks.is_empty() {
-            return None;
-        }
-
-        let n = self.tasks.len();
-
-        for step in 1..=n {
-            let id = (self.current + step) % n;
+        for id in 0..self.tasks.len() {
             if self.tasks[id].status == TaskStatus::Ready {
                 return Some(id);
             }
         }
-
         None
     }
 
-    fn find_next_ready_excluding_current(&self) -> Option<usize> {
-        if self.tasks.len() <= 1 {
-            return None;
-        }
-
-        let n = self.tasks.len();
-
-        for step in 1..n {
-            let id = (self.current + step) % n;
-            if self.tasks[id].status == TaskStatus::Ready {
-                return Some(id);
-            }
-        }
-
-        None
-    }
-
-    fn preempt_current_and_prepare_next(&mut self) -> Option<TaskRunInfo> {
-        let current = self.current;
-
-        if self.tasks[current].status == TaskStatus::Running {
-            self.tasks[current].status = TaskStatus::Ready;
-        }
-
-        let next = self.find_next_ready_excluding_current();
-
-        if let Some(next) = next {
-            log::info!(
-                "[task] task {} preempt -> task {}",
-                self.tasks[current].id,
-                self.tasks[next].id,
-            );
-
-            Some(self.prepare_run_task(next))
-        } else {
-
-            self.tasks[current].status = TaskStatus::Running;
-            None
+    fn mark_current_ready(&mut self, id: usize) {
+        if self.tasks[id].status == TaskStatus::Running {
+            self.tasks[id].status = TaskStatus::Ready;
         }
     }
 
-    fn prepare_run_task(&mut self, id: usize) -> TaskRunInfo {
-        self.current = id;
+    fn mark_current_zombie(&mut self, id: usize, exit_code: i32) {
+        self.tasks[id].status = TaskStatus::Zombie;
+        self.tasks[id].exit_code = exit_code;
+    }
+
+    fn task_cx_ptr(&mut self, id: usize) -> *mut TaskContext {
+        self.tasks[id].task_cx_ptr()
+    }
+
+    fn prepare_task(&mut self, id: usize) -> (PhysPageNum, usize, usize, *mut TaskContext) {
         self.tasks[id].status = TaskStatus::Running;
 
-        let task = &self.tasks[id];
+        let task = &mut self.tasks[id];
 
-        TaskRunInfo {
-            id: task.id,
-            root: task.root_ppn(),
-            kstack_top: task.kernel_stack.top(),
-            trap_cx_addr: task.trap_cx_addr,
-        }
+        (
+            task.root_ppn(),
+            task.kernel_stack.top(),
+            task.trap_cx_addr,
+            task.task_cx_ptr(),
+        )
     }
 
-    fn prepare_first_task(&mut self) -> TaskRunInfo {
-        if self.tasks.is_empty() {
-            panic!("no user task");
-        }
-
-        self.prepare_run_task(0)
-    }
-
-    fn exit_current_and_prepare_next(&mut self, exit_code: i32) -> Option<TaskRunInfo> {
-        let current = self.current;
-
-        log::info!(
-            "[task] task {} exited with code {}",
-            self.tasks[current].id,
-            exit_code,
-        );
-
-        self.tasks[current].status = TaskStatus::Exited;
-
-        let next = self.find_next_ready()?;
-        Some(self.prepare_run_task(next))
-    }
-    fn suspend_current_and_prepare_next(&mut self) -> Option<TaskRunInfo> {
-        let current = self.current;
-
-        if self.tasks[current].status == TaskStatus::Running {
-            self.tasks[current].status = TaskStatus::Ready;
-        }
-
-        let next = self.find_next_ready_excluding_current();
-
-        if let Some(next) = next {
-            log::info!(
-                "[task] task {} yield -> task {}",
-                self.tasks[current].id,
-                self.tasks[next].id,
-            );
-
-            Some(self.prepare_run_task(next))
-        } else {
-            self.tasks[current].status = TaskStatus::Running;
-            None
-        }
-    }
-}
-static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
-
-pub fn init() {
-    let mut manager = TASK_MANAGER.lock();
-
-    for id in 0..crate::loader::num_apps() {
-        let app = crate::loader::get_app_data(id);
-        let name = crate::loader::get_app_name(id);
-
-        log::info!(
-            "[task] load app {}: name={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
-            id,
-            name,
-            app.len(),
-            app.get(0).copied().unwrap_or(0),
-            app.get(1).copied().unwrap_or(0),
-            app.get(2).copied().unwrap_or(0),
-            app.get(3).copied().unwrap_or(0),
-        );
-
-        manager.add_task(TaskControlBlock::new(id, app));
-    }
-
-    log::info!("[task] loaded {} user tasks", crate::loader::num_apps());
-}
-
-pub fn run_first_task() -> ! {
-    let info = {
-        let mut manager = TASK_MANAGER.lock();
-        manager.prepare_first_task()
-    };
-
-    run_task(info)
-}
-pub fn suspend_current_and_run_next() -> isize {
-    let next = {
-        let mut manager = TASK_MANAGER.lock();
-        manager.suspend_current_and_prepare_next()
-    };
-
-    if let Some(info) = next {
-        run_task(info);
-    }
-
-    0
-}
-pub fn exit_current_and_run_next(exit_code: i32) -> ! {
-    let next = {
-        let mut manager = TASK_MANAGER.lock();
-        manager.exit_current_and_prepare_next(exit_code)
-    };
-
-    if let Some(info) = next {
-        run_task(info);
-    }
-
-    log::info!("[task] all user tasks exited");
-
-    loop {
-        core::hint::spin_loop();
-    }
-}
-
-fn run_task(info: TaskRunInfo) -> ! {
-    log::info!(
-        "[task] run task {}: root={:?}, kstack_top={:#x}, trap_cx={:#x}",
-        info.id,
-        info.root,
-        info.kstack_top,
-        info.trap_cx_addr,
-    );
-
-    crate::mm::activate_page_table(info.root);
-
-    unsafe {
-        __restore_user(info.trap_cx_addr as *const TrapContext);
-    }
-}
-
-impl TaskManager {
     pub fn read_current_user_bytes(&self, user_buf: usize, len: usize) -> Option<Vec<u8>> {
-        let current = self.current;
+        let current = processor::current_task_id();
         let task = self.tasks.get(current)?;
 
         let mut bytes = Vec::new();
@@ -259,25 +86,156 @@ impl TaskManager {
 
         Some(bytes)
     }
-
-    // 你原来的其他方法保持不变
 }
 
+static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
+pub fn init() {
+    let mut manager = TASK_MANAGER.lock();
+
+    for id in 0..crate::loader::num_apps() {
+        let app = crate::loader::get_app_data(id);
+        let name = crate::loader::get_app_name(id);
+
+        log::info!(
+            "[task] load app {}: name={}, size={} bytes",
+            id,
+            name,
+            app.len(),
+        );
+
+        manager.add_task(TaskControlBlock::new(id, app));
+    }
+
+    log::info!("[task] loaded {} user tasks", crate::loader::num_apps());
+}
+
+pub fn run_first_task() -> ! {
+    run_tasks()
+}
+
+pub fn run_tasks() -> ! {
+    loop {
+        let next = {
+            let mut manager = TASK_MANAGER.lock();
+
+            if let Some(id) = manager.find_next_ready() {
+                let (root, kstack_top, trap_cx_addr, task_cx_ptr) = manager.prepare_task(id);
+
+                log::info!(
+                    "[task] schedule task {}: root={:?}, kstack_top={:#x}, trap_cx={:#x}",
+                    id,
+                    root,
+                    kstack_top,
+                    trap_cx_addr,
+                );
+
+                Some((id, root, task_cx_ptr))
+            } else {
+                None
+            }
+        };
+
+        if let Some((id, root, task_cx_ptr)) = next {
+            processor::set_current(Some(id));
+
+            crate::mm::activate_page_table(root);
+
+            let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+            unsafe {
+                __switch(idle_cx_ptr, task_cx_ptr);
+            }
+
+            processor::set_current(None);
+        } else {
+            log::info!("[task] no ready task");
+
+            loop {
+                core::hint::spin_loop();
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn __task_entry() -> ! {
+    let current = processor::current_task_id();
+
+    let trap_cx_addr = {
+        let manager = TASK_MANAGER.lock();
+        manager.tasks[current].trap_cx_addr
+    };
+
+    unsafe {
+        __restore_user(trap_cx_addr as *const TrapContext);
+    }
+}
+
+pub fn suspend_current_and_run_next() -> isize {
+    let current = processor::current_task_id();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+        manager.mark_current_ready(current);
+        manager.task_cx_ptr(current)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+
+    0
+}
+
+pub fn preempt_current_and_run_next() {
+    let current = processor::current_task_id();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+        manager.mark_current_ready(current);
+        manager.task_cx_ptr(current)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+}
+
+pub fn exit_current_and_run_next(exit_code: i32) -> ! {
+    let current = processor::current_task_id();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+
+        log::info!(
+            "[task] task {} exited with code {}",
+            current,
+            exit_code,
+        );
+
+        manager.mark_current_zombie(current, exit_code);
+        manager.task_cx_ptr(current)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+
+    panic!("zombie task returned after exit");
+}
+
+pub fn current_task_id() -> usize {
+    processor::current_task_id()
+}
 
 pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
     let manager = TASK_MANAGER.lock();
     manager.read_current_user_bytes(user_buf, len)
-}
-
-pub fn preempt_current_and_run_next() {
-    let next = {
-        let mut manager = TASK_MANAGER.lock();
-        manager.preempt_current_and_prepare_next()
-    };
-
-    if let Some(info) = next {
-        run_task(info);
-    }
-
 }

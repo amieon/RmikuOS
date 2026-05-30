@@ -5,3 +5,7 @@ pub fn sys_exit(exit_code: i32) -> ! {
 pub fn sys_yield() -> isize {
     crate::task::suspend_current_and_run_next()
 }
+
+pub fn sys_getpid() -> isize {
+    crate::task::current_task_id() as isize
+}
