@@ -44,20 +44,19 @@ pub fn init() {
     }
 }
 
-/*
- * 返回 true 表示这次 tick 应该触发任务调度。
- */
+
 pub fn tick() -> bool {
-    /*
-     * LoongArch timer interrupt pending bit 要清掉。
-     * 如果你的 trap handler 里已经 clear_timer_interrupt() 了，
-     * 那这里和 handler 二选一保留一个，不要重复也没大问题，但最好只留这里。
-     */
+
     clear_timer_interrupt();
 
     let n = TICKS.fetch_add(1, Ordering::Relaxed) + 1;
 
+    
+
     n % TICKS_PER_SLICE == 0
+}
+pub fn ticks() -> usize {
+    TICKS.load(Ordering::Relaxed)
 }
 
 fn clear_timer_interrupt() {

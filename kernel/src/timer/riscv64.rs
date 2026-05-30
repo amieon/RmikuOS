@@ -65,3 +65,7 @@ fn sbi_set_timer(stime_value: usize) {
         );
     }
 }
+
+pub fn ticks() -> usize {
+    TICKS.load(Ordering::Relaxed)
+}

@@ -68,6 +68,9 @@ impl TrapContext {
     pub fn set_syscall_ret(&mut self, ret: usize) {
         self.x[REG_A0] = ret;
     }
+    pub fn syscall_ret(&self) -> usize {
+        self.x[REG_A0]
+    }
 
     pub fn advance_pc(&mut self) {
         self.sepc += INSTRUCTION_SIZE;
