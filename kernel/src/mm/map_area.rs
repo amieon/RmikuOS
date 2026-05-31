@@ -69,7 +69,7 @@ impl MapPermission {
     }
 
     pub fn contains(self, rhs: Self) -> bool {
-        self.bits & rhs.bits == rhs.bits
+        self.bits & rhs.bits != 0
     }
 }
 

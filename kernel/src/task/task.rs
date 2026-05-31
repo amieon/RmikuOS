@@ -47,6 +47,8 @@ pub struct TaskControlBlock {
 impl TaskControlBlock {
     pub fn new(id: usize, app: &[u8]) -> Self {
         let (user_space, entry, user_sp) = MemorySet::new_user_test(app);
+
+
         let trap_cx = TrapContext::app_init_context(entry, user_sp);
 
         let kernel_stack = Box::new(KernelStack::new());

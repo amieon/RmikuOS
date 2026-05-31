@@ -44,5 +44,13 @@ SECTIONS
         *(.debug_frame)
         *(.note.*)
         *(.comment)
+        *(.got)
+        *(.got.*)
+        *(.plt)
+        *(.plt.*)
+        *(.dynamic)
+        *(.dynsym)
+        *(.dynstr)
+        *(.gnu.hash)
     }
 }

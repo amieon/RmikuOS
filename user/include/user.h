@@ -13,10 +13,6 @@ typedef long isize;
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 
-static inline isize write(int fd, const char *buf, usize len) {
-    return syscall3(SYS_WRITE, (usize)fd, (usize)buf, len);
-}
-
 static inline isize yield(void) {
     return syscall3(SYS_YIELD, 0, 0, 0);
 }
@@ -50,8 +46,17 @@ static inline usize strlen(const char *s) {
     return n;
 }
 
+static inline isize write(int fd, const char *buf, usize len) {
+    return syscall3(SYS_WRITE, (usize)fd, (usize)buf, len);
+}
+
 static inline void puts(const char *s) {
-    write(1, s, strlen(s));
+    usize len = strlen(s);
+    syscall3(SYS_WRITE, 1, (usize)s, len);
+}
+
+static inline void put_char(char ch) {
+    syscall3(SYS_WRITE, 1, (usize)&ch, 1);
 }
 
 static inline void put_int(long x) {
@@ -59,12 +64,12 @@ static inline void put_int(long x) {
     int i = 0;
 
     if (x == 0) {
-        write(1, "0", 1);
+        put_char('0');
         return;
     }
 
     if (x < 0) {
-        write(1, "-", 1);
+        put_char('-');
         x = -x;
     }
 
@@ -75,6 +80,6 @@ static inline void put_int(long x) {
 
     while (i > 0) {
         i--;
-        write(1, &buf[i], 1);
+        put_char(buf[i]);
     }
 }

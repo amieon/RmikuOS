@@ -42,13 +42,16 @@ ARCH_CONFIG = {
         "objcopy": "loongarch64-unknown-linux-gnu-objcopy",
         "objdump": "loongarch64-unknown-linux-gnu-objdump",
         "linker": USER_DIR / "linker-loongarch64.ld",
-        "runtime": LIB_DIR / "syscall_loongarch64.S",
         "crt0": LIB_DIR / "crt0_loongarch64.S",
         "runtime": LIB_DIR / "syscall_loongarch64.S",
         "cflags": [
             "-DUSER_ARCH_LOONGARCH64",
+            "-G0",
+            "-mno-relax",
         ],
-        "ldflags": [],
+        "ldflags": [
+            "-Wl,--no-relax",
+        ],
     },
 }
 def run(cmd):
@@ -93,8 +96,9 @@ def build_one(arch: str, source: Path, app_id: int):
     runtime_obj = out_dir / f"{app_id}_{stem}_runtime.o"
     elf = out_dir / f"{app_id}_{stem}.elf"
     bin_path = out_dir / f"{app_id}_{stem}.bin"
-
+    
     common_flags = [
+
         "-ffreestanding",
         "-fno-builtin",
         "-fno-stack-protector",
