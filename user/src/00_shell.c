@@ -68,6 +68,7 @@ static void print_help(void) {
     puts("  getpid_sleep\n");
     puts("  fork_wait\n");
     puts("  estimate_pi\n");
+    puts("  fibonacci\n");
 }
 
 int main(void) {
