@@ -8,8 +8,9 @@ SECTIONS
     . = BASE_ADDRESS;
 
     .text : {
-        *(.text.entry)
-        *(.text.entry.*)
+        KEEP(*(.text.entry))
+        KEEP(*(.text.entry.*))
+
         *(.text)
         *(.text.*)
 

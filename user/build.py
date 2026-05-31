@@ -101,6 +101,19 @@ def build_one(arch: str, source: Path, app_id: int):
         "-I", str(INCLUDE_DIR),
     ]
 
+
+    compile_cmd = [
+        cfg["gcc"],
+        *cfg["cflags"],
+        *common_flags,
+        "-c",
+        str(source),
+        "-o",
+        str(obj),
+    ]
+    run(compile_cmd)
+
+  
     runtime_cmd = [
         cfg["gcc"],
         *cfg["cflags"],
@@ -112,6 +125,7 @@ def build_one(arch: str, source: Path, app_id: int):
     ]
     run(runtime_cmd)
 
+  
     link_cmd = [
         cfg["gcc"],
         *cfg["cflags"],
@@ -128,6 +142,7 @@ def build_one(arch: str, source: Path, app_id: int):
         str(elf),
     ]
     run(link_cmd)
+
 
     objcopy_cmd = [
         cfg["objcopy"],

@@ -8,8 +8,9 @@ SECTIONS
     . = BASE_ADDRESS;
 
     .text : {
-        *(.text.entry)
-        *(.text.entry.*)
+        KEEP(*(.text.entry))
+        KEEP(*(.text.entry.*))
+
         *(.text)
         *(.text.*)
 
@@ -43,5 +44,6 @@ SECTIONS
         *(.debug_frame)
         *(.note.*)
         *(.comment)
+        *(.riscv.attributes)
     }
 }
