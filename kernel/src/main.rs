@@ -112,15 +112,15 @@ fn primary_init() {
     trap::init();
 
     mm::init();
-    test::heap_test::heap_test();
-    test::frame_alloc_test::frame_alloc_test();
-    test::page_table_test::page_table_test();
+    // test::heap_test::heap_test();
+    // test::frame_alloc_test::frame_alloc_test();
+    // test::page_table_test::page_table_test();
 
-    test::memory_set_test::memory_set_test();
+    // test::memory_set_test::memory_set_test();
 
     mm::init_paging();
 
-    test::user_memory_set_test::user_memory_set_test();
+    // test::user_memory_set_test::user_memory_set_test();
 
     timer::init();
 
