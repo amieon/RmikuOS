@@ -67,6 +67,7 @@ static void print_help(void) {
     puts("  busy\n");
     puts("  getpid_sleep\n");
     puts("  fork_wait\n");
+    puts("  estimate_pi\n");
 }
 
 int main(void) {
