@@ -10,8 +10,20 @@ typedef long isize;
 #define SYS_FORK    4
 #define SYS_WAITPID 5
 #define SYS_SLEEP   6
+#define SYS_EXEC 7
+#define SYS_READ 8
+
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
+
+static inline isize exec(const char *name) {
+    return syscall3(SYS_EXEC, (usize)name, strlen(name), 0);
+}
+
+static inline isize read(int fd, char *buf, usize len) {
+    return syscall3(SYS_READ, (usize)fd, (usize)buf, len);
+}
+
 
 static inline isize yield(void) {
     return syscall3(SYS_YIELD, 0, 0, 0);

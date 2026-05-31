@@ -29,3 +29,33 @@ pub fn sys_write(fd: usize, user_buf: usize, len: usize) -> isize {
 
     len as isize
 }
+
+pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
+    if fd != 0 {
+        return -1;
+    }
+
+    if len == 0 {
+        return 0;
+    }
+
+    let mut count = 0usize;
+
+    while count < len {
+        let ch = crate::io::uart::getchar_raw();
+
+        let buf = [ch];
+
+        if crate::task::write_current_user_bytes(user_buf + count, &buf).is_none() {
+            return -1;
+        }
+
+        count += 1;
+
+        if ch == b'\n' || ch == b'\r' {
+            break;
+        }
+    }
+
+    count as isize
+}

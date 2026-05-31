@@ -72,3 +72,17 @@ pub fn putchar_phys_raw(ch: u8) {
         write_volatile(uart.add(UART_THR), ch);
     }
 }
+
+
+pub fn getchar_raw() -> u8 {
+    let uart = crate::mm::kernel_phys_to_virt(crate::arch::UART_PADDR) as *mut u8;
+
+    unsafe {
+
+        while core::ptr::read_volatile(uart.add(5)) & 0x01 == 0 {
+            core::hint::spin_loop();
+        }
+
+        core::ptr::read_volatile(uart.add(0))
+    }
+}

@@ -24,5 +24,7 @@ pub use manager::{
 
     current_task_id,
     read_current_user_bytes,
+    write_current_user_bytes,
     wake_sleeping_tasks,
+    exec_current,
 };

@@ -21,3 +21,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: usize) -> isize {
 pub fn sys_fork() -> isize {
     crate::task::fork_current()
 }
+
+pub fn sys_exec(name_ptr: usize, len: usize) -> isize {
+    crate::task::exec_current(name_ptr, len)
+}

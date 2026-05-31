@@ -91,6 +91,26 @@ impl TaskManager {
 
         Some(bytes)
     }
+
+    fn write_current_user_bytes(&self, task_id: usize, user_buf: usize, data: &[u8]) -> Option<usize> {
+        for (offset, byte) in data.iter().enumerate() {
+            let va = user_buf.checked_add(offset)?;
+            let vpn = VirtAddr(va).floor();
+            let page_offset = va & (PAGE_SIZE - 1);
+
+            let pte = self.tasks[task_id].user_space.translate(vpn)?;
+
+            let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
+            let kva = crate::mm::kernel_phys_to_virt(pa);
+
+            unsafe {
+                core::ptr::write_volatile(kva as *mut u8, *byte);
+            }
+        }
+
+        Some(data.len())
+    }
+
     fn has_alive_tasks(&self) -> bool {
         self.tasks.iter().any(|task| {
             matches!(
@@ -99,10 +119,12 @@ impl TaskManager {
             )
         })
     }
+
     fn block_current(&mut self, id: usize, reason: BlockReason) {
         self.tasks[id].status = TaskStatus::Blocking;
         self.tasks[id].block_reason = reason;
     }
+
     fn wake_parent_waiting_for(&mut self, child_pid: usize) {
         let parent = self.tasks[child_pid].parent;
 
@@ -385,29 +407,32 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
 static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
 pub fn init() {
-    let mut manager = TASK_MANAGER.lock();
+    let shell_app = crate::loader::find_app("shell")
+        .or_else(|| crate::loader::find_app("00_shell"))
+        .unwrap_or(0);
 
-    for id in 0..crate::loader::num_apps() {
-        let app = crate::loader::get_app_data(id);
-        let name = crate::loader::get_app_name(id);
+    let app = crate::loader::get_app_data(shell_app);
+    let name = crate::loader::get_app_name(shell_app);
 
-        log::info!(
-            "[task] load app {}: name={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
-            id,
-            name,
-            app.len(),
-            app.get(0).copied().unwrap_or(0),
-            app.get(1).copied().unwrap_or(0),
-            app.get(2).copied().unwrap_or(0),
-            app.get(3).copied().unwrap_or(0),
-        );
+    log::info!(
+        "[task] load init app: id={}, name={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
+        shell_app,
+        name,
+        app.len(),
+        app.get(0).copied().unwrap_or(0),
+        app.get(1).copied().unwrap_or(0),
+        app.get(2).copied().unwrap_or(0),
+        app.get(3).copied().unwrap_or(0),
+    );
 
-        manager.add_task(TaskControlBlock::new(id, app));
+    let task = TaskControlBlock::new(0, app);
 
-        log::info!("[task] app {} loaded into task", id);
+    {
+        let mut manager = TASK_MANAGER.lock();
+        manager.add_task(task);
     }
 
-    log::info!("[task] loaded {} user tasks", crate::loader::num_apps());
+    log::info!("[task] loaded init shell");
 }
 
 pub fn run_first_task() -> ! {
@@ -516,9 +541,92 @@ pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
     manager.read_current_user_bytes(user_buf, len)
 }
 
+pub fn write_current_user_bytes(user_buf: usize, data: &[u8]) -> Option<usize> {
+    let current = processor::current_task_id();
+    let manager = TASK_MANAGER.lock();
+    manager.write_current_user_bytes(current, user_buf, data)
+}
+
 
 pub fn wake_sleeping_tasks() {
     let now = crate::timer::ticks();
     let mut manager = TASK_MANAGER.lock();
     manager.wake_sleeping_tasks(now);
+}
+
+
+pub fn exec_current(name_ptr: usize, len: usize) -> isize {
+    let name_bytes = match read_current_user_bytes(name_ptr, len) {
+        Some(bytes) => bytes,
+        None => return -1,
+    };
+
+    let name = match core::str::from_utf8(&name_bytes) {
+        Ok(s) => s.trim_matches('\0').trim(),
+        Err(_) => return -1,
+    };
+
+    let app_id = match crate::loader::find_app(name) {
+        Some(id) => id,
+        None => {
+            log::warn!("[task] exec: app not found: {}", name);
+            return -1;
+        }
+    };
+
+    let app = crate::loader::get_app_data(app_id);
+    let app_name = crate::loader::get_app_name(app_id);
+
+    log::info!(
+        "[task] exec current task to app {}: {}",
+        app_id,
+        app_name,
+    );
+
+    /*
+     * 不要在 TASK_MANAGER 锁里 new_user_test，避免长时间持锁。
+     */
+    let (new_user_space, entry, user_sp) = MemorySet::new_user_test(app);
+    let new_trap_cx = TrapContext::app_init_context(entry, user_sp);
+
+    let current = processor::current_task_id();
+
+    let new_root = {
+        let mut manager = TASK_MANAGER.lock();
+        let task = &mut manager.tasks[current];
+
+        /*
+         * 替换用户地址空间。
+         */
+        let old_space = core::mem::replace(&mut task.user_space, new_user_space);
+
+        /*
+         * 重置当前任务 TrapContext。
+         * 注意 kernel_stack / task_cx 不变。
+         */
+        *task.trap_cx_mut() = new_trap_cx;
+
+        let root = task.root_ppn();
+
+        /*
+         * old_space 延迟到这里之后 drop。
+         * 当前还在内核态，马上切到新页表。
+         */
+        drop(old_space);
+
+        root
+    };
+
+    /*
+     * 关键：exec 换了当前任务页表，必须立刻切到新 root。
+     * 否则 syscall 返回用户态时还在旧页表上。
+     */
+    crate::mm::activate_page_table(new_root);
+
+    /*
+     * 成功 exec 后，理论上不会回到旧用户程序。
+     * 这里返回 0 只是让 trap handler 正常返回；
+     * 返回时会用新的 TrapContext 进入新 app。
+     */
+    0
 }
