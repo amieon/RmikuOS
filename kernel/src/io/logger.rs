@@ -51,6 +51,6 @@ fn log_level_from_env() -> LevelFilter {
         Some("INFO") | Some("info") => LevelFilter::Info,
         Some("DEBUG") | Some("debug") => LevelFilter::Debug,
         Some("TRACE") | Some("trace") => LevelFilter::Trace,
-        _ => LevelFilter::Info,
+        _ => LevelFilter::Warn,
     }
 }

@@ -134,12 +134,12 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
 
 fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
     
-    trap_println!(
-        "[trap] syscall id={} args=[{:#x}, {:#x}, {:#x}]",
-        id,
-        args[0],
-        args[1],
-        args[2]
-    );
+    // trap_println!(
+    //     "[trap] syscall id={} args=[{:#x}, {:#x}, {:#x}]",
+    //     id,
+    //     args[0],
+    //     args[1],
+    //     args[2]
+    // );
     crate::syscall::syscall(id, args)
 }

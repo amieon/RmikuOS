@@ -75,11 +75,14 @@ if [ "$ARCH" = "loongarch64" ]; then
   build_loongarch_trampoline
 fi
 
-echo "=== 编译内核 ($ARCH, $MODE) ==="
+LOG_LEVEL="${LOG:-warn}"
+
+echo "=== 编译内核 ($ARCH, $MODE, LOG=$LOG_LEVEL) ==="
+
 if [ "$MODE" = "release" ]; then
-  cargo build --target "$TARGET" --release
+  LOG="$LOG_LEVEL" cargo build --target "$TARGET" --release
 else
-  cargo build --target "$TARGET"
+  LOG="$LOG_LEVEL" cargo build --target "$TARGET"
 fi
 
 KERNEL_ELF="target/$TARGET/$MODE/RmikuOS"
