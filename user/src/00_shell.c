@@ -24,6 +24,16 @@ static int read_line(char *buf, int max_len) {
             continue;
         }
 
+        if (ch == 4) {
+            return -1;
+        }
+
+        if (ch == 3) {
+            puts("^C\n");
+            buf[0] = 0;
+            return 0;
+        }
+
         if (ch == '\r') {
             ch = '\n';
         }
@@ -36,9 +46,6 @@ static int read_line(char *buf, int max_len) {
         if (ch == 8 || ch == 127) {
             if (len > 0) {
                 len--;
-                /*
-                 * 退格显示：backspace, space, backspace
-                 */
                 write(1, "\b \b", 3);
             }
             continue;
@@ -73,6 +80,11 @@ int main(void) {
 
         int len = read_line(line, LINE_SIZE);
 
+        if (len < 0) {
+            puts("\n");
+            continue;
+        }
+
         if (len == 0) {
             continue;
         }
@@ -90,9 +102,6 @@ int main(void) {
         isize pid = fork();
 
         if (pid == 0) {
-            /*
-             * 子进程执行命令。
-             */
             exec2(line, strlen(line));
 
             puts("exec failed: ");
