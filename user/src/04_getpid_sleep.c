@@ -1,6 +1,6 @@
 #include "user.h"
 
-void _start(void) {
+int main(void) {
     puts("[fork_wait] parent before fork, pid=");
     put_int(getpid());
     puts("\n");

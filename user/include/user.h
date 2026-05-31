@@ -11,10 +11,6 @@ typedef long isize;
 #define SYS_WAITPID 5
 #define SYS_SLEEP   6
 
-
-#define USER_ENTRY \
-    __attribute__((section(".text.entry"), used, noreturn)) void _start(void)
-
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 
 static inline isize write(int fd, const char *buf, usize len) {
@@ -41,7 +37,6 @@ static inline isize sleep(usize ticks) {
     return syscall3(SYS_SLEEP, ticks, 0, 0);
 }
 
-__attribute__((noreturn))
 static inline void exit(int code) {
     syscall3(SYS_EXIT, (usize)code, 0, 0);
     for (;;) {}

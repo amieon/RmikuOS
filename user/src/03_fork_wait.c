@@ -1,6 +1,6 @@
 #include "user.h"
 
-void _start(void) {
+int main(void) {
     puts("[getpid_sleep] start, pid=");
     put_int(getpid());
     puts("\n");

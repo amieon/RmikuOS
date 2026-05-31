@@ -1,6 +1,6 @@
 #include "user.h"
 
-void _start(void) {
+int main(void) {
     puts("[busy.c] start\n");
 
     volatile unsigned long i = 0;

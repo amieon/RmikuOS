@@ -23,6 +23,8 @@ ARCH_CONFIG = {
         "objdump": "riscv64-unknown-elf-objdump",
         "linker": USER_DIR / "linker-riscv64.ld",
         "runtime": LIB_DIR / "syscall_riscv64.S",
+        "crt0": LIB_DIR / "crt0_riscv64.S",
+        "runtime": LIB_DIR / "syscall_riscv64.S",
         "cflags": [
             "-march=rv64gc",
             "-mabi=lp64",
@@ -40,6 +42,8 @@ ARCH_CONFIG = {
         "objcopy": "loongarch64-unknown-linux-gnu-objcopy",
         "objdump": "loongarch64-unknown-linux-gnu-objdump",
         "linker": USER_DIR / "linker-loongarch64.ld",
+        "runtime": LIB_DIR / "syscall_loongarch64.S",
+        "crt0": LIB_DIR / "crt0_loongarch64.S",
         "runtime": LIB_DIR / "syscall_loongarch64.S",
         "cflags": [
             "-DUSER_ARCH_LOONGARCH64",
@@ -85,6 +89,7 @@ def build_one(arch: str, source: Path, app_id: int):
 
     stem = source.stem
     obj = out_dir / f"{app_id}_{stem}.o"
+    crt0_obj = out_dir / f"{app_id}_{stem}_crt0.o"
     runtime_obj = out_dir / f"{app_id}_{stem}_runtime.o"
     elf = out_dir / f"{app_id}_{stem}.elf"
     bin_path = out_dir / f"{app_id}_{stem}.bin"
@@ -100,7 +105,15 @@ def build_one(arch: str, source: Path, app_id: int):
         "-static",
         "-I", str(INCLUDE_DIR),
     ]
-
+    run([
+        cfg["gcc"],
+        *cfg["cflags"],
+        *common_flags,
+        "-c",
+        str(cfg["crt0"]),
+        "-o",
+        str(crt0_obj),
+    ])
 
     compile_cmd = [
         cfg["gcc"],
@@ -125,7 +138,15 @@ def build_one(arch: str, source: Path, app_id: int):
     ]
     run(runtime_cmd)
 
-  
+    link_objects = []
+
+    if source.suffix == ".c":
+        link_objects.append(str(crt0_obj))
+
+    link_objects.append(str(obj))
+
+    if source.suffix == ".c":
+        link_objects.append(str(runtime_obj))
     link_cmd = [
         cfg["gcc"],
         *cfg["cflags"],
@@ -136,8 +157,7 @@ def build_one(arch: str, source: Path, app_id: int):
         "-Wl,--build-id=none",
         *cfg["ldflags"],
         "-T", str(cfg["linker"]),
-        str(obj),
-        str(runtime_obj),
+        *link_objects,
         "-o",
         str(elf),
     ]
