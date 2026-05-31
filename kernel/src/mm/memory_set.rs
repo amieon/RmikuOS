@@ -181,21 +181,12 @@ impl MemorySet {
     pub fn new_user_test(app: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_bare();
 
-        /*
-         * 第一版先把内核高半也映射进用户页表。
-         *
-         * 这些区域 U=0，用户态不能访问。
-         * 但是 trap 进入内核后，内核代码/栈/UART 可以继续工作。
-         */
         #[cfg(target_arch = "riscv64")]
         {
             memory_set.map_kernel_areas();
         }
   
 
-        /*
-         * 用户程序区域。
-         */
         let app_start = crate::mm::USER_TEXT_BASE;
         let app_end = crate::mm::align_up(
             app_start + core::cmp::max(app.len(), 1),
@@ -214,10 +205,6 @@ impl MemorySet {
 
         memory_set.copy_data(VirtAddr(app_start), app);
 
-        /*
-         * 用户栈。
-         */
-
         let stack_perm = MapPermission::R
             .union(MapPermission::W)
             .union(MapPermission::U);
@@ -233,4 +220,35 @@ impl MemorySet {
 
         (memory_set, entry, user_sp)
     }
+
+
+    pub fn from_existed_user(user_space: &Self) -> Self {
+        let mut memory_set = Self::new_bare();
+
+        #[cfg(target_arch = "riscv64")]
+        {
+            memory_set.map_kernel_areas();
+        }
+
+        for area in user_space.areas.iter() {
+            if !area.is_user() {
+                continue;
+            }
+
+            assert!(
+                area.is_framed(),
+                "user area must be framed when cloning user MemorySet"
+            );
+
+            let new_area = area.clone_framed_area_data(
+                &user_space.page_table,
+                &mut memory_set.page_table,
+            );
+
+            memory_set.areas.push(new_area);
+        }
+
+        memory_set
+    }
+        
 }

@@ -101,6 +101,7 @@ pub fn init_paging() {
 
 }
 
+
 #[cfg(target_arch = "riscv64")]
 fn kernel_pte_flags() -> PteFlags {
     PteFlags::R

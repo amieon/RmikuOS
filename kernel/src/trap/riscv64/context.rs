@@ -1,7 +1,7 @@
 //! RISC-V trap context.
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TrapContext {
     /// General registers x0..x31.
     pub x: [usize; 32],

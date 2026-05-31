@@ -69,7 +69,7 @@ impl MapPermission {
     }
 
     pub fn contains(self, rhs: Self) -> bool {
-        self.bits & rhs.bits != 0
+        self.bits & rhs.bits == rhs.bits
     }
 }
 
@@ -135,6 +135,60 @@ impl MapArea {
         page_table.map(vpn, ppn, map_perm_to_pte_flags(self.permission));
     }
 }
+
+
+
+impl MapArea {
+    pub fn is_user(&self) -> bool {
+        self.permission.contains(MapPermission::U)
+    }
+
+    pub fn is_framed(&self) -> bool {
+        matches!(self.map_type, MapType::Framed)
+    }
+
+    pub fn clone_framed_area_data(
+        &self,
+        old_page_table: &PageTable,
+        new_page_table: &mut PageTable,
+    ) -> Self {
+        assert!(
+            self.is_framed(),
+            "clone_framed_area_data only supports framed areas"
+        );
+
+ 
+        let mut new_area = MapArea {
+            vpn_range: self.vpn_range,
+            map_type: MapType::Framed,
+            permission: self.permission,
+            data_frames: Vec::new(),
+        };
+
+        new_area.map(new_page_table);
+
+
+        for vpn in self.vpn_range {
+            let src_pte = old_page_table
+                .translate(vpn)
+                .expect("clone_framed_area_data: old pte not found");
+
+            let dst_pte = new_page_table
+                .translate(vpn)
+                .expect("clone_framed_area_data: new pte not found");
+
+            let src = src_pte.ppn().bytes_array();
+            let dst = dst_pte.ppn().bytes_array();
+
+            dst.copy_from_slice(src);
+        }
+
+        new_area
+    }
+}
+
+
+
 
 #[cfg(target_arch = "riscv64")]
 fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {

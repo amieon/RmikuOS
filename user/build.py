@@ -12,9 +12,9 @@ USER_DIR = ROOT / "user"
 SRC_DIR = USER_DIR / "src"
 BUILD_DIR = USER_DIR / "build"
 INCLUDE_DIR = USER_DIR / "include"
+LIB_DIR = USER_DIR / "lib"
 
 GENERATED_RS = ROOT / "kernel" / "src" / "loader" / "generated.rs"
-
 
 ARCH_CONFIG = {
     "riscv64": {
@@ -22,11 +22,17 @@ ARCH_CONFIG = {
         "objcopy": "riscv64-unknown-elf-objcopy",
         "objdump": "riscv64-unknown-elf-objdump",
         "linker": USER_DIR / "linker-riscv64.ld",
+        "runtime": LIB_DIR / "syscall_riscv64.S",
         "cflags": [
             "-march=rv64gc",
             "-mabi=lp64",
             "-mcmodel=medany",
+            "-mno-relax",
+            "-msmall-data-limit=0",
             "-DUSER_ARCH_RISCV64",
+        ],
+        "ldflags": [
+            "-Wl,--no-relax",
         ],
     },
     "loongarch64": {
@@ -34,13 +40,13 @@ ARCH_CONFIG = {
         "objcopy": "loongarch64-unknown-linux-gnu-objcopy",
         "objdump": "loongarch64-unknown-linux-gnu-objdump",
         "linker": USER_DIR / "linker-loongarch64.ld",
+        "runtime": LIB_DIR / "syscall_loongarch64.S",
         "cflags": [
             "-DUSER_ARCH_LOONGARCH64",
         ],
+        "ldflags": [],
     },
 }
-
-
 def run(cmd):
     print("+", " ".join(str(x) for x in cmd))
     subprocess.run(cmd, check=True)
@@ -79,6 +85,7 @@ def build_one(arch: str, source: Path, app_id: int):
 
     stem = source.stem
     obj = out_dir / f"{app_id}_{stem}.o"
+    runtime_obj = out_dir / f"{app_id}_{stem}_runtime.o"
     elf = out_dir / f"{app_id}_{stem}.elf"
     bin_path = out_dir / f"{app_id}_{stem}.bin"
 
@@ -94,16 +101,16 @@ def build_one(arch: str, source: Path, app_id: int):
         "-I", str(INCLUDE_DIR),
     ]
 
-    compile_cmd = [
+    runtime_cmd = [
         cfg["gcc"],
         *cfg["cflags"],
         *common_flags,
         "-c",
-        str(source),
+        str(cfg["runtime"]),
         "-o",
-        str(obj),
+        str(runtime_obj),
     ]
-    run(compile_cmd)
+    run(runtime_cmd)
 
     link_cmd = [
         cfg["gcc"],
@@ -113,8 +120,10 @@ def build_one(arch: str, source: Path, app_id: int):
         "-static",
         "-no-pie",
         "-Wl,--build-id=none",
+        *cfg["ldflags"],
         "-T", str(cfg["linker"]),
         str(obj),
+        str(runtime_obj),
         "-o",
         str(elf),
     ]

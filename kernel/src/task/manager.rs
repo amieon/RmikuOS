@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::mm::{PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
+use crate::mm::{MemorySet,PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
 use crate::sync::spin::Mutex;
 use crate::trap::TrapContext;
@@ -392,13 +392,19 @@ pub fn init() {
         let name = crate::loader::get_app_name(id);
 
         log::info!(
-            "[task] load app {}: name={}, size={} bytes",
+            "[task] load app {}: name={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
             id,
             name,
             app.len(),
+            app.get(0).copied().unwrap_or(0),
+            app.get(1).copied().unwrap_or(0),
+            app.get(2).copied().unwrap_or(0),
+            app.get(3).copied().unwrap_or(0),
         );
 
         manager.add_task(TaskControlBlock::new(id, app));
+
+        log::info!("[task] app {} loaded into task", id);
     }
 
     log::info!("[task] loaded {} user tasks", crate::loader::num_apps());

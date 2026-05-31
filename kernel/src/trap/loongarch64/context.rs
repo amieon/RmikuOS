@@ -1,7 +1,7 @@
 //! LoongArch64 trap context.
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TrapContext {
     /// General registers r0..r31.
     pub r: [usize; 32],
