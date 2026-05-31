@@ -443,6 +443,8 @@ pub fn run_tasks() -> ! {
     loop {
         let next = {
             let mut manager = TASK_MANAGER.lock();
+            let now = crate::timer::ticks();
+            manager.wake_sleeping_tasks(now);
 
             if let Some(id) = manager.find_next_ready() {
                 let (root, kstack_top, trap_cx_addr, task_cx_ptr) = manager.prepare_task(id);
@@ -474,11 +476,9 @@ pub fn run_tasks() -> ! {
 
             processor::set_current(None);
         } else {
-            log::info!("[task] no ready task");
-
-            loop {
-                core::hint::spin_loop();
-            }
+            crate::arch::enable_interrupt();
+            crate::arch::wait_for_interrupt();
+            crate::arch::disable_interrupt();
         }
     }
 }

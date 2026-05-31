@@ -28,3 +28,50 @@ pub fn hartid() -> usize {
     }
     id
 }
+
+pub fn enable_interrupt() {
+    let mut crmd: usize;
+
+    unsafe {
+
+        core::arch::asm!(
+            "csrrd {0}, 0x0",
+            out(reg) crmd,
+            options(nostack)
+        );
+
+        crmd |= 1usize << 2;
+
+        core::arch::asm!(
+            "csrwr {0}, 0x0",
+            inout(reg) crmd => _,
+            options(nostack)
+        );
+    }
+}
+
+pub fn disable_interrupt() {
+    let mut crmd: usize;
+
+    unsafe {
+        core::arch::asm!(
+            "csrrd {0}, 0x0",
+            out(reg) crmd,
+            options(nostack)
+        );
+
+        crmd &= !(1usize << 2);
+
+        core::arch::asm!(
+            "csrwr {0}, 0x0",
+            inout(reg) crmd => _,
+            options(nostack)
+        );
+    }
+}
+
+pub fn wait_for_interrupt() {
+    unsafe {
+        core::arch::asm!("idle 0", options(nostack));
+    }
+}

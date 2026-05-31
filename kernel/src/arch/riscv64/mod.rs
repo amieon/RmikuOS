@@ -25,3 +25,31 @@ pub fn hartid() -> usize {
     }
     id
 }
+
+pub fn enable_interrupt() {
+    unsafe {
+        //sstatus.SIE = bit 1
+        core::arch::asm!(
+            "csrs sstatus, {0}",
+            in(reg) 1usize << 1,
+            options(nostack)
+        );
+    }
+}
+
+pub fn disable_interrupt() {
+    unsafe {
+        //clear sstatus.SIE
+        core::arch::asm!(
+            "csrc sstatus, {0}",
+            in(reg) 1usize << 1,
+            options(nostack)
+        );
+    }
+}
+
+pub fn wait_for_interrupt() {
+    unsafe {
+        core::arch::asm!("wfi", options(nostack));
+    }
+}
