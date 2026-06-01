@@ -16,6 +16,7 @@ use super::inode::{
     InodeType,
     Metadata,
 };
+use super::stat::*;
 
 static MOTD: &[u8] = b"Welcome to RmikuOS initramfs!\n";
 
@@ -204,6 +205,10 @@ impl File for MemFile {
     fn write(&self, _buf: &[u8]) -> isize {
         -1
     }
+
+    fn stat(&self) -> Stat {
+        Stat::new(STAT_TYPE_FILE, self.data.len())
+    }
 }
 
 pub struct DirFile {
@@ -265,4 +270,9 @@ impl File for DirFile {
 
         (written * DIRENT_SIZE) as isize
     }
+
+    fn stat(&self) -> Stat {
+        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE)
+    }
+
 }

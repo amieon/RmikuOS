@@ -17,7 +17,8 @@ typedef long isize;
 #define SYS_GETDENTS   11
 #define SYS_CHDIR      12
 #define SYS_GETCWD     13
-
+#define SYS_STAT       14
+#define SYS_FSTAT      15
 
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
@@ -82,6 +83,7 @@ static inline isize open(const char *path) {
 static inline isize close(int fd) {
     return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
 }
+
 
 
 static inline void put_int(long x) {

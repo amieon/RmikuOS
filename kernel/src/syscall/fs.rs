@@ -172,3 +172,59 @@ pub fn sys_getcwd(user_buf: usize, len: usize) -> isize {
 
     bytes.len() as isize
 }
+
+
+
+fn write_stat_to_user(user_ptr: usize, stat: &crate::fs::Stat) -> isize {
+    if user_ptr == 0 {
+        return -1;
+    }
+
+    let bytes = unsafe {
+        core::slice::from_raw_parts(
+            stat as *const crate::fs::Stat as *const u8,
+            core::mem::size_of::<crate::fs::Stat>(),
+        )
+    };
+
+    if crate::task::write_current_user_bytes(user_ptr, bytes).is_none() {
+        return -1;
+    }
+
+    0
+}
+
+pub fn sys_stat(path_ptr: usize, path_len: usize, stat_ptr: usize) -> isize {
+    let path_bytes = match crate::task::read_current_user_bytes(path_ptr, path_len) {
+        Some(bytes) => bytes,
+        None => return -1,
+    };
+
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s.trim_matches('\0').trim(),
+        Err(_) => return -1,
+    };
+
+    let cwd = crate::task::current_cwd();
+
+    let stat = match crate::fs::stat_at(&cwd, path) {
+        Some(stat) => stat,
+        None => {
+            log::warn!("[fs] stat failed: cwd={}, path={}", cwd, path);
+            return -1;
+        }
+    };
+
+    write_stat_to_user(stat_ptr, &stat)
+}
+
+pub fn sys_fstat(fd: usize, stat_ptr: usize) -> isize {
+    let file = match crate::task::current_file(fd) {
+        Some(file) => file,
+        None => return -1,
+    };
+
+    let stat = file.stat();
+
+    write_stat_to_user(stat_ptr, &stat)
+}

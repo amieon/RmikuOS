@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 
 use super::file::{File, FileRef};
-
+use super::stat::*;
 pub struct Stdin;
 pub struct Stdout;
 
@@ -12,6 +12,10 @@ impl File for Stdin {
 
     fn writable(&self) -> bool {
         false
+    }
+
+    fn stat(&self) -> Stat {
+        Stat::new(STAT_TYPE_CHAR, 0)
     }
 
     fn read(&self, buf: &mut [u8]) -> isize {
@@ -59,6 +63,9 @@ impl File for Stdout {
         }
 
         buf.len() as isize
+    }
+    fn stat(&self) -> Stat {
+        Stat::new(STAT_TYPE_CHAR, 0)
     }
 }
 

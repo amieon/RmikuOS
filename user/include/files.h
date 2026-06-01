@@ -60,3 +60,26 @@ static inline isize chdir(const char *path) {
 static inline isize getcwd(char *buf, usize len) {
     return syscall3(SYS_GETCWD, (usize)buf, len, 0);
 }
+
+
+#define STAT_TYPE_FILE 1
+#define STAT_TYPE_DIR  2
+#define STAT_TYPE_CHAR 3
+
+struct stat {
+    unsigned char file_type;
+    unsigned char reserved[7];
+    usize size;
+};
+
+static inline isize stat2(const char *path, usize len, struct stat *st) {
+    return syscall3(SYS_STAT, (usize)path, len, (usize)st);
+}
+
+static inline isize stat(const char *path, struct stat *st) {
+    return stat2(path, strlen(path), st);
+}
+
+static inline isize fstat(int fd, struct stat *st) {
+    return syscall3(SYS_FSTAT, (usize)fd, (usize)st, 0);
+}

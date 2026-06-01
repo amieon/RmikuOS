@@ -1,5 +1,7 @@
 use alloc::sync::Arc;
 
+use crate::fs::stat::Stat;
+
 pub type FileRef = Arc<dyn File>;
 
 pub trait File: Send + Sync {
@@ -9,6 +11,8 @@ pub trait File: Send + Sync {
     fn is_dir(&self) -> bool {
         false
     }
+
+    fn stat(&self) -> Stat;
 
     fn read(&self, buf: &mut [u8]) -> isize;
     fn write(&self, buf: &[u8]) -> isize;
