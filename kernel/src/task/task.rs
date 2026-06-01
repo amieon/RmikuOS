@@ -47,6 +47,7 @@ pub struct TaskControlBlock {
     pub block_reason: BlockReason,
 
     pub fd_table: Vec<Option<FileRef>>,
+    pub free_fds: Vec<usize>,
     pub cwd: String,
 
     pub exit_code: i32,
@@ -83,6 +84,7 @@ impl TaskControlBlock {
             block_reason: BlockReason::None,
 
             fd_table: Self::new_fd_table(),
+            free_fds: Vec::new(),
             cwd: String::from("/"),
 
             exit_code: 0,
@@ -95,6 +97,7 @@ impl TaskControlBlock {
         user_space: MemorySet,
         trap_cx: TrapContext,
         fd_table: Vec<Option<FileRef>>,
+        free_fds: Vec<usize>,
         cwd: String,
     ) -> Self {
         
@@ -123,6 +126,7 @@ impl TaskControlBlock {
             block_reason: BlockReason::None,
 
             fd_table : fd_table,
+            free_fds: free_fds,
             cwd : cwd,
 
             exit_code: 0,
@@ -163,6 +167,19 @@ impl TaskControlBlock {
 
         fd_table
     }
+
+    pub fn close_non_standard_fds_on_exec(&mut self) {
+        /*
+        * fd 0/1/2 是 stdin/stdout/stderr，exec 后保留。
+        * fd >= 3 作为普通打开文件，exec 成功后关闭。
+        */
+        for fd in 3..self.fd_table.len() {
+            if self.fd_table[fd].take().is_some() {
+                self.free_fds.push(fd);
+            }
+        }
+    }
+
 }
 
 

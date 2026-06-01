@@ -330,7 +330,7 @@ impl TaskManager {
 
 
     fn get_file(&self, task_id: usize, fd: usize) -> Option<crate::fs::FileRef> {
-        self.try_task(task_id)?
+        self.task(task_id)
             .fd_table
             .get(fd)?
             .as_ref()
@@ -338,31 +338,49 @@ impl TaskManager {
     }
 
     fn alloc_fd(&mut self, task_id: usize, file: crate::fs::FileRef) -> isize {
-        let fd_table = &mut self.task_mut(task_id).fd_table;
+        let task = self.task_mut(task_id);
 
-        for i in 0..fd_table.len() {
-            if fd_table[i].is_none() {
-                fd_table[i] = Some(file);
-                return i as isize;
-            }
+        if let Some(fd) = task.free_fds.pop() {
+            assert!(
+                fd < task.fd_table.len(),
+                "free fd out of range: fd={}, len={}",
+                fd,
+                task.fd_table.len(),
+            );
+
+            assert!(
+                task.fd_table[fd].is_none(),
+                "free fd slot is not empty: fd={}",
+                fd,
+            );
+
+            task.fd_table[fd] = Some(file);
+            return fd as isize;
         }
 
-        fd_table.push(Some(file));
-        (fd_table.len() - 1) as isize
+        let fd = task.fd_table.len();
+        task.fd_table.push(Some(file));
+        fd as isize
     }
 
     fn close_fd(&mut self, task_id: usize, fd: usize) -> isize {
-        let fd_table = &mut self.task_mut(task_id).fd_table;
+        let task = self.task_mut(task_id);
 
-        if fd >= fd_table.len() {
+        if fd >= task.fd_table.len() {
             return -1;
         }
 
-        if fd_table[fd].is_none() {
+        if task.fd_table[fd].take().is_none() {
             return -1;
         }
 
-        fd_table[fd] = None;
+        
+        //标准 fd 也允许 close。
+        //close(0)、close(1)、close(2) 后也可以被后续 open 复用。
+        //这符合 Unix 直觉。
+  
+        task.free_fds.push(fd);
+
         0
     }
 }
@@ -463,6 +481,7 @@ pub fn fork_current() -> isize {
 
 
         let child_fd_table = manager.task(parent).fd_table.clone();
+        let child_free_fds = manager.task(parent).free_fds.clone();
         let child_cwd = manager.task(parent).cwd.clone();
 
         child_trap_cx.set_syscall_ret(0);
@@ -474,6 +493,7 @@ pub fn fork_current() -> isize {
             child_user_space,
             child_trap_cx,
             child_fd_table,
+            child_free_fds,
             child_cwd,
         );
 
@@ -822,6 +842,8 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     let new_root = {
         let mut manager = TASK_MANAGER.lock();
         let task = manager.task_mut(current);
+
+        task.close_non_standard_fds_on_exec();
 
         let old_space = core::mem::replace(&mut task.user_space, new_user_space);
 
