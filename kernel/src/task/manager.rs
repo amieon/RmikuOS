@@ -597,13 +597,36 @@ pub fn wake_sleeping_tasks() {
 }
 
 
-pub fn exec_current(name_ptr: usize, len: usize) -> isize {
-    let name_bytes = match read_current_user_bytes(name_ptr, len) {
+
+
+const EXEC_MAX_ARGS: usize = 8;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct UserArg {
+    ptr: usize,
+    len: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct UserExecArgs {
+    argc: usize,
+    argv: [UserArg; EXEC_MAX_ARGS],
+}
+
+
+
+pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize {
+    use alloc::string::String;
+    use alloc::vec::Vec;
+
+    let path_bytes = match crate::task::read_current_user_bytes(path_ptr, path_len) {
         Some(bytes) => bytes,
         None => return -1,
     };
 
-    let name = match core::str::from_utf8(&name_bytes) {
+    let name = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s.trim_matches('\0').trim(),
         Err(_) => return -1,
     };
@@ -613,10 +636,10 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
     }
 
     /*
-     * shell 输入 hello，就尝试 /bin/hello。
-     * shell 输入 /bin/hello，就直接用它。
+     * 如果传入 hello，就变成 /bin/hello。
+     * 如果传入 /bin/hello，就直接使用。
      */
-    let mut path_buf = alloc::string::String::new();
+    let mut path_buf = String::new();
 
     let path = if name.starts_with('/') {
         name
@@ -626,6 +649,20 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
         path_buf.as_str()
     };
 
+    /*
+     * 先从旧地址空间读取 argv。
+     * 注意：必须在替换 user_space 之前读。
+     */
+    let argv = match read_exec_args(args_ptr, name) {
+        Some(argv) => argv,
+        None => return -1,
+    };
+
+    let argc = argv.len();
+
+    /*
+     * 从 VFS 打开程序文件。
+     */
     let file = match crate::fs::open(path) {
         Some(file) => file,
         None => {
@@ -634,21 +671,25 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
         }
     };
 
-    if !file.readable() || file.is_dir() {
-        log::warn!("[exec] not executable file: {}", path);
+    if file.is_dir() || !file.readable() {
+        log::warn!("[exec] not a regular readable file: {}", path);
         return -1;
     }
 
-
-    let mut app_data = alloc::vec::Vec::new();
+    /*
+     * 读取完整 app binary。
+     */
+    let mut app_data = Vec::new();
     let mut buf = [0u8; 512];
 
     loop {
         let n = file.read(&mut buf);
+
         if n < 0 {
             log::warn!("[exec] read failed: {}", path);
             return -1;
         }
+
         if n == 0 {
             break;
         }
@@ -657,16 +698,39 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
     }
 
     if app_data.is_empty() {
-        log::warn!("[exec] empty file: {}", path);
+        log::warn!("[exec] empty executable: {}", path);
         return -1;
     }
 
-    log::info!("[exec] load {}: {} bytes", path, app_data.len());
-
-    let (new_user_space, entry, user_sp) =
+    /*
+     * 创建新用户地址空间。
+     */
+    let (mut new_user_space, entry, user_sp) =
         crate::mm::MemorySet::new_user_test(&app_data);
 
-    let new_trap_cx = crate::trap::TrapContext::app_init_context(entry, user_sp);
+    /*
+     * 把 argc/argv 放进新用户栈。
+     */
+    let (new_user_sp, argv_ptr) = match build_user_stack_with_args(
+        &new_user_space,
+        user_sp,
+        &argv,
+    ) {
+        Some(v) => v,
+        None => return -1,
+    };
+
+    let mut new_trap_cx =
+        crate::trap::TrapContext::app_init_context(entry, new_user_sp);
+
+    /*
+     * a0 = argc
+     * a1 = argv
+     *
+     * 注意：trap handler 会把 sys_exec 的返回值写回 a0。
+     * 所以 sys_exec 成功时要 return argc。
+     */
+    new_trap_cx.set_app_args(argc, argv_ptr);
 
     let current = processor::current_task_id();
 
@@ -677,7 +741,6 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
         let old_space = core::mem::replace(&mut task.user_space, new_user_space);
 
         *task.trap_cx_mut() = new_trap_cx;
-        task.trap_cx_addr = task.trap_cx_ptr_addr();
 
         let root = task.root_ppn();
 
@@ -688,7 +751,142 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
 
     crate::mm::activate_page_table(new_root);
 
-    0
+    /*
+     * 关键：成功 exec 返回 argc。
+     * trap handler 会把这个值写到新 TrapContext 的 a0，
+     * 正好作为 main(argc, argv) 的 argc。
+     */
+    argc as isize
+}
+
+
+
+fn read_exec_args(args_ptr: usize, default_argv0: &str) -> Option<alloc::vec::Vec<alloc::vec::Vec<u8>>> {
+    use alloc::vec::Vec;
+
+    if args_ptr == 0 {
+        let mut argv = Vec::new();
+        argv.push(default_argv0.as_bytes().to_vec());
+        return Some(argv);
+    }
+
+    let bytes = crate::task::read_current_user_bytes(
+        args_ptr,
+        core::mem::size_of::<UserExecArgs>(),
+    )?;
+
+    let raw = unsafe {
+        core::ptr::read_unaligned(bytes.as_ptr() as *const UserExecArgs)
+    };
+
+    if raw.argc == 0 || raw.argc > EXEC_MAX_ARGS {
+        return None;
+    }
+
+    let mut argv = Vec::new();
+
+    for i in 0..raw.argc {
+        let arg = raw.argv[i];
+
+        if arg.ptr == 0 || arg.len > 256 {
+            return None;
+        }
+
+        let mut data = crate::task::read_current_user_bytes(arg.ptr, arg.len)?;
+
+        /*
+         * argv 字符串里不要带 NUL。后面压用户栈时我们自己补 '\0'。
+         */
+        if let Some(pos) = data.iter().position(|&c| c == 0) {
+            data.truncate(pos);
+        }
+
+        argv.push(data);
+    }
+
+    Some(argv)
+}
+
+
+
+fn write_to_user_space(
+    user_space: &crate::mm::MemorySet,
+    user_va: usize,
+    data: &[u8],
+) -> Option<()> {
+    use crate::mm::{
+        VirtAddr,
+        PAGE_SIZE_BITS,
+        kernel_phys_to_virt,
+    };
+    use crate::mm::config::PAGE_SIZE;
+
+    for (offset, byte) in data.iter().enumerate() {
+        let va = user_va.checked_add(offset)?;
+        let vpn = VirtAddr(va).floor();
+        let page_offset = va & (PAGE_SIZE - 1);
+
+        let pte = user_space.translate(vpn)?;
+        let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
+        let kva = kernel_phys_to_virt(pa);
+
+        unsafe {
+            core::ptr::write_volatile(kva as *mut u8, *byte);
+        }
+    }
+
+    Some(())
+}
+
+
+fn align_down(value: usize, align: usize) -> usize {
+    value & !(align - 1)
+}
+
+fn push_usize_to_user_stack(
+    user_space: &crate::mm::MemorySet,
+    sp: &mut usize,
+    value: usize,
+) -> Option<()> {
+    *sp -= core::mem::size_of::<usize>();
+    write_to_user_space(user_space, *sp, &value.to_ne_bytes())
+}
+
+fn build_user_stack_with_args(
+    user_space: &crate::mm::MemorySet,
+    user_sp: usize,
+    argv: &[alloc::vec::Vec<u8>],
+) -> Option<(usize, usize)> {
+    use alloc::vec::Vec;
+
+    let mut sp = user_sp;
+    let mut arg_ptrs: Vec<usize> = Vec::new();
+
+ 
+    for arg in argv.iter().rev() {
+        sp -= arg.len() + 1;
+
+        write_to_user_space(user_space, sp, arg)?;
+        write_to_user_space(user_space, sp + arg.len(), &[0])?;
+
+        arg_ptrs.push(sp);
+    }
+
+    arg_ptrs.reverse();
+
+    sp = align_down(sp, 16);
+
+
+    push_usize_to_user_stack(user_space, &mut sp, 0)?;
+
+
+    for &ptr in arg_ptrs.iter().rev() {
+        push_usize_to_user_stack(user_space, &mut sp, ptr)?;
+    }
+
+    let argv_ptr = sp;
+
+    Some((sp, argv_ptr))
 }
 
 

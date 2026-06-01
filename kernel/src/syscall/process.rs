@@ -22,6 +22,6 @@ pub fn sys_fork() -> isize {
     crate::task::fork_current()
 }
 
-pub fn sys_exec(name_ptr: usize, len: usize) -> isize {
-    crate::task::exec_current(name_ptr, len)
+pub fn sys_exec(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize {
+    crate::task::exec_current(path_ptr, path_len, args_ptr)
 }

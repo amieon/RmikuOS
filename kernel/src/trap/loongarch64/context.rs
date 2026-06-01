@@ -108,3 +108,10 @@ impl TrapContext {
         self.prmd & PRMD_PPLV_MASK == PLV_USER
     }
 }
+
+impl TrapContext {
+    pub fn set_app_args(&mut self, argc: usize, argv: usize) {
+        self.r[REG_A0] = argc; // a0
+        self.r[REG_A1] = argv; // a1
+    }
+}

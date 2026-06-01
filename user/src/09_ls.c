@@ -13,12 +13,19 @@ static void print_name(struct dirent *d) {
     puts("\n");
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     const char *path = "/";
+
+    if (argc >= 2) {
+        path = argv[1];
+    }
+
     int fd = open(path);
 
     if (fd < 0) {
-        puts("ls: open failed\n");
+        puts("ls: cannot open ");
+        puts(path);
+        puts("\n");
         return 1;
     }
 

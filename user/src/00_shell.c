@@ -181,14 +181,56 @@ static int builtin_cat(int argc, char *argv[]) {
     return 0;
 }
 
-static void run_external(char *cmd) {
+static void build_exec_path(const char *cmd, char *out, int out_size) {
+    if (cmd[0] == '/') {
+        int i = 0;
+        while (cmd[i] && i < out_size - 1) {
+            out[i] = cmd[i];
+            i++;
+        }
+        out[i] = 0;
+        return;
+    }
+
+    const char *prefix = "/bin/";
+    int pos = 0;
+
+    for (int i = 0; prefix[i] && pos < out_size - 1; i++) {
+        out[pos++] = prefix[i];
+    }
+
+    for (int i = 0; cmd[i] && pos < out_size - 1; i++) {
+        out[pos++] = cmd[i];
+    }
+
+    out[pos] = 0;
+}
+
+static void run_external(int argc, char *argv[]) {
     isize pid = fork();
 
     if (pid == 0) {
-        exec(cmd);
+        char path[96];
+
+        build_exec_path(argv[0], path, sizeof(path));
+
+        struct exec_args args;
+        args.argc = argc;
+
+        for (int i = 0; i < EXEC_MAX_ARGS; i++) {
+            args.argv[i].ptr = 0;
+            args.argv[i].len = 0;
+        }
+
+        for (int i = 0; i < argc && i < EXEC_MAX_ARGS; i++) {
+            args.argv[i].ptr = argv[i];
+            args.argv[i].len = strlen(argv[i]);
+        }
+
+        exec_with_args(path, &args);
 
         puts("exec failed: ");
-        puts(cmd);
+        puts(path);
         puts("\n");
 
         exit(1);
@@ -203,7 +245,6 @@ static void run_external(char *cmd) {
         puts("fork failed\n");
     }
 }
-
 int main(void) {
     char line[LINE_SIZE];
     char *argv[MAX_ARGC];
@@ -252,7 +293,7 @@ int main(void) {
             continue;
         }
 
-        run_external(argv[0]);
+        run_external(argc, argv);
     }
 
     return 0;

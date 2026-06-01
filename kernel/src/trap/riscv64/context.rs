@@ -105,3 +105,10 @@ impl TrapContext {
         self.sstatus & SSTATUS_SPP == 0
     }
 }
+
+impl TrapContext {
+    pub fn set_app_args(&mut self, argc: usize, argv: usize) {
+        self.x[REG_A0] = argc; // a0
+        self.x[REG_A1] = argv; // a1
+    }
+}
