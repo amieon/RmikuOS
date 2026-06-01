@@ -31,6 +31,73 @@ impl StackFrameAllocator {
         self.end = end_ppn.0;
         self.recycled.clear();
     }
+
+    pub fn alloc_contiguous(&mut self, pages: usize) -> Option<PhysPageNum> {
+        if pages == 0 {
+            return None;
+        }
+
+        // 优先从 current 后面直接切连续页。
+        if self.current + pages <= self.end {
+            let base = self.current;
+            self.current += pages;
+            return Some(PhysPageNum(base));
+        }
+
+        // current 不够时，再从 recycled 里找连续页。
+        if self.recycled.len() >= pages {
+            self.recycled.sort_unstable();
+
+            let mut run_start = 0usize;
+            let mut run_len = 1usize;
+
+            for i in 1..self.recycled.len() {
+                if self.recycled[i] == self.recycled[i - 1] + 1 {
+                    run_len += 1;
+                } else {
+                    run_start = i;
+                    run_len = 1;
+                }
+
+                if run_len >= pages {
+                    let pos = run_start;
+                    let base = self.recycled[pos];
+
+                    for _ in 0..pages {
+                        self.recycled.remove(pos);
+                    }
+
+                    return Some(PhysPageNum(base));
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn dealloc_contiguous(&mut self, base_ppn: PhysPageNum, pages: usize) {
+        let base = base_ppn.0;
+
+        for i in 0..pages {
+            let ppn = base + i;
+
+            if ppn < self.start || ppn >= self.current {
+                panic!(
+                    "[mm] invalid contiguous frame dealloc: ppn={:#x}, valid={:#x}..{:#x}",
+                    ppn,
+                    self.start,
+                    self.current,
+                );
+            }
+
+            if self.recycled.iter().any(|&x| x == ppn) {
+                panic!("[mm] contiguous frame double free: ppn={:#x}", ppn);
+            }
+
+            self.recycled.push(ppn);
+        }
+    }
+
 }
 
 impl FrameAllocator for StackFrameAllocator {
@@ -64,6 +131,8 @@ impl FrameAllocator for StackFrameAllocator {
 
         self.recycled.push(ppn);
     }
+
+    
 }
 
 static FRAME_ALLOCATOR_LOCK: SpinLock = SpinLock::new();
@@ -133,6 +202,29 @@ pub fn dealloc_frame(ppn: PhysPageNum) {
 
     unsafe {
         FRAME_ALLOCATOR.dealloc(ppn);
+    }
+
+    FRAME_ALLOCATOR_LOCK.unlock();
+}
+
+
+pub fn alloc_contiguous_frames(pages: usize) -> Option<PhysPageNum> {
+    FRAME_ALLOCATOR_LOCK.lock();
+
+    let frame = unsafe {
+        FRAME_ALLOCATOR.alloc_contiguous(pages)
+    };
+
+    FRAME_ALLOCATOR_LOCK.unlock();
+
+    frame
+}
+
+pub fn dealloc_contiguous_frames(base_ppn: PhysPageNum, pages: usize) {
+    FRAME_ALLOCATOR_LOCK.lock();
+
+    unsafe {
+        FRAME_ALLOCATOR.dealloc_contiguous(base_ppn, pages);
     }
 
     FRAME_ALLOCATOR_LOCK.unlock();

@@ -22,7 +22,7 @@ pub fn init(heap_start: usize) {
             .lock()
             .init(heap_start, KERNEL_HEAP_SIZE);
     }
-    crate::mm::heap::dump_heap_stats("after init");
+    
 
 
     log::info!(

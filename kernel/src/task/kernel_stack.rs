@@ -1,27 +1,81 @@
+use crate::mm::{
+    kernel_phys_to_virt,
+    PhysPageNum,
+    PAGE_SIZE_BITS,
+};
+use crate::mm::config::PAGE_SIZE;
+use crate::mm::frame_allocator::{
+    alloc_contiguous_frames,
+    dealloc_contiguous_frames,
+};
 use crate::trap::TrapContext;
 
 pub const KERNEL_STACK_SIZE: usize = 16 * 1024;
 const TRAP_CONTEXT_SIZE: usize = core::mem::size_of::<TrapContext>();
 
-#[repr(align(16))]
 pub struct KernelStack {
-    data: [u8; KERNEL_STACK_SIZE],
+    base_ppn: PhysPageNum,
+    pages: usize,
 }
 
 impl KernelStack {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
+        assert!(
+            KERNEL_STACK_SIZE % PAGE_SIZE == 0,
+            "KERNEL_STACK_SIZE must be page aligned"
+        );
+
+        let pages = KERNEL_STACK_SIZE / PAGE_SIZE;
+
+        let base_ppn = alloc_contiguous_frames(pages)
+            .expect("failed to allocate kernel stack frames");
+
+        let base_va = kernel_phys_to_virt(base_ppn.0 << PAGE_SIZE_BITS);
+
+        unsafe {
+            core::ptr::write_bytes(
+                base_va as *mut u8,
+                0,
+                KERNEL_STACK_SIZE,
+            );
+        }
+
         Self {
-            data: [0; KERNEL_STACK_SIZE],
+            base_ppn,
+            pages,
         }
     }
 
+    pub fn bottom(&self) -> usize {
+        kernel_phys_to_virt(self.base_ppn.0 << PAGE_SIZE_BITS)
+    }
+
     pub fn top(&self) -> usize {
-        self.data.as_ptr() as usize + KERNEL_STACK_SIZE
+        self.bottom() + self.pages * PAGE_SIZE
     }
 
     pub unsafe fn push_context(&self, cx: TrapContext) -> *mut TrapContext {
-        let cx_ptr = (self.top() - TRAP_CONTEXT_SIZE) as *mut TrapContext;
+        let actual_size = core::mem::size_of::<TrapContext>();
+
+        assert_eq!(
+            TRAP_CONTEXT_SIZE,
+            actual_size,
+            "TRAP_CONTEXT_SIZE mismatch"
+        );
+
+        assert!(
+            actual_size <= KERNEL_STACK_SIZE,
+            "TrapContext too large"
+        );
+
+        let cx_ptr = (self.top() - actual_size) as *mut TrapContext;
         cx_ptr.write(cx);
         cx_ptr
+    }
+}
+
+impl Drop for KernelStack {
+    fn drop(&mut self) {
+        dealloc_contiguous_frames(self.base_ppn, self.pages);
     }
 }

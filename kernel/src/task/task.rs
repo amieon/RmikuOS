@@ -38,7 +38,7 @@ pub struct TaskControlBlock {
     pub children: Vec<usize>,
 
     pub user_space: MemorySet,
-    pub kernel_stack: Box<KernelStack>,
+    pub kernel_stack: KernelStack,
     pub trap_cx_addr: usize,
     pub task_cx: TaskContext,
 
@@ -57,7 +57,7 @@ impl TaskControlBlock {
 
         let trap_cx = TrapContext::app_init_context(entry, user_sp);
 
-        let kernel_stack = Box::new(KernelStack::new());
+        let kernel_stack = KernelStack::new();
 
         let trap_cx_ptr = unsafe {
             kernel_stack.push_context(trap_cx)
@@ -94,8 +94,7 @@ impl TaskControlBlock {
     ) -> Self {
         
           
-crate::mm::heap::dump_heap_stats("before KernelStack::new");
-        let kernel_stack = Box::new(KernelStack::new());
+        let kernel_stack = KernelStack::new();
 
  
         let trap_cx_ptr = unsafe {
