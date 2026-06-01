@@ -10,6 +10,8 @@ pub const SYSCALL_WAITPID: usize = 5;
 pub const SYSCALL_SLEEP: usize = 6;
 pub const SYSCALL_EXEC: usize = 7;
 pub const SYSCALL_READ: usize = 8;
+pub const SYSCALL_OPEN: usize = 9;
+pub const SYSCALL_CLOSE: usize = 10;
 
 
 pub fn syscall(id: usize, args: [usize; 3]) -> isize {
@@ -25,6 +27,8 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_SLEEP => process::sys_sleep(args[0]),
         SYSCALL_EXEC => process::sys_exec(args[0], args[1]),
         SYSCALL_READ => fs::sys_read(args[0], args[1], args[2]),
+        SYSCALL_OPEN => fs::sys_open(args[0], args[1]),
+        SYSCALL_CLOSE => fs::sys_close(args[0]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

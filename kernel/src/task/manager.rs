@@ -252,6 +252,44 @@ impl TaskManager {
             }
         }
     }
+
+
+
+    fn get_file(&self, task_id: usize, fd: usize) -> Option<crate::fs::FileRef> {
+        self.tasks
+            .get(task_id)?
+            .fd_table
+            .get(fd)?
+            .as_ref()
+            .cloned()
+    }
+
+    fn alloc_fd(&mut self, task_id: usize, file: crate::fs::FileRef) -> isize {
+        let fd_table = &mut self.tasks[task_id].fd_table;
+
+        for i in 0..fd_table.len() {
+            if fd_table[i].is_none() {
+                fd_table[i] = Some(file);
+                return i as isize;
+            }
+        }
+
+        fd_table.push(Some(file));
+        (fd_table.len() - 1) as isize
+    }
+
+    fn close_fd(&mut self, task_id: usize, fd: usize) -> isize {
+        if fd >= self.tasks[task_id].fd_table.len() {
+            return -1;
+        }
+
+        if self.tasks[task_id].fd_table[fd].is_none() {
+            return -1;
+        }
+
+        self.tasks[task_id].fd_table[fd] = None;
+        0
+    }
 }
 
 pub fn sleep_current_and_run_next(ticks: usize) -> isize {
@@ -349,6 +387,8 @@ pub fn fork_current() -> isize {
         let mut child_trap_cx = *manager.tasks[parent].trap_cx();
 
 
+        let child_fd_table = manager.tasks[parent].fd_table.clone();
+
         child_trap_cx.set_syscall_ret(0);
 
         let child = TaskControlBlock::fork_from(
@@ -356,6 +396,7 @@ pub fn fork_current() -> isize {
             parent,
             child_user_space,
             child_trap_cx,
+            child_fd_table,
         );
 
         manager.tasks[parent].children.push(child_pid);
@@ -629,4 +670,26 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
      * 返回时会用新的 TrapContext 进入新 app。
      */
     0
+}
+
+
+
+
+
+pub fn current_file(fd: usize) -> Option<crate::fs::FileRef> {
+    let current = processor::current_task_id();
+    let manager = TASK_MANAGER.lock();
+    manager.get_file(current, fd)
+}
+
+pub fn alloc_fd_current(file: crate::fs::FileRef) -> isize {
+    let current = processor::current_task_id();
+    let mut manager = TASK_MANAGER.lock();
+    manager.alloc_fd(current, file)
+}
+
+pub fn close_fd_current(fd: usize) -> isize {
+    let current = processor::current_task_id();
+    let mut manager = TASK_MANAGER.lock();
+    manager.close_fd(current, fd)
 }

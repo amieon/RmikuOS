@@ -27,4 +27,8 @@ pub use manager::{
     write_current_user_bytes,
     wake_sleeping_tasks,
     exec_current,
+
+    current_file,
+    alloc_fd_current,
+    close_fd_current,
 };

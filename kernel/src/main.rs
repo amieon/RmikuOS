@@ -14,6 +14,7 @@ mod test;
 mod task;
 mod syscall;
 mod loader;
+mod fs;
 
 #[macro_use]
 mod io;

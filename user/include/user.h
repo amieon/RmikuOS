@@ -12,6 +12,8 @@ typedef long isize;
 #define SYS_SLEEP   6
 #define SYS_EXEC    7
 #define SYS_READ    8
+#define SYS_OPEN    9
+#define SYS_CLOSE   10
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 
@@ -71,6 +73,19 @@ static inline void puts(const char *s) {
 static inline void put_char(char ch) {
     write(1, &ch, 1);
 }
+
+static inline isize open2(const char *path, usize len) {
+    return syscall3(SYS_OPEN, (usize)path, len, 0);
+}
+
+static inline isize open(const char *path) {
+    return open2(path, strlen(path));
+}
+
+static inline isize close(int fd) {
+    return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
+}
+
 
 static inline void put_int(long x) {
     char buf[32];
