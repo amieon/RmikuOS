@@ -15,12 +15,19 @@ pub struct VPNRange {
     end: usize,
 }
 
+
 impl VPNRange {
     pub fn new(start: VirtPageNum, end: VirtPageNum) -> Self {
         Self {
             current: start.0,
             end: end.0,
         }
+    }
+    pub fn get_end(&self)->usize{
+        self.end
+    }
+    pub fn get_start(&self)->usize{
+        self.current
     }
 }
 
@@ -81,6 +88,8 @@ pub struct MapArea {
     data_frames: Vec<FrameTracker>,
 }
 
+
+
 impl MapArea {
     pub fn new(
         start_va: VirtAddr,
@@ -136,7 +145,11 @@ impl MapArea {
     }
 }
 
-
+impl MapArea {
+    pub fn page_count(&self) -> usize {
+        self.vpn_range.get_end() - self.vpn_range.get_start()
+    }
+}
 
 impl MapArea {
     pub fn is_user(&self) -> bool {

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::sync::sync::SpinLock;
-use super::address::PhysPageNum;
+use super::address::{PhysPageNum,PhysAddr};
 
 pub trait FrameAllocator {
     fn alloc(&mut self) -> Option<PhysPageNum>;
@@ -69,18 +69,51 @@ impl FrameAllocator for StackFrameAllocator {
 static FRAME_ALLOCATOR_LOCK: SpinLock = SpinLock::new();
 static mut FRAME_ALLOCATOR: StackFrameAllocator = StackFrameAllocator::new();
 
+
 pub fn init_frame_allocator(start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
+    let mut actual_start_ppn = start_ppn;
+
+
+    if crate::mm::heap::kernel_heap_inited() {
+        let heap_end_va = crate::mm::heap::kernel_heap_end();
+        let heap_end_pa = crate::mm::kernel_virt_to_phys(heap_end_va);
+        let heap_end_ppn = PhysAddr(heap_end_pa).ceil();
+
+        if heap_end_ppn.0 > actual_start_ppn.0 {
+            log::warn!(
+                "[mm] frame allocator start adjusted to avoid kernel heap: old=PPN:{:#x}, heap_end_va={:#x}, heap_end_pa={:#x}, new=PPN:{:#x}",
+                actual_start_ppn.0,
+                heap_end_va,
+                heap_end_pa,
+                heap_end_ppn.0,
+            );
+
+            actual_start_ppn = heap_end_ppn;
+        }
+    } else {
+        log::warn!(
+            "[mm] kernel heap not initialized before frame allocator; cannot protect heap range"
+        );
+    }
+
+    assert!(
+        actual_start_ppn.0 <= end_ppn.0,
+        "[mm] invalid frame allocator range: start=PPN:{:#x}, end=PPN:{:#x}",
+        actual_start_ppn.0,
+        end_ppn.0,
+    );
+
     FRAME_ALLOCATOR_LOCK.lock();
 
     unsafe {
-        FRAME_ALLOCATOR.init(start_ppn, end_ppn);
+        FRAME_ALLOCATOR.init(actual_start_ppn, end_ppn);
     }
 
     FRAME_ALLOCATOR_LOCK.unlock();
 
     log::info!(
         "[mm] frame allocator: PPN {:#x}..{:#x}",
-        start_ppn.0,
+        actual_start_ppn.0,
         end_ppn.0
     );
 }

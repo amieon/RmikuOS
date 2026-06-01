@@ -380,6 +380,7 @@ pub fn fork_current() -> isize {
         let child_pid = manager.tasks.len();
 
 
+        crate::mm::heap::dump_heap_stats("after clone user_space");
         let child_user_space =
             MemorySet::from_existed_user(&manager.tasks[parent].user_space);
 
@@ -390,6 +391,8 @@ pub fn fork_current() -> isize {
         let child_fd_table = manager.tasks[parent].fd_table.clone();
 
         child_trap_cx.set_syscall_ret(0);
+
+        crate::mm::heap::dump_heap_stats("before shell fork");
 
         let child = TaskControlBlock::fork_from(
             child_pid,

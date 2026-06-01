@@ -16,6 +16,16 @@ pub struct MemorySet {
 
 
 impl MemorySet {
+    pub fn debug_count_pages(&self) -> usize {
+        self.areas
+            .iter()
+            .map(|area| area.page_count())
+            .sum()
+    }
+}
+
+
+impl MemorySet {
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
         memory_set.map_kernel_areas();

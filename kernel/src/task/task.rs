@@ -92,8 +92,12 @@ impl TaskControlBlock {
         trap_cx: TrapContext,
         fd_table: Vec<Option<FileRef>>,
     ) -> Self {
+        
+          
+crate::mm::heap::dump_heap_stats("before KernelStack::new");
         let kernel_stack = Box::new(KernelStack::new());
 
+ 
         let trap_cx_ptr = unsafe {
             kernel_stack.push_context(trap_cx)
         };
