@@ -10,6 +10,154 @@ use super::dirent::{
     FILE_TYPE_FILE,
 };
 use super::file::{File, FileRef};
+use super::inode::{
+    Inode,
+    InodeRef,
+    InodeType,
+    Metadata,
+};
+
+static MOTD: &[u8] = b"Welcome to RmikuOS initramfs!\n";
+
+#[derive(Clone, Copy)]
+enum InitramfsNode {
+    Root,
+    Bin,
+    Etc,
+    Motd,
+    App(usize),
+}
+
+pub struct InitramfsInode {
+    node: InitramfsNode,
+}
+
+impl InitramfsInode {
+    fn new(node: InitramfsNode) -> Self {
+        Self { node }
+    }
+
+    fn root() -> Self {
+        Self::new(InitramfsNode::Root)
+    }
+}
+
+pub fn root_inode() -> InodeRef {
+    Arc::new(InitramfsInode::root())
+}
+
+fn strip_numeric_prefix(name: &str) -> &str {
+    let bytes = name.as_bytes();
+
+    let mut i = 0usize;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+
+    if i > 0 && i < bytes.len() && bytes[i] == b'_' {
+        &name[i + 1..]
+    } else {
+        name
+    }
+}
+
+impl Inode for InitramfsInode {
+    fn metadata(&self) -> Metadata {
+        match self.node {
+            InitramfsNode::Root |
+            InitramfsNode::Bin |
+            InitramfsNode::Etc => Metadata {
+                inode_type: InodeType::Directory,
+                size: 0,
+            },
+            InitramfsNode::Motd => Metadata {
+                inode_type: InodeType::File,
+                size: MOTD.len(),
+            },
+            InitramfsNode::App(id) => Metadata {
+                inode_type: InodeType::File,
+                size: crate::loader::get_app_data(id).len(),
+            },
+        }
+    }
+
+    fn lookup(&self, name: &str) -> Option<InodeRef> {
+        match self.node {
+            InitramfsNode::Root => match name {
+                "" | "." => Some(root_inode()),
+                "bin" => Some(Arc::new(InitramfsInode::new(InitramfsNode::Bin))),
+                "etc" => Some(Arc::new(InitramfsInode::new(InitramfsNode::Etc))),
+                _ => None,
+            },
+
+            InitramfsNode::Bin => {
+                if name == "." {
+                    return Some(Arc::new(InitramfsInode::new(InitramfsNode::Bin)));
+                }
+
+                let app_id = crate::loader::find_app(name)?;
+                Some(Arc::new(InitramfsInode::new(InitramfsNode::App(app_id))))
+            }
+
+            InitramfsNode::Etc => match name {
+                "." => Some(Arc::new(InitramfsInode::new(InitramfsNode::Etc))),
+                "motd" => Some(Arc::new(InitramfsInode::new(InitramfsNode::Motd))),
+                _ => None,
+            },
+
+            InitramfsNode::Motd | InitramfsNode::App(_) => None,
+        }
+    }
+
+    fn open(&self) -> Option<FileRef> {
+        match self.node {
+            InitramfsNode::Root |
+            InitramfsNode::Bin |
+            InitramfsNode::Etc => {
+                Some(Arc::new(DirFile::new(self.getdents())))
+            }
+
+            InitramfsNode::Motd => {
+                Some(Arc::new(MemFile::new(MOTD)))
+            }
+
+            InitramfsNode::App(id) => {
+                Some(Arc::new(MemFile::new(crate::loader::get_app_data(id))))
+            }
+        }
+    }
+
+    fn getdents(&self) -> Vec<DirEntry> {
+        match self.node {
+            InitramfsNode::Root => {
+                let mut entries = Vec::new();
+                entries.push(DirEntry::new("bin", FILE_TYPE_DIR));
+                entries.push(DirEntry::new("etc", FILE_TYPE_DIR));
+                entries
+            }
+
+            InitramfsNode::Bin => {
+                let mut entries = Vec::new();
+
+                for id in 0..crate::loader::num_apps() {
+                    let app_name = crate::loader::get_app_name(id);
+                    let short_name = strip_numeric_prefix(app_name);
+                    entries.push(DirEntry::new(short_name, FILE_TYPE_FILE));
+                }
+
+                entries
+            }
+
+            InitramfsNode::Etc => {
+                let mut entries = Vec::new();
+                entries.push(DirEntry::new("motd", FILE_TYPE_FILE));
+                entries
+            }
+
+            InitramfsNode::Motd | InitramfsNode::App(_) => Vec::new(),
+        }
+    }
+}
 
 pub struct MemFile {
     data: &'static [u8],
@@ -44,7 +192,9 @@ impl File for MemFile {
         let available = self.data.len() - *offset;
         let read_len = core::cmp::min(buf.len(), available);
 
-        buf[..read_len].copy_from_slice(&self.data[*offset..*offset + read_len]);
+        buf[..read_len].copy_from_slice(
+            &self.data[*offset..*offset + read_len]
+        );
 
         *offset += read_len;
 
@@ -115,70 +265,4 @@ impl File for DirFile {
 
         (written * DIRENT_SIZE) as isize
     }
-}
-
-
-static MOTD: &[u8] = b"Welcome to RmikuOS initramfs!\n";
-
-fn strip_numeric_prefix(name: &str) -> &str {
-    let bytes = name.as_bytes();
-
-    let mut i = 0usize;
-    while i < bytes.len() && bytes[i].is_ascii_digit() {
-        i += 1;
-    }
-
-    if i > 0 && i < bytes.len() && bytes[i] == b'_' {
-        &name[i + 1..]
-    } else {
-        name
-    }
-}
-
-pub fn open(path: &str) -> Option<FileRef> {
-    let path = path.trim();
-
-    if path == "/" {
-        let entries = alloc::vec![
-            DirEntry::new("bin", FILE_TYPE_DIR),
-            DirEntry::new("etc", FILE_TYPE_DIR),
-        ];
-        return Some(Arc::new(DirFile::new(entries)));
-    }
-
-    if path == "/etc" || path == "/etc/" {
-        let entries = alloc::vec![
-            DirEntry::new("motd", FILE_TYPE_FILE),
-        ];
-        return Some(Arc::new(DirFile::new(entries)));
-    }
-
-    if path == "/bin" || path == "/bin/" {
-        let mut entries = Vec::new();
-
-        for id in 0..crate::loader::num_apps() {
-            let app_name = crate::loader::get_app_name(id);
-            let short_name = strip_numeric_prefix(app_name);
-            entries.push(DirEntry::new(short_name, FILE_TYPE_FILE));
-        }
-
-        return Some(Arc::new(DirFile::new(entries)));
-    }
-
-    if path == "/etc/motd" || path == "motd" {
-        return Some(Arc::new(MemFile::new(MOTD)));
-    }
-
-    let name = if let Some(rest) = path.strip_prefix("/bin/") {
-        rest
-    } else {
-        path.rsplit('/').next().unwrap_or(path)
-    };
-
-    if let Some(app_id) = crate::loader::find_app(name) {
-        let data = crate::loader::get_app_data(app_id);
-        return Some(Arc::new(MemFile::new(data)));
-    }
-
-    None
 }

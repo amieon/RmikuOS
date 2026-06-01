@@ -139,7 +139,9 @@ impl TaskControlBlock {
         &mut self.task_cx as *mut TaskContext
     }
 
-
+    pub fn trap_cx_ptr_addr(&self) -> usize {
+        self.trap_cx_addr
+    }
 
     pub fn new_fd_table() -> Vec<Option<FileRef>> {
         let mut fd_table = Vec::new();

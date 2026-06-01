@@ -1,6 +1,7 @@
 #include "user.h"
 
-#define LINE_SIZE 64
+#define LINE_SIZE 128
+#define MAX_ARGC  8
 
 static int streq(const char *a, const char *b) {
     int i = 0;
@@ -22,16 +23,6 @@ static int read_line(char *buf, int max_len) {
 
         if (n <= 0) {
             continue;
-        }
-
-        if (ch == 4) {
-            return -1;
-        }
-
-        if (ch == 3) {
-            puts("^C\n");
-            buf[0] = 0;
-            return 0;
         }
 
         if (ch == '\r') {
@@ -59,21 +50,163 @@ static int read_line(char *buf, int max_len) {
     return len;
 }
 
+static int parse_args(char *line, char *argv[], int max_argc) {
+    int argc = 0;
+    int i = 0;
+
+    while (line[i]) {
+        while (line[i] == ' ' || line[i] == '\t') {
+            line[i] = 0;
+            i++;
+        }
+
+        if (!line[i]) {
+            break;
+        }
+
+        if (argc >= max_argc) {
+            break;
+        }
+
+        argv[argc++] = &line[i];
+
+        while (line[i] && line[i] != ' ' && line[i] != '\t') {
+            i++;
+        }
+    }
+
+    return argc;
+}
+
 static void print_help(void) {
     puts("commands:\n");
     puts("  help\n");
     puts("  exit\n");
-    puts("  hello\n");
-    puts("  busy\n");
-    puts("  getpid_sleep\n");
-    puts("  fork_wait\n");
-    puts("  estimate_pi\n");
-    puts("  fibonacci\n");
-    puts("  cat_motd\n");
+    puts("  ls [path]\n");
+    puts("  cat <path>\n");
+    puts("\n");
+    puts("external commands are in /bin:\n");
+    puts("  try: ls /bin\n");
+}
+
+static void print_dirent_name(struct dirent *d) {
+    for (int i = 0; i < d->name_len; i++) {
+        char ch = d->name[i];
+        write(1, &ch, 1);
+    }
+
+    if (d->file_type == FILE_TYPE_DIR) {
+        puts("/");
+    }
+
+    puts("\n");
+}
+
+static int builtin_ls(int argc, char *argv[]) {
+    const char *path = "/";
+
+    if (argc >= 2) {
+        path = argv[1];
+    }
+
+    int fd = open(path);
+    if (fd < 0) {
+        puts("ls: cannot open ");
+        puts(path);
+        puts("\n");
+        return 1;
+    }
+
+    struct dirent entries[8];
+
+    while (1) {
+        isize n = getdents(fd, entries, sizeof(entries));
+
+        if (n < 0) {
+            puts("ls: getdents failed\n");
+            close(fd);
+            return 1;
+        }
+
+        if (n == 0) {
+            break;
+        }
+
+        int count = n / sizeof(struct dirent);
+
+        for (int i = 0; i < count; i++) {
+            print_dirent_name(&entries[i]);
+        }
+    }
+
+    close(fd);
+    return 0;
+}
+
+static int builtin_cat(int argc, char *argv[]) {
+    if (argc < 2) {
+        puts("cat: missing path\n");
+        return 1;
+    }
+
+    const char *path = argv[1];
+
+    int fd = open(path);
+    if (fd < 0) {
+        puts("cat: cannot open ");
+        puts(path);
+        puts("\n");
+        return 1;
+    }
+
+    char buf[128];
+
+    while (1) {
+        isize n = read(fd, buf, sizeof(buf));
+
+        if (n < 0) {
+            puts("cat: read failed\n");
+            close(fd);
+            return 1;
+        }
+
+        if (n == 0) {
+            break;
+        }
+
+        write(1, buf, n);
+    }
+
+    close(fd);
+    return 0;
+}
+
+static void run_external(char *cmd) {
+    isize pid = fork();
+
+    if (pid == 0) {
+        exec(cmd);
+
+        puts("exec failed: ");
+        puts(cmd);
+        puts("\n");
+
+        exit(1);
+    } else if (pid > 0) {
+        int code = -1;
+        waitpid(pid, &code);
+
+        puts("[shell] child exit code ");
+        put_int(code);
+        puts("\n");
+    } else {
+        puts("fork failed\n");
+    }
 }
 
 int main(void) {
     char line[LINE_SIZE];
+    char *argv[MAX_ARGC];
 
     puts("\nRmikuOS shell\n");
     print_help();
@@ -83,45 +216,43 @@ int main(void) {
 
         int len = read_line(line, LINE_SIZE);
 
-        if (len < 0) {
-            puts("\n");
-            continue;
-        }
-
         if (len == 0) {
             continue;
         }
 
-        if (streq(line, "help")) {
+        int argc = parse_args(line, argv, MAX_ARGC);
+
+        if (argc == 0) {
+            continue;
+        }
+
+        if (streq(argv[0], "help")) {
             print_help();
             continue;
         }
 
-        if (streq(line, "exit")) {
+        if (streq(argv[0], "exit")) {
             puts("bye\n");
             return 0;
         }
 
-        isize pid = fork();
-
-        if (pid == 0) {
-            exec2(line, strlen(line));
-
-            puts("exec failed: ");
-            puts(line);
-            puts("\n");
-
-            exit(1);
-        } else if (pid > 0) {
-            int code = -1;
-            waitpid(pid, &code);
-
-            puts("[shell] child exit code ");
+        if (streq(argv[0], "ls")) {
+            int code = builtin_ls(argc, argv);
+            puts("[shell] builtin exit code ");
             put_int(code);
             puts("\n");
-        } else {
-            puts("fork failed\n");
+            continue;
         }
+
+        if (streq(argv[0], "cat")) {
+            int code = builtin_cat(argc, argv);
+            puts("[shell] builtin exit code ");
+            put_int(code);
+            puts("\n");
+            continue;
+        }
+
+        run_external(argv[0]);
     }
 
     return 0;

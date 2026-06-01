@@ -34,7 +34,7 @@ impl DirEntry {
         unsafe {
             core::slice::from_raw_parts(
                 self as *const Self as *const u8,
-                core::mem::size_of::<Self>(),
+                DIRENT_SIZE,
             )
         }
     }

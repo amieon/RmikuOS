@@ -608,28 +608,65 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
         Err(_) => return -1,
     };
 
-    let app_id = match crate::loader::find_app(name) {
-        Some(id) => id,
+    if name.is_empty() {
+        return -1;
+    }
+
+    /*
+     * shell 输入 hello，就尝试 /bin/hello。
+     * shell 输入 /bin/hello，就直接用它。
+     */
+    let mut path_buf = alloc::string::String::new();
+
+    let path = if name.starts_with('/') {
+        name
+    } else {
+        path_buf.push_str("/bin/");
+        path_buf.push_str(name);
+        path_buf.as_str()
+    };
+
+    let file = match crate::fs::open(path) {
+        Some(file) => file,
         None => {
-            log::warn!("[task] exec: app not found: {}", name);
+            log::warn!("[exec] open failed: {}", path);
             return -1;
         }
     };
 
-    let app = crate::loader::get_app_data(app_id);
-    let app_name = crate::loader::get_app_name(app_id);
+    if !file.readable() || file.is_dir() {
+        log::warn!("[exec] not executable file: {}", path);
+        return -1;
+    }
 
-    log::info!(
-        "[task] exec current task to app {}: {}",
-        app_id,
-        app_name,
-    );
 
-    /*
-     * 不要在 TASK_MANAGER 锁里 new_user_test，避免长时间持锁。
-     */
-    let (new_user_space, entry, user_sp) = MemorySet::new_user_test(app);
-    let new_trap_cx = TrapContext::app_init_context(entry, user_sp);
+    let mut app_data = alloc::vec::Vec::new();
+    let mut buf = [0u8; 512];
+
+    loop {
+        let n = file.read(&mut buf);
+        if n < 0 {
+            log::warn!("[exec] read failed: {}", path);
+            return -1;
+        }
+        if n == 0 {
+            break;
+        }
+
+        app_data.extend_from_slice(&buf[..n as usize]);
+    }
+
+    if app_data.is_empty() {
+        log::warn!("[exec] empty file: {}", path);
+        return -1;
+    }
+
+    log::info!("[exec] load {}: {} bytes", path, app_data.len());
+
+    let (new_user_space, entry, user_sp) =
+        crate::mm::MemorySet::new_user_test(&app_data);
+
+    let new_trap_cx = crate::trap::TrapContext::app_init_context(entry, user_sp);
 
     let current = processor::current_task_id();
 
@@ -637,39 +674,20 @@ pub fn exec_current(name_ptr: usize, len: usize) -> isize {
         let mut manager = TASK_MANAGER.lock();
         let task = &mut manager.tasks[current];
 
-        /*
-         * 替换用户地址空间。
-         */
         let old_space = core::mem::replace(&mut task.user_space, new_user_space);
 
-        /*
-         * 重置当前任务 TrapContext。
-         * 注意 kernel_stack / task_cx 不变。
-         */
         *task.trap_cx_mut() = new_trap_cx;
+        task.trap_cx_addr = task.trap_cx_ptr_addr();
 
         let root = task.root_ppn();
 
-        /*
-         * old_space 延迟到这里之后 drop。
-         * 当前还在内核态，马上切到新页表。
-         */
         drop(old_space);
 
         root
     };
 
-    /*
-     * 关键：exec 换了当前任务页表，必须立刻切到新 root。
-     * 否则 syscall 返回用户态时还在旧页表上。
-     */
     crate::mm::activate_page_table(new_root);
 
-    /*
-     * 成功 exec 后，理论上不会回到旧用户程序。
-     * 这里返回 0 只是让 trap handler 正常返回；
-     * 返回时会用新的 TrapContext 进入新 app。
-     */
     0
 }
 
