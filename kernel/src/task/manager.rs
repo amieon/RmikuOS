@@ -15,7 +15,8 @@ unsafe extern "C" {
 }
 
 pub struct TaskManager {
-    tasks: Vec<TaskControlBlock>,
+    tasks: Vec<Option<TaskControlBlock>>,
+    free_pids: Vec<usize>,
 }
 
 enum WaitPidAction {
@@ -25,16 +26,73 @@ enum WaitPidAction {
 
 impl TaskManager {
     pub const fn new() -> Self {
-        Self { tasks: Vec::new() }
+        Self {
+            tasks: Vec::new(),
+            free_pids: Vec::new(),
+        }
+    }
+
+    fn alloc_pid(&mut self) -> usize {
+        self.free_pids.pop().unwrap_or(self.tasks.len())
+    }
+
+    fn insert_task(&mut self, task: TaskControlBlock) {
+        let pid = task.id;
+
+        if pid == self.tasks.len() {
+            self.tasks.push(Some(task));
+        } else {
+            assert!(pid < self.tasks.len(), "invalid reused pid {}", pid);
+            assert!(self.tasks[pid].is_none(), "pid slot {} is not free", pid);
+            self.tasks[pid] = Some(task);
+        }
     }
 
     pub fn add_task(&mut self, task: TaskControlBlock) {
-        self.tasks.push(task);
+        self.insert_task(task);
+    }
+
+    fn task(&self, pid: usize) -> &TaskControlBlock {
+        self.tasks
+            .get(pid)
+            .and_then(|slot| slot.as_ref())
+            .expect("invalid task pid")
+    }
+
+    fn task_mut(&mut self, pid: usize) -> &mut TaskControlBlock {
+        self.tasks
+            .get_mut(pid)
+            .and_then(|slot| slot.as_mut())
+            .expect("invalid task pid")
+    }
+
+    fn try_task(&self, pid: usize) -> Option<&TaskControlBlock> {
+        self.tasks.get(pid)?.as_ref()
+    }
+
+    fn try_task_mut(&mut self, pid: usize) -> Option<&mut TaskControlBlock> {
+        self.tasks.get_mut(pid)?.as_mut()
+    }
+
+    fn reap_task(&mut self, pid: usize) {
+        let dead = self
+            .tasks
+            .get_mut(pid)
+            .expect("invalid reap pid")
+            .take();
+
+        assert!(dead.is_some(), "reap empty task slot");
+
+        self.free_pids.push(pid);
     }
 
     fn find_next_ready(&self) -> Option<usize> {
         for id in 0..self.tasks.len() {
-            if self.tasks[id].status == TaskStatus::Ready {
+            let Some(task) = self.tasks[id].as_ref() else {
+                continue;
+            };
+
+            if task.status == TaskStatus::Ready {
                 return Some(id);
             }
         }
@@ -42,24 +100,25 @@ impl TaskManager {
     }
 
     fn mark_current_ready(&mut self, id: usize) {
-        if self.tasks[id].status == TaskStatus::Running {
-            self.tasks[id].status = TaskStatus::Ready;
+        let task = self.task_mut(id);
+        if task.status == TaskStatus::Running {
+            task.status = TaskStatus::Ready;
         }
     }
 
     fn mark_current_zombie(&mut self, id: usize, exit_code: i32) {
-        self.tasks[id].status = TaskStatus::Zombie;
-        self.tasks[id].exit_code = exit_code;
+        let task = self.task_mut(id);
+        task.status = TaskStatus::Zombie;
+        task.exit_code = exit_code;
     }
 
     fn task_cx_ptr(&mut self, id: usize) -> *mut TaskContext {
-        self.tasks[id].task_cx_ptr()
+        self.task_mut(id).task_cx_ptr()
     }
 
     fn prepare_task(&mut self, id: usize) -> (PhysPageNum, usize, usize, *mut TaskContext) {
-        self.tasks[id].status = TaskStatus::Running;
-
-        let task = &mut self.tasks[id];
+        let task = self.task_mut(id);
+        task.status = TaskStatus::Running;
 
         (
             task.root_ppn(),
@@ -71,7 +130,7 @@ impl TaskManager {
 
     pub fn read_current_user_bytes(&self, user_buf: usize, len: usize) -> Option<Vec<u8>> {
         let current = processor::current_task_id();
-        let task = self.tasks.get(current)?;
+        let task = self.try_task(current)?;
 
         let mut bytes = Vec::new();
 
@@ -93,12 +152,14 @@ impl TaskManager {
     }
 
     fn write_current_user_bytes(&self, task_id: usize, user_buf: usize, data: &[u8]) -> Option<usize> {
+        let task = self.try_task(task_id)?;
+
         for (offset, byte) in data.iter().enumerate() {
             let va = user_buf.checked_add(offset)?;
             let vpn = VirtAddr(va).floor();
             let page_offset = va & (PAGE_SIZE - 1);
 
-            let pte = self.tasks[task_id].user_space.translate(vpn)?;
+            let pte = task.user_space.translate(vpn)?;
 
             let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
             let kva = crate::mm::kernel_phys_to_virt(pa);
@@ -112,7 +173,11 @@ impl TaskManager {
     }
 
     fn has_alive_tasks(&self) -> bool {
-        self.tasks.iter().any(|task| {
+        self.tasks.iter().any(|slot| {
+            let Some(task) = slot.as_ref() else {
+                return false;
+            };
+
             matches!(
                 task.status,
                 TaskStatus::Ready | TaskStatus::Running | TaskStatus::Blocking | TaskStatus::Zombie
@@ -121,32 +186,36 @@ impl TaskManager {
     }
 
     fn block_current(&mut self, id: usize, reason: BlockReason) {
-        self.tasks[id].status = TaskStatus::Blocking;
-        self.tasks[id].block_reason = reason;
+        let task = self.task_mut(id);
+        task.status = TaskStatus::Blocking;
+        task.block_reason = reason;
     }
 
     fn wake_parent_waiting_for(&mut self, child_pid: usize) {
-        let parent = self.tasks[child_pid].parent;
+        let parent = match self.try_task(child_pid).and_then(|task| task.parent) {
+            Some(parent_pid) => parent_pid,
+            None => return,
+        };
 
-        let Some(parent_pid) = parent else {
+        let Some(parent_task) = self.try_task_mut(parent) else {
             return;
         };
 
-        if self.tasks[parent_pid].status != TaskStatus::Blocking {
+        if parent_task.status != TaskStatus::Blocking {
             return;
         }
 
-        match self.tasks[parent_pid].block_reason {
+        match parent_task.block_reason {
             BlockReason::WaitPid { pid } => {
                 let matched = pid == -1 || pid as usize == child_pid;
 
                 if matched {
-                    self.tasks[parent_pid].status = TaskStatus::Ready;
-                    self.tasks[parent_pid].block_reason = BlockReason::None;
+                    parent_task.status = TaskStatus::Ready;
+                    parent_task.block_reason = BlockReason::None;
 
                     log::info!(
                         "[task] wake parent task {} waiting for child {}",
-                        parent_pid,
+                        parent,
                         child_pid,
                     );
                 }
@@ -159,6 +228,7 @@ impl TaskManager {
             return Some(());
         }
 
+        let task = self.try_task(task_id)?;
         let bytes = value.to_ne_bytes();
 
         for (offset, byte) in bytes.iter().enumerate() {
@@ -166,7 +236,7 @@ impl TaskManager {
             let vpn = VirtAddr(va).floor();
             let page_offset = va & (PAGE_SIZE - 1);
 
-            let pte = self.tasks[task_id].user_space.translate(vpn)?;
+            let pte = task.user_space.translate(vpn)?;
 
             let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
             let kva = crate::mm::kernel_phys_to_virt(pa);
@@ -181,15 +251,13 @@ impl TaskManager {
 
 
     fn try_waitpid(&mut self, current: usize, pid: isize, exit_code_ptr: usize) -> WaitPidAction {
-        
-        //没有子进程。
-        if self.tasks[current].children.is_empty() {
+        // 没有子进程。
+        if self.task(current).children.is_empty() {
             return WaitPidAction::Return(-1);
         }
 
         let mut has_matched_child = false;
-
-        let children_snapshot = self.tasks[current].children.clone();
+        let children_snapshot = self.task(current).children.clone();
 
         for child_pid in children_snapshot {
             let matched = pid == -1 || pid as usize == child_pid;
@@ -200,18 +268,20 @@ impl TaskManager {
 
             has_matched_child = true;
 
-            if self.tasks[child_pid].status == TaskStatus::Zombie {
-                let code = self.tasks[child_pid].exit_code;
+            let Some(child) = self.try_task(child_pid) else {
+                continue;
+            };
+
+            if child.status == TaskStatus::Zombie {
+                let code = child.exit_code;
 
                 if self.write_user_i32(current, exit_code_ptr, code).is_none() {
                     return WaitPidAction::Return(-1);
                 }
 
-                self.tasks[child_pid].status = TaskStatus::Dead;
+                self.task_mut(current).children.retain(|&x| x != child_pid);
 
-                self.tasks[current]
-                    .children
-                    .retain(|&x| x != child_pid);
+                self.reap_task(child_pid);
 
                 log::info!(
                     "[task] task {} collected child {}, exit_code={}",
@@ -231,7 +301,11 @@ impl TaskManager {
         WaitPidAction::Block
     }
     fn wake_sleeping_tasks(&mut self, now: usize) {
-        for task in self.tasks.iter_mut() {
+        for slot in self.tasks.iter_mut() {
+            let Some(task) = slot.as_mut() else {
+                continue;
+            };
+
             if task.status != TaskStatus::Blocking {
                 continue;
             }
@@ -256,8 +330,7 @@ impl TaskManager {
 
 
     fn get_file(&self, task_id: usize, fd: usize) -> Option<crate::fs::FileRef> {
-        self.tasks
-            .get(task_id)?
+        self.try_task(task_id)?
             .fd_table
             .get(fd)?
             .as_ref()
@@ -265,7 +338,7 @@ impl TaskManager {
     }
 
     fn alloc_fd(&mut self, task_id: usize, file: crate::fs::FileRef) -> isize {
-        let fd_table = &mut self.tasks[task_id].fd_table;
+        let fd_table = &mut self.task_mut(task_id).fd_table;
 
         for i in 0..fd_table.len() {
             if fd_table[i].is_none() {
@@ -279,15 +352,17 @@ impl TaskManager {
     }
 
     fn close_fd(&mut self, task_id: usize, fd: usize) -> isize {
-        if fd >= self.tasks[task_id].fd_table.len() {
+        let fd_table = &mut self.task_mut(task_id).fd_table;
+
+        if fd >= fd_table.len() {
             return -1;
         }
 
-        if self.tasks[task_id].fd_table[fd].is_none() {
+        if fd_table[fd].is_none() {
             return -1;
         }
 
-        self.tasks[task_id].fd_table[fd] = None;
+        fd_table[fd] = None;
         0
     }
 }
@@ -377,18 +452,18 @@ pub fn fork_current() -> isize {
     let child_pid = {
         let mut manager = TASK_MANAGER.lock();
 
-        let child_pid = manager.tasks.len();
+        let child_pid = manager.alloc_pid();
 
 
         let child_user_space =
-            MemorySet::from_existed_user(&manager.tasks[parent].user_space);
+            MemorySet::from_existed_user(&manager.task(parent).user_space);
 
 
-        let mut child_trap_cx = *manager.tasks[parent].trap_cx();
+        let mut child_trap_cx = *manager.task(parent).trap_cx();
 
 
-        let child_fd_table = manager.tasks[parent].fd_table.clone();
-        let child_cwd = manager.tasks[parent].cwd.clone();
+        let child_fd_table = manager.task(parent).fd_table.clone();
+        let child_cwd = manager.task(parent).cwd.clone();
 
         child_trap_cx.set_syscall_ret(0);
 
@@ -402,8 +477,8 @@ pub fn fork_current() -> isize {
             child_cwd,
         );
 
-        manager.tasks[parent].children.push(child_pid);
-        manager.tasks.push(child);
+        manager.task_mut(parent).children.push(child_pid);
+        manager.insert_task(child);
 
         log::info!(
             "[task] fork: parent={} child={}",
@@ -430,9 +505,8 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
             exit_code,
         );
 
-        manager.tasks[current].status = TaskStatus::Zombie;
-        manager.tasks[current].exit_code = exit_code;
-        manager.tasks[current].block_reason = BlockReason::None;
+        manager.mark_current_zombie(current, exit_code);
+        manager.task_mut(current).block_reason = BlockReason::None;
 
         manager.wake_parent_waiting_for(current);
 
@@ -533,7 +607,7 @@ pub extern "C" fn __task_entry() -> ! {
 
     let trap_cx_addr = {
         let manager = TASK_MANAGER.lock();
-        manager.tasks[current].trap_cx_addr
+        manager.task(current).trap_cx_addr
     };
 
     unsafe {
@@ -641,10 +715,8 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
      * 如果传入 hello，就变成 /bin/hello。
      * 如果传入 /bin/hello，就直接使用。
      */
-    let mut path_buf = String::new();
-
     let cwd = crate::task::current_cwd();
-    let mut path_buf = alloc::string::String::new();
+    let mut path_buf = String::new();
 
     let path = if name.starts_with('/') || name.starts_with("./") || name.starts_with("../") {
         match crate::fs::normalize_path(&cwd, name) {
@@ -718,7 +790,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     /*
      * 创建新用户地址空间。
      */
-    let (mut new_user_space, entry, user_sp) =
+    let (new_user_space, entry, user_sp) =
         crate::mm::MemorySet::new_user_test(&app_data);
 
     /*
@@ -749,7 +821,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 
     let new_root = {
         let mut manager = TASK_MANAGER.lock();
-        let task = &mut manager.tasks[current];
+        let task = manager.task_mut(current);
 
         let old_space = core::mem::replace(&mut task.user_space, new_user_space);
 
@@ -927,14 +999,14 @@ pub fn current_cwd() -> alloc::string::String {
     let current = processor::current_task_id();
     let manager = TASK_MANAGER.lock();
 
-    manager.tasks[current].cwd.clone()
+    manager.task(current).cwd.clone()
 }
 
 pub fn set_current_cwd(new_cwd: alloc::string::String) -> isize {
     let current = processor::current_task_id();
     let mut manager = TASK_MANAGER.lock();
 
-    manager.tasks[current].cwd = new_cwd;
+    manager.task_mut(current).cwd = new_cwd;
 
     0
 }
