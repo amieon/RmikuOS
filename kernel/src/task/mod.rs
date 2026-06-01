@@ -31,4 +31,6 @@ pub use manager::{
     current_file,
     alloc_fd_current,
     close_fd_current,
+    current_cwd,
+    set_current_cwd,
 };

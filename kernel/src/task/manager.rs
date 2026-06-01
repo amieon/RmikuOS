@@ -388,6 +388,7 @@ pub fn fork_current() -> isize {
 
 
         let child_fd_table = manager.tasks[parent].fd_table.clone();
+        let child_cwd = manager.tasks[parent].cwd.clone();
 
         child_trap_cx.set_syscall_ret(0);
 
@@ -398,6 +399,7 @@ pub fn fork_current() -> isize {
             child_user_space,
             child_trap_cx,
             child_fd_table,
+            child_cwd,
         );
 
         manager.tasks[parent].children.push(child_pid);
@@ -641,13 +643,24 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
      */
     let mut path_buf = String::new();
 
-    let path = if name.starts_with('/') {
-        name
+    let cwd = crate::task::current_cwd();
+    let mut path_buf = alloc::string::String::new();
+
+    let path = if name.starts_with('/') || name.starts_with("./") || name.starts_with("../") {
+        match crate::fs::normalize_path(&cwd, name) {
+            Some(p) => {
+                path_buf = p;
+                path_buf.as_str()
+            }
+            None => return -1,
+        }
     } else {
         path_buf.push_str("/bin/");
         path_buf.push_str(name);
         path_buf.as_str()
     };
+
+
 
     /*
      * 先从旧地址空间读取 argv。
@@ -909,4 +922,19 @@ pub fn close_fd_current(fd: usize) -> isize {
     let current = processor::current_task_id();
     let mut manager = TASK_MANAGER.lock();
     manager.close_fd(current, fd)
+}
+pub fn current_cwd() -> alloc::string::String {
+    let current = processor::current_task_id();
+    let manager = TASK_MANAGER.lock();
+
+    manager.tasks[current].cwd.clone()
+}
+
+pub fn set_current_cwd(new_cwd: alloc::string::String) -> isize {
+    let current = processor::current_task_id();
+    let mut manager = TASK_MANAGER.lock();
+
+    manager.tasks[current].cwd = new_cwd;
+
+    0
 }

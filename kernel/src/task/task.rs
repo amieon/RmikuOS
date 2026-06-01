@@ -9,6 +9,7 @@ use super::kernel_stack::KernelStack;
 
 use alloc::sync::Arc;
 use crate::fs::FileRef;
+use alloc::string::String;
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +47,7 @@ pub struct TaskControlBlock {
     pub block_reason: BlockReason,
 
     pub fd_table: Vec<Option<FileRef>>,
+    pub cwd: String,
 
     pub exit_code: i32,
 }
@@ -80,6 +82,7 @@ impl TaskControlBlock {
             block_reason: BlockReason::None,
 
             fd_table: Self::new_fd_table(),
+            cwd: String::from("/"),
 
             exit_code: 0,
         }
@@ -91,6 +94,7 @@ impl TaskControlBlock {
         user_space: MemorySet,
         trap_cx: TrapContext,
         fd_table: Vec<Option<FileRef>>,
+        cwd: String,
     ) -> Self {
         
           
@@ -118,6 +122,7 @@ impl TaskControlBlock {
             block_reason: BlockReason::None,
 
             fd_table : fd_table,
+            cwd : cwd,
 
             exit_code: 0,
         }

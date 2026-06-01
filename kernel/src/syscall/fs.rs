@@ -64,17 +64,18 @@ pub fn sys_open(path_ptr: usize, len: usize) -> isize {
         Err(_) => return -1,
     };
 
-    let file = match crate::fs::open(path) {
+    let cwd = crate::task::current_cwd();
+
+    let file = match crate::fs::open_at(&cwd, path) {
         Some(file) => file,
         None => {
-            log::warn!("[fs] open failed: {}", path);
+            log::warn!("[fs] open failed: cwd={}, path={}", cwd, path);
             return -1;
         }
     };
 
     crate::task::alloc_fd_current(file)
 }
-
 pub fn sys_close(fd: usize) -> isize {
     crate::task::close_fd_current(fd)
 }
@@ -109,4 +110,65 @@ pub fn sys_getdents(fd: usize, user_buf: usize, len: usize) -> isize {
     }
 
     n as isize
+}
+
+
+pub fn sys_chdir(path_ptr: usize, len: usize) -> isize {
+    let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
+        Some(bytes) => bytes,
+        None => return -1,
+    };
+
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s.trim_matches('\0').trim(),
+        Err(_) => return -1,
+    };
+
+    let cwd = crate::task::current_cwd();
+
+    let new_cwd = match crate::fs::normalize_path(&cwd, path) {
+        Some(path) => path,
+        None => return -1,
+    };
+
+    let inode = match crate::fs::lookup(&new_cwd) {
+        Some(inode) => inode,
+        None => {
+            log::warn!("[fs] chdir failed: no such dir {}", new_cwd);
+            return -1;
+        }
+    };
+
+    if !inode.is_dir() {
+        log::warn!("[fs] chdir failed: not dir {}", new_cwd);
+        return -1;
+    }
+
+    crate::task::set_current_cwd(new_cwd)
+}
+
+pub fn sys_getcwd(user_buf: usize, len: usize) -> isize {
+    if len == 0 {
+        return -1;
+    }
+
+    let cwd = crate::task::current_cwd();
+    let bytes = cwd.as_bytes();
+
+    /*
+     * 写入 cwd + '\0'
+     */
+    if bytes.len() + 1 > len {
+        return -1;
+    }
+
+    if crate::task::write_current_user_bytes(user_buf, bytes).is_none() {
+        return -1;
+    }
+
+    if crate::task::write_current_user_bytes(user_buf + bytes.len(), &[0]).is_none() {
+        return -1;
+    }
+
+    bytes.len() as isize
 }

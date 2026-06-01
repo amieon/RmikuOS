@@ -13,6 +13,8 @@ pub const SYSCALL_READ: usize = 8;
 pub const SYSCALL_OPEN: usize = 9;
 pub const SYSCALL_CLOSE: usize = 10;
 pub const SYSCALL_GETDENTS: usize = 11;
+pub const SYSCALL_CHDIR: usize = 12;
+pub const SYSCALL_GETCWD: usize = 13;
 
 
 pub fn syscall(id: usize, args: [usize; 3]) -> isize {
@@ -31,6 +33,8 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_OPEN => fs::sys_open(args[0], args[1]),
         SYSCALL_CLOSE => fs::sys_close(args[0]),
         SYSCALL_GETDENTS => fs::sys_getdents(args[0], args[1], args[2]),
+        SYSCALL_CHDIR => fs::sys_chdir(args[0], args[1]),
+        SYSCALL_GETCWD => fs::sys_getcwd(args[0], args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

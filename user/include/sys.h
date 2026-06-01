@@ -15,6 +15,10 @@ typedef long isize;
 #define SYS_OPEN       9
 #define SYS_CLOSE      10
 #define SYS_GETDENTS   11
+#define SYS_CHDIR      12
+#define SYS_GETCWD     13
+
+
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 

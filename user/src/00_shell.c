@@ -87,6 +87,8 @@ static void print_help(void) {
     puts("\n");
     puts("external commands are in /bin:\n");
     puts("  try: ls /bin\n");
+    puts("  cd <path>\n");
+    puts("  pwd\n");
 }
 
 static void print_dirent_name(struct dirent *d) {
@@ -102,8 +104,43 @@ static void print_dirent_name(struct dirent *d) {
     puts("\n");
 }
 
-static int builtin_ls(int argc, char *argv[]) {
+
+static int builtin_pwd(void) {
+    char buf[128];
+
+    isize n = getcwd(buf, sizeof(buf));
+
+    if (n < 0) {
+        puts("pwd: getcwd failed\n");
+        return 1;
+    }
+
+    puts(buf);
+    puts("\n");
+    return 0;
+}
+
+static int builtin_cd(int argc, char *argv[]) {
     const char *path = "/";
+
+    if (argc >= 2) {
+        path = argv[1];
+    }
+
+    if (chdir(path) < 0) {
+        puts("cd: no such directory: ");
+        puts(path);
+        puts("\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+
+static int builtin_ls(int argc, char *argv[]) {
+
+    const char *path = ".";
 
     if (argc >= 2) {
         path = argv[1];
@@ -123,7 +160,10 @@ static int builtin_ls(int argc, char *argv[]) {
         isize n = getdents(fd, entries, sizeof(entries));
 
         if (n < 0) {
-            puts("ls: getdents failed\n");
+
+            puts("ls: not a directory: ");
+            puts(path);
+            puts("\n");
             close(fd);
             return 1;
         }
@@ -149,36 +189,45 @@ static int builtin_cat(int argc, char *argv[]) {
         return 1;
     }
 
-    const char *path = argv[1];
 
-    int fd = open(path);
-    if (fd < 0) {
-        puts("cat: cannot open ");
-        puts(path);
-        puts("\n");
-        return 1;
-    }
+    int ret = 0;
 
-    char buf[128];
+    for (int argi = 1; argi < argc; argi++) {
+        const char *path = argv[argi];
 
-    while (1) {
-        isize n = read(fd, buf, sizeof(buf));
-
-        if (n < 0) {
-            puts("cat: read failed\n");
-            close(fd);
-            return 1;
+        int fd = open(path);
+        if (fd < 0) {
+            puts("cat: cannot open ");
+            puts(path);
+            puts("\n");
+            ret = 1;
+            continue;
         }
 
-        if (n == 0) {
-            break;
+        char buf[128];
+
+        while (1) {
+            isize n = read(fd, buf, sizeof(buf));
+
+            if (n < 0) {
+                puts("cat: read failed: ");
+                puts(path);
+                puts("\n");
+                ret = 1;
+                break;
+            }
+
+            if (n == 0) {
+                break;
+            }
+
+            write(1, buf, n);
         }
 
-        write(1, buf, n);
+        close(fd);
     }
 
-    close(fd);
-    return 0;
+    return ret;
 }
 
 static void build_exec_path(const char *cmd, char *out, int out_size) {
@@ -253,7 +302,13 @@ int main(void) {
     print_help();
 
     while (1) {
-        puts("\n$ ");
+        char cwd_buf[128];
+
+        puts("\n");
+        if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
+            puts(cwd_buf);
+        }
+        puts(" $ ");
 
         int len = read_line(line, LINE_SIZE);
 
@@ -287,6 +342,22 @@ int main(void) {
 
         if (streq(argv[0], "cat")) {
             int code = builtin_cat(argc, argv);
+            puts("[shell] builtin exit code ");
+            put_int(code);
+            puts("\n");
+            continue;
+        }
+
+        if (streq(argv[0], "pwd")) {
+            int code = builtin_pwd();
+            puts("[shell] builtin exit code ");
+            put_int(code);
+            puts("\n");
+            continue;
+        }
+
+        if (streq(argv[0], "cd")) {
+            int code = builtin_cd(argc, argv);
             puts("[shell] builtin exit code ");
             put_int(code);
             puts("\n");

@@ -48,3 +48,15 @@ static inline isize exec(const char *path) {
 
     return exec_with_args(path, &args);
 }
+
+static inline isize chdir2(const char *path, usize len) {
+    return syscall3(SYS_CHDIR, (usize)path, len, 0);
+}
+
+static inline isize chdir(const char *path) {
+    return chdir2(path, strlen(path));
+}
+
+static inline isize getcwd(char *buf, usize len) {
+    return syscall3(SYS_GETCWD, (usize)buf, len, 0);
+}
