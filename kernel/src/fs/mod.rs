@@ -1,5 +1,6 @@
 extern crate alloc;
 
+pub mod dirent;
 pub mod file;
 mod initramfs;
 mod stdio;

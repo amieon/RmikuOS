@@ -3,17 +3,18 @@
 typedef unsigned long usize;
 typedef long isize;
 
-#define SYS_EXIT    0
-#define SYS_YIELD   1
-#define SYS_WRITE   2
-#define SYS_GETPID  3
-#define SYS_FORK    4
-#define SYS_WAITPID 5
-#define SYS_SLEEP   6
-#define SYS_EXEC    7
-#define SYS_READ    8
-#define SYS_OPEN    9
-#define SYS_CLOSE   10
+#define SYS_EXIT       0
+#define SYS_YIELD      1
+#define SYS_WRITE      2
+#define SYS_GETPID     3
+#define SYS_FORK       4
+#define SYS_WAITPID    5
+#define SYS_SLEEP      6
+#define SYS_EXEC       7
+#define SYS_READ       8
+#define SYS_OPEN       9
+#define SYS_CLOSE      10
+#define SYS_GETDENTS   11
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 
@@ -110,4 +111,21 @@ static inline void put_int(long x) {
         i--;
         put_char(buf[i]);
     }
+}
+
+
+
+
+#define FILE_TYPE_FILE 1
+#define FILE_TYPE_DIR  2
+
+struct dirent {
+    unsigned char file_type;
+    unsigned char name_len;
+    unsigned char reserved[6];
+    char name[56];
+};
+
+static inline isize getdents(int fd, struct dirent *buf, usize len) {
+    return syscall3(SYS_GETDENTS, (usize)fd, (usize)buf, len);
 }

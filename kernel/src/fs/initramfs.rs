@@ -1,7 +1,14 @@
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 use crate::sync::spin::Mutex;
 
+use super::dirent::{
+    DirEntry,
+    DIRENT_SIZE,
+    FILE_TYPE_DIR,
+    FILE_TYPE_FILE,
+};
 use super::file::{File, FileRef};
 
 pub struct MemFile {
@@ -49,30 +56,123 @@ impl File for MemFile {
     }
 }
 
+pub struct DirFile {
+    entries: Vec<DirEntry>,
+    offset: Mutex<usize>,
+}
+
+impl DirFile {
+    pub fn new(entries: Vec<DirEntry>) -> Self {
+        Self {
+            entries,
+            offset: Mutex::new(0),
+        }
+    }
+}
+
+impl File for DirFile {
+    fn readable(&self) -> bool {
+        true
+    }
+
+    fn writable(&self) -> bool {
+        false
+    }
+
+    fn is_dir(&self) -> bool {
+        true
+    }
+
+    fn read(&self, _buf: &mut [u8]) -> isize {
+        -1
+    }
+
+    fn write(&self, _buf: &[u8]) -> isize {
+        -1
+    }
+
+    fn getdents(&self, buf: &mut [u8]) -> isize {
+        let mut offset = self.offset.lock();
+
+        let max_entries = buf.len() / DIRENT_SIZE;
+        if max_entries == 0 {
+            return 0;
+        }
+
+        let mut written = 0usize;
+
+        while *offset < self.entries.len() && written < max_entries {
+            let entry = self.entries[*offset];
+
+            let start = written * DIRENT_SIZE;
+            let end = start + DIRENT_SIZE;
+
+            buf[start..end].copy_from_slice(entry.as_bytes());
+
+            *offset += 1;
+            written += 1;
+        }
+
+        (written * DIRENT_SIZE) as isize
+    }
+}
+
+
 static MOTD: &[u8] = b"Welcome to RmikuOS initramfs!\n";
 
-fn basename(path: &str) -> &str {
-    match path.rsplit('/').next() {
-        Some(name) => name,
-        None => path,
+fn strip_numeric_prefix(name: &str) -> &str {
+    let bytes = name.as_bytes();
+
+    let mut i = 0usize;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+
+    if i > 0 && i < bytes.len() && bytes[i] == b'_' {
+        &name[i + 1..]
+    } else {
+        name
     }
 }
 
 pub fn open(path: &str) -> Option<FileRef> {
     let path = path.trim();
 
+    if path == "/" {
+        let entries = alloc::vec![
+            DirEntry::new("bin", FILE_TYPE_DIR),
+            DirEntry::new("etc", FILE_TYPE_DIR),
+        ];
+        return Some(Arc::new(DirFile::new(entries)));
+    }
+
+    if path == "/etc" || path == "/etc/" {
+        let entries = alloc::vec![
+            DirEntry::new("motd", FILE_TYPE_FILE),
+        ];
+        return Some(Arc::new(DirFile::new(entries)));
+    }
+
+    if path == "/bin" || path == "/bin/" {
+        let mut entries = Vec::new();
+
+        for id in 0..crate::loader::num_apps() {
+            let app_name = crate::loader::get_app_name(id);
+            let short_name = strip_numeric_prefix(app_name);
+            entries.push(DirEntry::new(short_name, FILE_TYPE_FILE));
+        }
+
+        return Some(Arc::new(DirFile::new(entries)));
+    }
+
     if path == "/etc/motd" || path == "motd" {
         return Some(Arc::new(MemFile::new(MOTD)));
     }
 
-    /*
-     * /bin/hello -> loader::find_app("hello")
-     * hello      -> loader::find_app("hello")
-     */
     let name = if let Some(rest) = path.strip_prefix("/bin/") {
         rest
     } else {
-        basename(path)
+        path.rsplit('/').next().unwrap_or(path)
     };
 
     if let Some(app_id) = crate::loader::find_app(name) {

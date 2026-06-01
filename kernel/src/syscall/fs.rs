@@ -78,3 +78,35 @@ pub fn sys_open(path_ptr: usize, len: usize) -> isize {
 pub fn sys_close(fd: usize) -> isize {
     crate::task::close_fd_current(fd)
 }
+
+
+pub fn sys_getdents(fd: usize, user_buf: usize, len: usize) -> isize {
+    if len == 0 {
+        return 0;
+    }
+
+    let file = match crate::task::current_file(fd) {
+        Some(file) => file,
+        None => return -1,
+    };
+
+    if !file.is_dir() {
+        return -1;
+    }
+
+    let mut kbuf = alloc::vec![0u8; len];
+
+    let n = file.getdents(&mut kbuf);
+
+    if n <= 0 {
+        return n;
+    }
+
+    let n = n as usize;
+
+    if crate::task::write_current_user_bytes(user_buf, &kbuf[..n]).is_none() {
+        return -1;
+    }
+
+    n as isize
+}
