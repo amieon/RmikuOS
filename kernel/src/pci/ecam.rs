@@ -77,3 +77,23 @@ pub fn write_config_u32(addr: PciAddress, offset: usize, value: u32) {
         );
     }
 }
+
+
+
+const PCI_COMMAND: usize = 0x04;
+const PCI_COMMAND_IO: u16 = 1 << 0;
+const PCI_COMMAND_MEMORY: u16 = 1 << 1;
+const PCI_COMMAND_BUS_MASTER: u16 = 1 << 2;
+
+pub fn enable_pci_device(addr: PciAddress) {
+    let old = read_config_u16(addr, PCI_COMMAND);
+    let new = old | PCI_COMMAND_MEMORY | PCI_COMMAND_BUS_MASTER;
+
+    write_config_u16(addr, PCI_COMMAND, new);
+
+    log::info!(
+        "[pci] command {:#x}->{:#x}",
+        old,
+        new,
+    );
+}

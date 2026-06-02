@@ -19,3 +19,4 @@ pub use cache::{
 pub mod virtio_mmio;
 pub mod virtio_probe;
 pub mod virtio_blk;
+pub mod virtio_pci;

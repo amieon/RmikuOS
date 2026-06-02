@@ -1,5 +1,7 @@
 pub mod ecam;
 pub mod probe;
+pub mod bar;
+
 
 pub use probe::{
     PciDeviceLocation,

@@ -131,10 +131,28 @@ fn primary_init() {
 
     block::ext4_image::test_ext4_magic();
 
+
     #[cfg(target_arch = "loongarch64")]
     {
         crate::pci::scan_pci_bus();
-        crate::pci::find_virtio_blk_pci();
+
+        if let Some(info) = crate::pci::find_virtio_blk_pci() {
+            let addr = info.loc.addr();
+
+            crate::pci::ecam::enable_pci_device(addr);
+
+            let regions = crate::block::virtio_pci::parse_virtio_pci_caps(addr)
+                .expect("parse virtio pci caps failed");
+
+            log::info!(
+                "[virtio-pci] parsed regions: common={:?}, notify={:?}, isr={:?}, device={:?}, notify_mul={}",
+                regions.common,
+                regions.notify,
+                regions.isr,
+                regions.device,
+                regions.notify_off_multiplier,
+            );
+        }
     }
     let rootfs_device: alloc::sync::Arc<dyn block::BlockDevice> =
         if let Some(phys_base) = block::virtio_probe::probe_virtio_blk_mmio() {
