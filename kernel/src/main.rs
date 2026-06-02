@@ -124,12 +124,13 @@ fn primary_init() {
 
     test::user_memory_set_test::user_memory_set_test();
 
-    timer::init();
-
     test::block_cache_tset::test_block_cache();
     test::block_test::test_ramdisk();
     block::ext4_image::test_ext4_magic();
+    block::virtio_probe::probe_virtio_blk_mmio();
 
+
+    timer::init();
 
     let rootfs = crate::block::ext4_image::rootfs_ramdisk();
     crate::fs::ext4fs::init(rootfs);

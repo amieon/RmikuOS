@@ -76,7 +76,7 @@ if [ "$ARCH" = "loongarch64" ]; then
   build_loongarch_trampoline
 fi
 
-LOG_LEVEL="${LOG:-warn}"
+LOG_LEVEL="${LOG:-info}"
 
 echo "=== 编译内核 ($ARCH, $MODE, LOG=$LOG_LEVEL) ==="
 
@@ -100,6 +100,8 @@ case "$ARCH" in
       -m 128M
       -nographic
       -kernel "$KERNEL_ELF"
+      -drive file=target/fs-riscv64.img,format=raw,if=none,id=blk0 \
+      -device virtio-blk-device,drive=blk0
     )
     ;;
   loongarch64)

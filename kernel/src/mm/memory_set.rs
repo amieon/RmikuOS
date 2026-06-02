@@ -147,6 +147,33 @@ impl MemorySet {
             },
             mmio_perm,
         ));
+
+        #[cfg(target_arch = "riscv64")]
+        {
+            let virtio_start = crate::mm::align_down(
+                crate::arch::VIRTIO_MMIO_BASE,
+                crate::mm::PAGE_SIZE,
+            );
+
+            let virtio_end = virtio_start + crate::arch::VIRTIO_MMIO_SIZE;
+
+            log::info!(
+                "[mm] map virtio-mmio: pa={:#x}..{:#x}, va={:#x}..{:#x}",
+                virtio_start,
+                virtio_end,
+                crate::mm::kernel_phys_to_virt(virtio_start),
+                crate::mm::kernel_phys_to_virt(virtio_end),
+            );
+
+            self.insert_area(MapArea::new(
+                VirtAddr(crate::mm::kernel_phys_to_virt(virtio_start)),
+                VirtAddr(crate::mm::kernel_phys_to_virt(virtio_end)),
+                MapType::Linear {
+                    offset: crate::mm::KERNEL_OFFSET,
+                },
+                mmio_perm,
+            ));
+        }
     }
 
 

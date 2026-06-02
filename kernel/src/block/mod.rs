@@ -14,3 +14,7 @@ pub use cache::{
     BlockCacheRef,
     get_block_cache,
 };
+
+
+pub mod virtio_mmio;
+pub mod virtio_probe;

@@ -15,6 +15,13 @@ pub const KERNEL_DIRECT_MAP_SIZE: usize = 128 * 1024 * 1024;
 pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
 
 
+
+pub const VIRTIO_MMIO_BASE: usize = 0x1000_1000;
+pub const VIRTIO_MMIO_STRIDE: usize = 0x1000;
+pub const VIRTIO_MMIO_COUNT: usize = 8;
+pub const VIRTIO_MMIO_SIZE: usize = VIRTIO_MMIO_STRIDE * VIRTIO_MMIO_COUNT;
+
+
 /// 读取当前核的 hartid
 /// 在 boot.S 里已经把 hartid 存到了 tp 寄存器
 #[inline]
