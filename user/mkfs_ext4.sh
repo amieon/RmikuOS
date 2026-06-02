@@ -1,23 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ARCH="${1:-loongarch64}"
+ARCH="${1:-riscv64}"
 
 IMG="target/fs-${ARCH}.img"
 ROOT="target/fsroot-${ARCH}"
+OVERLAY="user/rootfs"
 
 mkdir -p target
 rm -rf "$ROOT"
-mkdir -p "$ROOT/bin" "$ROOT/etc"
-
-if ! command -v mkfs.ext4 >/dev/null 2>&1; then
-  echo "错误: 找不到 mkfs.ext4，请先安装 e2fsprogs" >&2
-  echo "Ubuntu: sudo apt install e2fsprogs" >&2
-  exit 1
-fi
 
 echo "=== 构建 ext4 rootfs ($ARCH) ==="
 
+# 1. 先复制用户自定义 rootfs 模板
+if [ -d "$OVERLAY" ]; then
+  echo "copy rootfs overlay: $OVERLAY -> $ROOT"
+  mkdir -p "$ROOT"
+  cp -a "$OVERLAY"/. "$ROOT"/
+else
+  echo "no $OVERLAY, create minimal rootfs"
+  mkdir -p "$ROOT"
+fi
+
+# 2. 确保基础目录存在
+mkdir -p "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc"
+
+# 3. 如果用户没有提供 motd，就生成默认 motd
+if [ ! -f "$ROOT/etc/motd" ]; then
+  cat > "$ROOT/etc/motd" <<EOF
+Welcome to RmikuOS ext4 rootfs!
+EOF
+fi
+
+# 4. 把编译出来的用户程序放进 /bin
 for f in user/build/${ARCH}/*.bin; do
   [ -e "$f" ] || continue
 
@@ -30,14 +45,15 @@ for f in user/build/${ARCH}/*.bin; do
   cp "$f" "$ROOT/bin/$clean"
 done
 
-cat > "$ROOT/etc/motd" <<EOF
-Welcome to RmikuOS ext4 rootfs!
-EOF
+# 5. 简单展示 rootfs 内容
+echo "rootfs content:"
+find "$ROOT" -maxdepth 3 -print | sort
 
+# 6.fs content:"
+find "$ROOT" -maxdepth 3 -print | sort
 rm -f "$IMG"
-truncate -s 16M "$IMG"
+truncate -s 32M "$IMG"
 
-# -d 可以把 ROOT 目录内容直接写进 ext4 image，不需要 sudo mount。
 mkfs.ext4 -q -F -d "$ROOT" "$IMG"
 
-echo "created $IMG"s
+echo "created $IMG"

@@ -13,7 +13,6 @@ mod panic;
 mod test;
 mod task;
 mod syscall;
-mod loader;
 mod fs;
 mod block;
 mod pci;

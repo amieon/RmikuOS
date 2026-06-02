@@ -7,7 +7,7 @@ pub mod path;
 pub mod common_file;
 pub mod ext4fs;
 
-pub mod initramfs;
+//pub mod initramfs;
 mod stdio;
 
 pub use file::{File, FileRef};
@@ -76,11 +76,8 @@ pub fn stat(path: &str) -> Option<Stat> {
 }
 
 pub fn root_inode() -> InodeRef {
-    if let Some(root) = ext4fs::root_inode() {
-        root
-    } else {
-        initramfs::root_inode()
-    }
+    ext4fs::root_inode()
+        .expect("[fs] rootfs not mounted")
 }
 
 
