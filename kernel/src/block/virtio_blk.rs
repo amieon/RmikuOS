@@ -68,6 +68,14 @@ const MODERN_USED_OFFSET: usize =
 
 const MODERN_QUEUE_PAGES: usize = 1;
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct VirtioBlkReq {
+    req_type: u32,
+    reserved: u32,
+    sector: u64,
+}
+
 pub struct VirtioQueue {
     pub queue_ppn: PhysPageNum,
     pub queue_pa: usize,
@@ -118,8 +126,9 @@ pub struct VirtioBlkDevice {
     pub phys_base: usize,
     pub virt_base: usize,
     pub header: VirtioMmioHeader,
-    pub queue0: VirtioQueue,
+    pub inner: crate::sync::spin::Mutex<VirtioBlkInner>,
 }
+
 
 impl VirtioBlkDevice {
     pub fn init_from_phys_base(phys_base: usize) -> Option<Arc<Self>> {
@@ -314,12 +323,312 @@ impl VirtioBlkDevice {
             version,
             header.status(),
         );
-
+        let dma = match VirtioBlkDma::new() {
+            Some(dma) => dma,
+            None => {
+                log::error!("[virtio-blk] alloc dma page failed");
+                header.fail();
+                return None;
+            }
+        };
         Some(Arc::new(Self {
             phys_base,
             virt_base,
             header,
-            queue0,
+            inner: crate::sync::spin::Mutex::new(VirtioBlkInner {
+                queue0,
+                dma,
+                avail_idx: 0,
+                last_used_idx: 0,
+            }),
         }))
     }
+}
+
+
+
+use core::ptr::{
+    read_volatile,
+    write_volatile,
+};
+
+const VIRTQ_DESC_F_NEXT: u16 = 1;
+const VIRTQ_DESC_F_WRITE: u16 = 2;
+
+const VIRTQ_AVAIL_F_NO_INTERRUPT: u16 = 1;
+
+const VIRTIO_BLK_T_IN: u32 = 0;
+const VIRTIO_BLK_S_OK: u8 = 0;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct VirtqDesc {
+    addr: u64,
+    len: u32,
+    flags: u16,
+    next: u16,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct VirtqUsedElem {
+    id: u32,
+    len: u32,
+}
+
+
+
+impl VirtioQueue {
+    fn desc_va(&self) -> usize {
+        self.queue_va + DESC_OFFSET
+    }
+
+    fn avail_va(&self) -> usize {
+        self.queue_va + AVAIL_OFFSET
+    }
+
+    fn used_va(&self) -> usize {
+        /*
+         * 如果你只用 legacy，现在 used_pa 是 queue_pa + LEGACY_USED_OFFSET。
+         * 所以这里直接通过 pa 差值算 offset。
+         */
+        self.queue_va + (self.used_pa - self.queue_pa)
+    }
+
+    unsafe fn desc_mut(&self, index: usize) -> *mut VirtqDesc {
+        assert!(index < VIRTIO_BLK_QUEUE_SIZE);
+        (self.desc_va() as *mut VirtqDesc).add(index)
+    }
+
+    unsafe fn avail_flags_ptr(&self) -> *mut u16 {
+        self.avail_va() as *mut u16
+    }
+
+    unsafe fn avail_idx_ptr(&self) -> *mut u16 {
+        (self.avail_va() + 2) as *mut u16
+    }
+
+    unsafe fn avail_ring_ptr(&self, index: usize) -> *mut u16 {
+        assert!(index < VIRTIO_BLK_QUEUE_SIZE);
+        (self.avail_va() + 4) as *mut u16
+    }
+
+    unsafe fn used_idx_ptr(&self) -> *const u16 {
+        (self.used_va() + 2) as *const u16
+    }
+
+    unsafe fn used_ring_ptr(&self, index: usize) -> *const VirtqUsedElem {
+        assert!(index < VIRTIO_BLK_QUEUE_SIZE);
+        (self.used_va() + 4) as *const VirtqUsedElem
+    }
+}
+
+
+const DMA_REQ_OFFSET: usize = 0;
+const DMA_DATA_OFFSET: usize = 64;
+const DMA_STATUS_OFFSET: usize = DMA_DATA_OFFSET + 512;
+
+
+pub struct VirtioBlkDma {
+    ppn: PhysPageNum,
+    pa: usize,
+    va: usize,
+
+    req_pa: usize,
+    data_pa: usize,
+    status_pa: usize,
+
+    req_va: usize,
+    data_va: usize,
+    status_va: usize,
+}
+
+impl VirtioBlkDma {
+    pub fn new() -> Option<Self> {
+        let ppn = alloc_frame()?;
+
+        let pa = ppn.0 << PAGE_SIZE_BITS;
+        let va = kernel_phys_to_virt(pa);
+
+        unsafe {
+            core::ptr::write_bytes(va as *mut u8, 0, PAGE_SIZE);
+        }
+
+        Some(Self {
+            ppn,
+            pa,
+            va,
+
+            req_pa: pa + DMA_REQ_OFFSET,
+            data_pa: pa + DMA_DATA_OFFSET,
+            status_pa: pa + DMA_STATUS_OFFSET,
+
+            req_va: va + DMA_REQ_OFFSET,
+            data_va: va + DMA_DATA_OFFSET,
+            status_va: va + DMA_STATUS_OFFSET,
+        })
+    }
+}
+
+pub struct VirtioBlkInner {
+    pub queue0: VirtioQueue,
+    pub dma: VirtioBlkDma,
+    pub avail_idx: u16,
+    pub last_used_idx: u16,
+}
+
+
+impl VirtioBlkDevice {
+    fn read_sector_sync(&self, sector: usize, out: &mut [u8]) -> isize {
+        if out.len() != 512 {
+            return -1;
+        }
+
+        let mut inner = self.inner.lock();
+
+        /*
+        * 不要 let q = &inner.queue0 后又改 inner.avail_idx。
+        * 先把需要的地址/指针算出来。
+        */
+        let desc0 = unsafe { inner.queue0.desc_mut(0) };
+        let desc1 = unsafe { inner.queue0.desc_mut(1) };
+        let desc2 = unsafe { inner.queue0.desc_mut(2) };
+
+        let avail_flags = unsafe { inner.queue0.avail_flags_ptr() };
+        let avail_idx_ptr = unsafe { inner.queue0.avail_idx_ptr() };
+
+        let used_idx_ptr = unsafe { inner.queue0.used_idx_ptr() };
+
+        let req_va = inner.dma.req_va;
+        let data_va = inner.dma.data_va;
+        let status_va = inner.dma.status_va;
+
+        let req_pa = inner.dma.req_pa;
+        let data_pa = inner.dma.data_pa;
+        let status_pa = inner.dma.status_pa;
+
+        let avail_idx = inner.avail_idx;
+        let ring_index = (avail_idx as usize) % VIRTIO_BLK_QUEUE_SIZE;
+        let avail_ring = unsafe { inner.queue0.avail_ring_ptr(ring_index) };
+
+
+
+        let q = &inner.queue0;
+        let dma = &inner.dma;
+
+        unsafe {
+            let req = VirtioBlkReq {
+                req_type: VIRTIO_BLK_T_IN,
+                reserved: 0,
+                sector: sector as u64,
+            };
+
+            write_volatile(req_va as *mut VirtioBlkReq, req);
+            write_volatile(status_va as *mut u8, 0xff);
+            core::ptr::write_bytes(data_va as *mut u8, 0, 512);
+
+            write_volatile(
+                desc0,
+                VirtqDesc {
+                    addr: req_pa as u64,
+                    len: core::mem::size_of::<VirtioBlkReq>() as u32,
+                    flags: VIRTQ_DESC_F_NEXT,
+                    next: 1,
+                },
+            );
+
+            write_volatile(
+                desc1,
+                VirtqDesc {
+                    addr: data_pa as u64,
+                    len: 512,
+                    flags: VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE,
+                    next: 2,
+                },
+            );
+
+            write_volatile(
+                desc2,
+                VirtqDesc {
+                    addr: status_pa as u64,
+                    len: 1,
+                    flags: VIRTQ_DESC_F_WRITE,
+                    next: 0,
+                },
+            );
+
+            write_volatile(avail_flags, VIRTQ_AVAIL_F_NO_INTERRUPT);
+            write_volatile(avail_ring, 0);
+
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+
+            let new_avail_idx = avail_idx.wrapping_add(1);
+            inner.avail_idx = new_avail_idx;
+
+            write_volatile(avail_idx_ptr, new_avail_idx);
+
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+
+            self.header.notify_queue(0);
+        }
+
+        512
+    }
+}
+
+
+use super::device::BlockDevice;
+
+impl BlockDevice for VirtioBlkDevice {
+    fn block_size(&self) -> usize {
+        512
+    }
+
+    fn num_blocks(&self) -> usize {
+        /*
+         * 第一版先不读 capacity。
+         * 后面可以从 virtio-blk config 读。
+         */
+        0
+    }
+
+    fn read_block(&self, block_id: usize, buf: &mut [u8]) -> isize {
+        self.read_sector_sync(block_id, buf)
+    }
+
+    fn write_block(&self, _block_id: usize, _buf: &[u8]) -> isize {
+        -1
+    }
+}
+
+
+pub fn test_read_ext4_magic(dev: Arc<VirtioBlkDevice>) {
+    let mut block = [0u8; 512];
+
+    /*
+     * ext4 magic 总偏移：
+     *   1024 + 0x38 = 1080
+     * 在 512B sector 下：
+     *   sector = 2
+     *   offset = 56
+     */
+    let ret = dev.read_block(2, &mut block);
+
+    assert_eq!(ret, 512);
+
+    let magic = u16::from_le_bytes([
+        block[56],
+        block[57],
+    ]);
+
+    log::info!(
+        "[virtio-blk] ext4 magic from disk = {:#x}",
+        magic,
+    );
+
+    assert_eq!(
+        magic,
+        0xef53,
+        "[virtio-blk] bad ext4 magic"
+    );
 }
