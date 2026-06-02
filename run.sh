@@ -47,6 +47,7 @@ build_user_apps() {
 
   echo "=== 构建用户程序 ($ARCH) ==="
   python3 "$USER_BUILD_SCRIPT" "$ARCH"
+  ./user/mkfs_ext4.sh "$ARCH"
 
   if [ ! -f "$GENERATED_LOADER" ]; then
     echo "错误: 用户程序构建后仍找不到: $GENERATED_LOADER" >&2

@@ -128,6 +128,7 @@ fn primary_init() {
 
     test::block_cache_tset::test_block_cache();
     test::block_test::test_ramdisk();
+    block::ext4_image::test_ext4_magic();
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
