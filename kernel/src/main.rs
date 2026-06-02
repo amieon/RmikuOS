@@ -126,7 +126,8 @@ fn primary_init() {
 
     timer::init();
 
-    test::block_tset::test_ramdisk();
+    test::block_cache_tset::test_block_cache();
+    test::block_test::test_ramdisk();
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 

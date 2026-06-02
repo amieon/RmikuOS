@@ -1,3 +1,4 @@
+
 use crate::block::{BlockDevice, RamDisk};
 
 static TEST_DISK: [u8; 1024] = {
@@ -54,3 +55,5 @@ pub fn test_ramdisk() {
         block1[3] as char,
     );
 }
+
+
