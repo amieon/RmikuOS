@@ -162,25 +162,56 @@ fn primary_init() {
             */
         }
     }
-    let rootfs_device: alloc::sync::Arc<dyn block::BlockDevice> =
-        if let Some(phys_base) = block::virtio_probe::probe_virtio_blk_mmio() {
-            let dev = block::virtio_blk::init_global_from_phys_base(phys_base)
-                .expect("virtio-blk init failed");
+    let rootfs_device: alloc::sync::Arc<dyn crate::block::BlockDevice> = {
+        #[cfg(target_arch = "riscv64")]
+        {
+            if let Some(phys_base) = crate::block::virtio_probe::probe_virtio_blk_mmio() {
+                let dev = crate::block::virtio_blk::VirtioBlkDevice::init_from_phys_base(phys_base)
+                    .expect("virtio-blk init failed");
 
-            block::virtio_blk::test_read_some_sectors(dev.clone());
-            block::virtio_blk::test_read_ext4_magic(dev.clone());
+                crate::block::virtio_blk::test_read_ext4_magic(dev.clone());
 
-            log::info!("[rootfs] using virtio-blk device");
+                log::info!("[rootfs] using riscv64 virtio-mmio block device");
 
-            dev as alloc::sync::Arc<dyn block::BlockDevice>
-        } else {
-            log::warn!("[rootfs] virtio-blk not found, fallback to ramdisk");
+                dev as alloc::sync::Arc<dyn crate::block::BlockDevice>
+            } else {
+                log::warn!("[rootfs] virtio-mmio not found, fallback to ramdisk");
+                crate::block::ext4_image::rootfs_ramdisk()
+            }
+        }
 
-            block::ext4_image::rootfs_ramdisk()
-        };
+        #[cfg(target_arch = "loongarch64")]
+        {
+            if let Some(info) = crate::pci::find_virtio_blk_pci() {
+                let addr = info.loc.addr();
 
+                crate::pci::ensure_mem_bar(
+                    addr,
+                    4,
+                    crate::arch::PCI_MMIO_BASE,
+                );
 
-    fs::ext4fs::init(rootfs_device);
+                crate::pci::ecam::enable_pci_device(addr);
+
+                let regions = crate::block::virtio_pci::parse_virtio_pci_caps(addr)
+                    .expect("parse virtio pci caps failed");
+
+                let dev = crate::block::virtio_pci_blk::VirtioPciBlkDevice::init(regions)
+                    .expect("virtio-pci-blk init failed");
+
+                crate::block::virtio_pci_blk::test_read_ext4_magic(dev.clone());
+
+                log::info!("[rootfs] using loongarch64 virtio-pci block device");
+
+                dev as alloc::sync::Arc<dyn crate::block::BlockDevice>
+            } else {
+                log::warn!("[rootfs] virtio-pci blk not found, fallback to ramdisk");
+                crate::block::ext4_image::rootfs_ramdisk()
+            }
+        }
+    };
+
+    crate::fs::ext4fs::init(rootfs_device);
 
 
     timer::init();
