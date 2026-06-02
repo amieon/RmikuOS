@@ -480,9 +480,7 @@ int main(int argc, char **argv) {
             puts("\n");
         }
 
-        /*
-         * 如果错误太多，提前停，避免刷屏。
-         */
+
         if (failures >= 20) {
             puts("[abort] too many failures\n");
             break;

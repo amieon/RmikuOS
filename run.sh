@@ -116,6 +116,9 @@ case "$ARCH" in
       -nographic
       -bios trampoline.bin
       -device "loader,file=$KERNEL_BIN,addr=0x1000000"
+
+      -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"
+      -device "virtio-blk-pci,drive=blk0,disable-legacy=on"
     )
     ;;
 esac

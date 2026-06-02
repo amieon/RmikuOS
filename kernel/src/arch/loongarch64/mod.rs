@@ -18,6 +18,13 @@ pub const UART_PADDR: usize = 0x1fe0_01e0;
 pub const UART_BASE: usize = crate::mm::config::KERNEL_OFFSET + UART_PADDR;
 
 
+pub const PCI_ECAM_BASE: usize = 0x2000_0000;
+pub const PCI_ECAM_SIZE: usize = 0x0800_0000;
+pub const PCI_MMIO_BASE: usize = 0x4000_0000;
+pub const PCI_MMIO_SIZE: usize = 0x4000_0000;
+pub const PCI_IO_BASE: usize = 0x1804_0000;
+pub const PCI_IO_SIZE: usize = 0x0001_0000;
+
 
 /// 读取当前核的 CPUID
 #[inline]

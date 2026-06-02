@@ -72,11 +72,27 @@ impl MemorySet {
         ));
     }
 
+    fn insert_linear_pa_range(
+        &mut self,
+        pa_start: usize,
+        pa_end: usize,
+        perm: MapPermission,
+    ) {
+        if pa_start >= pa_end {
+            return;
+        }
+
+        self.insert_area(MapArea::new(
+            VirtAddr(crate::mm::kernel_phys_to_virt(pa_start)),
+            VirtAddr(crate::mm::kernel_phys_to_virt(pa_end)),
+            MapType::Linear {
+                offset: crate::mm::KERNEL_OFFSET,
+            },
+            perm,
+        ));
+    }
     
     fn map_kernel_areas(&mut self) {
-
-
-
         let kernel_perm = MapPermission::R
             .union(MapPermission::W)
             .union(MapPermission::X);
@@ -87,12 +103,7 @@ impl MemorySet {
         let map_start = crate::arch::MEMORY_START;
         let map_end = crate::arch::MEMORY_START + crate::arch::KERNEL_DIRECT_MAP_SIZE;
 
-        let uart_start = crate::mm::align_down(crate::arch::UART_PADDR, crate::mm::PAGE_SIZE);
-        let uart_end = uart_start + crate::mm::PAGE_SIZE;
-
-
         let va_start = crate::mm::kernel_phys_to_virt(map_start);
-        let va_end = crate::mm::kernel_phys_to_virt(map_end);
 
         assert!(
             va_start >= crate::mm::KERNEL_OFFSET,
@@ -102,80 +113,87 @@ impl MemorySet {
             crate::mm::KERNEL_OFFSET,
         );
 
-        // direct map 没碰到 UART，整段映射。
-        if map_end <= uart_start || map_start >= uart_end {
-            self.insert_area(MapArea::new(
-                VirtAddr(va_start),
-                VirtAddr(va_end),
-                MapType::Linear {
-                    offset: crate::mm::KERNEL_OFFSET,
-                },
-                kernel_perm,
-            ));
-        } else {
-            // direct map 覆盖 UART，挖掉 UART 页。
-
-            if map_start < uart_start {
-                self.insert_area(MapArea::new(
-                    VirtAddr(crate::mm::kernel_phys_to_virt(map_start)),
-                    VirtAddr(crate::mm::kernel_phys_to_virt(uart_start)),
-                    MapType::Linear {
-                        offset: crate::mm::KERNEL_OFFSET,
-                    },
-                    kernel_perm,
-                ));
-            }
-
-            if uart_end < map_end {
-                self.insert_area(MapArea::new(
-                    VirtAddr(crate::mm::kernel_phys_to_virt(uart_end)),
-                    VirtAddr(crate::mm::kernel_phys_to_virt(map_end)),
-                    MapType::Linear {
-                        offset: crate::mm::KERNEL_OFFSET,
-                    },
-                    kernel_perm,
-                ));
-            }
-        }
-
-        // UART 单独映射，避免被普通 memory flags 覆盖。
-        self.insert_area(MapArea::new(
-            VirtAddr(crate::mm::kernel_phys_to_virt(uart_start)),
-            VirtAddr(crate::mm::kernel_phys_to_virt(uart_end)),
-            MapType::Linear {
-                offset: crate::mm::KERNEL_OFFSET,
-            },
-            mmio_perm,
-        ));
+        #[cfg(target_arch = "loongarch64")]
+        let mmio_ranges: &[(usize, usize)] = &[
+            (
+                crate::mm::align_down(crate::arch::UART_PADDR, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(
+                    crate::arch::UART_PADDR + crate::mm::PAGE_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE,
+            ),
+            (
+                crate::mm::align_down(crate::arch::PCI_ECAM_BASE, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(
+                    crate::arch::PCI_ECAM_BASE + crate::arch::PCI_ECAM_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE,
+            ),
+            (
+                crate::mm::align_down(crate::arch::PCI_MMIO_BASE, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(
+                    crate::arch::PCI_MMIO_BASE + crate::arch::PCI_MMIO_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE,
+            ),
+        ];
 
         #[cfg(target_arch = "riscv64")]
-        {
-            let virtio_start = crate::mm::align_down(
-                crate::arch::VIRTIO_MMIO_BASE,
-                crate::mm::PAGE_SIZE,
-            );
+        let mmio_ranges: &[(usize, usize)] = &[
+            (
+                crate::mm::align_down(crate::arch::UART_PADDR, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(
+                    crate::arch::UART_PADDR + crate::mm::PAGE_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE,
+            ),
+            (
+                crate::mm::align_down(crate::arch::VIRTIO_MMIO_BASE, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(
+                    crate::arch::VIRTIO_MMIO_BASE + crate::arch::VIRTIO_MMIO_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE,
+            ),
+        ];
 
-            let virtio_end = virtio_start + crate::arch::VIRTIO_MMIO_SIZE;
+        let mut cursor = map_start;
 
+        for &(raw_start, raw_end) in mmio_ranges.iter() {
+            let start = core::cmp::max(raw_start, map_start);
+            let end = core::cmp::min(raw_end, map_end);
+
+            if end <= map_start || start >= map_end || start >= end {
+                continue;
+            }
+
+            if cursor < start {
+                self.insert_linear_pa_range(cursor, start, kernel_perm);
+            }
+
+            if cursor < end {
+                cursor = end;
+            }
+        }
+
+        if cursor < map_end {
+            self.insert_linear_pa_range(cursor, map_end, kernel_perm);
+        }
+
+        
+        //MMIO 区域单独映射。
+        
+        for &(start, end) in mmio_ranges.iter() {
             log::info!(
-                "[mm] map virtio-mmio: pa={:#x}..{:#x}, va={:#x}..{:#x}",
-                virtio_start,
-                virtio_end,
-                crate::mm::kernel_phys_to_virt(virtio_start),
-                crate::mm::kernel_phys_to_virt(virtio_end),
+                "[mm] map mmio: pa={:#x}..{:#x}, va={:#x}..{:#x}",
+                start,
+                end,
+                crate::mm::kernel_phys_to_virt(start),
+                crate::mm::kernel_phys_to_virt(end),
             );
 
-            self.insert_area(MapArea::new(
-                VirtAddr(crate::mm::kernel_phys_to_virt(virtio_start)),
-                VirtAddr(crate::mm::kernel_phys_to_virt(virtio_end)),
-                MapType::Linear {
-                    offset: crate::mm::KERNEL_OFFSET,
-                },
-                mmio_perm,
-            ));
+            self.insert_linear_pa_range(start, end, mmio_perm);
         }
     }
-
 
     pub fn copy_data(&self, start_va: VirtAddr, data: &[u8]) {
         let mut offset = 0usize;

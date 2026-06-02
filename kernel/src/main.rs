@@ -16,6 +16,7 @@ mod syscall;
 mod loader;
 mod fs;
 mod block;
+mod pci;
 
 #[macro_use]
 mod io;
@@ -130,7 +131,11 @@ fn primary_init() {
 
     block::ext4_image::test_ext4_magic();
 
-
+    #[cfg(target_arch = "loongarch64")]
+    {
+        crate::pci::scan_pci_bus();
+        crate::pci::find_virtio_blk_pci();
+    }
     let rootfs_device: alloc::sync::Arc<dyn block::BlockDevice> =
         if let Some(phys_base) = block::virtio_probe::probe_virtio_blk_mmio() {
             let dev = block::virtio_blk::init_global_from_phys_base(phys_base)
