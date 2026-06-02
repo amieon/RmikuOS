@@ -15,6 +15,7 @@ mod task;
 mod syscall;
 mod loader;
 mod fs;
+mod block;
 
 #[macro_use]
 mod io;
@@ -125,6 +126,7 @@ fn primary_init() {
 
     timer::init();
 
+    test::block_tset::test_ramdisk();
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 

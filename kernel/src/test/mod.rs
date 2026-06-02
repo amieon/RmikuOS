@@ -4,4 +4,5 @@ pub mod page_table_test;
 pub mod memory_set_test;
 pub mod user_memory_set_test;
 pub mod user_test;
+pub mod block_tset;
 pub mod loader;

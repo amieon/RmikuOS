@@ -75,7 +75,7 @@ if [ "$ARCH" = "loongarch64" ]; then
   build_loongarch_trampoline
 fi
 
-LOG_LEVEL="${LOG:-warn}"
+LOG_LEVEL="${LOG:-info}"
 
 echo "=== 编译内核 ($ARCH, $MODE, LOG=$LOG_LEVEL) ==="
 
