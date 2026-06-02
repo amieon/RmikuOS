@@ -4,6 +4,7 @@ pub mod dirent;
 pub mod file;
 pub mod inode;
 pub mod path;
+pub mod common_file;
 
 pub mod initramfs;
 mod stdio;
@@ -41,6 +42,10 @@ pub use stat::{
     STAT_TYPE_FILE,
     STAT_TYPE_DIR,
     STAT_TYPE_CHAR,
+};
+pub use common_file::{
+    ReadOnlyDirFile,
+    ReadOnlyMemFile,
 };
 
 

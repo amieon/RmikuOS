@@ -115,15 +115,17 @@ impl Inode for InitramfsInode {
             InitramfsNode::Root |
             InitramfsNode::Bin |
             InitramfsNode::Etc => {
-                Some(Arc::new(DirFile::new(self.getdents())))
+                Some(Arc::new(super::ReadOnlyDirFile::new(self.getdents())))
             }
 
             InitramfsNode::Motd => {
-                Some(Arc::new(MemFile::new(MOTD)))
+                Some(Arc::new(super::ReadOnlyMemFile::from_static(MOTD)))
             }
 
             InitramfsNode::App(id) => {
-                Some(Arc::new(MemFile::new(crate::loader::get_app_data(id))))
+                Some(Arc::new(super::ReadOnlyMemFile::from_static(
+                    crate::loader::get_app_data(id),
+                )))
             }
         }
     }
