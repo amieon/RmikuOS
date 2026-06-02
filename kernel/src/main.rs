@@ -130,6 +130,10 @@ fn primary_init() {
     test::block_test::test_ramdisk();
     block::ext4_image::test_ext4_magic();
 
+
+    let rootfs = crate::block::ext4_image::rootfs_ramdisk();
+    crate::fs::ext4fs::init(rootfs);
+
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
     log::info!("logger initialized");

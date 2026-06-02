@@ -5,6 +5,7 @@ pub mod file;
 pub mod inode;
 pub mod path;
 pub mod common_file;
+pub mod ext4fs;
 
 pub mod initramfs;
 mod stdio;
@@ -12,6 +13,7 @@ mod stdio;
 pub use file::{File, FileRef};
 pub use inode::{Inode, InodeRef, Metadata, InodeType};
 pub use stdio::{stdin, stdout};
+
 
 pub fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {
     path::normalize_path(cwd, path)
@@ -71,4 +73,12 @@ pub fn stat(path: &str) -> Option<Stat> {
     };
 
     Some(Stat::new(file_type, meta.size))
+}
+
+pub fn root_inode() -> InodeRef {
+    if let Some(root) = ext4fs::root_inode() {
+        root
+    } else {
+        initramfs::root_inode()
+    }
 }

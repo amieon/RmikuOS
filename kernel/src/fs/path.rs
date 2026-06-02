@@ -57,7 +57,7 @@ pub fn normalize_path(cwd: &str, path: &str) -> Option<String> {
 pub fn lookup_abs_path(path: &str) -> Option<InodeRef> {
     let path = normalize_path("/", path)?;
 
-    let mut current = crate::fs::initramfs::root_inode();
+    let mut current = crate::fs::root_inode();
 
     if path == "/" {
         return Some(current);
