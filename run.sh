@@ -32,11 +32,17 @@ LA_GCC="${LA_GCC:-${LA_PREFIX}gcc}"
 LA_OBJCOPY="${LA_OBJCOPY:-${LA_PREFIX}objcopy}"
 
 USER_BUILD_SCRIPT="user/build.py"
-GENERATED_LOADER="kernel/src/loader/generated.rs"
+
 
 build_user_apps() {
   if [ "${SKIP_USER_BUILD:-0}" = "1" ]; then
     echo "=== 跳过用户程序构建: SKIP_USER_BUILD=1 ==="
+
+    if [ ! -f "target/fs-${ARCH}.img" ]; then
+      echo "错误: SKIP_USER_BUILD=1 但找不到 target/fs-${ARCH}.img" >&2
+      exit 1
+    fi
+
     return
   fi
 
@@ -47,16 +53,12 @@ build_user_apps() {
 
   echo "=== 构建用户程序 ($ARCH) ==="
   python3 "$USER_BUILD_SCRIPT" "$ARCH"
+
+  echo "=== 构建 ext4 rootfs ($ARCH) ==="
   ./user/mkfs_ext4.sh "$ARCH"
 
-  if [ ! -f "$GENERATED_LOADER" ]; then
-    echo "错误: 用户程序构建后仍找不到: $GENERATED_LOADER" >&2
-    exit 1
-  fi
-
-  if ! grep -q "arch = $ARCH" "$GENERATED_LOADER"; then
-    echo "错误: $GENERATED_LOADER 不是为当前架构 $ARCH 生成的" >&2
-    echo "请检查 user/build.py 是否写入了 // arch = $ARCH" >&2
+  if [ ! -f "target/fs-${ARCH}.img" ]; then
+    echo "错误: rootfs 构建后找不到 target/fs-${ARCH}.img" >&2
     exit 1
   fi
 }
@@ -100,8 +102,9 @@ case "$ARCH" in
       -m 128M
       -nographic
       -kernel "$KERNEL_ELF"
-      -drive file=target/fs-riscv64.img,format=raw,if=none,id=blk0 \
-      -device virtio-blk-device,drive=blk0
+
+      -drive "file=target/fs-riscv64.img,format=raw,if=none,id=blk0"
+      -device "virtio-blk-device,drive=blk0"
     )
     ;;
   loongarch64)

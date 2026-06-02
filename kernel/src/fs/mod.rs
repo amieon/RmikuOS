@@ -82,3 +82,37 @@ pub fn root_inode() -> InodeRef {
         initramfs::root_inode()
     }
 }
+
+
+use alloc::vec::Vec;
+
+pub fn read_all(path: &str) -> Option<Vec<u8>> {
+    let inode = crate::fs::path::lookup_abs_path(path)?;
+
+    let meta = inode.metadata();
+
+    if meta.inode_type != crate::fs::InodeType::File {
+        return None;
+    }
+
+    let file = inode.open()?;
+
+    let mut data = Vec::new();
+    let mut buf = [0u8; 512];
+
+    loop {
+        let n = file.read(&mut buf);
+
+        if n < 0 {
+            return None;
+        }
+
+        if n == 0 {
+            break;
+        }
+
+        data.extend_from_slice(&buf[..n as usize]);
+    }
+
+    Some(data)
+}

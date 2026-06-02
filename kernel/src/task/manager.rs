@@ -545,17 +545,14 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
 static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
 pub fn init() {
-    let shell_app = crate::loader::find_app("shell")
-        .or_else(|| crate::loader::find_app("00_shell"))
-        .unwrap_or(0);
+    let init_path = "/bin/shell";
 
-    let app = crate::loader::get_app_data(shell_app);
-    let name = crate::loader::get_app_name(shell_app);
+    let app = crate::fs::read_all(init_path)
+        .expect("[task] failed to load init shell from /bin/shell");
 
     log::info!(
-        "[task] load init app: id={}, name={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
-        shell_app,
-        name,
+        "[task] load init app from VFS: path={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
+        init_path,
         app.len(),
         app.get(0).copied().unwrap_or(0),
         app.get(1).copied().unwrap_or(0),
@@ -563,14 +560,14 @@ pub fn init() {
         app.get(3).copied().unwrap_or(0),
     );
 
-    let task = TaskControlBlock::new(0, app);
+    let task = TaskControlBlock::new(0, app.as_slice());
 
     {
         let mut manager = TASK_MANAGER.lock();
         manager.add_task(task);
     }
 
-    log::info!("[task] loaded init shell");
+    log::info!("[task] loaded init shell from rootfs");
 }
 
 pub fn run_first_task() -> ! {
