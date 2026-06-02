@@ -43,36 +43,43 @@ impl KernelStack {
             );
         }
 
-        Self {
+        let stack = Self {
             base_ppn,
             pages,
-        }
+        };
+
+        stack.init_guard();
+
+        stack
     }
 
     pub fn bottom(&self) -> usize {
-        unsafe {
-            let magic_ptr = self.bottom() as *mut usize;
-            magic_ptr.write_volatile(KERNEL_STACK_MAGIC);
-        }
         kernel_phys_to_virt(self.base_ppn.0 << PAGE_SIZE_BITS)
-        
-    }
-
-
-    pub fn check_guard(&self) {
-        unsafe {
-            let magic = (self.bottom() as *const usize).read_volatile();
-            assert_eq!(
-                magic,
-                KERNEL_STACK_MAGIC,
-                "kernel stack overflow detected"
-            );
-        }
     }
 
     pub fn top(&self) -> usize {
         self.bottom() + self.pages * PAGE_SIZE
     }
+
+    fn init_guard(&self) {
+        unsafe {
+            let magic_ptr = self.bottom() as *mut usize;
+            magic_ptr.write_volatile(KERNEL_STACK_MAGIC);
+        }
+    }
+
+    pub fn check_guard(&self) {
+        let magic = unsafe {
+            (self.bottom() as *const usize).read_volatile()
+        };
+
+        assert_eq!(
+            magic,
+            KERNEL_STACK_MAGIC,
+            "kernel stack overflow detected"
+        );
+    }
+
 
     pub unsafe fn push_context(&self, cx: TrapContext) -> *mut TrapContext {
         let actual_size = core::mem::size_of::<TrapContext>();
