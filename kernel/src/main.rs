@@ -126,17 +126,36 @@ fn primary_init() {
 
     test::block_cache_tset::test_block_cache();
     test::block_test::test_ramdisk();
+
+
     block::ext4_image::test_ext4_magic();
-    if let Some(phys_base) = crate::block::virtio_probe::probe_virtio_blk_mmio() {
-        let _dev = crate::block::virtio_blk::VirtioBlkDevice::init_from_phys_base(phys_base)
-            .expect("virtio-blk init failed");
-    }
+
+
+    let rootfs_device: alloc::sync::Arc<dyn block::BlockDevice> =
+        if let Some(phys_base) = block::virtio_probe::probe_virtio_blk_mmio() {
+            let dev = block::virtio_blk::init_global_from_phys_base(phys_base)
+                .expect("virtio-blk init failed");
+
+            block::virtio_blk::test_read_some_sectors(dev.clone());
+            block::virtio_blk::test_read_ext4_magic(dev.clone());
+
+            log::info!("[rootfs] using virtio-blk device");
+
+            dev as alloc::sync::Arc<dyn block::BlockDevice>
+        } else {
+            log::warn!("[rootfs] virtio-blk not found, fallback to ramdisk");
+
+            block::ext4_image::rootfs_ramdisk()
+        };
+
+
+    fs::ext4fs::init(rootfs_device);
 
 
     timer::init();
 
-    let rootfs = crate::block::ext4_image::rootfs_ramdisk();
-    crate::fs::ext4fs::init(rootfs);
+    let rootfs = block::ext4_image::rootfs_ramdisk();
+    fs::ext4fs::init(rootfs);
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 

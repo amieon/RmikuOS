@@ -135,7 +135,15 @@ pub type BlockCacheRef = Arc<Mutex<BlockCache>>;
 pub struct BlockCacheManager {
     queue: VecDeque<BlockCacheRef>,
 }
-
+impl BlockCache {
+    pub fn matches(
+        &self,
+        block_id: usize,
+        device: &Arc<dyn BlockDevice>,
+    ) -> bool {
+        self.block_id == block_id && Arc::ptr_eq(&self.device, device)
+    }
+}
 impl BlockCacheManager {
     pub const fn new() -> Self {
         Self {
@@ -149,15 +157,12 @@ impl BlockCacheManager {
         device: Arc<dyn BlockDevice>,
     ) -> BlockCacheRef {
         for cache in self.queue.iter() {
-            if cache.lock().block_id() == block_id {
+            if cache.lock().matches(block_id, &device) {
                 return cache.clone();
             }
         }
 
         if self.queue.len() >= BLOCK_CACHE_CAPACITY {
-            //第一版简单淘汰队首。
-            //如果 Arc strong_count > 1，说明外面还有人在用，
-            //那就先跳过，找一个没人用的 cache。
             let mut victim_index = None;
 
             for (i, cache) in self.queue.iter().enumerate() {

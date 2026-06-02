@@ -408,24 +408,25 @@ impl VirtioQueue {
         (self.avail_va() + 2) as *mut u16
     }
 
-    unsafe fn avail_ring_ptr(&self, index: usize) -> *mut u16 {
-        assert!(index < VIRTIO_BLK_QUEUE_SIZE);
-        (self.avail_va() + 4) as *mut u16
-    }
-
     unsafe fn used_idx_ptr(&self) -> *const u16 {
         (self.used_va() + 2) as *const u16
     }
 
+
+    unsafe fn avail_ring_ptr(&self, index: usize) -> *mut u16 {
+    assert!(index < VIRTIO_BLK_QUEUE_SIZE);
+    ((self.avail_va() + 4) as *mut u16).add(index)
+    }
+
     unsafe fn used_ring_ptr(&self, index: usize) -> *const VirtqUsedElem {
         assert!(index < VIRTIO_BLK_QUEUE_SIZE);
-        (self.used_va() + 4) as *const VirtqUsedElem
+        ((self.used_va() + 4) as *const VirtqUsedElem).add(index)
     }
 }
 
 
 const DMA_REQ_OFFSET: usize = 0;
-const DMA_DATA_OFFSET: usize = 64;
+const DMA_DATA_OFFSET: usize = 512;
 const DMA_STATUS_OFFSET: usize = DMA_DATA_OFFSET + 512;
 
 
@@ -487,9 +488,8 @@ impl VirtioBlkDevice {
         let mut inner = self.inner.lock();
 
         /*
-        * 不要 let q = &inner.queue0 后又改 inner.avail_idx。
-        * 先把需要的地址/指针算出来。
-        */
+         * 先把会用到的指针和地址取出来，避免 borrow checker 卡住。
+         */
         let desc0 = unsafe { inner.queue0.desc_mut(0) };
         let desc1 = unsafe { inner.queue0.desc_mut(1) };
         let desc2 = unsafe { inner.queue0.desc_mut(2) };
@@ -507,16 +507,14 @@ impl VirtioBlkDevice {
         let data_pa = inner.dma.data_pa;
         let status_pa = inner.dma.status_pa;
 
-        let avail_idx = inner.avail_idx;
-        let ring_index = (avail_idx as usize) % VIRTIO_BLK_QUEUE_SIZE;
+        let old_avail_idx = inner.avail_idx;
+        let ring_index = (old_avail_idx as usize) % VIRTIO_BLK_QUEUE_SIZE;
         let avail_ring = unsafe { inner.queue0.avail_ring_ptr(ring_index) };
 
-
-
-        let q = &inner.queue0;
-        let dma = &inner.dma;
-
         unsafe {
+            /*
+             * 1. 准备 request header。
+             */
             let req = VirtioBlkReq {
                 req_type: VIRTIO_BLK_T_IN,
                 reserved: 0,
@@ -524,9 +522,24 @@ impl VirtioBlkDevice {
             };
 
             write_volatile(req_va as *mut VirtioBlkReq, req);
+
+            /*
+             * status 先写成 0xff，方便判断设备有没有真的写回来。
+             */
             write_volatile(status_va as *mut u8, 0xff);
+
+            /*
+             * data buffer 清零，方便 debug。
+             */
             core::ptr::write_bytes(data_va as *mut u8, 0, 512);
 
+            /*
+             * 2. descriptor chain:
+             *
+             * desc0: request header，device readable
+             * desc1: data buffer，device writable
+             * desc2: status byte，device writable
+             */
             write_volatile(
                 desc0,
                 VirtqDesc {
@@ -557,19 +570,112 @@ impl VirtioBlkDevice {
                 },
             );
 
+            /*
+             * 3. 放进 avail ring。
+             */
             write_volatile(avail_flags, VIRTQ_AVAIL_F_NO_INTERRUPT);
             write_volatile(avail_ring, 0);
 
             core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
 
-            let new_avail_idx = avail_idx.wrapping_add(1);
+            let new_avail_idx = old_avail_idx.wrapping_add(1);
             inner.avail_idx = new_avail_idx;
 
             write_volatile(avail_idx_ptr, new_avail_idx);
 
             core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
 
+            /*
+             * 4. 通知设备。
+             */
             self.header.notify_queue(0);
+
+            /*
+             * 5. 等设备更新 used ring。
+             */
+            let mut spin = 0usize;
+
+            loop {
+                let used_idx = read_volatile(used_idx_ptr);
+
+                if used_idx != inner.last_used_idx {
+                    break;
+                }
+
+                spin += 1;
+
+                if spin > 10_000_000 {
+                    log::error!(
+                        "[virtio-blk] read sector {} timeout, avail_idx={}, used_idx={}, last_used_idx={}",
+                        sector,
+                        inner.avail_idx,
+                        used_idx,
+                        inner.last_used_idx,
+                    );
+                    return -1;
+                }
+
+                core::hint::spin_loop();
+            }
+
+            /*
+             * 6. 读取 used elem。
+             */
+            let used_ring_index =
+                (inner.last_used_idx as usize) % VIRTIO_BLK_QUEUE_SIZE;
+
+            let used_ptr = inner.queue0.used_ring_ptr(used_ring_index);
+            let used = read_volatile(used_ptr);
+
+            inner.last_used_idx = inner.last_used_idx.wrapping_add(1);
+
+            /*
+             * 7. ack interrupt，可有可无，但加上更干净。
+             */
+            let isr = self.header.interrupt_status();
+            if isr != 0 {
+                self.header.ack_interrupt(isr);
+            }
+
+            /*
+             * 8. 检查 used id 和 status。
+             */
+            let status = read_volatile(status_va as *const u8);
+
+            log::info!(
+                "[virtio-blk] done sector={}, used.id={}, used.len={}, status={}",
+                sector,
+                used.id,
+                used.len,
+                status,
+            );
+
+            if used.id != 0 {
+                log::error!(
+                    "[virtio-blk] unexpected used id: {}",
+                    used.id,
+                );
+                return -1;
+            }
+
+            if status != VIRTIO_BLK_S_OK {
+                log::error!(
+                    "[virtio-blk] read sector {} failed, status={}",
+                    sector,
+                    status,
+                );
+                return -1;
+            }
+
+            /*
+             * 9. 关键：把 DMA data buffer 复制到 out。
+             */
+            let data = core::slice::from_raw_parts(
+                data_va as *const u8,
+                512,
+            );
+
+            out.copy_from_slice(data);
         }
 
         512
@@ -578,7 +684,6 @@ impl VirtioBlkDevice {
 
 
 use super::device::BlockDevice;
-
 impl BlockDevice for VirtioBlkDevice {
     fn block_size(&self) -> usize {
         512
@@ -586,13 +691,17 @@ impl BlockDevice for VirtioBlkDevice {
 
     fn num_blocks(&self) -> usize {
         /*
-         * 第一版先不读 capacity。
-         * 后面可以从 virtio-blk config 读。
+         * 第一版可以先返回 0。
+         * 后面可以从 virtio-blk config 里读 capacity。
          */
         0
     }
 
     fn read_block(&self, block_id: usize, buf: &mut [u8]) -> isize {
+        if buf.len() != 512 {
+            return -1;
+        }
+
         self.read_sector_sync(block_id, buf)
     }
 
@@ -632,3 +741,66 @@ pub fn test_read_ext4_magic(dev: Arc<VirtioBlkDevice>) {
         "[virtio-blk] bad ext4 magic"
     );
 }
+
+pub fn test_read_some_sectors(dev: alloc::sync::Arc<VirtioBlkDevice>) {
+    for sector in 0..4 {
+        let mut block = [0u8; 512];
+
+        let ret = dev.read_block(sector, &mut block);
+
+        log::info!(
+            "[virtio-blk] sector {} ret={}, first16=[{:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}]",
+            sector,
+            ret,
+            block[0],
+            block[1],
+            block[2],
+            block[3],
+            block[4],
+            block[5],
+            block[6],
+            block[7],
+            block[8],
+            block[9],
+            block[10],
+            block[11],
+            block[12],
+            block[13],
+            block[14],
+            block[15],
+        );
+
+        if sector == 2 {
+            let magic = u16::from_le_bytes([block[56], block[57]]);
+            log::info!(
+                "[virtio-blk] sector 2 magic at offset 56 = {:#x}",
+                magic,
+            );
+        }
+    }
+}
+
+
+
+static mut VIRTIO_BLK_DEVICE: Option<Arc<VirtioBlkDevice>> = None;
+
+pub fn init_global_from_phys_base(phys_base: usize) -> Option<Arc<VirtioBlkDevice>> {
+    let dev = VirtioBlkDevice::init_from_phys_base(phys_base)?;
+
+    unsafe {
+        VIRTIO_BLK_DEVICE = Some(dev.clone());
+    }
+
+    Some(dev)
+}
+
+pub fn global_device() -> Option<Arc<VirtioBlkDevice>> {
+    unsafe {
+        VIRTIO_BLK_DEVICE.as_ref().cloned()
+    }
+}
+
+pub fn global_block_device() -> Option<Arc<dyn BlockDevice>> {
+    global_device().map(|dev| dev as Arc<dyn BlockDevice>)
+}
+
