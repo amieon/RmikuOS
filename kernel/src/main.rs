@@ -139,19 +139,27 @@ fn primary_init() {
         if let Some(info) = crate::pci::find_virtio_blk_pci() {
             let addr = info.loc.addr();
 
+            crate::pci::bar::ensure_mem_bar(
+                addr,
+                4,
+                crate::arch::PCI_MMIO_BASE,
+            );
+
             crate::pci::ecam::enable_pci_device(addr);
+
 
             let regions = crate::block::virtio_pci::parse_virtio_pci_caps(addr)
                 .expect("parse virtio pci caps failed");
 
-            log::info!(
-                "[virtio-pci] parsed regions: common={:?}, notify={:?}, isr={:?}, device={:?}, notify_mul={}",
-                regions.common,
-                regions.notify,
-                regions.isr,
-                regions.device,
-                regions.notify_off_multiplier,
-            );
+            let dev = crate::block::virtio_pci_blk::VirtioPciBlkDevice::init(regions)
+                .expect("virtio-pci-blk init failed");
+
+            crate::block::virtio_pci_blk::test_read_ext4_magic(dev.clone());
+
+            /*
+            * 后面接 rootfs：
+            * crate::fs::ext4fs::init(dev as Arc<dyn BlockDevice>);
+            */
         }
     }
     let rootfs_device: alloc::sync::Arc<dyn block::BlockDevice> =

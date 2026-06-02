@@ -20,3 +20,5 @@ pub mod virtio_mmio;
 pub mod virtio_probe;
 pub mod virtio_blk;
 pub mod virtio_pci;
+pub mod virtio_queue;
+pub mod virtio_pci_blk;
