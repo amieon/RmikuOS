@@ -127,7 +127,10 @@ fn primary_init() {
     test::block_cache_tset::test_block_cache();
     test::block_test::test_ramdisk();
     block::ext4_image::test_ext4_magic();
-    block::virtio_probe::probe_virtio_blk_mmio();
+    if let Some(phys_base) = crate::block::virtio_probe::probe_virtio_blk_mmio() {
+        let _dev = crate::block::virtio_blk::VirtioBlkDevice::init_from_phys_base(phys_base)
+            .expect("virtio-blk init failed");
+    }
 
 
     timer::init();

@@ -65,7 +65,6 @@ impl BlockDevice for RamDisk {
     fn write_block(&self, _block_id: usize, _buf: &[u8]) -> isize {
         /*
          * 第一版 ramdisk 只读。
-         * 后面如果你想做可写 ramdisk，需要 data 换成可变内存。
          */
         -1
     }

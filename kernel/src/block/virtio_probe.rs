@@ -15,35 +15,42 @@ const VIRTIO_MMIO_COUNT: usize = 8;
 pub fn probe_virtio_blk_mmio() -> Option<usize> {
     #[cfg(target_arch = "riscv64")]
     {
-        for i in 0..VIRTIO_MMIO_COUNT {
-            let phys_base = crate::arch::VIRTIO_MMIO_BASE
+        for i in 0..crate::arch::VIRTIO_MMIO_COUNT {
+            let phys_base =
+                crate::arch::VIRTIO_MMIO_BASE
                 + i * crate::arch::VIRTIO_MMIO_STRIDE;
 
-            let base = crate::mm::kernel_phys_to_virt(phys_base);
+            let virt_base = crate::mm::kernel_phys_to_virt(phys_base);
 
-            let hdr = VirtioMmioHeader::new(base);
+            let hdr = super::virtio_mmio::VirtioMmioHeader::new(virt_base);
 
             let magic = hdr.magic();
             let version = hdr.version();
             let device_id = hdr.device_id();
             let vendor_id = hdr.vendor_id();
 
-            if magic != VIRTIO_MAGIC {
+            if magic != super::virtio_mmio::VIRTIO_MAGIC {
                 continue;
             }
 
             log::info!(
-                "[virtio] mmio slot {} base={:#x}, version={}, device_id={}, vendor={:#x}",
+                "[virtio] mmio slot {} pa={:#x}, va={:#x}, version={}, device_id={}, vendor={:#x}",
                 i,
-                base,
+                phys_base,
+                virt_base,
                 version,
                 device_id,
                 vendor_id,
             );
 
-            if device_id == VIRTIO_DEVICE_ID_BLOCK {
-                log::info!("[virtio] found block device at {:#x}", base);
-                return Some(base);
+            if device_id == super::virtio_mmio::VIRTIO_DEVICE_ID_BLOCK {
+                log::info!(
+                    "[virtio] found block device at pa={:#x}, va={:#x}",
+                    phys_base,
+                    virt_base,
+                );
+
+                return Some(phys_base);
             }
         }
 
