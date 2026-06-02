@@ -118,8 +118,8 @@ impl TaskManager {
 
     fn prepare_task(&mut self, id: usize) -> (PhysPageNum, usize, usize, *mut TaskContext) {
         let task = self.task_mut(id);
+        task.kernel_stack.check_guard();
         task.status = TaskStatus::Running;
-
         (
             task.root_ppn(),
             task.kernel_stack.top(),

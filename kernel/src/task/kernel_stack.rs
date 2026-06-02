@@ -10,13 +10,16 @@ use crate::mm::frame_allocator::{
 };
 use crate::trap::TrapContext;
 
-pub const KERNEL_STACK_SIZE: usize = 16 * 1024;
+pub const KERNEL_STACK_SIZE: usize = 128 * 1024;
 const TRAP_CONTEXT_SIZE: usize = core::mem::size_of::<TrapContext>();
 
 pub struct KernelStack {
     base_ppn: PhysPageNum,
     pages: usize,
 }
+
+const KERNEL_STACK_MAGIC: usize = 0xdead_beef_cafe_babe;
+
 
 impl KernelStack {
     pub fn new() -> Self {
@@ -47,7 +50,24 @@ impl KernelStack {
     }
 
     pub fn bottom(&self) -> usize {
+        unsafe {
+            let magic_ptr = self.bottom() as *mut usize;
+            magic_ptr.write_volatile(KERNEL_STACK_MAGIC);
+        }
         kernel_phys_to_virt(self.base_ppn.0 << PAGE_SIZE_BITS)
+        
+    }
+
+
+    pub fn check_guard(&self) {
+        unsafe {
+            let magic = (self.bottom() as *const usize).read_volatile();
+            assert_eq!(
+                magic,
+                KERNEL_STACK_MAGIC,
+                "kernel stack overflow detected"
+            );
+        }
     }
 
     pub fn top(&self) -> usize {
