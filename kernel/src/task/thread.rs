@@ -18,9 +18,18 @@ pub enum ThreadStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockReason {
     None,
-    Sleep { wake_tick: usize },
-    WaitPid { pid: isize },
-    Join { tid: Tid },
+
+    Sleep {
+        wake_tick: usize,
+    },
+
+    WaitPid {
+        pid: isize,
+    },
+
+    Join {
+        tid: Tid,
+    },
 }
 
 pub struct ThreadControlBlock {
@@ -80,5 +89,21 @@ impl ThreadControlBlock {
 
     pub fn task_cx_ptr(&mut self) -> *mut TaskContext {
         &mut self.task_cx as *mut TaskContext
+    }
+
+    pub fn trap_cx_ptr_addr(&self) -> usize {
+        self.trap_cx_addr
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.status == ThreadStatus::Ready
+    }
+
+    pub fn is_blocking(&self) -> bool {
+        self.status == ThreadStatus::Blocking
+    }
+
+    pub fn is_zombie(&self) -> bool {
+        self.status == ThreadStatus::Zombie
     }
 }
