@@ -1,3 +1,4 @@
+//该文件不使用了，先保留
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -37,6 +38,11 @@ pub struct TaskControlBlock {
 
     pub parent: Option<usize>,
     pub children: Vec<usize>,
+        pub fd_table: Vec<Option<FileRef>>,
+    pub free_fds: Vec<usize>,
+    pub cwd: String,
+
+    pub exit_code: i32,
 
     pub user_space: MemorySet,
     pub kernel_stack: KernelStack,
@@ -46,11 +52,7 @@ pub struct TaskControlBlock {
     pub status: TaskStatus,
     pub block_reason: BlockReason,
 
-    pub fd_table: Vec<Option<FileRef>>,
-    pub free_fds: Vec<usize>,
-    pub cwd: String,
 
-    pub exit_code: i32,
 }
 
 

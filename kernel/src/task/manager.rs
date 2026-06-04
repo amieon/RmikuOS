@@ -8,15 +8,19 @@ use crate::trap::TrapContext;
 use super::context::TaskContext;
 use super::processor;
 use super::switch::__switch;
-use super::task::{TaskControlBlock, TaskStatus, BlockReason};
+use super::process::{ProcessControlBlock, BlockReason, Pid};
+use super::thread::{ThreadControlBlock, ThreadStatus, Tid};
 
 unsafe extern "C" {
     fn __restore_user(cx: *const TrapContext) -> !;
 }
 
 pub struct TaskManager {
-    tasks: Vec<Option<TaskControlBlock>>,
-    free_pids: Vec<usize>,
+    processes: Vec<Option<ProcessControlBlock>>,
+    threads: Vec<Option<ThreadControlBlock>>,
+
+    free_pids: Vec<Pid>,
+    free_tids: Vec<Tid>,
 }
 
 enum WaitPidAction {
@@ -27,43 +31,48 @@ enum WaitPidAction {
 impl TaskManager {
     pub const fn new() -> Self {
         Self {
-            tasks: Vec::new(),
+            processes: Vec::new(),
             free_pids: Vec::new(),
+
+            threads: Vec::new(),
+            free_tids: Vec::new(),
         }
     }
 
-    fn alloc_pid(&mut self) -> usize {
-        self.free_pids.pop().unwrap_or(self.tasks.len())
+    fn alloc_pid(&mut self) -> Pid {
+        self.free_pids.pop().unwrap_or(self.processes.len())
     }
 
-    fn insert_task(&mut self, task: TaskControlBlock) {
-        let pid = task.id;
-
-        if pid == self.tasks.len() {
-            self.tasks.push(Some(task));
-        } else {
-            assert!(pid < self.tasks.len(), "invalid reused pid {}", pid);
-            assert!(self.tasks[pid].is_none(), "pid slot {} is not free", pid);
-            self.tasks[pid] = Some(task);
-        }
+    fn alloc_tid(&mut self) -> Tid {
+        self.free_tids.pop().unwrap_or(self.threads.len())
     }
 
-    pub fn add_task(&mut self, task: TaskControlBlock) {
-        self.insert_task(task);
-    }
-
-    fn task(&self, pid: usize) -> &TaskControlBlock {
-        self.tasks
+    fn process(&self, pid: Pid) -> &ProcessControlBlock {
+        self.processes
             .get(pid)
             .and_then(|slot| slot.as_ref())
-            .expect("invalid task pid")
+            .expect("invalid pid")
     }
 
-    fn task_mut(&mut self, pid: usize) -> &mut TaskControlBlock {
-        self.tasks
+    fn process_mut(&mut self, pid: Pid) -> &mut ProcessControlBlock {
+        self.processes
             .get_mut(pid)
             .and_then(|slot| slot.as_mut())
-            .expect("invalid task pid")
+            .expect("invalid pid")
+    }
+
+    fn thread(&self, tid: Tid) -> &ThreadControlBlock {
+        self.threads
+            .get(tid)
+            .and_then(|slot| slot.as_ref())
+            .expect("invalid tid")
+    }
+
+    fn thread_mut(&mut self, tid: Tid) -> &mut ThreadControlBlock {
+        self.threads
+            .get_mut(tid)
+            .and_then(|slot| slot.as_mut())
+            .expect("invalid tid")
     }
 
     fn try_task(&self, pid: usize) -> Option<&TaskControlBlock> {
@@ -544,30 +553,39 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
 
 static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
+
 pub fn init() {
     let init_path = "/bin/shell";
 
     let app = crate::fs::read_all(init_path)
         .expect("[task] failed to load init shell from /bin/shell");
 
-    log::info!(
-        "[task] load init app from VFS: path={}, size={} bytes, first4=[{:02x}, {:02x}, {:02x}, {:02x}]",
-        init_path,
-        app.len(),
-        app.get(0).copied().unwrap_or(0),
-        app.get(1).copied().unwrap_or(0),
-        app.get(2).copied().unwrap_or(0),
-        app.get(3).copied().unwrap_or(0),
+    let (user_space, entry, user_sp) =
+        crate::mm::MemorySet::new_user_test(app.as_slice());
+
+    let trap_cx =
+        crate::trap::TrapContext::app_init_context(entry, user_sp);
+
+    let mut process = ProcessControlBlock::new(
+        0,
+        user_space,
+        alloc::string::String::from("/"),
     );
 
-    let task = TaskControlBlock::new(0, app.as_slice());
+    let thread = ThreadControlBlock::new_main_thread(
+        0,
+        0,
+        trap_cx,
+    );
 
-    {
-        let mut manager = TASK_MANAGER.lock();
-        manager.add_task(task);
-    }
+    process.threads.push(0);
+    process.ready_threads.push(0);
 
-    log::info!("[task] loaded init shell from rootfs");
+    let mut manager = TASK_MANAGER.lock();
+    manager.insert_process(process);
+    manager.insert_thread(thread);
+
+    log::info!("[task] loaded init shell as pid=0 tid=0");
 }
 
 pub fn run_first_task() -> ! {

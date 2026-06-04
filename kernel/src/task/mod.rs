@@ -3,11 +3,17 @@ mod kernel_stack;
 mod manager;
 mod processor;
 mod switch;
-mod task;
+mod thread;
+mod process;
 
 pub use context::TaskContext;
 pub use kernel_stack::KernelStack;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use thread::{ThreadControlBlock, ThreadStatus};
+
+
+pub type Pid = usize;
+pub type Tid = usize;
+
 
 pub use manager::{
     init,
