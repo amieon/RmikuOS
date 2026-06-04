@@ -139,19 +139,11 @@ impl TaskManager {
         }
     }
 
-    fn process_has_ready_thread(&self, pid: Pid) -> bool {
-        let Some(process) = self.try_process(pid) else {
-            return false;
-        };
 
-        process.ready_threads.iter().any(|&tid| {
-            self.try_thread(tid)
-                .map(|thread| thread.status == ThreadStatus::Ready)
-                .unwrap_or(false)
-        })
-    }
 
-    fn find_next_ready_thread(&mut self) -> Option<Tid> {
+
+
+    fn pick_ready_process_by_stride(&self) -> Option<Pid> {
         let mut best: Option<(Pid, usize)> = None;
 
         for pid in 0..self.processes.len() {
@@ -164,7 +156,9 @@ impl TaskManager {
             }
 
             match best {
-                None => best = Some((pid, process.pass)),
+                None => {
+                    best = Some((pid, process.pass));
+                }
                 Some((_, best_pass)) if process.pass < best_pass => {
                     best = Some((pid, process.pass));
                 }
@@ -172,15 +166,35 @@ impl TaskManager {
             }
         }
 
-        let pid = best.map(|(pid, _)| pid)?;
-
-        {
-            let process = self.process_mut(pid);
-            process.pass = process.pass.wrapping_add(process.stride);
-        }
-
-        self.pick_ready_thread_in_process(pid)
+        best.map(|(pid, _)| pid)
     }
+
+
+
+    fn find_next_ready_thread(&mut self) -> Option<Tid> {
+        let pid = self.pick_ready_process_by_stride()?;
+        let tid = self.pick_ready_thread_in_process(pid)?;
+
+        let process = self.process_mut(pid);
+        process.pass = process.pass.wrapping_add(process.stride);
+
+        Some(tid)
+    }
+
+    fn process_has_ready_thread(&self, pid: Pid) -> bool {
+        let Some(process) = self.processes.get(pid).and_then(|x| x.as_ref()) else {
+            return false;
+        };
+
+        process.ready_threads.iter().any(|&tid| {
+            self.threads
+                .get(tid)
+                .and_then(|x| x.as_ref())
+                .map(|thread| thread.status == ThreadStatus::Ready)
+                .unwrap_or(false)
+        })
+    }
+    
 
     fn pick_ready_thread_in_process(&mut self, pid: Pid) -> Option<Tid> {
         loop {
@@ -298,6 +312,7 @@ impl TaskManager {
 
                 thread.status = ThreadStatus::Ready;
                 thread.block_reason = BlockReason::None;
+                
             }
 
             self.enqueue_ready_thread(tid);
