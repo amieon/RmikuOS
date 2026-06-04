@@ -43,6 +43,38 @@ static inline void put_int(long x) {
     }
 }
 
+static int append_str(char *buf, int pos, const char *s) {
+    while (*s) {
+        buf[pos++] = *s++;
+    }
+    return pos;
+}
+
+static int append_int(char *buf, int pos, int x) {
+    char tmp[16];
+    int n = 0;
+
+    if (x == 0) {
+        buf[pos++] = '0';
+        return pos;
+    }
+
+    if (x < 0) {
+        buf[pos++] = '-';
+        x = -x;
+    }
+
+    while (x > 0) {
+        tmp[n++] = '0' + (x % 10);
+        x /= 10;
+    }
+
+    while (n > 0) {
+        buf[pos++] = tmp[--n];
+    }
+
+    return pos;
+}
 
 
 

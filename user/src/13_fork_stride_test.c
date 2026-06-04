@@ -1,5 +1,21 @@
 #include "user.h"
 
+static void print_round_line(const char *name, int pid, int round) {
+    char buf[128];
+    int pos = 0;
+
+    pos = append_str(buf, pos, "[");
+    pos = append_str(buf, pos, name);
+    pos = append_str(buf, pos, "] pid=");
+    pos = append_int(buf, pos, pid);
+    pos = append_str(buf, pos, " round=");
+    pos = append_int(buf, pos, round);
+    pos = append_str(buf, pos, "\n");
+
+    write(1, buf, pos);
+}
+
+
 static void burn_cpu(int rounds) {
     volatile unsigned long x = 1;
 
@@ -19,14 +35,7 @@ static void worker(const char *name, int rounds, int burn) {
     int pid = getpid();
 
     for (int i = 0; i < rounds; i++) {
-        puts("[");
-        puts(name);
-        puts("] pid=");
-        put_int(pid);
-        puts(" round=");
-        put_int(i);
-        puts("\n");
-
+        print_round_line(name, pid, i);
         burn_cpu(burn);
     }
 }
