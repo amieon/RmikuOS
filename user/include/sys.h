@@ -85,32 +85,3 @@ static inline isize close(int fd) {
 }
 
 
-
-static inline void put_int(long x) {
-    char buf[32];
-    int i = 0;
-
-    if (x == 0) {
-        put_char('0');
-        return;
-    }
-
-    if (x < 0) {
-        put_char('-');
-        x = -x;
-    }
-
-    while (x > 0) {
-        buf[i++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (i > 0) {
-        i--;
-        put_char(buf[i]);
-    }
-}
-
-
-
-
