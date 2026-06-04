@@ -812,7 +812,6 @@ pub fn fork_current() -> isize {
             parent_tickets,
             parent_pass,
         );
-
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
             child_pid,
