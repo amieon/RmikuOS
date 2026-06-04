@@ -19,9 +19,17 @@ typedef long isize;
 #define SYS_GETCWD     13
 #define SYS_STAT       14
 #define SYS_FSTAT      15
+#define SYS_THREAD_CREATE   16
+#define SYS_THREAD_EXIT     17
+#define SYS_THREAD_JOIN     18
+
+
 
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
+
+isize syscall6(usize id, usize a0, usize a1, usize a2, usize a3, usize a4, usize a5);
+
 
 static inline usize strlen(const char *s) {
     usize n = 0;
@@ -84,4 +92,31 @@ static inline isize close(int fd) {
     return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
 }
 
+void thread_exit(int code) {
+    syscall3(SYS_THREAD_EXIT, code,0,0);
+
+    while (1) {
+    }
+}
+
+int thread_join(int tid, int *exit_code) {
+    return syscall3(SYS_THREAD_JOIN, tid, (long)exit_code,0);
+}
+
+void __thread_entry(void (*func)(void *), void *arg) {
+    func(arg);
+    thread_exit(0);
+}
+
+int thread_create(void (*func)(void *), void *arg, void *stack_top) {
+    return syscall6(
+        SYS_THREAD_CREATE,
+        (long)__thread_entry,
+        (long)func,
+        (long)arg,
+        (long)stack_top,
+        0,
+        0
+    );
+}
 

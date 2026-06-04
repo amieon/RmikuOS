@@ -84,7 +84,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         CAUSE_U_ECALL => {
             cx.sepc += 4;
             let syscall_id = cx.x[17];
-            let args = [cx.x[10], cx.x[11], cx.x[12]];
+            let args = [cx.x[10], cx.x[11], cx.x[12],cx.x[13], cx.x[14], cx.x[15]];
             cx.x[10] = handle_syscall(syscall_id, args) as usize;
         }
 
@@ -128,7 +128,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     cx
 }
 
-fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
+fn handle_syscall(id: usize, args: [usize; 6]) -> isize {
     
     // trap_println!(
     //     "[trap] syscall id={} args=[{:#x}, {:#x}, {:#x}]",

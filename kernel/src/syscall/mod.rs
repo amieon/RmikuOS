@@ -1,5 +1,6 @@
 mod fs;
 mod process;
+mod thread;
 
 pub const SYSCALL_EXIT: usize = 0;
 pub const SYSCALL_YIELD: usize = 1;
@@ -17,13 +18,14 @@ pub const SYSCALL_CHDIR: usize = 12;
 pub const SYSCALL_GETCWD: usize = 13;
 pub const SYSCALL_STAT: usize = 14;
 pub const SYSCALL_FSTAT: usize = 15;
+pub const SYSCALL_THREAD_CREATE: usize = 16;
+pub const SYSCALL_THREAD_EXIT: usize = 17;
+pub const SYSCALL_THREAD_JOIN: usize = 18;
 
 
-pub fn syscall(id: usize, args: [usize; 3]) -> isize {
+pub fn syscall(id: usize, args: [usize; 6]) -> isize {
     match id {
-        SYSCALL_EXIT => {
-            process::sys_exit(args[0] as i32);
-        }
+        SYSCALL_EXIT => process::sys_exit(args[0] as i32),
         SYSCALL_YIELD => process::sys_yield(),
         SYSCALL_WRITE => fs::sys_write(args[0], args[1], args[2]),
         SYSCALL_GETPID => process::sys_getpid(),
@@ -39,6 +41,9 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_GETCWD => fs::sys_getcwd(args[0], args[1]),
         SYSCALL_STAT => fs::sys_stat(args[0], args[1], args[2]),
         SYSCALL_FSTAT => fs::sys_fstat(args[0], args[1]),
+        SYSCALL_THREAD_CREATE => thread::sys_thread_create(args[0], args[1], args[2], args[3]),
+        SYSCALL_THREAD_EXIT => thread::sys_thread_exit(args[0] as i32),
+        SYSCALL_THREAD_JOIN => thread::sys_sthread_join(args[0], args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

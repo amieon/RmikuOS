@@ -5,17 +5,19 @@ mod processor;
 mod switch;
 mod thread;
 mod process;
+mod manager_wrapper;
 
 pub use context::TaskContext;
 pub use kernel_stack::KernelStack;
 pub use thread::{ThreadControlBlock, ThreadStatus};
 
 
+
 pub type Pid = usize;
 pub type Tid = usize;
 
 
-pub use manager::{
+pub use manager_wrapper::{
     init,
     run_first_task,
     run_tasks,
@@ -39,4 +41,8 @@ pub use manager::{
     close_fd_current,
     current_cwd,
     set_current_cwd,
+
+    thread_create_current,
+    thread_exit_current,
+    thread_join_current,
 };

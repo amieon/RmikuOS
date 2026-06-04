@@ -250,6 +250,7 @@ impl MemorySet {
 
         let app_perm = MapPermission::R
             .union(MapPermission::X)
+            .union(MapPermission::W)
             .union(MapPermission::U);
 
         memory_set.insert_framed_area(

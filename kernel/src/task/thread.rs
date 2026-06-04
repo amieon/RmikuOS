@@ -75,6 +75,42 @@ impl ThreadControlBlock {
         }
     }
 
+    pub fn new_user_thread(
+        tid: Tid,
+        pid: Pid,
+        entry: usize,
+        user_sp: usize,
+        arg0: usize,
+        arg1: usize,
+    ) -> Self {
+        let mut trap_cx =
+            TrapContext::app_init_context(entry, user_sp);
+
+        trap_cx.set_thread_args(arg0, arg1);
+
+        let kernel_stack = KernelStack::new();
+
+        let trap_cx_ptr = unsafe {
+            kernel_stack.push_context(trap_cx)
+        };
+
+        let task_cx = TaskContext::goto_task_entry(trap_cx_ptr as usize);
+
+        Self {
+            tid,
+            pid,
+
+            kernel_stack,
+            trap_cx_addr: trap_cx_ptr as usize,
+            task_cx,
+
+            status: ThreadStatus::Ready,
+            block_reason: BlockReason::None,
+
+            exit_code: 0,
+        }
+    }
+
     pub fn trap_cx(&self) -> &TrapContext {
         unsafe {
             &*(self.trap_cx_addr as *const TrapContext)
@@ -107,3 +143,4 @@ impl ThreadControlBlock {
         self.status == ThreadStatus::Zombie
     }
 }
+

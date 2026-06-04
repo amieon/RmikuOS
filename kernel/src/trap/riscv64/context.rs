@@ -112,3 +112,9 @@ impl TrapContext {
         self.x[REG_A1] = argv; // a1
     }
 }
+
+impl TrapContext {
+    pub fn set_thread_args(&mut self, func: usize, arg: usize) {
+        self.set_app_args(func, arg);
+    }
+}

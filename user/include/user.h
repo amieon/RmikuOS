@@ -76,5 +76,32 @@ static int append_int(char *buf, int pos, int x) {
     return pos;
 }
 
+char c(long x){
+    if(x <= 9)return x+'0';
+    return x-10+'a';
+}
 
+static inline void put_hex(long x) {
+    char buf[32];
+    int i = 0;
 
+    if (x == 0) {
+        put_char('0');
+        return;
+    }
+
+    if (x < 0) {
+        put_char('-');
+        x = -x;
+    }
+
+    while (x > 0) {
+        buf[i++] = c(x % 16);
+        x /= 16;
+    }
+
+    while (i > 0) {
+        i--;
+        put_char(buf[i]);
+    }
+}

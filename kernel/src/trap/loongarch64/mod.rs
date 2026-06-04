@@ -78,7 +78,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
         ECODE_SYS => {
             cx.era += 4;
             let syscall_id = cx.r[11]; // a7
-            let args = [cx.r[4], cx.r[5], cx.r[6]]; // a0, a1, a2
+            let args = [cx.r[4], cx.r[5], cx.r[6], cx.r[7], cx.r[8], cx.r[9]]; // a0, a1, a2
             cx.r[4] = handle_syscall(syscall_id, args) as usize; // return in a0
         }
         ECODE_BRK => {
@@ -153,7 +153,7 @@ fn clear_timer_interrupt() {
     }
 }
 
-fn handle_syscall(id: usize, args: [usize; 3]) -> isize {
+fn handle_syscall(id: usize, args: [usize; 6]) -> isize {
     // trap_println!(
     //     "[trap] syscall id={} args=[{:#x}, {:#x}, {:#x}]",
     //     id,
