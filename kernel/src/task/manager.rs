@@ -790,11 +790,17 @@ pub fn fork_current() -> isize {
         let mut child_trap_cx =
             *manager.thread(parent_tid).trap_cx();
 
+        /*
+         * fork 在子进程返回 0。
+         */
         child_trap_cx.set_syscall_ret(0);
 
         let child_fd_table = manager.process(parent_pid).fd_table.clone();
         let child_free_fds = manager.process(parent_pid).free_fds.clone();
         let child_cwd = manager.process(parent_pid).cwd.clone();
+
+        let parent_tickets = manager.process(parent_pid).tickets;
+        let parent_pass = manager.process(parent_pid).pass;
 
         let mut child_process = ProcessControlBlock::fork_from(
             child_pid,
@@ -803,6 +809,8 @@ pub fn fork_current() -> isize {
             child_fd_table,
             child_free_fds,
             child_cwd,
+            parent_tickets,
+            parent_pass,
         );
 
         let child_thread = ThreadControlBlock::new_main_thread(
@@ -820,8 +828,9 @@ pub fn fork_current() -> isize {
         manager.insert_thread(child_thread);
 
         log::info!(
-            "[task] fork: parent_pid={} child_pid={}, child_tid={}",
+            "[task] fork: parent_pid={} parent_tid={} child_pid={} child_tid={}",
             parent_pid,
+            parent_tid,
             child_pid,
             child_tid,
         );
@@ -830,6 +839,7 @@ pub fn fork_current() -> isize {
     };
 
     child_pid as isize
+
 }
 
 pub fn exit_current_and_run_next(exit_code: i32) -> ! {
