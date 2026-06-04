@@ -1,19 +1,22 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::mm::{MemorySet,PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
+use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
 use crate::sync::spin::Mutex;
 use crate::trap::TrapContext;
 
 use super::context::TaskContext;
+use super::process::{Pid, ProcessControlBlock};
 use super::processor;
 use super::switch::__switch;
-use super::process::{ProcessControlBlock, BlockReason, Pid};
-use super::thread::{ThreadControlBlock, ThreadStatus, Tid};
+use super::thread::{BlockReason, ThreadControlBlock, ThreadStatus, Tid};
 
 unsafe extern "C" {
     fn __restore_user(cx: *const TrapContext) -> !;
 }
+
+static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
 pub struct TaskManager {
     processes: Vec<Option<ProcessControlBlock>>,
@@ -32,9 +35,9 @@ impl TaskManager {
     pub const fn new() -> Self {
         Self {
             processes: Vec::new(),
-            free_pids: Vec::new(),
-
             threads: Vec::new(),
+
+            free_pids: Vec::new(),
             free_tids: Vec::new(),
         }
     }
@@ -47,99 +50,263 @@ impl TaskManager {
         self.free_tids.pop().unwrap_or(self.threads.len())
     }
 
-    fn process(&self, pid: Pid) -> &ProcessControlBlock {
+    fn insert_process(&mut self, process: ProcessControlBlock) {
+        let pid = process.pid;
+
+        if pid >= self.processes.len() {
+            self.processes.resize_with(pid + 1, || None);
+        }
+
+        assert!(
+            self.processes[pid].is_none(),
+            "[task] process slot already used: pid={}",
+            pid,
+        );
+
+        self.processes[pid] = Some(process);
+    }
+
+    fn insert_thread(&mut self, thread: ThreadControlBlock) {
+        let tid = thread.tid;
+
+        if tid >= self.threads.len() {
+            self.threads.resize_with(tid + 1, || None);
+        }
+
+        assert!(
+            self.threads[tid].is_none(),
+            "[task] thread slot already used: tid={}",
+            tid,
+        );
+
+        self.threads[tid] = Some(thread);
+    }
+
+    pub fn process(&self, pid: Pid) -> &ProcessControlBlock {
         self.processes
             .get(pid)
             .and_then(|slot| slot.as_ref())
-            .expect("invalid pid")
+            .expect("[task] invalid pid")
     }
 
     fn process_mut(&mut self, pid: Pid) -> &mut ProcessControlBlock {
         self.processes
             .get_mut(pid)
             .and_then(|slot| slot.as_mut())
-            .expect("invalid pid")
+            .expect("[task] invalid pid")
     }
 
-    fn thread(&self, tid: Tid) -> &ThreadControlBlock {
+    pub fn thread(&self, tid: Tid) -> &ThreadControlBlock {
         self.threads
             .get(tid)
             .and_then(|slot| slot.as_ref())
-            .expect("invalid tid")
+            .expect("[task] invalid tid")
     }
 
     fn thread_mut(&mut self, tid: Tid) -> &mut ThreadControlBlock {
         self.threads
             .get_mut(tid)
             .and_then(|slot| slot.as_mut())
-            .expect("invalid tid")
+            .expect("[task] invalid tid")
     }
 
-    fn try_task(&self, pid: usize) -> Option<&TaskControlBlock> {
-        self.tasks.get(pid)?.as_ref()
+    fn try_process(&self, pid: Pid) -> Option<&ProcessControlBlock> {
+        self.processes.get(pid)?.as_ref()
     }
 
-    fn try_task_mut(&mut self, pid: usize) -> Option<&mut TaskControlBlock> {
-        self.tasks.get_mut(pid)?.as_mut()
+    fn try_thread(&self, tid: Tid) -> Option<&ThreadControlBlock> {
+        self.threads.get(tid)?.as_ref()
     }
 
-    fn reap_task(&mut self, pid: usize) {
-        let dead = self
-            .tasks
-            .get_mut(pid)
-            .expect("invalid reap pid")
-            .take();
-
-        assert!(dead.is_some(), "reap empty task slot");
-
-        self.free_pids.push(pid);
+    fn pid_of_tid(&self, tid: Tid) -> Pid {
+        self.thread(tid).pid
     }
 
-    fn find_next_ready(&self) -> Option<usize> {
-        for id in 0..self.tasks.len() {
-            let Some(task) = self.tasks[id].as_ref() else {
+    fn current_pid(&self) -> Pid {
+        let tid = processor::current_tid();
+        self.pid_of_tid(tid)
+    }
+
+    fn enqueue_ready_thread(&mut self, tid: Tid) {
+        let pid = self.thread(tid).pid;
+
+        if self.thread(tid).status != ThreadStatus::Ready {
+            return;
+        }
+
+        if !self.process(pid).ready_threads.contains(&tid) {
+            self.process_mut(pid).ready_threads.push(tid);
+        }
+    }
+
+    fn process_has_ready_thread(&self, pid: Pid) -> bool {
+        let Some(process) = self.try_process(pid) else {
+            return false;
+        };
+
+        process.ready_threads.iter().any(|&tid| {
+            self.try_thread(tid)
+                .map(|thread| thread.status == ThreadStatus::Ready)
+                .unwrap_or(false)
+        })
+    }
+
+    fn find_next_ready_thread(&mut self) -> Option<Tid> {
+        let mut best: Option<(Pid, usize)> = None;
+
+        for pid in 0..self.processes.len() {
+            let Some(process) = self.processes[pid].as_ref() else {
                 continue;
             };
 
-            if task.status == TaskStatus::Ready {
-                return Some(id);
+            if !self.process_has_ready_thread(pid) {
+                continue;
+            }
+
+            match best {
+                None => best = Some((pid, process.pass)),
+                Some((_, best_pass)) if process.pass < best_pass => {
+                    best = Some((pid, process.pass));
+                }
+                _ => {}
             }
         }
-        None
+
+        let pid = best.map(|(pid, _)| pid)?;
+
+        {
+            let process = self.process_mut(pid);
+            process.pass = process.pass.wrapping_add(process.stride);
+        }
+
+        self.pick_ready_thread_in_process(pid)
     }
 
-    fn mark_current_ready(&mut self, id: usize) {
-        let task = self.task_mut(id);
-        if task.status == TaskStatus::Running {
-            task.status = TaskStatus::Ready;
+    fn pick_ready_thread_in_process(&mut self, pid: Pid) -> Option<Tid> {
+        loop {
+            let tid = {
+                let process = self.process_mut(pid);
+
+                if process.ready_threads.is_empty() {
+                    return None;
+                }
+
+                process.ready_threads.remove(0)
+            };
+
+            let Some(thread) = self.try_thread(tid) else {
+                continue;
+            };
+
+            if thread.status == ThreadStatus::Ready {
+                return Some(tid);
+            }
         }
     }
 
-    fn mark_current_zombie(&mut self, id: usize, exit_code: i32) {
-        let task = self.task_mut(id);
-        task.status = TaskStatus::Zombie;
-        task.exit_code = exit_code;
+    fn mark_thread_ready(&mut self, tid: Tid) {
+        {
+            let thread = self.thread_mut(tid);
+
+            if thread.status == ThreadStatus::Running {
+                thread.status = ThreadStatus::Ready;
+            }
+        }
+
+        self.enqueue_ready_thread(tid);
     }
 
-    fn task_cx_ptr(&mut self, id: usize) -> *mut TaskContext {
-        self.task_mut(id).task_cx_ptr()
+    fn mark_thread_zombie(&mut self, tid: Tid, exit_code: i32) {
+        let pid = self.thread(tid).pid;
+
+        {
+            let thread = self.thread_mut(tid);
+            thread.status = ThreadStatus::Zombie;
+            thread.block_reason = BlockReason::None;
+            thread.exit_code = exit_code;
+        }
+
+        self.process_mut(pid).exit_code = exit_code;
     }
 
-    fn prepare_task(&mut self, id: usize) -> (PhysPageNum, usize, usize, *mut TaskContext) {
-        let task = self.task_mut(id);
-        task.kernel_stack.check_guard();
-        task.status = TaskStatus::Running;
+    fn thread_cx_ptr(&mut self, tid: Tid) -> *mut TaskContext {
+        self.thread_mut(tid).task_cx_ptr()
+    }
+
+    fn prepare_thread(
+        &mut self,
+        tid: Tid,
+    ) -> (Pid, PhysPageNum, usize, usize, *mut TaskContext) {
+        let pid = self.thread(tid).pid;
+        let root = self.process(pid).user_space.root_ppn();
+
+        let thread = self.thread_mut(tid);
+
+        thread.kernel_stack.check_guard();
+        thread.status = ThreadStatus::Running;
+
         (
-            task.root_ppn(),
-            task.kernel_stack.top(),
-            task.trap_cx_addr,
-            task.task_cx_ptr(),
+            pid,
+            root,
+            thread.kernel_stack.top(),
+            thread.trap_cx_addr,
+            thread.task_cx_ptr(),
         )
     }
 
+    fn block_thread(&mut self, tid: Tid, reason: BlockReason) {
+        let thread = self.thread_mut(tid);
+        thread.status = ThreadStatus::Blocking;
+        thread.block_reason = reason;
+    }
+
+    fn wake_sleeping_threads(&mut self, now: usize) {
+        let mut wake_list = Vec::new();
+
+        for tid in 0..self.threads.len() {
+            let Some(thread) = self.threads[tid].as_ref() else {
+                continue;
+            };
+
+            if thread.status != ThreadStatus::Blocking {
+                continue;
+            }
+
+            match thread.block_reason {
+                BlockReason::Sleep { wake_tick } if now >= wake_tick => {
+                    wake_list.push(tid);
+                }
+                _ => {}
+            }
+        }
+
+        for tid in wake_list {
+            let wake_tick = match self.thread(tid).block_reason {
+                BlockReason::Sleep { wake_tick } => wake_tick,
+                _ => 0,
+            };
+
+            {
+                let thread = self.thread_mut(tid);
+
+                log::info!(
+                    "[task] wake thread {} from sleep: now={}, wake_tick={}",
+                    tid,
+                    now,
+                    wake_tick,
+                );
+
+                thread.status = ThreadStatus::Ready;
+                thread.block_reason = BlockReason::None;
+            }
+
+            self.enqueue_ready_thread(tid);
+        }
+    }
+
     pub fn read_current_user_bytes(&self, user_buf: usize, len: usize) -> Option<Vec<u8>> {
-        let current = processor::current_task_id();
-        let task = self.try_task(current)?;
+        let pid = self.current_pid();
+        let process = self.try_process(pid)?;
 
         let mut bytes = Vec::new();
 
@@ -148,27 +315,35 @@ impl TaskManager {
             let vpn = VirtAddr(va).floor();
             let page_offset = va & (PAGE_SIZE - 1);
 
-            let pte = task.user_space.translate(vpn)?;
+            let pte = process.user_space.translate(vpn)?;
 
             let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
             let kva = crate::mm::kernel_phys_to_virt(pa);
 
-            let byte = unsafe { core::ptr::read_volatile(kva as *const u8) };
+            let byte = unsafe {
+                core::ptr::read_volatile(kva as *const u8)
+            };
+
             bytes.push(byte);
         }
 
         Some(bytes)
     }
 
-    fn write_current_user_bytes(&self, task_id: usize, user_buf: usize, data: &[u8]) -> Option<usize> {
-        let task = self.try_task(task_id)?;
+    fn write_user_bytes_by_pid(
+        &self,
+        pid: Pid,
+        user_buf: usize,
+        data: &[u8],
+    ) -> Option<usize> {
+        let process = self.try_process(pid)?;
 
         for (offset, byte) in data.iter().enumerate() {
             let va = user_buf.checked_add(offset)?;
             let vpn = VirtAddr(va).floor();
             let page_offset = va & (PAGE_SIZE - 1);
 
-            let pte = task.user_space.translate(vpn)?;
+            let pte = process.user_space.translate(vpn)?;
 
             let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
             let kva = crate::mm::kernel_phys_to_virt(pa);
@@ -181,92 +356,112 @@ impl TaskManager {
         Some(data.len())
     }
 
-    fn has_alive_tasks(&self) -> bool {
-        self.tasks.iter().any(|slot| {
-            let Some(task) = slot.as_ref() else {
-                return false;
-            };
-
-            matches!(
-                task.status,
-                TaskStatus::Ready | TaskStatus::Running | TaskStatus::Blocking | TaskStatus::Zombie
-            )
-        })
-    }
-
-    fn block_current(&mut self, id: usize, reason: BlockReason) {
-        let task = self.task_mut(id);
-        task.status = TaskStatus::Blocking;
-        task.block_reason = reason;
-    }
-
-    fn wake_parent_waiting_for(&mut self, child_pid: usize) {
-        let parent = match self.try_task(child_pid).and_then(|task| task.parent) {
-            Some(parent_pid) => parent_pid,
-            None => return,
-        };
-
-        let Some(parent_task) = self.try_task_mut(parent) else {
-            return;
-        };
-
-        if parent_task.status != TaskStatus::Blocking {
-            return;
-        }
-
-        match parent_task.block_reason {
-            BlockReason::WaitPid { pid } => {
-                let matched = pid == -1 || pid as usize == child_pid;
-
-                if matched {
-                    parent_task.status = TaskStatus::Ready;
-                    parent_task.block_reason = BlockReason::None;
-
-                    log::info!(
-                        "[task] wake parent task {} waiting for child {}",
-                        parent,
-                        child_pid,
-                    );
-                }
-            }
-            _ => {}
-        }
-    }
-    fn write_user_i32(&self, task_id: usize, user_ptr: usize, value: i32) -> Option<()> {
+    fn write_user_i32(&self, pid: Pid, user_ptr: usize, value: i32) -> Option<()> {
         if user_ptr == 0 {
             return Some(());
         }
 
-        let task = self.try_task(task_id)?;
         let bytes = value.to_ne_bytes();
-
-        for (offset, byte) in bytes.iter().enumerate() {
-            let va = user_ptr.checked_add(offset)?;
-            let vpn = VirtAddr(va).floor();
-            let page_offset = va & (PAGE_SIZE - 1);
-
-            let pte = task.user_space.translate(vpn)?;
-
-            let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
-            let kva = crate::mm::kernel_phys_to_virt(pa);
-
-            unsafe {
-                core::ptr::write_volatile(kva as *mut u8, *byte);
-            }
-        }
-
+        self.write_user_bytes_by_pid(pid, user_ptr, &bytes)?;
         Some(())
     }
 
+    fn process_is_zombie(&self, pid: Pid) -> bool {
+        let Some(process) = self.try_process(pid) else {
+            return false;
+        };
 
-    fn try_waitpid(&mut self, current: usize, pid: isize, exit_code_ptr: usize) -> WaitPidAction {
-        // 没有子进程。
-        if self.task(current).children.is_empty() {
+        if process.threads.is_empty() {
+            return false;
+        }
+
+        process.threads.iter().all(|&tid| {
+            matches!(
+                self.try_thread(tid).map(|thread| thread.status),
+                Some(ThreadStatus::Zombie | ThreadStatus::Dead)
+            )
+        })
+    }
+
+    fn reap_process(&mut self, pid: Pid) {
+        let process = self
+            .processes
+            .get_mut(pid)
+            .expect("[task] invalid reap pid")
+            .take();
+
+        let Some(process) = process else {
+            panic!("[task] reap empty process slot: pid={}", pid);
+        };
+
+        for tid in process.threads {
+            if let Some(slot) = self.threads.get_mut(tid) {
+                let old = slot.take();
+
+                if old.is_some() {
+                    self.free_tids.push(tid);
+                }
+            }
+        }
+
+        self.free_pids.push(pid);
+    }
+
+    fn wake_parent_waiting_for(&mut self, child_pid: Pid) {
+        let parent_pid = match self.try_process(child_pid).and_then(|process| process.parent) {
+            Some(parent_pid) => parent_pid,
+            None => return,
+        };
+
+        let parent_threads = match self.try_process(parent_pid) {
+            Some(parent) => parent.threads.clone(),
+            None => return,
+        };
+
+        for tid in parent_threads {
+            let should_wake = match self.try_thread(tid) {
+                Some(thread) if thread.status == ThreadStatus::Blocking => {
+                    match thread.block_reason {
+                        BlockReason::WaitPid { pid } => {
+                            pid == -1 || pid as usize == child_pid
+                        }
+                        _ => false,
+                    }
+                }
+                _ => false,
+            };
+
+            if should_wake {
+                {
+                    let thread = self.thread_mut(tid);
+                    thread.status = ThreadStatus::Ready;
+                    thread.block_reason = BlockReason::None;
+                }
+
+                self.enqueue_ready_thread(tid);
+
+                log::info!(
+                    "[task] wake parent pid={} tid={} waiting for child {}",
+                    parent_pid,
+                    tid,
+                    child_pid,
+                );
+            }
+        }
+    }
+
+    fn try_waitpid(
+        &mut self,
+        current_pid: Pid,
+        pid: isize,
+        exit_code_ptr: usize,
+    ) -> WaitPidAction {
+        if self.process(current_pid).children.is_empty() {
             return WaitPidAction::Return(-1);
         }
 
         let mut has_matched_child = false;
-        let children_snapshot = self.task(current).children.clone();
+        let children_snapshot = self.process(current_pid).children.clone();
 
         for child_pid in children_snapshot {
             let matched = pid == -1 || pid as usize == child_pid;
@@ -277,30 +472,36 @@ impl TaskManager {
 
             has_matched_child = true;
 
-            let Some(child) = self.try_task(child_pid) else {
+            if !self.process_is_zombie(child_pid) {
                 continue;
-            };
-
-            if child.status == TaskStatus::Zombie {
-                let code = child.exit_code;
-
-                if self.write_user_i32(current, exit_code_ptr, code).is_none() {
-                    return WaitPidAction::Return(-1);
-                }
-
-                self.task_mut(current).children.retain(|&x| x != child_pid);
-
-                self.reap_task(child_pid);
-
-                log::info!(
-                    "[task] task {} collected child {}, exit_code={}",
-                    current,
-                    child_pid,
-                    code,
-                );
-
-                return WaitPidAction::Return(child_pid as isize);
             }
+
+            let code = self
+                .try_process(child_pid)
+                .map(|child| child.exit_code)
+                .unwrap_or(0);
+
+            if self
+                .write_user_i32(current_pid, exit_code_ptr, code)
+                .is_none()
+            {
+                return WaitPidAction::Return(-1);
+            }
+
+            self.process_mut(current_pid)
+                .children
+                .retain(|&x| x != child_pid);
+
+            self.reap_process(child_pid);
+
+            log::info!(
+                "[task] pid {} collected child {}, exit_code={}",
+                current_pid,
+                child_pid,
+                code,
+            );
+
+            return WaitPidAction::Return(child_pid as isize);
         }
 
         if !has_matched_child {
@@ -309,250 +510,57 @@ impl TaskManager {
 
         WaitPidAction::Block
     }
-    fn wake_sleeping_tasks(&mut self, now: usize) {
-        for slot in self.tasks.iter_mut() {
-            let Some(task) = slot.as_mut() else {
-                continue;
-            };
 
-            if task.status != TaskStatus::Blocking {
-                continue;
-            }
-
-            match task.block_reason {
-                BlockReason::Sleep { wake_tick } if now >= wake_tick => {
-                    log::info!(
-                        "[task] wake task {} from sleep: now={}, wake_tick={}",
-                        task.id,
-                        now,
-                        wake_tick,
-                    );
-
-                    task.status = TaskStatus::Ready;
-                    task.block_reason = BlockReason::None;
-                }
-                _ => {}
-            }
-        }
-    }
-
-
-
-    fn get_file(&self, task_id: usize, fd: usize) -> Option<crate::fs::FileRef> {
-        self.task(task_id)
+    fn get_file(&self, pid: Pid, fd: usize) -> Option<crate::fs::FileRef> {
+        self.process(pid)
             .fd_table
             .get(fd)?
             .as_ref()
             .cloned()
     }
 
-    fn alloc_fd(&mut self, task_id: usize, file: crate::fs::FileRef) -> isize {
-        let task = self.task_mut(task_id);
+    fn alloc_fd(&mut self, pid: Pid, file: crate::fs::FileRef) -> isize {
+        let process = self.process_mut(pid);
 
-        if let Some(fd) = task.free_fds.pop() {
+        if let Some(fd) = process.free_fds.pop() {
             assert!(
-                fd < task.fd_table.len(),
+                fd < process.fd_table.len(),
                 "free fd out of range: fd={}, len={}",
                 fd,
-                task.fd_table.len(),
+                process.fd_table.len(),
             );
 
             assert!(
-                task.fd_table[fd].is_none(),
+                process.fd_table[fd].is_none(),
                 "free fd slot is not empty: fd={}",
                 fd,
             );
 
-            task.fd_table[fd] = Some(file);
+            process.fd_table[fd] = Some(file);
             return fd as isize;
         }
 
-        let fd = task.fd_table.len();
-        task.fd_table.push(Some(file));
+        let fd = process.fd_table.len();
+        process.fd_table.push(Some(file));
         fd as isize
     }
 
-    fn close_fd(&mut self, task_id: usize, fd: usize) -> isize {
-        let task = self.task_mut(task_id);
+    fn close_fd(&mut self, pid: Pid, fd: usize) -> isize {
+        let process = self.process_mut(pid);
 
-        if fd >= task.fd_table.len() {
+        if fd >= process.fd_table.len() {
             return -1;
         }
 
-        if task.fd_table[fd].take().is_none() {
+        if process.fd_table[fd].take().is_none() {
             return -1;
         }
 
-        
-        //标准 fd 也允许 close。
-        //close(0)、close(1)、close(2) 后也可以被后续 open 复用。
-        //这符合 Unix 直觉。
-  
-        task.free_fds.push(fd);
+        process.free_fds.push(fd);
 
         0
     }
 }
-
-pub fn sleep_current_and_run_next(ticks: usize) -> isize {
-    if ticks == 0 {
-        return 0;
-    }
-
-    let current = processor::current_task_id();
-    let wake_tick = crate::timer::ticks() + ticks;
-
-    let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
-
-        log::info!(
-            "[task] task {} sleep until tick {}",
-            current,
-            wake_tick,
-        );
-
-        manager.block_current(
-            current,
-            BlockReason::Sleep {
-                wake_tick,
-            },
-        );
-
-        manager.task_cx_ptr(current)
-    };
-
-    let idle_cx_ptr = processor::idle_task_cx_ptr();
-
-    unsafe {
-        __switch(task_cx_ptr, idle_cx_ptr);
-    }
-
-    0
-}
-pub fn waitpid_current(pid: isize, exit_code_ptr: usize) -> isize {
-    let current = processor::current_task_id();
-
-    loop {
-        let action = {
-            let mut manager = TASK_MANAGER.lock();
-            manager.try_waitpid(current, pid, exit_code_ptr)
-        };
-
-        match action {
-            WaitPidAction::Return(ret) => return ret,
-            WaitPidAction::Block => {
-                let task_cx_ptr = {
-                    let mut manager = TASK_MANAGER.lock();
-
-                    log::info!(
-                        "[task] task {} waitpid(pid={}) blocking",
-                        current,
-                        pid,
-                    );
-
-                    manager.block_current(
-                        current,
-                        BlockReason::WaitPid {
-                            pid,
-                        },
-                    );
-
-                    manager.task_cx_ptr(current)
-                };
-
-                let idle_cx_ptr = processor::idle_task_cx_ptr();
-
-                unsafe {
-                    __switch(task_cx_ptr, idle_cx_ptr);
-                }
-
-                /*
-                 * 被 child exit 唤醒后，会回到这里，然后 loop 重新检查 zombie child。
-                 */
-            }
-        }
-    }
-}
-pub fn fork_current() -> isize {
-    let parent = processor::current_task_id();
-
-    let child_pid = {
-        let mut manager = TASK_MANAGER.lock();
-
-        let child_pid = manager.alloc_pid();
-
-
-        let child_user_space =
-            MemorySet::from_existed_user(&manager.task(parent).user_space);
-
-
-        let mut child_trap_cx = *manager.task(parent).trap_cx();
-
-
-        let child_fd_table = manager.task(parent).fd_table.clone();
-        let child_free_fds = manager.task(parent).free_fds.clone();
-        let child_cwd = manager.task(parent).cwd.clone();
-
-        child_trap_cx.set_syscall_ret(0);
-
-
-        let child = TaskControlBlock::fork_from(
-            child_pid,
-            parent,
-            child_user_space,
-            child_trap_cx,
-            child_fd_table,
-            child_free_fds,
-            child_cwd,
-        );
-
-        manager.task_mut(parent).children.push(child_pid);
-        manager.insert_task(child);
-
-        log::info!(
-            "[task] fork: parent={} child={}",
-            parent,
-            child_pid,
-        );
-
-        child_pid
-    };
-
-
-    child_pid as isize
-}
-
-pub fn exit_current_and_run_next(exit_code: i32) -> ! {
-    let current = processor::current_task_id();
-
-    let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
-
-        log::info!(
-            "[task] task {} exited with code {}",
-            current,
-            exit_code,
-        );
-
-        manager.mark_current_zombie(current, exit_code);
-        manager.task_mut(current).block_reason = BlockReason::None;
-
-        manager.wake_parent_waiting_for(current);
-
-        manager.task_cx_ptr(current)
-    };
-
-    let idle_cx_ptr = processor::idle_task_cx_ptr();
-
-    unsafe {
-        __switch(task_cx_ptr, idle_cx_ptr);
-    }
-
-    panic!("zombie task returned after exit");
-}
-
-static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
-
 
 pub fn init() {
     let init_path = "/bin/shell";
@@ -569,7 +577,7 @@ pub fn init() {
     let mut process = ProcessControlBlock::new(
         0,
         user_space,
-        alloc::string::String::from("/"),
+        String::from("/"),
     );
 
     let thread = ThreadControlBlock::new_main_thread(
@@ -597,27 +605,30 @@ pub fn run_tasks() -> ! {
         let next = {
             let mut manager = TASK_MANAGER.lock();
             let now = crate::timer::ticks();
-            manager.wake_sleeping_tasks(now);
 
-            if let Some(id) = manager.find_next_ready() {
-                let (root, kstack_top, trap_cx_addr, task_cx_ptr) = manager.prepare_task(id);
+            manager.wake_sleeping_threads(now);
+
+            if let Some(tid) = manager.find_next_ready_thread() {
+                let (pid, root, kstack_top, trap_cx_addr, task_cx_ptr) =
+                    manager.prepare_thread(tid);
 
                 log::info!(
-                    "[task] schedule task {}: root={:?}, kstack_top={:#x}, trap_cx={:#x}",
-                    id,
+                    "[task] schedule pid={} tid={}: root={:?}, kstack_top={:#x}, trap_cx={:#x}",
+                    pid,
+                    tid,
                     root,
                     kstack_top,
                     trap_cx_addr,
                 );
 
-                Some((id, root, task_cx_ptr))
+                Some((tid, root, task_cx_ptr))
             } else {
                 None
             }
         };
 
-        if let Some((id, root, task_cx_ptr)) = next {
-            processor::set_current(Some(id));
+        if let Some((tid, root, task_cx_ptr)) = next {
+            processor::set_current_tid(Some(tid));
 
             crate::mm::activate_page_table(root);
 
@@ -627,7 +638,7 @@ pub fn run_tasks() -> ! {
                 __switch(idle_cx_ptr, task_cx_ptr);
             }
 
-            processor::set_current(None);
+            processor::set_current_tid(None);
         } else {
             crate::arch::enable_interrupt();
             crate::arch::wait_for_interrupt();
@@ -638,11 +649,11 @@ pub fn run_tasks() -> ! {
 
 #[no_mangle]
 pub extern "C" fn __task_entry() -> ! {
-    let current = processor::current_task_id();
+    let current_tid = processor::current_tid();
 
     let trap_cx_addr = {
         let manager = TASK_MANAGER.lock();
-        manager.task(current).trap_cx_addr
+        manager.thread(current_tid).trap_cx_addr
     };
 
     unsafe {
@@ -650,13 +661,49 @@ pub extern "C" fn __task_entry() -> ! {
     }
 }
 
-pub fn suspend_current_and_run_next() -> isize {
-    let current = processor::current_task_id();
+pub fn sleep_current_and_run_next(ticks: usize) -> isize {
+    if ticks == 0 {
+        return 0;
+    }
+
+    let current_tid = processor::current_tid();
+    let wake_tick = crate::timer::ticks() + ticks;
 
     let task_cx_ptr = {
         let mut manager = TASK_MANAGER.lock();
-        manager.mark_current_ready(current);
-        manager.task_cx_ptr(current)
+
+        log::info!(
+            "[task] thread {} sleep until tick {}",
+            current_tid,
+            wake_tick,
+        );
+
+        manager.block_thread(
+            current_tid,
+            BlockReason::Sleep {
+                wake_tick,
+            },
+        );
+
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+
+    0
+}
+
+pub fn suspend_current_and_run_next() -> isize {
+    let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+        manager.mark_thread_ready(current_tid);
+        manager.thread_cx_ptr(current_tid)
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
@@ -669,12 +716,12 @@ pub fn suspend_current_and_run_next() -> isize {
 }
 
 pub fn preempt_current_and_run_next() {
-    let current = processor::current_task_id();
+    let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
         let mut manager = TASK_MANAGER.lock();
-        manager.mark_current_ready(current);
-        manager.task_cx_ptr(current)
+        manager.mark_thread_ready(current_tid);
+        manager.thread_cx_ptr(current_tid)
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
@@ -684,9 +731,149 @@ pub fn preempt_current_and_run_next() {
     }
 }
 
+pub fn waitpid_current(pid: isize, exit_code_ptr: usize) -> isize {
+    let current_tid = processor::current_tid();
+
+    loop {
+        let action = {
+            let mut manager = TASK_MANAGER.lock();
+            let current_pid = manager.pid_of_tid(current_tid);
+            manager.try_waitpid(current_pid, pid, exit_code_ptr)
+        };
+
+        match action {
+            WaitPidAction::Return(ret) => return ret,
+            WaitPidAction::Block => {
+                let task_cx_ptr = {
+                    let mut manager = TASK_MANAGER.lock();
+
+                    log::info!(
+                        "[task] tid {} waitpid(pid={}) blocking",
+                        current_tid,
+                        pid,
+                    );
+
+                    manager.block_thread(
+                        current_tid,
+                        BlockReason::WaitPid {
+                            pid,
+                        },
+                    );
+
+                    manager.thread_cx_ptr(current_tid)
+                };
+
+                let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+                unsafe {
+                    __switch(task_cx_ptr, idle_cx_ptr);
+                }
+            }
+        }
+    }
+}
+
+pub fn fork_current() -> isize {
+    let parent_tid = processor::current_tid();
+
+    let child_pid = {
+        let mut manager = TASK_MANAGER.lock();
+
+        let parent_pid = manager.pid_of_tid(parent_tid);
+
+        let child_pid = manager.alloc_pid();
+        let child_tid = manager.alloc_tid();
+
+        let child_user_space =
+            MemorySet::from_existed_user(&manager.process(parent_pid).user_space);
+
+        let mut child_trap_cx =
+            *manager.thread(parent_tid).trap_cx();
+
+        child_trap_cx.set_syscall_ret(0);
+
+        let child_fd_table = manager.process(parent_pid).fd_table.clone();
+        let child_free_fds = manager.process(parent_pid).free_fds.clone();
+        let child_cwd = manager.process(parent_pid).cwd.clone();
+
+        let mut child_process = ProcessControlBlock::fork_from(
+            child_pid,
+            parent_pid,
+            child_user_space,
+            child_fd_table,
+            child_free_fds,
+            child_cwd,
+        );
+
+        let child_thread = ThreadControlBlock::new_main_thread(
+            child_tid,
+            child_pid,
+            child_trap_cx,
+        );
+
+        child_process.threads.push(child_tid);
+        child_process.ready_threads.push(child_tid);
+
+        manager.process_mut(parent_pid).children.push(child_pid);
+
+        manager.insert_process(child_process);
+        manager.insert_thread(child_thread);
+
+        log::info!(
+            "[task] fork: parent_pid={} child_pid={}, child_tid={}",
+            parent_pid,
+            child_pid,
+            child_tid,
+        );
+
+        child_pid
+    };
+
+    child_pid as isize
+}
+
+pub fn exit_current_and_run_next(exit_code: i32) -> ! {
+    let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+
+        let current_pid = manager.pid_of_tid(current_tid);
+
+        log::info!(
+            "[task] pid={} tid={} exited with code {}",
+            current_pid,
+            current_tid,
+            exit_code,
+        );
+
+        manager.mark_thread_zombie(current_tid, exit_code);
+        manager.wake_parent_waiting_for(current_pid);
+
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+
+    panic!("zombie thread returned after exit");
+}
+
+pub fn current_tid() -> Tid {
+    processor::current_tid()
+}
+
+pub fn current_pid() -> Pid {
+    let tid = processor::current_tid();
+    let manager = TASK_MANAGER.lock();
+    manager.pid_of_tid(tid)
+}
 
 pub fn current_task_id() -> usize {
-    processor::current_task_id()
+    current_pid()
 }
 
 pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
@@ -695,20 +882,16 @@ pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
 }
 
 pub fn write_current_user_bytes(user_buf: usize, data: &[u8]) -> Option<usize> {
-    let current = processor::current_task_id();
+    let pid = current_pid();
     let manager = TASK_MANAGER.lock();
-    manager.write_current_user_bytes(current, user_buf, data)
+    manager.write_user_bytes_by_pid(pid, user_buf, data)
 }
-
 
 pub fn wake_sleeping_tasks() {
     let now = crate::timer::ticks();
     let mut manager = TASK_MANAGER.lock();
-    manager.wake_sleeping_tasks(now);
+    manager.wake_sleeping_threads(now);
 }
-
-
-
 
 const EXEC_MAX_ARGS: usize = 8;
 
@@ -726,12 +909,7 @@ struct UserExecArgs {
     argv: [UserArg; EXEC_MAX_ARGS],
 }
 
-
-
 pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize {
-    use alloc::string::String;
-    use alloc::vec::Vec;
-
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, path_len) {
         Some(bytes) => bytes,
         None => return -1,
@@ -746,10 +924,6 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         return -1;
     }
 
-    /*
-     * 如果传入 hello，就变成 /bin/hello。
-     * 如果传入 /bin/hello，就直接使用。
-     */
     let cwd = crate::task::current_cwd();
     let mut path_buf = String::new();
 
@@ -767,12 +941,6 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         path_buf.as_str()
     };
 
-
-
-    /*
-     * 先从旧地址空间读取 argv。
-     * 注意：必须在替换 user_space 之前读。
-     */
     let argv = match read_exec_args(args_ptr, name) {
         Some(argv) => argv,
         None => return -1,
@@ -780,9 +948,6 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 
     let argc = argv.len();
 
-    /*
-     * 从 VFS 打开程序文件。
-     */
     let file = match crate::fs::open(path) {
         Some(file) => file,
         None => {
@@ -796,9 +961,6 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         return -1;
     }
 
-    /*
-     * 读取完整 app binary。
-     */
     let mut app_data = Vec::new();
     let mut buf = [0u8; 512];
 
@@ -822,15 +984,9 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         return -1;
     }
 
-    /*
-     * 创建新用户地址空间。
-     */
     let (new_user_space, entry, user_sp) =
         crate::mm::MemorySet::new_user_test(&app_data);
 
-    /*
-     * 把 argc/argv 放进新用户栈。
-     */
     let (new_user_sp, argv_ptr) = match build_user_stack_with_args(
         &new_user_space,
         user_sp,
@@ -843,28 +999,31 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     let mut new_trap_cx =
         crate::trap::TrapContext::app_init_context(entry, new_user_sp);
 
-    /*
-     * a0 = argc
-     * a1 = argv
-     *
-     * 注意：trap handler 会把 sys_exec 的返回值写回 a0。
-     * 所以 sys_exec 成功时要 return argc。
-     */
     new_trap_cx.set_app_args(argc, argv_ptr);
 
-    let current = processor::current_task_id();
+    let current_tid = processor::current_tid();
 
     let new_root = {
         let mut manager = TASK_MANAGER.lock();
-        let task = manager.task_mut(current);
+        let current_pid = manager.pid_of_tid(current_tid);
 
-        task.close_non_standard_fds_on_exec();
+        if manager.process(current_pid).threads.len() != 1 {
+            log::warn!(
+                "[exec] pid={} has multiple threads, exec denied in first version",
+                current_pid,
+            );
+            return -1;
+        }
 
-        let old_space = core::mem::replace(&mut task.user_space, new_user_space);
+        let old_space = {
+            let process = manager.process_mut(current_pid);
+            process.close_non_standard_fds_on_exec();
+            core::mem::replace(&mut process.user_space, new_user_space)
+        };
 
-        *task.trap_cx_mut() = new_trap_cx;
+        *manager.thread_mut(current_tid).trap_cx_mut() = new_trap_cx;
 
-        let root = task.root_ppn();
+        let root = manager.process(current_pid).user_space.root_ppn();
 
         drop(old_space);
 
@@ -873,19 +1032,13 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 
     crate::mm::activate_page_table(new_root);
 
-    /*
-     * 关键：成功 exec 返回 argc。
-     * trap handler 会把这个值写到新 TrapContext 的 a0，
-     * 正好作为 main(argc, argv) 的 argc。
-     */
     argc as isize
 }
 
-
-
-fn read_exec_args(args_ptr: usize, default_argv0: &str) -> Option<alloc::vec::Vec<alloc::vec::Vec<u8>>> {
-    use alloc::vec::Vec;
-
+fn read_exec_args(
+    args_ptr: usize,
+    default_argv0: &str,
+) -> Option<Vec<Vec<u8>>> {
     if args_ptr == 0 {
         let mut argv = Vec::new();
         argv.push(default_argv0.as_bytes().to_vec());
@@ -916,9 +1069,6 @@ fn read_exec_args(args_ptr: usize, default_argv0: &str) -> Option<alloc::vec::Ve
 
         let mut data = crate::task::read_current_user_bytes(arg.ptr, arg.len)?;
 
-        /*
-         * argv 字符串里不要带 NUL。后面压用户栈时我们自己补 '\0'。
-         */
         if let Some(pos) = data.iter().position(|&c| c == 0) {
             data.truncate(pos);
         }
@@ -929,20 +1079,11 @@ fn read_exec_args(args_ptr: usize, default_argv0: &str) -> Option<alloc::vec::Ve
     Some(argv)
 }
 
-
-
 fn write_to_user_space(
     user_space: &crate::mm::MemorySet,
     user_va: usize,
     data: &[u8],
 ) -> Option<()> {
-    use crate::mm::{
-        VirtAddr,
-        PAGE_SIZE_BITS,
-        kernel_phys_to_virt,
-    };
-    use crate::mm::config::PAGE_SIZE;
-
     for (offset, byte) in data.iter().enumerate() {
         let va = user_va.checked_add(offset)?;
         let vpn = VirtAddr(va).floor();
@@ -950,7 +1091,7 @@ fn write_to_user_space(
 
         let pte = user_space.translate(vpn)?;
         let pa = (pte.ppn().0 << PAGE_SIZE_BITS) + page_offset;
-        let kva = kernel_phys_to_virt(pa);
+        let kva = crate::mm::kernel_phys_to_virt(pa);
 
         unsafe {
             core::ptr::write_volatile(kva as *mut u8, *byte);
@@ -959,7 +1100,6 @@ fn write_to_user_space(
 
     Some(())
 }
-
 
 fn align_down(value: usize, align: usize) -> usize {
     value & !(align - 1)
@@ -977,14 +1117,11 @@ fn push_usize_to_user_stack(
 fn build_user_stack_with_args(
     user_space: &crate::mm::MemorySet,
     user_sp: usize,
-    argv: &[alloc::vec::Vec<u8>],
+    argv: &[Vec<u8>],
 ) -> Option<(usize, usize)> {
-    use alloc::vec::Vec;
-
     let mut sp = user_sp;
     let mut arg_ptrs: Vec<usize> = Vec::new();
 
- 
     for arg in argv.iter().rev() {
         sp -= arg.len() + 1;
 
@@ -998,9 +1135,7 @@ fn build_user_stack_with_args(
 
     sp = align_down(sp, 16);
 
-
     push_usize_to_user_stack(user_space, &mut sp, 0)?;
-
 
     for &ptr in arg_ptrs.iter().rev() {
         push_usize_to_user_stack(user_space, &mut sp, ptr)?;
@@ -1011,39 +1146,36 @@ fn build_user_stack_with_args(
     Some((sp, argv_ptr))
 }
 
-
-
-
-
 pub fn current_file(fd: usize) -> Option<crate::fs::FileRef> {
-    let current = processor::current_task_id();
+    let pid = current_pid();
     let manager = TASK_MANAGER.lock();
-    manager.get_file(current, fd)
+    manager.get_file(pid, fd)
 }
 
 pub fn alloc_fd_current(file: crate::fs::FileRef) -> isize {
-    let current = processor::current_task_id();
+    let pid = current_pid();
     let mut manager = TASK_MANAGER.lock();
-    manager.alloc_fd(current, file)
+    manager.alloc_fd(pid, file)
 }
 
 pub fn close_fd_current(fd: usize) -> isize {
-    let current = processor::current_task_id();
+    let pid = current_pid();
     let mut manager = TASK_MANAGER.lock();
-    manager.close_fd(current, fd)
+    manager.close_fd(pid, fd)
 }
-pub fn current_cwd() -> alloc::string::String {
-    let current = processor::current_task_id();
+
+pub fn current_cwd() -> String {
+    let pid = current_pid();
     let manager = TASK_MANAGER.lock();
 
-    manager.task(current).cwd.clone()
+    manager.process(pid).cwd.clone()
 }
 
-pub fn set_current_cwd(new_cwd: alloc::string::String) -> isize {
-    let current = processor::current_task_id();
+pub fn set_current_cwd(new_cwd: String) -> isize {
+    let pid = current_pid();
     let mut manager = TASK_MANAGER.lock();
 
-    manager.task_mut(current).cwd = new_cwd;
+    manager.process_mut(pid).cwd = new_cwd;
 
     0
 }

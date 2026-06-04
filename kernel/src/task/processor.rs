@@ -1,22 +1,22 @@
-use crate::sync::spin::Mutex;
+use crate::{sync::spin::Mutex, task::thread::Tid};
 
 use super::context::TaskContext;
 
 pub struct Processor {
-    pub current: Option<usize>,
+    pub current_tid: Option<Tid>,
     pub idle_task_cx: TaskContext,
 }
 
 impl Processor {
     pub const fn new() -> Self {
         Self {
-            current: None,
+            current_tid: None,
             idle_task_cx: TaskContext::zero(),
         }
     }
 
-    pub fn current(&self) -> Option<usize> {
-        self.current
+    pub fn current_tid(&self) -> Option<usize> {
+        self.current_tid
     }
 
     pub fn idle_task_cx_ptr(&mut self) -> *mut TaskContext {
@@ -26,15 +26,15 @@ impl Processor {
 
 static PROCESSOR: Mutex<Processor> = Mutex::new(Processor::new());
 
-pub fn current_task_id() -> usize {
+pub fn current_tid() -> Tid {
     PROCESSOR
         .lock()
-        .current()
+        .current_tid()
         .expect("no current task")
 }
 
-pub fn set_current(id: Option<usize>) {
-    PROCESSOR.lock().current = id;
+pub fn set_current_tid(id: Option<Tid>) {
+    PROCESSOR.lock().current_tid = id;
 }
 
 pub fn idle_task_cx_ptr() -> *mut TaskContext {
