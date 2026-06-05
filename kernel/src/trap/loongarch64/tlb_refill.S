@@ -29,8 +29,20 @@
      *
      * Use only 0x31/0x32 for temporary saves.
      */
-    .equ CSR_SAVE_T1,    0x31
-    .equ CSR_SAVE_T2,    0x32
+    # .equ CSR_SAVE_T1,    0x31
+    # .equ CSR_SAVE_T2,    0x32
+    /*
+    * trap.S uses:
+    *   0x30 = KSAVE0 = kernel_stack_top
+    *   0x31 = KSAVE1 = saved original r12
+    *   0x32 = KSAVE2 = saved original r13
+    *
+    * Therefore tlb_refill must not touch 0x30/0x31/0x32.
+    * Use:
+    *   TLBRSAVE = save t0
+    *   KSAVE3   = save t1
+    */
+    .equ CSR_SAVE_T1,    0x33
 
     /*
      * Real TLB entry flags, not page-table-walker flags.
@@ -49,7 +61,7 @@ __tlb_refill:
      */
     csrwr   $t0, CSR_TLBRSAVE
     csrwr   $t1, CSR_SAVE_T1
-    csrwr   $t2, CSR_SAVE_T2
+    # csrwr   $t2, CSR_SAVE_T2
 
     /*
      * Decide by faulting VA.
@@ -75,18 +87,12 @@ __tlb_refill:
      */
     csrrd   $t0, CSR_TLBRBADV
     li.d    $t1, -8192
-    and     $t2, $t0, $t1
-    ori     $t2, $t2, 12
-    csrwr   $t2, CSR_TLBREHI
+    and     $t0, $t0, $t1
+    ori     $t0, $t0, 12
+    csrwr   $t0, CSR_TLBREHI
 
     /*
      * Walk current page table.
-     *
-     * With your current 4-level layout:
-     *   Dir3 = VA[47:39]
-     *   Dir2 = VA[38:30]
-     *   Dir1 = VA[29:21]
-     *   PT   = VA[20:12]
      */
     csrrd   $t0, CSR_PGD
 
@@ -116,13 +122,14 @@ __tlb_refill:
      *   PS   = 12 for 4KiB page
      */
     li.d    $t1, -8192
-    and     $t2, $t0, $t1
-    ori     $t2, $t2, 12
-    csrwr   $t2, CSR_TLBREHI
+    and     $t0, $t0, $t1
+    ori     $t0, $t0, 12
+    csrwr   $t0, CSR_TLBREHI
 
     /*
      * PA = BADV - KERNEL_OFFSET.
      */
+    csrrd   $t0, CSR_TLBRBADV
     li.d    $t1, KERNEL_OFFSET
     sub.d   $t0, $t0, $t1
 
@@ -136,27 +143,23 @@ __tlb_refill:
      * TLBRELO0 = even page.
      */
     li.d    $t1, TLB_KERNEL_RWX
-    or      $t2, $t0, $t1
-    csrwr   $t2, CSR_TLBRELO0
+    or      $t1, $t0, $t1
+    csrwr   $t1, CSR_TLBRELO0
 
     /*
      * TLBRELO1 = odd page.
      */
-    lu12i.w $t2, 1          /* 0x1000 */
-    add.d   $t0, $t0, $t2
+    lu12i.w $t1, 1          /* 0x1000 */
+    add.d   $t0, $t0, $t1
 
     li.d    $t1, TLB_KERNEL_RWX
-    or      $t2, $t0, $t1
-    csrwr   $t2, CSR_TLBRELO1
+    or      $t1, $t0, $t1
+    csrwr   $t1, CSR_TLBRELO1
 
     tlbfill
 
 
 .Lrestore_and_ertn:
-    /*
-     * Restore temporaries.
-     */
-    csrrd   $t2, CSR_SAVE_T2
     csrrd   $t1, CSR_SAVE_T1
     csrrd   $t0, CSR_TLBRSAVE
 
