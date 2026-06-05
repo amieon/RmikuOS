@@ -25,3 +25,12 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize {
     crate::task::exec_current(path_ptr, path_len, args_ptr)
 }
+
+pub fn sys_mmap(len: usize, prot: usize) -> isize {
+    crate::task::mmap_current(len, prot)
+}
+
+
+pub fn sys_munmap(addr: usize, len: usize) -> isize {
+    crate::task::munmap_current(addr, len)
+}

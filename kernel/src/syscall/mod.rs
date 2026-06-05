@@ -21,6 +21,8 @@ pub const SYSCALL_FSTAT: usize = 15;
 pub const SYSCALL_THREAD_CREATE: usize = 16;
 pub const SYSCALL_THREAD_EXIT: usize = 17;
 pub const SYSCALL_THREAD_JOIN: usize = 18;
+pub const SYSCALL_MMAP: usize = 19;
+pub const SYSCALL_MUNMAP: usize = 20;
 
 
 pub fn syscall(id: usize, args: [usize; 6]) -> isize {
@@ -44,6 +46,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_THREAD_CREATE => thread::sys_thread_create(args[0], args[1], args[2], args[3]),
         SYSCALL_THREAD_EXIT => thread::sys_thread_exit(args[0] as i32),
         SYSCALL_THREAD_JOIN => thread::sys_sthread_join(args[0], args[1]),
+        SYSCALL_MMAP => process::sys_mmap(args[0],args[1]),
+        SYSCALL_MUNMAP => process::sys_munmap(args[0], args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

@@ -3,8 +3,8 @@
 #define STACK_SIZE 16384
 
 
-static unsigned char stack1[STACK_SIZE] __attribute__((aligned(16))) = {1};
-static unsigned char stack2[STACK_SIZE] __attribute__((aligned(16))) = {2};
+// static unsigned char stack1[STACK_SIZE] __attribute__((aligned(16))) = {1};
+// static unsigned char stack2[STACK_SIZE] __attribute__((aligned(16))) = {2};
 
 static void burn_cpu(int rounds) {
     volatile unsigned long x = 1;
@@ -48,15 +48,15 @@ static void worker(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
-    puts("stack1_top=");
-    put_hex((usize)(stack1 + STACK_SIZE));
-    puts("\n");
+    // puts("stack1_top=");
+    // put_hex((usize)(stack1 + STACK_SIZE));
+    // puts("\n");
 
 
     puts("thread_test start\n");
 
-    int t1 = thread_create(worker, "thread1", stack1 + STACK_SIZE);
-    int t2 = thread_create(worker, "thread2", stack2 + STACK_SIZE);
+    int t1 = thread_create(worker, "thread1"/*, stack1 + STACK_SIZE*/);
+    int t2 = thread_create(worker, "thread2"/*, stack2 + STACK_SIZE*/);
 
     puts("created threads: ");
     put_int(t1);
