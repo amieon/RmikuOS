@@ -63,3 +63,13 @@ pub fn wait_for_interrupt() {
         core::arch::asm!("wfi", options(nostack));
     }
 }
+
+#[inline]
+pub fn flush_tlb() {
+    unsafe {
+        core::arch::asm!(
+            "sfence.vma",
+            options(nostack)
+        );
+    }
+}

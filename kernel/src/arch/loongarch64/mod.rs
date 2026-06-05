@@ -82,3 +82,13 @@ pub fn wait_for_interrupt() {
         core::arch::asm!("idle 0", options(nostack));
     }
 }
+
+#[inline]
+pub fn flush_tlb() {
+    unsafe {
+        core::arch::asm!(
+            "invtlb 0x0, $zero, $zero",
+            options(nostack)
+        );
+    }
+}

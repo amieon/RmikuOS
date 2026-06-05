@@ -915,7 +915,6 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
             Some(range) => range,
             None => return -1,
         }
-
     };
 
     {
@@ -928,23 +927,23 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
             perm,
         ));
 
-        // let start_vpn = crate::mm::VirtAddr(start).floor();
-        // let end_vpn = crate::mm::VirtAddr(end).ceil();
+        let start_vpn = crate::mm::VirtAddr(start).floor();
+        let end_vpn = crate::mm::VirtAddr(end).ceil();
 
-        // for vpn_id in start_vpn.0..end_vpn.0 {
-        //     let vpn = crate::mm::VirtPageNum(vpn_id);
+        for vpn_id in start_vpn.0..end_vpn.0 {
+            let vpn = crate::mm::VirtPageNum(vpn_id);
 
-        //     if process.user_space.translate(vpn).is_none() {
-        //         log::error!(
-        //             "[mmap] verify failed: pid={} start={:#x} end={:#x} missing vpn={:?}",
-        //             pid,
-        //             start,
-        //             end,
-        //             vpn,
-        //         );
-        //         return -1;
-        //     }
-        // }
+            if process.user_space.translate(vpn).is_none() {
+                log::error!(
+                    "[mmap] verify failed: pid={} start={:#x} end={:#x} missing vpn={:?}",
+                    pid,
+                    start,
+                    end,
+                    vpn,
+                );
+                return -1;
+            }
+        }
 
         process.mmap_areas.push(crate::task::process::MmapArea {
             start,
@@ -952,6 +951,8 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
             prot,
         });
     }
+
+    crate::arch::flush_tlb();
 
     log::info!(
         "[mmap] pid={} len={} prot={:#x} => {:#x}..{:#x}",
@@ -964,7 +965,6 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
 
     start as isize
 }
-
 
 pub fn munmap_current(addr: usize, len: usize) -> isize {
     if addr == 0 || len == 0 {
@@ -982,23 +982,28 @@ pub fn munmap_current(addr: usize, len: usize) -> isize {
     let mut manager = TASK_MANAGER.lock();
     let pid = manager.current_pid();
 
-    let process = manager.process_mut(pid);
+    {
+        let process = manager.process_mut(pid);
 
-    let Some(index) = process
-        .mmap_areas
-        .iter()
-        .position(|area| area.start == start && area.end == end)
-    else {
-        return -1;
-    };
+        let Some(index) = process
+            .mmap_areas
+            .iter()
+            .position(|area| area.start == start && area.end == end)
+        else {
+            return -1;
+        };
 
-    process.mmap_areas.remove(index);
+        process.mmap_areas.remove(index);
 
+        if !process.user_space.remove_area(
+            crate::mm::VirtAddr(start),
+            crate::mm::VirtAddr(end),
+        ) {
+            return -1;
+        }
+    }
 
-    process.user_space.remove_area(
-        crate::mm::VirtAddr(start),
-        crate::mm::VirtAddr(end),
-    );
+    crate::arch::flush_tlb();
 
     log::info!(
         "[munmap] pid={} {:#x}..{:#x}",
