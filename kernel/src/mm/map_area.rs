@@ -11,23 +11,26 @@ use crate::arch::{MEMORY_END, MEMORY_START};
 
 #[derive(Clone, Copy, Debug)]
 pub struct VPNRange {
+    start: usize,
     current: usize,
     end: usize,
 }
 
-
 impl VPNRange {
     pub fn new(start: VirtPageNum, end: VirtPageNum) -> Self {
         Self {
+            start: start.0,
             current: start.0,
             end: end.0,
         }
     }
-    pub fn get_end(&self)->usize{
-        self.end
+
+    pub fn get_start(&self) -> VirtPageNum {
+        VirtPageNum(self.start)
     }
-    pub fn get_start(&self)->usize{
-        self.current
+
+    pub fn get_end(&self) -> VirtPageNum {
+        VirtPageNum(self.end)
     }
 }
 
@@ -109,16 +112,29 @@ impl MapArea {
     }
 
     pub fn map(&mut self, page_table: &mut PageTable) {
-        for vpn in self.vpn_range {
+        for vpn in self.vpn_range.clone() {
             self.map_one(page_table, vpn);
         }
     }
 
     pub fn unmap(&mut self, page_table: &mut PageTable) {
-        for vpn in self.vpn_range {
+        for vpn in self.vpn_range.clone() {
             page_table.unmap(vpn);
         }
+
         self.data_frames.clear();
+    }
+
+    pub fn start_vpn(&self) -> VirtPageNum {
+        self.vpn_range.get_start()
+    }
+
+    pub fn end_vpn(&self) -> VirtPageNum {
+        self.vpn_range.get_end()
+    }
+
+    pub fn page_count(&self) -> usize {
+        self.vpn_range.get_end().0 - self.vpn_range.get_start().0
     }
 
     fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
@@ -143,21 +159,11 @@ impl MapArea {
 
         page_table.map(vpn, ppn, map_perm_to_pte_flags(self.permission));
     }
-    pub fn start_vpn(&self) -> VirtPageNum {
-        self.vpn_range.get_start().into()
-    }
 
-    pub fn end_vpn(&self) -> VirtPageNum {
-        self.vpn_range.get_end().into()
-    }
 
 }
 
-impl MapArea {
-    pub fn page_count(&self) -> usize {
-        self.vpn_range.get_end() - self.vpn_range.get_start()
-    }
-}
+
 
 impl MapArea {
     pub fn is_user(&self) -> bool {
@@ -178,7 +184,6 @@ impl MapArea {
             "clone_framed_area_data only supports framed areas"
         );
 
- 
         let mut new_area = MapArea {
             vpn_range: self.vpn_range,
             map_type: MapType::Framed,
@@ -188,8 +193,7 @@ impl MapArea {
 
         new_area.map(new_page_table);
 
-
-        for vpn in self.vpn_range {
+        for vpn in self.vpn_range.clone() {
             let src_pte = old_page_table
                 .translate(vpn)
                 .expect("clone_framed_area_data: old pte not found");

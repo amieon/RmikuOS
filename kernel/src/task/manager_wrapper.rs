@@ -915,6 +915,7 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
             Some(range) => range,
             None => return -1,
         }
+
     };
 
     {
@@ -926,6 +927,24 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
             crate::mm::MapType::Framed,
             perm,
         ));
+
+        // let start_vpn = crate::mm::VirtAddr(start).floor();
+        // let end_vpn = crate::mm::VirtAddr(end).ceil();
+
+        // for vpn_id in start_vpn.0..end_vpn.0 {
+        //     let vpn = crate::mm::VirtPageNum(vpn_id);
+
+        //     if process.user_space.translate(vpn).is_none() {
+        //         log::error!(
+        //             "[mmap] verify failed: pid={} start={:#x} end={:#x} missing vpn={:?}",
+        //             pid,
+        //             start,
+        //             end,
+        //             vpn,
+        //         );
+        //         return -1;
+        //     }
+        // }
 
         process.mmap_areas.push(crate::task::process::MmapArea {
             start,
