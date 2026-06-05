@@ -19,49 +19,42 @@
     .equ CSR_TLBREHI,    0x8e
 
     /*
-     * Do NOT use 0x30 here.
+     * Do NOT use 0x30 / 0x31 / 0x32 here.
      *
      * trap.S uses:
-     *   KSAVE0 / 0x30 = kernel_stack_top while running user
+     *   0x30 = KSAVE0 = kernel_stack_top while running user
+     *   0x31 = KSAVE1 = saved original user r12
+     *   0x32 = KSAVE2 = saved original user r13
      *
-     * TLB refill may happen while running user.  If we overwrite 0x30,
-     * the next user trap cannot switch to the kernel stack.
+     * TLB refill may happen while running user or while trap.S is saving
+     * registers, so overwriting 0x31 / 0x32 can corrupt TrapContext.
      *
-     * Use only 0x31/0x32 for temporary saves.
+     * This file only uses:
+     *   CSR_TLBRSAVE = save original t0/r12
+     *   0x33         = KSAVE3, save original t1/r13
      */
-    # .equ CSR_SAVE_T1,    0x31
-    # .equ CSR_SAVE_T2,    0x32
-    /*
-    * trap.S uses:
-    *   0x30 = KSAVE0 = kernel_stack_top
-    *   0x31 = KSAVE1 = saved original r12
-    *   0x32 = KSAVE2 = saved original r13
-    *
-    * Therefore tlb_refill must not touch 0x30/0x31/0x32.
-    * Use:
-    *   TLBRSAVE = save t0
-    *   KSAVE3   = save t1
-    */
     .equ CSR_SAVE_T1,    0x33
 
     /*
      * Real TLB entry flags, not page-table-walker flags.
      *
      * V | D | MAT_CC | G
+     *
+     * Used only for kernel high-half direct-map refill.
      */
     .equ TLB_KERNEL_RWX, 0x53
 
 
 __tlb_refill:
     /*
-     * Save temporaries used by this handler.
+     * Save temporaries.
      *
-     * csrwr clobbers its source register with old CSR value,
-     * so do not use these registers until after they are saved.
+     * csrwr writes the GPR value into CSR and returns old CSR value into
+     * the same GPR, so t0/t1 are clobbered after these instructions.
+     * That is fine because their original values are now saved.
      */
     csrwr   $t0, CSR_TLBRSAVE
     csrwr   $t1, CSR_SAVE_T1
-    # csrwr   $t2, CSR_SAVE_T2
 
     /*
      * Decide by faulting VA.
@@ -93,6 +86,14 @@ __tlb_refill:
 
     /*
      * Walk current page table.
+     *
+     * Current 4-level layout:
+     *   Dir3 = VA[47:39]
+     *   Dir2 = VA[38:30]
+     *   Dir1 = VA[29:21]
+     *   PT   = VA[20:12]
+     *
+     * ldpte loads the even/odd page pair into TLBRELO0 / TLBRELO1.
      */
     csrrd   $t0, CSR_PGD
 
@@ -114,13 +115,12 @@ __tlb_refill:
  *   VA = KERNEL_OFFSET + PA
  */
 .Lkernel_direct_refill:
-    csrrd   $t0, CSR_TLBRBADV
-
     /*
      * Set TLBREHI:
      *   VPPN = BADV with low 13 bits cleared
      *   PS   = 12 for 4KiB page
      */
+    csrrd   $t0, CSR_TLBRBADV
     li.d    $t1, -8192
     and     $t0, $t0, $t1
     ori     $t0, $t0, 12
@@ -149,7 +149,7 @@ __tlb_refill:
     /*
      * TLBRELO1 = odd page.
      */
-    lu12i.w $t1, 1          /* 0x1000 */
+    lu12i.w $t1, 1              /* 0x1000 */
     add.d   $t0, $t0, $t1
 
     li.d    $t1, TLB_KERNEL_RWX
@@ -160,6 +160,9 @@ __tlb_refill:
 
 
 .Lrestore_and_ertn:
+    /*
+     * Restore temporaries.
+     */
     csrrd   $t1, CSR_SAVE_T1
     csrrd   $t0, CSR_TLBRSAVE
 
