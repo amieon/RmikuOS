@@ -50,7 +50,22 @@ impl MemorySet {
         area.map(&mut self.page_table);
         self.areas.push(area);
     }
+    
+    pub fn remove_area(&mut self, start: VirtAddr, end: VirtAddr) -> bool {
+        let start_vpn = start.floor();
+        let end_vpn = end.ceil();
 
+        let Some(index) = self.areas.iter().position(|area| {
+            area.start_vpn() == start_vpn && area.end_vpn() == end_vpn
+        }) else {
+            return false;
+        };
+
+        let mut area = self.areas.remove(index);
+        area.unmap(&mut self.page_table);
+
+        true
+    }
 
     pub fn translate(&self, vpn: VirtPageNum) -> Option<crate::mm::page_table::PageTableEntry> {
         self.page_table.translate(vpn)
@@ -92,6 +107,7 @@ impl MemorySet {
         ));
     }
     
+
     fn map_kernel_areas(&mut self) {
         let kernel_perm = MapPermission::R
             .union(MapPermission::W)

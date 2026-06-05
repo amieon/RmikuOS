@@ -143,6 +143,14 @@ impl MapArea {
 
         page_table.map(vpn, ppn, map_perm_to_pte_flags(self.permission));
     }
+    pub fn start_vpn(&self) -> VirtPageNum {
+        self.vpn_range.get_start().into()
+    }
+
+    pub fn end_vpn(&self) -> VirtPageNum {
+        self.vpn_range.get_end().into()
+    }
+
 }
 
 impl MapArea {
@@ -221,7 +229,7 @@ fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
     }
 
     
-    //第一版直接置 A/D，避免硬件或 QEMU 因 A/D 位触发异常。
+    //直接置 A/D，避免硬件或 QEMU 因 A/D 位触发异常。
     flags.union(PteFlags::A).union(PteFlags::D)
 }
 
