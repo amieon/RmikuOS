@@ -302,6 +302,10 @@ pub fn fork_current() -> isize {
         let parent_tickets = manager.process(parent_pid).tickets;
         let parent_pass = manager.process(parent_pid).pass;
 
+        let child_mmap_areas = manager.process(parent_pid).mmap_areas.clone();
+        let child_mmap_next = manager.process(parent_pid).mmap_next.clone();
+
+
         let mut child_process = ProcessControlBlock::fork_from(
             child_pid,
             parent_pid,
@@ -311,6 +315,8 @@ pub fn fork_current() -> isize {
             child_cwd,
             parent_tickets,
             parent_pass,
+            child_mmap_areas,
+            child_mmap_next,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
@@ -857,4 +863,130 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
          * 被目标线程 thread_exit 唤醒后，回到这里重新检查。
          */
     }
+}
+
+
+
+fn mmap_prot_to_perm(prot: usize) -> Option<crate::mm::MapPermission> {
+    use crate::mm::MapPermission;
+
+    if prot & !(crate::task::process::PROT_READ
+        | crate::task::process::PROT_WRITE
+        | crate::task::process::PROT_EXEC) != 0
+    {
+        return None;
+    }
+
+    if prot == 0 {
+        return None;
+    }
+
+    let mut perm = MapPermission::U;
+
+    if prot & crate::task::process::PROT_READ != 0 {
+        perm = perm.union(MapPermission::R);
+    }
+
+    if prot & crate::task::process::PROT_WRITE != 0 {
+        perm = perm.union(MapPermission::W);
+    }
+
+    if prot & crate::task::process::PROT_EXEC != 0 {
+        perm = perm.union(MapPermission::X);
+    }
+
+    Some(perm)
+}
+
+
+pub fn mmap_current(len: usize, prot: usize) -> isize {
+    let perm = match mmap_prot_to_perm(prot) {
+        Some(perm) => perm,
+        None => return -1,
+    };
+
+    let mut manager = TASK_MANAGER.lock();
+    let pid = manager.current_pid();
+
+    let (start, end) = {
+        let process = manager.process_mut(pid);
+
+        match process.alloc_mmap_range(len) {
+            Some(range) => range,
+            None => return -1,
+        }
+    };
+
+    {
+        let process = manager.process_mut(pid);
+
+        process.user_space.insert_area(crate::mm::MapArea::new(
+            crate::mm::VirtAddr(start),
+            crate::mm::VirtAddr(end),
+            crate::mm::MapType::Framed,
+            perm,
+        ));
+
+        process.mmap_areas.push(crate::task::process::MmapArea {
+            start,
+            end,
+            prot,
+        });
+    }
+
+    log::info!(
+        "[mmap] pid={} len={} prot={:#x} => {:#x}..{:#x}",
+        pid,
+        len,
+        prot,
+        start,
+        end,
+    );
+
+    start as isize
+}
+
+
+pub fn munmap_current(addr: usize, len: usize) -> isize {
+    if addr == 0 || len == 0 {
+        return -1;
+    }
+
+    let start = crate::mm::align_down(addr, crate::mm::config::PAGE_SIZE);
+    let len = crate::mm::align_up(len, crate::mm::config::PAGE_SIZE);
+
+    let end = match start.checked_add(len) {
+        Some(end) => end,
+        None => return -1,
+    };
+
+    let mut manager = TASK_MANAGER.lock();
+    let pid = manager.current_pid();
+
+    let process = manager.process_mut(pid);
+
+    let Some(index) = process
+        .mmap_areas
+        .iter()
+        .position(|area| area.start == start && area.end == end)
+    else {
+        return -1;
+    };
+
+    process.mmap_areas.remove(index);
+
+
+    process.user_space.remove_area(
+        crate::mm::VirtAddr(start),
+        crate::mm::VirtAddr(end),
+    );
+
+    log::info!(
+        "[munmap] pid={} {:#x}..{:#x}",
+        pid,
+        start,
+        end,
+    );
+
+    0
 }

@@ -30,6 +30,9 @@ pub struct ProcessControlBlock {
     pub stride: usize,
     pub pass: usize,
 
+    pub mmap_areas: Vec<MmapArea>,
+    pub mmap_next: usize,
+
     pub exit_code: i32,
 }
 
@@ -57,6 +60,9 @@ impl ProcessControlBlock {
             tickets: DEFAULT_TICKETS,
             stride: BIG_STRIDE / DEFAULT_TICKETS,
             pass: 0,
+            
+            mmap_areas: Vec::new(),
+            mmap_next: USER_MMAP_BASE,
 
             exit_code: 0,
         }
@@ -71,6 +77,8 @@ impl ProcessControlBlock {
         cwd: String,
         parent_tickets: usize,
         parent_pass: usize,
+        mmap_areas: Vec<MmapArea>,
+        mmap_next: usize,
     ) -> Self {
         let tickets = parent_tickets.max(1);
         let stride = BIG_STRIDE / tickets;
@@ -92,8 +100,10 @@ impl ProcessControlBlock {
 
             tickets,
             stride,
-
             pass: parent_pass,
+
+            mmap_areas,
+            mmap_next,
 
             exit_code: 0,
         }
@@ -129,4 +139,41 @@ impl ProcessControlBlock {
             }
         }
     }
+}
+
+
+#[derive(Clone, Copy, Debug)]
+pub struct MmapArea {
+    pub start: usize,
+    pub end: usize,
+    pub prot: usize,
+}
+
+pub const USER_MMAP_BASE: usize = 0x4000_0000;
+pub const USER_MMAP_TOP: usize = 0x7000_0000;
+
+pub const PROT_READ: usize = 1;
+pub const PROT_WRITE: usize = 2;
+pub const PROT_EXEC: usize = 4;
+
+impl ProcessControlBlock {
+    pub fn alloc_mmap_range(&mut self, len: usize) -> Option<(usize, usize)> {
+        let len = crate::mm::align_up(len, crate::mm::config::PAGE_SIZE);
+
+        if len == 0 {
+            return None;
+        }
+
+        let start = crate::mm::align_up(self.mmap_next, crate::mm::config::PAGE_SIZE);
+        let end = start.checked_add(len)?;
+
+        if end > USER_MMAP_TOP {
+            return None;
+        }
+
+        self.mmap_next = end;
+
+        Some((start, end))
+    }
+
 }
