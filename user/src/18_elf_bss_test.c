@@ -6,6 +6,7 @@ static char big_bss[16384];
 static int global_init = 1234;
 static char data_buf[4] = { 'R', 'm', 'i', 'k' };
 
+
 int main() {
     puts("elf_bss_test start\n");
 
