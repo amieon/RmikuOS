@@ -4,6 +4,7 @@ pub mod config;
 pub mod frame_allocator;
 pub mod heap;
 pub mod page_table;
+pub mod elf;
 
 #[cfg(target_arch = "riscv64")]
 #[path = "riscv64.rs"]

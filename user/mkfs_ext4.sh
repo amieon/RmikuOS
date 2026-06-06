@@ -12,7 +12,7 @@ rm -rf "$ROOT"
 
 echo "=== 构建 ext4 rootfs ($ARCH) ==="
 
-# 1. 先复制用户自定义 rootfs 模板
+#先复制用户自定义 rootfs 模板
 if [ -d "$OVERLAY" ]; then
   echo "copy rootfs overlay: $OVERLAY -> $ROOT"
   mkdir -p "$ROOT"
@@ -22,24 +22,22 @@ else
   mkdir -p "$ROOT"
 fi
 
-# 2. 确保基础目录存在
+# 确保基础目录存在
 mkdir -p "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc"
 
-# 3. 如果用户没有提供 motd，就生成默认 motd
+# 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then
   cat > "$ROOT/etc/motd" <<EOF
 Welcome to RmikuOS ext4 rootfs!
 EOF
 fi
 
-# 4. 把编译出来的用户程序放进 /bin
-for f in user/build/${ARCH}/*.bin; do
+# 把编译出来的用户程序放进 /bin
+for f in user/build/${ARCH}/*.elf; do
   [ -e "$f" ] || continue
 
-  base="$(basename "$f" .bin)"
+  base="$(basename "$f" .elf)"
 
-  # 0_00_shell -> shell
-  # 1_01_hello -> hello
   clean="$(printf "%s" "$base" | sed -E 's/^([0-9]+_)+//')"
 
   cp "$f" "$ROOT/bin/$clean"

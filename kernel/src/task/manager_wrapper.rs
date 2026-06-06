@@ -67,7 +67,7 @@ pub fn init() {
         .expect("[task] failed to load init shell from /bin/shell");
 
     let (user_space, entry, user_sp) =
-        crate::mm::MemorySet::new_user_test(app.as_slice());
+        crate::mm::MemorySet::from_elf(app.as_slice()).unwrap();
 
     let trap_cx =
         crate::trap::TrapContext::app_init_context(entry, user_sp);
@@ -502,7 +502,13 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     }
 
     let (new_user_space, entry, user_sp) =
-        crate::mm::MemorySet::new_user_test(&app_data);
+    match crate::mm::MemorySet::from_elf(&app_data) {
+        Some(v) => v,
+        None => {
+            log::warn!("[exec] invalid ELF executable: {}", path);
+            return -1;
+        }
+    };;
 
     let (new_user_sp, argv_ptr) = match build_user_stack_with_args(
         &new_user_space,
