@@ -1,24 +1,45 @@
-#ifndef USER_MALLOC_H
-#define USER_MALLOC_H
+#pragma once
 
 #include "sys.h"
+#include "lock.h"
+
+#ifndef PROT_READ
+#define PROT_READ  1
+#define PROT_WRITE 2
+#define PROT_EXEC  4
+#endif
 
 #define MALLOC_ALIGNMENT 16
+#define MALLOC_PAGE_SIZE 4096
 #define MALLOC_CHUNK_SIZE (64 * 1024)
 
 typedef struct malloc_block {
-    usize size;
-    int free;
+    usize size;                 // payload size
+    usize free;
     struct malloc_block *next;
 } malloc_block_t;
 
 static malloc_block_t *malloc_head = 0;
 
-static inline usize malloc_align_up(usize x) {
-    return (x + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+static mutex_t malloc_lock = MUTEX_INIT;
+
+static inline usize malloc_align_up(usize x, usize align) {
+    return (x + align - 1) & ~(align - 1);
 }
 
-static inline malloc_block_t *find_free_block(usize size) {
+static inline usize malloc_header_size(void) {
+    return malloc_align_up(sizeof(malloc_block_t), MALLOC_ALIGNMENT);
+}
+
+static inline void *malloc_payload(malloc_block_t *block) {
+    return (void *)((char *)block + malloc_header_size());
+}
+
+static inline malloc_block_t *malloc_block_from_payload(void *ptr) {
+    return (malloc_block_t *)((char *)ptr - malloc_header_size());
+}
+
+static inline malloc_block_t *malloc_find_free(usize size) {
     malloc_block_t *cur = malloc_head;
 
     while (cur) {
@@ -32,17 +53,17 @@ static inline malloc_block_t *find_free_block(usize size) {
     return 0;
 }
 
-static inline void split_block(malloc_block_t *block, usize size) {
-    usize header_size = sizeof(malloc_block_t);
+static inline void malloc_split_block(malloc_block_t *block, usize size) {
+    usize header = malloc_header_size();
 
-    if (block->size < size + header_size + MALLOC_ALIGNMENT) {
+    if (block->size < size + header + MALLOC_ALIGNMENT) {
         return;
     }
 
     malloc_block_t *new_block =
-        (malloc_block_t *)((char *)(block + 1) + size);
+        (malloc_block_t *)((char *)malloc_payload(block) + size);
 
-    new_block->size = block->size - size - header_size;
+    new_block->size = block->size - size - header;
     new_block->free = 1;
     new_block->next = block->next;
 
@@ -50,14 +71,15 @@ static inline void split_block(malloc_block_t *block, usize size) {
     block->next = new_block;
 }
 
-static inline malloc_block_t *request_chunk(usize size) {
-    usize total = size + sizeof(malloc_block_t);
+static inline malloc_block_t *malloc_request_chunk(usize size) {
+    usize header = malloc_header_size();
+    usize total = size + header;
 
     if (total < MALLOC_CHUNK_SIZE) {
         total = MALLOC_CHUNK_SIZE;
     }
 
-    total = malloc_align_up(total);
+    total = malloc_align_up(total, MALLOC_PAGE_SIZE);
 
     void *mem = mmap(total, PROT_READ | PROT_WRITE);
 
@@ -67,7 +89,7 @@ static inline malloc_block_t *request_chunk(usize size) {
 
     malloc_block_t *block = (malloc_block_t *)mem;
 
-    block->size = total - sizeof(malloc_block_t);
+    block->size = total - header;
     block->free = 1;
     block->next = 0;
 
@@ -86,37 +108,69 @@ static inline malloc_block_t *request_chunk(usize size) {
     return block;
 }
 
-static inline void *malloc(usize size) {
+static inline void malloc_coalesce(void) {
+    malloc_block_t *cur = malloc_head;
+    usize header = malloc_header_size();
+
+    while (cur && cur->next) {
+        char *cur_end = (char *)malloc_payload(cur) + cur->size;
+
+        if (cur->free && cur->next->free && cur_end == (char *)cur->next) {
+            cur->size += header + cur->next->size;
+            cur->next = cur->next->next;
+        } else {
+            cur = cur->next;
+        }
+    }
+}
+
+static inline void *__malloc_unlocked(usize size) {
     if (size == 0) {
         return 0;
     }
 
-    size = malloc_align_up(size);
+    size = malloc_align_up(size, MALLOC_ALIGNMENT);
 
-    malloc_block_t *block = find_free_block(size);
+    malloc_block_t *block = malloc_find_free(size);
 
     if (!block) {
-        block = request_chunk(size);
+        block = malloc_request_chunk(size);
 
         if (!block) {
             return 0;
         }
     }
 
-    split_block(block, size);
+    malloc_split_block(block, size);
 
     block->free = 0;
 
-    return (void *)(block + 1);
+    return malloc_payload(block);
 }
 
-static inline void free(void *ptr) {
+static inline void *malloc(usize size) {
+    mutex_lock(&malloc_lock);
+    void *p = __malloc_unlocked(size);
+    mutex_unlock(&malloc_lock);
+
+    return p;
+}
+
+static inline void __free_unlocked(void *ptr) {
     if (!ptr) {
         return;
     }
 
-    malloc_block_t *block = ((malloc_block_t *)ptr) - 1;
+    malloc_block_t *block = malloc_block_from_payload(ptr);
     block->free = 1;
+
+    malloc_coalesce();
+}
+
+static inline void free(void *ptr) {
+    mutex_lock(&malloc_lock);
+    __free_unlocked(ptr);
+    mutex_unlock(&malloc_lock);
 }
 
 static inline void *calloc(usize n, usize size) {
@@ -138,5 +192,3 @@ static inline void *calloc(usize n, usize size) {
 
     return p;
 }
-
-#endif
