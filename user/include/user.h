@@ -1,4 +1,6 @@
 #include "files.h"
+#include "lock.h"
+#include "thread.h"
 
 static int parse_int(const char *s) {
     int x = 0;

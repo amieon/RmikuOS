@@ -94,12 +94,6 @@ static inline isize close(int fd) {
     return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
 }
 
-void thread_exit(int code) {
-    syscall3(SYS_THREAD_EXIT, code,0,0);
-
-    while (1) {
-    }
-}
 
 #define PROT_READ  1
 #define PROT_WRITE 2
@@ -118,37 +112,5 @@ static inline void *mmap(usize len, usize prot) {
 static inline int munmap(void *addr, usize len) {
     return syscall3(SYS_MUNMAP, (usize)addr, len, 0);
 }
-
-
-
-int thread_join(int tid, int *exit_code) {
-    return syscall3(SYS_THREAD_JOIN, tid, (long)exit_code,0);
-}
-
-void __thread_entry(void (*func)(void *), void *arg) {
-    func(arg);
-    thread_exit(0);
-}
-
-#define THREAD_STACK_SIZE (64 * 1024)
-
-static inline int thread_create(void (*func)(void *), void *arg) {
-    void *stack = mmap(THREAD_STACK_SIZE, PROT_READ | PROT_WRITE);
-
-    if ((isize)stack < 0) {
-        return -1;
-    }
-
-    return syscall6(
-        SYS_THREAD_CREATE,
-        (usize)__thread_entry,
-        (usize)func,
-        (usize)arg,
-        (usize)stack + THREAD_STACK_SIZE,
-        0,
-        0
-    );
-}
-
 
 
