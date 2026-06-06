@@ -26,7 +26,7 @@ static void worker(void *raw) {
          * 故意 yield，扩大竞争窗口。
          * 如果锁坏了，counter 很容易错。
          */
-        if ((i % 17) == 0) {
+        if ((i % 16) == 0) {
             yield();
         }
 
@@ -34,7 +34,7 @@ static void worker(void *raw) {
 
         mutex_unlock(&lock);
 
-        if ((i % 113) == 0) {
+        if ((i % 123) == 0) {
             yield();
         }
     }
@@ -88,3 +88,4 @@ int main() {
     puts("lock_test PASS\n");
     return 0;
 }
+
