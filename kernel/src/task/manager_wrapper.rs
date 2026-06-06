@@ -1,5 +1,6 @@
 use alloc::string::String;
 use alloc::vec::Vec;
+use log::logger;
 
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
@@ -131,12 +132,13 @@ pub fn run_tasks() -> ! {
             crate::mm::activate_page_table(root);
 
             let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+       
             unsafe {
                 __switch(idle_cx_ptr, task_cx_ptr);
             }
 
             processor::set_current_tid(None);
+            
         } else {
             crate::arch::enable_interrupt();
             crate::arch::wait_for_interrupt();

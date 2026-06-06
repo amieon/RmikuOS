@@ -97,10 +97,6 @@ impl Elf64Header {
             return None;
         }
 
-        if header.e_type != ET_EXEC {
-            return None;
-        }
-
         if header.e_phentsize as usize != size_of::<Elf64ProgramHeader>() {
             return None;
         }

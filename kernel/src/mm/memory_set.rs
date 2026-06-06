@@ -374,6 +374,7 @@ impl MemorySet {
         let header = Elf64Header::parse(elf_data)?;
 
         let mut memory_set = MemorySet::new_bare();
+        memory_set.map_kernel_areas();
 
         for i in 0..header.e_phnum as usize {
             let ph = header.program_header(elf_data, i)?;
