@@ -31,6 +31,7 @@ pub struct ProcessControlBlock {
     pub pass: usize,
 
     pub mmap_areas: Vec<MmapArea>,
+    pub mmap_free_ranges: Vec<MmapFreeRange>,
     pub mmap_next: usize,
 
     pub exit_code: i32,
@@ -62,6 +63,7 @@ impl ProcessControlBlock {
             pass: 0,
             
             mmap_areas: Vec::new(),
+            mmap_free_ranges: Vec::new(),
             mmap_next: USER_MMAP_BASE,
 
             exit_code: 0,
@@ -78,6 +80,7 @@ impl ProcessControlBlock {
         parent_tickets: usize,
         parent_pass: usize,
         mmap_areas: Vec<MmapArea>,
+        mmap_free_ranges: Vec<MmapFreeRange>,
         mmap_next: usize,
     ) -> Self {
         let tickets = parent_tickets.max(1);
@@ -103,6 +106,7 @@ impl ProcessControlBlock {
             pass: parent_pass,
 
             mmap_areas,
+            mmap_free_ranges,
             mmap_next,
 
             exit_code: 0,
@@ -149,6 +153,12 @@ pub struct MmapArea {
     pub prot: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MmapFreeRange {
+    pub start: usize,
+    pub end: usize,
+}
+
 pub const USER_MMAP_BASE: usize = 0x4000_0000;
 pub const USER_MMAP_TOP: usize = 0x7000_0000;
 
@@ -164,7 +174,46 @@ impl ProcessControlBlock {
             return None;
         }
 
-        let start = crate::mm::align_up(self.mmap_next, crate::mm::config::PAGE_SIZE);
+        // 优先复用 free range。先只做 first-fit。
+        for i in 0..self.mmap_free_ranges.len() {
+            let range = self.mmap_free_ranges[i];
+
+            let start = crate::mm::align_up(
+                range.start,
+                crate::mm::config::PAGE_SIZE,
+            );
+
+            let end = start.checked_add(len)?;
+
+            if end > range.end {
+                continue;
+            }
+
+            //从这个 free range 里切出 [start, end)。
+            if start == range.start && end == range.end {
+                self.mmap_free_ranges.remove(i);
+            } else if start == range.start {
+                self.mmap_free_ranges[i].start = end;
+            } else if end == range.end {
+                self.mmap_free_ranges[i].end = start;
+            } else {
+                //中间切一段，拆成左右两个 free range。
+                self.mmap_free_ranges[i].end = start;
+                self.mmap_free_ranges.push(MmapFreeRange {
+                    start: end,
+                    end: range.end,
+                });
+            }
+
+            return Some((start, end));
+        }
+
+        //free list 找不到，再从 mmap_next 扩张。
+        let start = crate::mm::align_up(
+            self.mmap_next,
+            crate::mm::config::PAGE_SIZE,
+        );
+
         let end = start.checked_add(len)?;
 
         if end > USER_MMAP_TOP {
@@ -176,4 +225,48 @@ impl ProcessControlBlock {
         Some((start, end))
     }
 
+    pub fn dealloc_mmap_range(&mut self, start: usize, end: usize) {
+        if start >= end {
+            return;
+        }
+
+        self.mmap_free_ranges.push(MmapFreeRange {
+            start,
+            end,
+        });
+
+        self.merge_mmap_free_ranges();
+    }
+
+    fn merge_mmap_free_ranges(&mut self) {
+        //free range 数量一般不大，直接 O(n2) 合并，简单可靠。
+        let mut changed = true;
+
+        while changed {
+            changed = false;
+
+            'outer: for i in 0..self.mmap_free_ranges.len() {
+                for j in (i + 1)..self.mmap_free_ranges.len() {
+                    let a = self.mmap_free_ranges[i];
+                    let b = self.mmap_free_ranges[j];
+
+                    
+                    //重叠或相邻都合并。
+                    if a.end >= b.start && b.end >= a.start {
+                        let start = if a.start < b.start { a.start } else { b.start };
+                        let end = if a.end > b.end { a.end } else { b.end };
+
+                        self.mmap_free_ranges[i] = MmapFreeRange {
+                            start,
+                            end,
+                        };
+
+                        self.mmap_free_ranges.remove(j);
+                        changed = true;
+                        break 'outer;
+                    }
+                }
+            }
+        }
+    }
 }

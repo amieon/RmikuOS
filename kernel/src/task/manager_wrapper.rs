@@ -303,6 +303,7 @@ pub fn fork_current() -> isize {
         let parent_pass = manager.process(parent_pid).pass;
 
         let child_mmap_areas = manager.process(parent_pid).mmap_areas.clone();
+        let child_mmap_free_areas = manager.process(parent_pid).mmap_free_ranges.clone();
         let child_mmap_next = manager.process(parent_pid).mmap_next.clone();
 
 
@@ -316,6 +317,7 @@ pub fn fork_current() -> isize {
             parent_tickets,
             parent_pass,
             child_mmap_areas,
+            child_mmap_free_areas,
             child_mmap_next,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
@@ -1007,7 +1009,9 @@ pub fn munmap_current(addr: usize, len: usize) -> isize {
         ) {
             return -1;
         }
+        process.dealloc_mmap_range(start, end);
     }
+
 
     crate::arch::flush_tlb();
 
