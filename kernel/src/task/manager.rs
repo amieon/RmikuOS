@@ -24,7 +24,7 @@ pub struct TaskManager {
     free_pids: Vec<Pid>,
     free_tids: Vec<Tid>,
 
-    
+    sched_alpha: isize,
 }
 
 pub enum WaitPidAction {
@@ -45,6 +45,8 @@ impl TaskManager {
 
             free_pids: Vec::new(),
             free_tids: Vec::new(),
+
+            sched_alpha: 50,
         }
     }
 
@@ -174,14 +176,16 @@ impl TaskManager {
     }
 
 
-    pub fn update_process_stride_by_sqrt(&mut self, pid: Pid) {
+    pub fn update_process_stride_by_alpha(&mut self, pid: Pid) {
         let ready_threads = self.count_ready_threads_in_process(pid);
 
         if ready_threads == 0 {
             return;
         }
 
-        let factor = crate::math::isqrt(ready_threads).max(1);
+        let alpha = self.sched_alpha;
+        let factor = crate::math::sched_thread_scale(ready_threads, alpha);
+
 
         let base_tickets = self.process(pid).tickets.max(1);
 
@@ -207,7 +211,7 @@ impl TaskManager {
             }
 
             //effective_tickets = tickets * sqrt(ready_threads)
-            self.update_process_stride_by_sqrt(pid);
+            self.update_process_stride_by_alpha(pid);
 
             let process = self.process(pid);
 
