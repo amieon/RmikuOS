@@ -1051,3 +1051,21 @@ pub fn set_thread_tickets_current(tid: usize, tickets: usize) -> isize {
 
     0
 }
+
+pub fn set_process_tickets_current(pid: usize, tickets: usize) -> isize {
+    if tickets == 0 {
+        return -1;
+    }
+
+    let mut manager = TASK_MANAGER.lock();
+
+    if manager.try_process(pid).is_none() {
+        return -1;
+    }
+
+    let process = manager.process_mut(pid);
+    process.tickets = tickets;
+    process.stride = crate::task::process::stride_from_tickets(tickets);
+
+    0
+}

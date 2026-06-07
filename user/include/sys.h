@@ -25,6 +25,7 @@ typedef long isize;
 #define SYS_MMAP                 19
 #define SYS_MUNMAP               20
 #define SYS_SET_THREAD_TICKETS   21
+#define SYS_SET_PROCESS_TICKETS  22
 
 
 
@@ -115,3 +116,7 @@ static inline int munmap(void *addr, usize len) {
 }
 
 
+
+static inline int set_process_tickets(int pid, int tickets) {
+    return syscall3(SYS_SET_PROCESS_TICKETS, pid, tickets, 0);
+}

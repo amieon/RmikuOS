@@ -20,26 +20,6 @@ struct arg {
 static struct arg args[MAX_THREADS];
 
 
-static int append_usize(char *buf, int pos, usize x) {
-    char tmp[32];
-    int n = 0;
-
-    if (x == 0) {
-        buf[pos++] = '0';
-        return pos;
-    }
-
-    while (x > 0) {
-        tmp[n++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (n > 0) {
-        buf[pos++] = tmp[--n];
-    }
-
-    return pos;
-}
 
 
 static void print_result(const char *name, int threads, usize total) {

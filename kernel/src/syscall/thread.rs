@@ -23,3 +23,7 @@ pub fn  sys_thread_exit(exit_code: i32) -> isize{
 pub fn sys_sthread_join(target_tid: crate::task::Tid, exit_code_ptr: usize) -> isize{
     thread_join_current(target_tid, exit_code_ptr)
 }
+
+pub fn sys_set_thread_tickets(tid : usize, tickets: usize) -> isize {
+    crate::task::set_thread_tickets_current(tid, tickets)
+}
