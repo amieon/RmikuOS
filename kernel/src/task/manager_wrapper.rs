@@ -1090,3 +1090,26 @@ pub fn set_my_tickets_current(tickets: usize) -> isize {
 
     0
 }
+
+
+pub fn get_thread_tickets_current(tid: usize) -> isize {
+
+
+    let mut manager = TASK_MANAGER.lock();
+    let current_tid = processor::current_tid();
+    let current_pid = manager.pid_of_tid(current_tid);
+
+    let Some(thread) = manager.try_thread(tid) else {
+        return -1;
+    };
+
+    if thread.pid != current_pid {
+        return -1;
+    }
+
+    let thread = manager.thread_mut(tid);
+
+    thread.tickets as isize
+     
+}
+

@@ -27,6 +27,7 @@ typedef long isize;
 #define SYS_SET_THREAD_TICKETS   21
 #define SYS_SET_PROCESS_TICKETS  22
 #define SYS_SET_MY_TICKETS       23
+#define SYS_GET_THREAD_TICKETS   24
 
 
 

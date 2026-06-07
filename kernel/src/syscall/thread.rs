@@ -27,3 +27,7 @@ pub fn sys_sthread_join(target_tid: crate::task::Tid, exit_code_ptr: usize) -> i
 pub fn sys_set_thread_tickets(tid : usize, tickets: usize) -> isize {
     crate::task::set_thread_tickets_current(tid, tickets)
 }
+
+pub fn sys_get_thread_tickets(tid : usize) -> isize {
+    crate::task::get_thread_tickets_current(tid)
+}
