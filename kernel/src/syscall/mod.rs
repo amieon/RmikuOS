@@ -54,6 +54,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_MUNMAP => process::sys_munmap(args[0], args[1]),
         SYSCALL_SET_THREAD_TICKETS => thread::sys_set_thread_tickets(args[0], args[1]),
         SYSCALL_SET_PROCESS_TICKETS => process::sys_set_process_tickets(args[0], args[1]),
+        SYSCALL_SET_MY_TICKETS => process::sys_set_my_tickets(args[0]),
         SYSCALL_GET_THREAD_TICKETS => thread::sys_get_thread_tickets(args[0]),
         _ => {
             log::warn!(
