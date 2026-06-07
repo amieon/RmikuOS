@@ -11,6 +11,11 @@ pub type Pid = usize;
 pub const DEFAULT_TICKETS: usize = 100;
 pub const BIG_STRIDE: usize = 10_000_000;
 
+pub fn stride_from_tickets(tickets: usize) -> usize {
+    let tickets = tickets.max(1);
+    (BIG_STRIDE / tickets).max(1)
+}
+
 pub struct ProcessControlBlock {
     pub pid: Pid,
 

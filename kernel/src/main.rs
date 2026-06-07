@@ -16,6 +16,7 @@ mod syscall;
 mod fs;
 mod block;
 mod pci;
+mod math;
 
 #[macro_use]
 mod io;

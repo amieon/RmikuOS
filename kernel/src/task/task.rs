@@ -38,7 +38,7 @@ pub struct TaskControlBlock {
 
     pub parent: Option<usize>,
     pub children: Vec<usize>,
-        pub fd_table: Vec<Option<FileRef>>,
+    pub fd_table: Vec<Option<FileRef>>,
     pub free_fds: Vec<usize>,
     pub cwd: String,
 

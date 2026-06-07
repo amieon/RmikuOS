@@ -153,18 +153,61 @@ impl TaskManager {
         }
     }
 
+    pub fn count_ready_threads_in_process(&self, pid: Pid) -> usize {
+        let Some(process) = self.processes.get(pid).and_then(|x| x.as_ref()) else {
+            return 0;
+        };
 
-    pub fn pick_ready_process_by_stride(&self) -> Option<Pid> {
+        process
+            .ready_threads
+            .iter()
+            .filter(|&&tid| {
+                self.threads
+                    .get(tid)
+                    .and_then(|x| x.as_ref())
+                    .map(|thread| thread.status == ThreadStatus::Ready)
+                    .unwrap_or(false)
+            })
+            .count()
+    }
+
+
+    pub fn update_process_stride_by_sqrt(&mut self, pid: Pid) {
+        let ready_threads = self.count_ready_threads_in_process(pid);
+
+        if ready_threads == 0 {
+            return;
+        }
+
+        let factor = crate::math::isqrt(ready_threads).max(1);
+
+        let base_tickets = self.process(pid).tickets.max(1);
+
+        let effective_tickets = base_tickets
+            .saturating_mul(factor)
+            .max(1);
+
+        let new_stride = crate::task::process::stride_from_tickets(effective_tickets);
+
+        self.process_mut(pid).stride = new_stride;
+    }
+
+    pub fn pick_ready_process_by_stride(&mut self) -> Option<Pid> {
         let mut best: Option<(Pid, usize)> = None;
 
         for pid in 0..self.processes.len() {
-            let Some(process) = self.processes[pid].as_ref() else {
+            let Some(_) = self.processes[pid].as_ref() else {
                 continue;
             };
 
             if !self.process_has_ready_thread(pid) {
                 continue;
             }
+
+            //effective_tickets = tickets * sqrt(ready_threads)
+            self.update_process_stride_by_sqrt(pid);
+
+            let process = self.process(pid);
 
             match best {
                 None => {
