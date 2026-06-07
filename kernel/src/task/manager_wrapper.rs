@@ -1113,3 +1113,30 @@ pub fn get_thread_tickets_current(tid: usize) -> isize {
      
 }
 
+pub fn get_process_tickets_current(pid: usize) -> isize {
+
+
+    let mut manager = TASK_MANAGER.lock();
+
+    if manager.try_process(pid).is_none() {
+        return -1;
+    }
+
+    let process = manager.process_mut(pid);
+    process.tickets as isize
+}
+
+pub fn get_my_tickets_current() -> isize {
+
+    let mut manager = TASK_MANAGER.lock();
+    let tid = processor::current_tid();
+    let pid = manager.pid_of_tid(tid);
+
+
+    if manager.try_process(pid).is_none() {
+        return -1;
+    }
+
+    let process = manager.process_mut(pid);
+    process.tickets as isize
+}

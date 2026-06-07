@@ -28,6 +28,8 @@ typedef long isize;
 #define SYS_SET_PROCESS_TICKETS  22
 #define SYS_SET_MY_TICKETS       23
 #define SYS_GET_THREAD_TICKETS   24
+#define SYS_GET_PROCESS_TICKETS  25
+#define SYS_GET_MY_TICKETS       26
 
 
 
@@ -120,9 +122,17 @@ static inline int munmap(void *addr, usize len) {
 
 
 static inline int set_process_tickets(int pid, int tickets) {
-    return syscall3(SYS_SET_PROCESS_TICKETS, pid, tickets, 0);
+    return syscall3(SYS_SET_PROCESS_TICKETS,  (usize)pid, tickets, 0);
 }
 
 static inline int set_my_tickets(int tickets) {
     return syscall3(SYS_SET_MY_TICKETS, tickets, 0, 0);
+}
+
+static inline int get_process_tickets(int pid) {
+    return syscall3(SYS_GET_PROCESS_TICKETS,  (usize)pid,0 , 0);
+}
+
+static inline int get_my_tickets() {
+    return syscall3(SYS_GET_MY_TICKETS,0 , 0, 0);
 }

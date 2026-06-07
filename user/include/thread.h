@@ -191,9 +191,9 @@ static inline int thread_join(int tid, int *exit_code) {
 
 
 static inline int set_thread_tickets(int tid, int tickets) {
-    return syscall3(SYS_SET_THREAD_TICKETS, tid, tickets, 0);
+    return syscall3(SYS_SET_THREAD_TICKETS,  (usize)tid, tickets, 0);
 }
 
 static inline int get_thread_tickets(int tid) {
-    return syscall3(SYS_GET_THREAD_TICKETS, tid, 0, 0);
+    return syscall3(SYS_GET_THREAD_TICKETS,  (usize)tid, 0, 0);
 }

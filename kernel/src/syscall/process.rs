@@ -42,3 +42,11 @@ pub fn sys_set_process_tickets(tid : usize, tickets: usize) -> isize {
 pub fn sys_set_my_tickets(tickets: usize) -> isize {
     crate::task::set_my_tickets_current(tickets)
 }
+
+pub fn sys_get_process_tickets(pid : usize) -> isize {
+    crate::task::get_process_tickets_current(pid)
+}
+
+pub fn sys_get_my_tickets() -> isize {
+    crate::task::get_my_tickets_current()
+}
