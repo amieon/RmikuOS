@@ -10,6 +10,7 @@ static void worker(void *arg) {
     thread_exit(0);
 }
 
+
 int main(void) {
     puts("tickets_syscall_test start\n");
 
