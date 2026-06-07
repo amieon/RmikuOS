@@ -38,3 +38,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> isize {
 pub fn sys_set_process_tickets(tid : usize, tickets: usize) -> isize {
     crate::task::set_process_tickets_current(tid, tickets)
 }
+
+pub fn sys_set_my_tickets(tickets: usize) -> isize {
+    crate::task::set_my_tickets_current(tickets)
+}

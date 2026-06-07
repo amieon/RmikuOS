@@ -47,6 +47,7 @@ pub use manager_wrapper::{
     thread_join_current,
     set_thread_tickets_current,
     set_process_tickets_current,
+    set_my_tickets_current,
 
     mmap_current,
     munmap_current,

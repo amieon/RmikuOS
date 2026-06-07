@@ -78,7 +78,7 @@ static int run_workload(const char *name, int threads, int tickets) {
         return 1;
     }
 
-    if (set_process_tickets(getpid(),tickets) < 0) {
+    if (set_my_tickets(tickets) < 0) {
         puts("[mixed_sched] FAIL: set_process_tickets\n");
         return 1;
     }
