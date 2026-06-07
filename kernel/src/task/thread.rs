@@ -31,8 +31,10 @@ pub enum BlockReason {
         tid: Tid,
     },
 }
+pub const DEFAULT_THREAD_TICKETS: usize = 100;
 
 pub struct ThreadControlBlock {
+    
     pub tid: Tid,
     pub pid: Pid,
 
@@ -42,6 +44,10 @@ pub struct ThreadControlBlock {
 
     pub status: ThreadStatus,
     pub block_reason: BlockReason,
+
+    pub tickets: usize,
+    pub stride: usize,
+    pub pass: usize,
 
     pub exit_code: i32,
 }
@@ -70,6 +76,10 @@ impl ThreadControlBlock {
 
             status: ThreadStatus::Ready,
             block_reason: BlockReason::None,
+
+            tickets: DEFAULT_THREAD_TICKETS,
+            stride: crate::task::process::stride_from_tickets(DEFAULT_THREAD_TICKETS),
+            pass: 0,
 
             exit_code: 0,
         }
@@ -103,6 +113,10 @@ impl ThreadControlBlock {
             kernel_stack,
             trap_cx_addr: trap_cx_ptr as usize,
             task_cx,
+
+            tickets: DEFAULT_THREAD_TICKETS,
+            stride: crate::task::process::stride_from_tickets(DEFAULT_THREAD_TICKETS),
+            pass: 0,
 
             status: ThreadStatus::Ready,
             block_reason: BlockReason::None,
@@ -142,5 +156,7 @@ impl ThreadControlBlock {
     pub fn is_zombie(&self) -> bool {
         self.status == ThreadStatus::Zombie
     }
+    
 }
+
 

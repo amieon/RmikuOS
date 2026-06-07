@@ -153,6 +153,8 @@ impl TaskManager {
         }
     }
 
+
+
     pub fn count_ready_threads_in_process(&self, pid: Pid) -> usize {
         let Some(process) = self.processes.get(pid).and_then(|x| x.as_ref()) else {
             return 0;
@@ -224,7 +226,6 @@ impl TaskManager {
     }
 
 
-
     pub fn find_next_ready_thread(&mut self) -> Option<Tid> {
         let pid = self.pick_ready_process_by_stride()?;
         let tid = self.pick_ready_thread_in_process(pid)?;
@@ -251,25 +252,47 @@ impl TaskManager {
     
 
     pub fn pick_ready_thread_in_process(&mut self, pid: Pid) -> Option<Tid> {
-        loop {
-            let tid = {
-                let process = self.process_mut(pid);
+        let ready_threads = {
+            let process = self.process(pid);
+            process.ready_threads.clone()
+        };
 
-                if process.ready_threads.is_empty() {
-                    return None;
-                }
+        let mut best_tid: Option<Tid> = None;
+        let mut best_pass: usize = usize::MAX;
 
-                process.ready_threads.remove(0)
-            };
-
+        for tid in ready_threads {
             let Some(thread) = self.try_thread(tid) else {
                 continue;
             };
 
-            if thread.status == ThreadStatus::Ready {
-                return Some(tid);
+            if thread.status != ThreadStatus::Ready {
+                continue;
+            }
+
+            if best_tid.is_none() || thread.pass < best_pass {
+                best_tid = Some(tid);
+                best_pass = thread.pass;
             }
         }
+
+        let tid = best_tid?;
+
+        {
+            let process = self.process_mut(pid);
+
+            if let Some(pos) = process.ready_threads.iter().position(|&x| x == tid) {
+                process.ready_threads.remove(pos);
+            } else {
+                return None;
+            }
+        }
+
+        {
+            let thread = self.thread_mut(tid);
+            thread.pass = thread.pass.wrapping_add(thread.stride);
+        }
+
+        Some(tid)
     }
 
     pub fn mark_thread_ready(&mut self, tid: Tid) {
@@ -630,7 +653,30 @@ impl TaskManager {
         0
     }
 
+    pub fn min_thread_pass_in_process(&self, pid: Pid) -> usize {
+        let process = self.process(pid);
 
+        let mut min_pass = usize::MAX;
+
+        for &tid in process.threads.iter() {
+            let Some(thread) = self.try_thread(tid) else {
+                continue;
+            };
+
+            if thread.status == ThreadStatus::Dead
+                || thread.status == ThreadStatus::Zombie {
+                continue;
+            }
+
+            min_pass = min_pass.min(thread.pass);
+        }
+
+        if min_pass == usize::MAX {
+            0
+        } else {
+            min_pass
+        }
+    }
 
     pub fn create_thread_current(
         &mut self,
@@ -649,7 +695,7 @@ impl TaskManager {
         let tid = self.alloc_tid();
         let user_stack_top = user_stack_top & !0xf;
 
-        let thread = ThreadControlBlock::new_user_thread(
+        let mut thread = ThreadControlBlock::new_user_thread(
             tid,
             pid,
             entry,
@@ -657,6 +703,8 @@ impl TaskManager {
             arg0,
             arg1,
         );
+        let init_pass = self.min_thread_pass_in_process(pid);
+        thread.pass = init_pass;
 
         self.insert_thread(thread);
 
