@@ -19,11 +19,12 @@ typedef long isize;
 #define SYS_GETCWD     13
 #define SYS_STAT       14
 #define SYS_FSTAT      15
-#define SYS_THREAD_CREATE   16
-#define SYS_THREAD_EXIT     17
-#define SYS_THREAD_JOIN     18
-#define SYS_MMAP       19
-#define SYS_MUNMAP     20
+#define SYS_THREAD_CREATE        16
+#define SYS_THREAD_EXIT          17
+#define SYS_THREAD_JOIN          18
+#define SYS_MMAP                 19
+#define SYS_MUNMAP               20
+#define SYS_SET_THREAD_TICKETS   21
 
 
 

@@ -1026,3 +1026,28 @@ pub fn munmap_current(addr: usize, len: usize) -> isize {
 
     0
 }
+
+
+pub fn set_thread_tickets_current(tid: usize, tickets: usize) -> isize {
+    if tickets == 0 {
+        return -1;
+    }
+
+    let mut manager = TASK_MANAGER.lock();
+    let current_tid = processor::current_tid();
+    let current_pid = manager.pid_of_tid(current_tid);
+
+    let Some(thread) = manager.try_thread(tid) else {
+        return -1;
+    };
+
+    if thread.pid != current_pid {
+        return -1;
+    }
+
+    let thread = manager.thread_mut(tid);
+    thread.tickets = tickets;
+    thread.stride = crate::task::process::stride_from_tickets(tickets);
+
+    0
+}

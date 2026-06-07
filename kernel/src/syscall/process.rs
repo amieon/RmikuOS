@@ -34,3 +34,7 @@ pub fn sys_mmap(len: usize, prot: usize) -> isize {
 pub fn sys_munmap(addr: usize, len: usize) -> isize {
     crate::task::munmap_current(addr, len)
 }
+
+pub fn sys_set_thread_tickets(tid : usize, tickets: usize) -> isize {
+    crate::task::set_thread_tickets_current(tid, tickets)
+}
