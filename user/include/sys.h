@@ -19,19 +19,21 @@ typedef long isize;
 #define SYS_GETCWD     13
 #define SYS_STAT       14
 #define SYS_FSTAT      15
-#define SYS_THREAD_CREATE        16
-#define SYS_THREAD_EXIT          17
-#define SYS_THREAD_JOIN          18
-#define SYS_MMAP                 19
-#define SYS_MUNMAP               20
-#define SYS_SET_THREAD_TICKETS   21
-#define SYS_SET_PROCESS_TICKETS  22
-#define SYS_SET_MY_TICKETS       23
-#define SYS_GET_THREAD_TICKETS   24
-#define SYS_GET_PROCESS_TICKETS  25
-#define SYS_GET_MY_TICKETS       26
-#define SYS_SET_SCHED_ALPHA      27
-#define SYS_GET_SCHED_ALPHA      28
+#define SYS_THREAD_CREATE            16
+#define SYS_THREAD_EXIT              17
+#define SYS_THREAD_JOIN              18
+#define SYS_MMAP                     19
+#define SYS_MUNMAP                   20
+#define SYS_SET_THREAD_TICKETS       21
+#define SYS_SET_PROCESS_TICKETS      22
+#define SYS_SET_MY_TICKETS           23
+#define SYS_GET_THREAD_TICKETS       24
+#define SYS_GET_PROCESS_TICKETS      25
+#define SYS_GET_MY_TICKETS           26
+#define SYS_SET_SCHED_ALPHA          27
+#define SYS_GET_SCHED_ALPHA          28
+#define SYS_GET_PROCESS_SCHED_STAT   29  
+#define SYS_RESET_SCHED_STAT         30
 
 
 
@@ -146,4 +148,32 @@ static inline int set_sched_alpha(int alpha) {
 
 static inline int get_sched_alpha(void) {
     return syscall3(SYS_GET_SCHED_ALPHA, 0, 0, 0);
+}
+
+
+struct sched_proc_stat {
+    int pid;
+    int tickets;
+    int effective_tickets;
+    int ready_threads;
+    int alpha;
+
+    unsigned long run_ticks;
+    unsigned long pass;
+    unsigned long stride;
+};
+
+
+
+static inline int get_process_sched_stat(int pid, struct sched_proc_stat *stat) {
+    return syscall3(
+        SYS_GET_PROCESS_SCHED_STAT,
+        (usize)pid,
+        (usize)stat,
+        0
+    );
+}
+
+static inline int reset_sched_stat(void) {
+    return syscall3(SYS_RESET_SCHED_STAT, 0, 0, 0);
 }

@@ -59,4 +59,13 @@ pub fn sys_get_sched_alpha() -> isize {
     crate::task::get_sched_alpha_current()
 }
 
+pub fn sys_get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
+    crate::task::get_process_sched_stat(pid, stat_ptr)
+}
+
+pub fn sys_reset_sched_stat() -> isize {
+    crate::task::reset_sched_stat()
+}
+
+
 

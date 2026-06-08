@@ -820,3 +820,23 @@ impl TaskManager {
 }
 
 
+impl TaskManager {
+    pub fn reset_sched_stat(&mut self) -> isize {
+        for process in self.processes.iter_mut() {
+            if let Some(process) = process.as_mut() {
+                process.run_ticks = 0;
+                process.ready_thread_count_snapshot = 0;
+
+                // process.effective_tickets = 建议 effective_tickets 保留，不要清 process.tickets;
+            }
+        }
+
+        for thread in self.threads.iter_mut() {
+            if let Some(thread) = thread.as_mut() {
+                thread.run_ticks = 0;
+            }
+        }
+        0
+    }
+}
+

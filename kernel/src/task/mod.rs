@@ -59,4 +59,6 @@ pub use manager_wrapper::{
     get_sched_alpha_current,
 
     account_current_tick,
+    get_process_sched_stat,
+    reset_sched_stat,
 };

@@ -1175,3 +1175,80 @@ pub fn account_current_tick() {
         process.run_ticks = process.run_ticks.saturating_add(1);
     }
 }
+
+
+fn write_value_to_user<T: Copy>(user_ptr: usize, value: &T) -> isize {
+    if user_ptr == 0 {
+        return -1;
+    }
+
+    let bytes = unsafe {
+        core::slice::from_raw_parts(
+            value as *const T as *const u8,
+            core::mem::size_of::<T>(),
+        )
+    };
+
+    match crate::task::write_current_user_bytes(user_ptr, bytes) {
+        Some(n) if n == bytes.len() => 0,
+        _ => -1,
+    }
+}
+
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct SchedProcStat {
+    pub pid: i32,
+    pub tickets: i32,
+    pub effective_tickets: i32,
+    pub ready_threads: i32,
+    pub alpha: i32,
+
+    pub run_ticks: usize,
+    pub pass: usize,
+    pub stride: usize,
+}
+
+pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
+    if stat_ptr == 0 {
+        return -1;
+    }
+
+    let stat = {
+        let mut manager = TASK_MANAGER.lock();
+
+        if manager.try_process(pid).is_none() {
+            return -1;
+        }
+
+        /*
+         * 如果这个进程还有 ready thread，先刷新一次 effective_tickets / ready_threads。
+         * 这样读出来的统计更接近当前调度状态。
+         */
+        if manager.process_has_ready_thread(pid) {
+            manager.update_process_stride_by_alpha(pid);
+        }
+
+        let process = manager.process(pid);
+
+        SchedProcStat {
+            pid: pid as i32,
+            tickets: process.tickets as i32,
+            effective_tickets: process.effective_tickets as i32,
+            ready_threads: process.ready_thread_count_snapshot as i32,
+            alpha: manager.get_sched_alpha() as i32,
+
+            run_ticks: process.run_ticks,
+            pass: process.pass,
+            stride: process.stride,
+        }
+    };
+
+    write_value_to_user(stat_ptr, &stat)
+}
+
+pub fn reset_sched_stat() -> isize {
+    let mut manager = TASK_MANAGER.lock();
+    manager.reset_sched_stat()
+}

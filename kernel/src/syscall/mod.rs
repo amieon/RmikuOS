@@ -31,6 +31,8 @@ pub const SYSCALL_GET_PROCESS_TICKETS: usize = 25;
 pub const SYSCALL_GET_MY_TICKETS: usize = 26;
 pub const SYSCALL_SET_SCHED_ALPHA: usize = 27;
 pub const SYSCALL_GET_SCHED_ALPHA: usize = 28;
+pub const SYSCALL_GET_PROCESS_SCHED_STAT: usize = 29;
+pub const SYSCALL_RESET_SCHED_STAT: usize = 30;
 
 
 
@@ -65,6 +67,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GET_MY_TICKETS => process::sys_get_my_tickets(),
         SYSCALL_SET_SCHED_ALPHA => process::sys_set_sched_alpha(args[0]),
         SYSCALL_GET_SCHED_ALPHA => process::sys_get_sched_alpha(),
+        SYSCALL_GET_PROCESS_SCHED_STAT => process::sys_get_process_sched_stat(args[0], args[1]),
+        SYSCALL_RESET_SCHED_STAT => process::sys_reset_sched_stat(),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",
