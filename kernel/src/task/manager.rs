@@ -193,12 +193,16 @@ impl TaskManager {
         let ready_threads = self.count_ready_threads_in_process(pid);
 
         if ready_threads == 0 {
+            //没有 ready thread 的进程不会参与调度。
+            //但为了统计信息不残留旧值，可以把快照清掉。
+            let process = self.process_mut(pid);
+            process.ready_thread_count_snapshot = 0;
+            process.effective_tickets = 0;
             return;
         }
 
         let alpha = self.sched_alpha;
         let factor = crate::math::sched_thread_scale(ready_threads, alpha);
-
 
         let base_tickets = self.process(pid).tickets.max(1);
 
@@ -206,9 +210,14 @@ impl TaskManager {
             .saturating_mul(factor)
             .max(1);
 
-        let new_stride = crate::task::process::stride_from_tickets(effective_tickets);
+        let new_stride =
+            crate::task::process::stride_from_tickets(effective_tickets);
 
-        self.process_mut(pid).stride = new_stride;
+        let process = self.process_mut(pid);
+
+        process.ready_thread_count_snapshot = ready_threads;
+        process.effective_tickets = effective_tickets;
+        process.stride = new_stride;
     }
 
     pub fn pick_ready_process_by_stride(&mut self) -> Option<Pid> {

@@ -66,6 +66,9 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                 if should_schedule && cx.is_from_user() {
                     crate::task::preempt_current_and_run_next();
                 }
+                if cx.is_from_user() {
+                    crate::task::account_current_tick();
+                }
             }
             _ => {
                 trap_println!(

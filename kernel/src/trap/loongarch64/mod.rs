@@ -132,6 +132,9 @@ fn handle_interrupt(cx: &mut TrapContext) {
         if should_schedule && cx.is_from_user() {
             crate::task::preempt_current_and_run_next();
         }
+        if cx.is_from_user() {
+            crate::task::account_current_tick();
+        }
 
         return;
     }

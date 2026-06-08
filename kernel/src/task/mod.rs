@@ -57,4 +57,6 @@ pub use manager_wrapper::{
 
     set_sched_alpha_current,
     get_sched_alpha_current,
+
+    account_current_tick,
 };

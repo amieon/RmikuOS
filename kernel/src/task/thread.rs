@@ -49,6 +49,8 @@ pub struct ThreadControlBlock {
     pub stride: usize,
     pub pass: usize,
 
+    pub run_ticks: usize,
+
     pub exit_code: i32,
 }
 
@@ -80,6 +82,8 @@ impl ThreadControlBlock {
             tickets: DEFAULT_THREAD_TICKETS,
             stride: crate::task::process::stride_from_tickets(DEFAULT_THREAD_TICKETS),
             pass: 0,
+
+            run_ticks: 0,
 
             exit_code: 0,
         }
@@ -120,6 +124,8 @@ impl ThreadControlBlock {
 
             status: ThreadStatus::Ready,
             block_reason: BlockReason::None,
+
+            run_ticks: 0,
 
             exit_code: 0,
         }

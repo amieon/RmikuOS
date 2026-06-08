@@ -1157,3 +1157,21 @@ pub fn get_sched_alpha_current() -> isize {
     let manager = TASK_MANAGER.lock();
     manager.get_sched_alpha() as isize
 }
+
+pub fn account_current_tick() {
+    let tid = processor::current_tid();
+
+    let mut manager = TASK_MANAGER.lock();
+
+    let pid = manager.pid_of_tid(tid);
+
+    {
+        let thread = manager.thread_mut(tid);
+        thread.run_ticks = thread.run_ticks.saturating_add(1);
+    }
+
+    {
+        let process = manager.process_mut(pid);
+        process.run_ticks = process.run_ticks.saturating_add(1);
+    }
+}
