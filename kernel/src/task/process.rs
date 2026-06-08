@@ -35,6 +35,10 @@ pub struct ProcessControlBlock {
     pub stride: usize,
     pub pass: usize,
 
+    pub run_ticks: usize,
+    pub effective_tickets: usize,
+    pub ready_thread_count_snapshot: usize,
+
     pub mmap_areas: Vec<MmapArea>,
     pub mmap_free_ranges: Vec<MmapFreeRange>,
     pub mmap_next: usize,
@@ -66,6 +70,10 @@ impl ProcessControlBlock {
             tickets: DEFAULT_TICKETS,
             stride: BIG_STRIDE / DEFAULT_TICKETS,
             pass: 0,
+
+            run_ticks: 0,
+            effective_tickets: DEFAULT_TICKETS,
+            ready_thread_count_snapshot: 0,
             
             mmap_areas: Vec::new(),
             mmap_free_ranges: Vec::new(),
@@ -109,6 +117,10 @@ impl ProcessControlBlock {
             tickets,
             stride,
             pass: parent_pass,
+
+            run_ticks: 0,
+            effective_tickets: tickets,
+            ready_thread_count_snapshot: 1,
 
             mmap_areas,
             mmap_free_ranges,
