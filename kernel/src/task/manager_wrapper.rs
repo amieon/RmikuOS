@@ -1065,6 +1065,7 @@ pub fn set_process_tickets_current(pid: usize, tickets: usize) -> isize {
 
     let process = manager.process_mut(pid);
     process.tickets = tickets;
+    process.effective_tickets = tickets;
     process.stride = crate::task::process::stride_from_tickets(tickets);
 
     0
@@ -1086,6 +1087,7 @@ pub fn set_my_tickets_current(tickets: usize) -> isize {
 
     let process = manager.process_mut(pid);
     process.tickets = tickets;
+    process.effective_tickets = tickets;
     process.stride = crate::task::process::stride_from_tickets(tickets);
 
     0
