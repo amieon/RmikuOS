@@ -68,6 +68,6 @@ pub fn sys_reset_sched_stat() -> isize {
 }
 
 pub fn sys_get_ticks() -> isize {
-    crate::timer::sys_get_ticks()
+    crate::timer::ticks().try_into().unwrap()
 }
 

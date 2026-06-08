@@ -190,11 +190,9 @@ impl TaskManager {
 
 
     pub fn update_process_stride_by_alpha(&mut self, pid: Pid) {
-        let ready_threads = self.count_ready_threads_in_process(pid);
+        let runnable_threads = self.count_runnable_threads_in_process(pid);
 
-        if ready_threads == 0 {
-            //没有 ready thread 的进程不会参与调度。
-            //但为了统计信息不残留旧值，可以把快照清掉。
+        if runnable_threads == 0 {
             let process = self.process_mut(pid);
             process.ready_thread_count_snapshot = 0;
             process.effective_tickets = 0;
@@ -202,7 +200,7 @@ impl TaskManager {
         }
 
         let alpha = self.sched_alpha;
-        let factor = crate::math::sched_thread_scale(ready_threads, alpha);
+        let factor = crate::math::sched_thread_scale(runnable_threads, alpha);
 
         let base_tickets = self.process(pid).tickets.max(1);
 
@@ -215,7 +213,7 @@ impl TaskManager {
 
         let process = self.process_mut(pid);
 
-        process.ready_thread_count_snapshot = ready_threads;
+        process.ready_thread_count_snapshot = runnable_threads;
         process.effective_tickets = effective_tickets;
         process.stride = new_stride;
     }
@@ -821,6 +819,60 @@ impl TaskManager {
 
 
 impl TaskManager {
+    pub fn count_runnable_threads_in_process(&self, pid: Pid) -> usize {
+        let Some(process) = self.processes.get(pid).and_then(|x| x.as_ref()) else {
+            return 0;
+        };
+
+        let mut count = 0;
+
+        for &tid in process.threads.iter() {
+            let Some(thread) = self.try_thread(tid) else {
+                continue;
+            };
+
+            if thread.status == ThreadStatus::Ready
+                || thread.status == ThreadStatus::Running
+            {
+                count += 1;
+            }
+        }
+
+        count
+    }
+
+    pub fn count_sched_runnable_threads_in_process(&self, pid: Pid) -> usize {
+        let Some(process) = self.processes.get(pid).and_then(|x| x.as_ref()) else {
+            return 0;
+        };
+
+        let mut count = 0;
+
+        for &tid in process.ready_threads.iter() {
+            let Some(thread) = self.try_thread(tid) else {
+                continue;
+            };
+
+            if thread.status == ThreadStatus::Ready {
+                count += 1;
+            }
+        }
+
+        let current_tid = crate::task::processor::current_tid();
+
+        if self.pid_of_tid(current_tid) == pid {
+            let thread = self.thread(current_tid);
+
+            if thread.status == ThreadStatus::Running {
+                count += 1;
+            }
+        }
+
+        count
+    }
+
+
+
     pub fn reset_sched_stat(&mut self) -> isize {
         for process in self.processes.iter_mut() {
             if let Some(process) = process.as_mut() {

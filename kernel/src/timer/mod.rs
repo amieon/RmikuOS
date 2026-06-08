@@ -9,3 +9,4 @@ mod arch_timer;
 mod arch_timer;
 
 pub use arch_timer::*;
+pub use ticks;

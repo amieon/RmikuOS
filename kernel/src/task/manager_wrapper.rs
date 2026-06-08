@@ -1218,32 +1218,40 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
     }
 
     let stat = {
-        let mut manager = TASK_MANAGER.lock();
+        let manager = TASK_MANAGER.lock();
 
         if manager.try_process(pid).is_none() {
             return -1;
         }
 
-        /*
-         * 如果这个进程还有 ready thread，先刷新一次 effective_tickets / ready_threads。
-         * 这样读出来的统计更接近当前调度状态。
-         */
-        if manager.process_has_ready_thread(pid) {
-            manager.update_process_stride_by_alpha(pid);
-        }
-
         let process = manager.process(pid);
+
+        let runnable_threads = manager
+            .count_sched_runnable_threads_in_process(pid)
+            .max(1);
+
+        let alpha = manager.get_sched_alpha();
+        let factor = crate::math::sched_thread_scale(runnable_threads, alpha);
+
+        let tickets = process.tickets.max(1);
+
+        let effective_tickets = tickets
+            .saturating_mul(factor)
+            .max(1);
+
+        let stride =
+            crate::task::process::stride_from_tickets(effective_tickets);
 
         SchedProcStat {
             pid: pid as i32,
-            tickets: process.tickets as i32,
-            effective_tickets: process.effective_tickets as i32,
-            ready_threads: process.ready_thread_count_snapshot as i32,
-            alpha: manager.get_sched_alpha() as i32,
+            tickets: tickets as i32,
+            effective_tickets: effective_tickets as i32,
+            ready_threads: runnable_threads as i32,
+            alpha: alpha as i32,
 
             run_ticks: process.run_ticks,
             pass: process.pass,
-            stride: process.stride,
+            stride,
         }
     };
 

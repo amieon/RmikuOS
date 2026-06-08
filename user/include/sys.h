@@ -34,6 +34,9 @@ typedef long isize;
 #define SYS_GET_SCHED_ALPHA          28
 #define SYS_GET_PROCESS_SCHED_STAT   29  
 #define SYS_RESET_SCHED_STAT         30
+#define SYS_GET_TICKS                31  
+
+
 
 
 
@@ -176,4 +179,8 @@ static inline int get_process_sched_stat(int pid, struct sched_proc_stat *stat) 
 
 static inline int reset_sched_stat(void) {
     return syscall3(SYS_RESET_SCHED_STAT, 0, 0, 0);
+}
+
+static inline usize get_ticks(void) {
+    return syscall3(SYS_GET_TICKS, 0, 0, 0);
 }
