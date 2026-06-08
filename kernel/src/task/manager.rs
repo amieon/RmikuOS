@@ -175,6 +175,19 @@ impl TaskManager {
             .count()
     }
 
+    pub fn set_sched_alpha(&mut self, alpha: isize) -> isize{
+        match alpha {
+            0 | 25 | 50 | 75 | 100 => {}
+            _ => return -1,
+        }
+        self.sched_alpha = alpha;
+        0
+    }
+
+    pub fn get_sched_alpha(&self) -> isize{
+        self.sched_alpha
+    }
+
 
     pub fn update_process_stride_by_alpha(&mut self, pid: Pid) {
         let ready_threads = self.count_ready_threads_in_process(pid);

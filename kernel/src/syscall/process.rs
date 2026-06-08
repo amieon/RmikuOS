@@ -50,3 +50,13 @@ pub fn sys_get_process_tickets(pid : usize) -> isize {
 pub fn sys_get_my_tickets() -> isize {
     crate::task::get_my_tickets_current()
 }
+
+pub fn sys_set_sched_alpha(alpha: usize) -> isize {
+    crate::task::set_sched_alpha_current(alpha.try_into().unwrap())
+}
+
+pub fn sys_get_sched_alpha() -> isize {
+    crate::task::get_sched_alpha_current()
+}
+
+

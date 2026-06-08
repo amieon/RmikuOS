@@ -30,6 +30,9 @@ typedef long isize;
 #define SYS_GET_THREAD_TICKETS   24
 #define SYS_GET_PROCESS_TICKETS  25
 #define SYS_GET_MY_TICKETS       26
+#define SYS_SET_SCHED_ALPHA      27
+#define SYS_GET_SCHED_ALPHA      28
+
 
 
 
@@ -135,4 +138,12 @@ static inline int get_process_tickets(int pid) {
 
 static inline int get_my_tickets() {
     return syscall3(SYS_GET_MY_TICKETS,0 , 0, 0);
+}
+
+static inline int set_sched_alpha(int alpha) {
+    return syscall3(SYS_SET_SCHED_ALPHA, alpha, 0, 0);
+}
+
+static inline int get_sched_alpha(void) {
+    return syscall3(SYS_GET_SCHED_ALPHA, 0, 0, 0);
 }
