@@ -67,5 +67,7 @@ pub fn sys_reset_sched_stat() -> isize {
     crate::task::reset_sched_stat()
 }
 
-
+pub fn sys_get_ticks() -> isize {
+    crate::timer::sys_get_ticks()
+}
 
