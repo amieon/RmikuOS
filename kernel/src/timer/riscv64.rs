@@ -7,7 +7,7 @@ static TICKS: AtomicUsize = AtomicUsize::new(0);
  * QEMU 上 10_000_000 可能太慢，抢占不明显。
  * 先用小一点，确认成功后再调大。
  */
-const INTERVAL: usize = 2_000_000;
+const INTERVAL: usize = 500_000;
 
 /*
  * 每多少次 timer interrupt 调度一次。

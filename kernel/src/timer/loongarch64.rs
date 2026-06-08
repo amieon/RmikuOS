@@ -7,7 +7,7 @@ static TICKS: AtomicUsize = AtomicUsize::new(0);
  * 先调小一点，方便验证抢占。
  * 如果日志太多或者切太快，再调大。
  */
-const TIMER_INITVAL: usize = 2_000_000;
+const TIMER_INITVAL: usize = 500_000;
 
 const TICKS_PER_SLICE: usize = 1;
 
