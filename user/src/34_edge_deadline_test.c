@@ -227,30 +227,22 @@ static void control_worker(void *raw) {
         }
 
         int missed = 0;
-
         if (get_ticks() > deadline) {
             missed = 1;
         }
-
         usize job_start = get_ticks();
         usize job_target = job_start + CONTROL_JOB_CPU_TICKS;
-
         while (get_ticks() < job_target) {
             burn_iters(CONTROL_SPIN_BURN_ITERS);
         }
-
         usize finish = get_ticks();
-
         if (finish > deadline) {
             missed = 1;
         }
-
         control_jobs++;
-
         if (missed) {
             control_miss++;
         }
-
         release += CONTROL_PERIOD_TICKS;
         deadline += CONTROL_PERIOD_TICKS;
 
