@@ -1,0 +1,3 @@
+# User-space experiment programs: important for evaluation,
+# but not representative of the kernel test-implementation language.
+user/src/*test* linguist-detectable=false
