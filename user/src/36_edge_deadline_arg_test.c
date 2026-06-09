@@ -1,6 +1,6 @@
 #include "user.h"
 
-#define MAX_THREADS 16
+#define MAX_THREADS 25
 
 #define CONTROL_TICKETS 300
 #define AI_TICKETS 100
@@ -14,7 +14,7 @@
 
 #define CONTROL_PERIOD_TICKS 4
 #define CONTROL_JOB_CPU_TICKS 2
-#define CONTROL_SPIN_BURN_ITERS 200000
+#define CONTROL_SPIN_BURN_ITERS 400000
 
 static volatile usize global_start_tick;
 static volatile usize global_end_tick;

@@ -34,13 +34,39 @@ impl KernelStack {
             .expect("failed to allocate kernel stack frames");
 
         let base_pa = base_ppn.0 << PAGE_SIZE_BITS;
+        let end_pa = base_pa + KERNEL_STACK_SIZE;
         let base_va = kernel_phys_to_virt(base_pa);
+        let end_va = kernel_phys_to_virt(end_pa);
+
+        let direct_map_start = crate::arch::MEMORY_START;
+        let direct_map_end = crate::arch::MEMORY_START + crate::arch::KERNEL_DIRECT_MAP_SIZE;
+
+        assert!(
+            base_pa >= direct_map_start && end_pa <= direct_map_end,
+            "[kstack] physical range outside kernel direct map: \
+            ppn={:#x}, pages={}, pa={:#x}..{:#x}, direct={:#x}..{:#x}, va={:#x}..{:#x}",
+            base_ppn.0,
+            pages,
+            base_pa,
+            end_pa,
+            direct_map_start,
+            direct_map_end,
+            base_va,
+            end_va,
+        );
 
         assert!(
             base_va >= crate::mm::config::KERNEL_OFFSET,
             "[kstack] bad kernel stack va: ppn={:#x}, pa={:#x}, va={:#x}",
             base_ppn.0,
             base_pa,
+            base_va,
+        );
+
+        assert_eq!(
+            base_va & (PAGE_SIZE - 1),
+            0,
+            "[kstack] unaligned kernel stack va: {:#x}",
             base_va,
         );
 

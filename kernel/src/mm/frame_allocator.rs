@@ -37,38 +37,43 @@ impl StackFrameAllocator {
             return None;
         }
 
-        // 优先从 current 后面直接切连续页。
-        if self.current + pages <= self.end {
-            let base = self.current;
-            self.current += pages;
-            return Some(PhysPageNum(base));
-        }
-
-        // current 不够时，再从 recycled 里找连续页。
+        
+        // 先从 recycled 中找连续页。
+        // KernelStack 这种大块连续分配会频繁创建/释放，
+        // 如果优先从 current 切新页，会导致重复实验时 current 单调增长，
+        // 很快吃到高物理地址甚至 direct map 外。
+        
         if self.recycled.len() >= pages {
             self.recycled.sort_unstable();
 
             let mut run_start = 0usize;
-            let mut run_len = 1usize;
+            let mut run_len = 0usize;
 
-            for i in 1..self.recycled.len() {
-                if self.recycled[i] == self.recycled[i - 1] + 1 {
-                    run_len += 1;
-                } else {
+            for i in 0..self.recycled.len() {
+                if i == 0 || self.recycled[i] != self.recycled[i - 1] + 1 {
                     run_start = i;
                     run_len = 1;
+                } else {
+                    run_len += 1;
                 }
 
                 if run_len >= pages {
                     let pos = run_start;
                     let base = self.recycled[pos];
 
-                    for _ in 0..pages {
-                        self.recycled.remove(pos);
-                    }
+                    self.recycled.drain(pos..pos + pages);
 
                     return Some(PhysPageNum(base));
                 }
+            }
+        }
+
+        //recycled 找不到连续块时，再从 current 后面切新页。
+        if let Some(next) = self.current.checked_add(pages) {
+            if next <= self.end {
+                let base = self.current;
+                self.current = next;
+                return Some(PhysPageNum(base));
             }
         }
 
