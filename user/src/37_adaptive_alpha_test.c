@@ -20,6 +20,24 @@
 #define ALPHA_STEP 25
 #define ZERO_MISS_WINDOWS_TO_INCREASE 3
 
+#define ALPHA_STEP 25
+
+/*
+ * 连续几个完全安全窗口后，才尝试提高 alpha。
+ * 越大越保守。
+ */
+#define SAFE_WINDOWS_TO_PROBE_UP 2
+
+/*
+ * 每个窗口大约 25 个 control jobs。
+ * 1 次 miss 大概就是 40 / 1000。
+ *
+ * >= 50/1000 认为明显不安全；
+ * >= 200/1000 认为严重不安全，会快速下降。
+ */
+#define UNSAFE_MISS_PER_1000 50
+#define SEVERE_MISS_PER_1000 200
+
 static volatile usize global_start_tick;
 static volatile usize global_end_tick;
 
@@ -96,10 +114,13 @@ static void print_adaptive_window(
     int window_id,
     int alpha_before,
     int alpha_after,
+    int max_allowed_alpha,
+    int safe_windows,
     usize jobs,
-    usize miss
+    usize miss,
+    const char *action
 ) {
-    char buf[384];
+    char buf[512];
     int pos = 0;
 
     usize miss_per_1000 = 0;
@@ -117,6 +138,12 @@ static void print_adaptive_window(
     pos = append_str(buf, pos, " alpha_after=");
     pos = append_usize(buf, pos, (usize)alpha_after);
 
+    pos = append_str(buf, pos, " max_allowed=");
+    pos = append_usize(buf, pos, (usize)max_allowed_alpha);
+
+    pos = append_str(buf, pos, " safe_windows=");
+    pos = append_usize(buf, pos, (usize)safe_windows);
+
     pos = append_str(buf, pos, " jobs=");
     pos = append_usize(buf, pos, jobs);
 
@@ -125,6 +152,9 @@ static void print_adaptive_window(
 
     pos = append_str(buf, pos, " miss_per_1000=");
     pos = append_usize(buf, pos, miss_per_1000);
+
+    pos = append_str(buf, pos, " action=");
+    pos = append_str(buf, pos, action);
 
     pos = append_str(buf, pos, "\n");
 
@@ -642,7 +672,16 @@ static int run_one_adaptive_case(
 
     usize last_jobs = 0;
     usize last_miss = 0;
-    int zero_miss_windows = 0;
+
+    int safe_windows = 0;
+
+    /*
+    * max_allowed_alpha 表示本轮实验中还允许尝试的最高 alpha。
+    * 一旦某个 alpha 被判定为不安全，就把上界压到它下面，
+    * 避免反复试探同一个坏 alpha。
+    */
+    int max_allowed_alpha = 100;
+
     int window_id = 0;
 
     while (get_ticks() + ADAPT_WINDOW_TICKS < global_end_tick) {
@@ -662,18 +701,71 @@ static int run_one_adaptive_case(
         last_jobs = total_jobs;
         last_miss = total_miss;
 
+        usize miss_per_1000 = 0;
+
+        if (window_jobs > 0) {
+            miss_per_1000 = window_miss * 1000 / window_jobs;
+        }
+
         int alpha_before = alpha;
+        const char *action = "hold";
 
-        if (window_miss > 0) {
-            alpha = clamp_alpha(alpha - ALPHA_STEP);
-            zero_miss_windows = 0;
-        } else {
-            zero_miss_windows++;
+        if (miss_per_1000 >= UNSAFE_MISS_PER_1000) {
+            /*
+            * 当前 alpha 已经不安全。
+            * 以后本轮实验不再尝试这个 alpha 或更高 alpha。
+            */
+            int new_max = alpha - ALPHA_STEP;
 
-            if (zero_miss_windows >= ZERO_MISS_WINDOWS_TO_INCREASE) {
-                alpha = clamp_alpha(alpha + ALPHA_STEP);
-                zero_miss_windows = 0;
+            if (new_max < 0) {
+                new_max = 0;
             }
+
+            if (new_max < max_allowed_alpha) {
+                max_allowed_alpha = new_max;
+            }
+
+            if (miss_per_1000 >= SEVERE_MISS_PER_1000) {
+                alpha = clamp_alpha(alpha - 2 * ALPHA_STEP);
+                action = "severe_down";
+            } else {
+                alpha = clamp_alpha(alpha - ALPHA_STEP);
+                action = "unsafe_down";
+            }
+
+            if (alpha > max_allowed_alpha) {
+                alpha = max_allowed_alpha;
+            }
+
+            safe_windows = 0;
+        } else if (window_miss == 0) {
+            /*
+            * 完全无 miss，认为当前 alpha 是安全的。
+            * 连续安全若干窗口后，尝试向上探索。
+            */
+            safe_windows++;
+
+            if (safe_windows >= SAFE_WINDOWS_TO_PROBE_UP) {
+                int next_alpha = alpha + ALPHA_STEP;
+
+                if (next_alpha <= max_allowed_alpha) {
+                    alpha = next_alpha;
+                    action = "probe_up";
+                } else {
+                    action = "safe_at_limit";
+                }
+
+                safe_windows = 0;
+            } else {
+                action = "safe_hold";
+            }
+        } else {
+            /*
+            * 有少量 miss，但没超过 unsafe 阈值。
+            * 认为处于灰区：不升也不降，避免因为 1 次抖动立刻回退。
+            */
+            safe_windows = 0;
+            action = "gray_hold";
         }
 
         if (alpha != alpha_before) {
@@ -687,8 +779,11 @@ static int run_one_adaptive_case(
             window_id,
             alpha_before,
             alpha,
+            max_allowed_alpha,
+            safe_windows,
             window_jobs,
-            window_miss
+            window_miss,
+            action
         );
 
         window_id++;
