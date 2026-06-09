@@ -1,0 +1,2269 @@
+=== 构建用户程序 (loongarch64) ===
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait.elf has a LOAD segment with RWX permissions
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/00_shell.c -o /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell.o /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell.elf /home/abcc/RmikuOS/user/build/loongarch64/0_00_shell.bin
+[user] built app0: 00_shell.c, 8064 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/01_busy.c -o /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy.o /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy.elf /home/abcc/RmikuOS/user/build/loongarch64/1_01_busy.bin
+[user] built app1: 01_busy.c, 1528 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/2_02_raw_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/02_raw.S -o /home/abcc/RmikuOS/user/build/loongarch64/2_02_raw.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/2_02_raw_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/2_02_raw.o -o /home/abcc/RmikuOS/user/build/loongarch64/2_02_raw.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/2_02_raw.elf /home/abcc/RmikuOS/user/build/loongarch64/2_02_raw.bin
+[user] built app2: 02_raw.S, 56 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/03_hello.c -o /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello.o /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello.elf /home/abcc/RmikuOS/user/build/loongarch64/3_03_hello.bin
+[user] built app3: 03_hello.c, 1576 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/04_fork_wait.c -o /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait.o /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait.elf /home/abcc/RmikuOS/user/build/loongarch64/4_04_fork_wait.bin
+[user] built app4: 04_fork_wait.c, 2552 bytes
++ /opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress.elf has a LOAD segment with RWX permissions
+loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/05_getpid_sleep.c -o /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep.o /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep.elf /home/abcc/RmikuOS/user/build/loongarch64/5_05_getpid_sleep.bin
+[user] built app5: 05_getpid_sleep.c, 2064 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/06_estimate_pi.c -o /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi.o /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi.elf /home/abcc/RmikuOS/user/build/loongarch64/6_06_estimate_pi.bin
+[user] built app6: 06_estimate_pi.c, 4784 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/07_fibonacci.c -o /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci.o /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci.elf /home/abcc/RmikuOS/user/build/loongarch64/7_07_fibonacci.bin
+[user] built app7: 07_fibonacci.c, 5120 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/08_cat_motd.c -o /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd.o /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd.elf /home/abcc/RmikuOS/user/build/loongarch64/8_08_cat_motd.bin
+[user] built app8: 08_cat_motd.c, 1904 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/09_fs_stress.c -o /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress.o /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress.elf
++ /opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test.elf has a LOAD segment with RWX permissions
+loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress.elf /home/abcc/RmikuOS/user/build/loongarch64/9_09_fs_stress.bin
+[user] built app9: 09_fs_stress.c, 4512 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/10_fs_stress2.c -o /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2.o /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2.elf /home/abcc/RmikuOS/user/build/loongarch64/10_10_fs_stress2.bin
+[user] built app10: 10_fs_stress2.c, 8856 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/11_open_exec.c -o /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec.o /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec.elf /home/abcc/RmikuOS/user/build/loongarch64/11_11_open_exec.bin
+[user] built app11: 11_open_exec.c, 2296 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/12_stat_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test.o /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test.elf /home/abcc/RmikuOS/user/build/loongarch64/12_12_stat_test.bin
+[user] built app12: 12_stat_test.c, 2528 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/13_fork_stride_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test.o /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test.elf /home/abcc/RmikuOS/user/build/loongarch64/13_13_fork_stride_test.bin
+[user] built app13: 13_fork_stride_test.c, 3472 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/14_thread_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test_runtime.o
++ /opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test.elf has a LOAD segment with RWX permissions
+loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test.o /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test.elf /home/abcc/RmikuOS/user/build/loongarch64/14_14_thread_test.bin
+[user] built app14: 14_thread_test.c, 5032 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/15_mmap_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test.o /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test.elf /home/abcc/RmikuOS/user/build/loongarch64/15_15_mmap_test.bin
+[user] built app15: 15_mmap_test.c, 1840 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/16_mmap_stress.c -o /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress.o /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress.elf /home/abcc/RmikuOS/user/build/loongarch64/16_16_mmap_stress.bin
+[user] built app16: 16_mmap_stress.c, 2984 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/17_malloc_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test.o /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test.elf /home/abcc/RmikuOS/user/build/loongarch64/17_17_malloc_test.bin
+[user] built app17: 17_malloc_test.c, 4016 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/18_elf_bss_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test.o /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test.elf /home/abcc/RmikuOS/user/build/loongarch64/18_18_elf_bss_test.bin
+[user] built app18: 18_elf_bss_test.c, 1804 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/19_little_stress.c -o /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress.o
++ /opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test.elf has a LOAD segment with RWX permissions
+loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress.o /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress.elf /home/abcc/RmikuOS/user/build/loongarch64/19_19_little_stress.bin
+[user] built app19: 19_little_stress.c, 7748 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/20_little_stress2.c -o /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2.o /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2.elf /home/abcc/RmikuOS/user/build/loongarch64/20_20_little_stress2.bin
+[user] built app20: 20_little_stress2.c, 10853 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/21_malloc_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test.o /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test.elf /home/abcc/RmikuOS/user/build/loongarch64/21_21_malloc_test.bin
+[user] built app21: 21_malloc_test.c, 6104 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/22_lock_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test.o /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test.elf /home/abcc/RmikuOS/user/build/loongarch64/22_22_lock_test.bin
+[user] built app22: 22_lock_test.c, 4680 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/23_thread_malloc_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test.o /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test.elf /home/abcc/RmikuOS/user/build/loongarch64/23_23_thread_malloc_test.bin
+[user] built app23: 23_thread_malloc_test.c, 4656 bytes
++ /opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test.elf has a LOAD segment with RWX permissions
+loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/24_mmap_reuse_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test.o /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test.elf /home/abcc/RmikuOS/user/build/loongarch64/24_24_mmap_reuse_test.bin
+[user] built app24: 24_mmap_reuse_test.c, 2488 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/25_thread_stack_reuse_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test.o /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test.elf /home/abcc/RmikuOS/user/build/loongarch64/25_25_thread_stack_reuse_test.bin
+[user] built app25: 25_thread_stack_reuse_test.c, 4704 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/26_sqrt_schedule_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test.o /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test.elf /home/abcc/RmikuOS/user/build/loongarch64/26_26_sqrt_schedule_test.bin
+[user] built app26: 26_sqrt_schedule_test.c, 6568 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/27_thread_stride_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test.o /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test.elf /home/abcc/RmikuOS/user/build/loongarch64/27_27_thread_stride_test.bin
+[user] built app27: 27_thread_stride_test.c, 5664 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/28_mixed_workload_sched_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test_runtime.o
++ /opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test.elf has a LOAD segment with RWX permissions
+loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test.o /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test.elf /home/abcc/RmikuOS/user/build/loongarch64/28_28_mixed_workload_sched_test.bin
+[user] built app28: 28_mixed_workload_sched_test.c, 7384 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/29_ticket_syscall_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test.o /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test.elf /home/abcc/RmikuOS/user/build/loongarch64/29_29_ticket_syscall_test.bin
+[user] built app29: 29_ticket_syscall_test.c, 5696 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/30_alpha_sched_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test.o /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test.elf /home/abcc/RmikuOS/user/build/loongarch64/30_30_alpha_sched_test.bin
+[user] built app30: 30_alpha_sched_test.c, 8056 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/31_reset_sched_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test.o /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test.elf /home/abcc/RmikuOS/user/build/loongarch64/31_31_reset_sched_test.bin
+[user] built app31: 31_reset_sched_test.c, 2496 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/32_sched_stat_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test.o /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test.elf /home/abcc/RmikuOS/user/build/loongarch64/32_32_sched_stat_test.bin
+[user] built app32: 32_sched_stat_test.c, 2496 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test_crt0.o
++ /opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test.elf has a LOAD segment with RWX permissions
+/opt/cross-tools/bin/../target/usr/lib64/gcc/loongarch64-unknown-linux-gnu/15.1.0/../../../../../../loongarch64-unknown-linux-gnu/bin/ld: warning: /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.elf has a LOAD segment with RWX permissions
+loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/33_alpha_sched_stat_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test.o /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test.elf /home/abcc/RmikuOS/user/build/loongarch64/33_33_alpha_sched_stat_test.bin
+[user] built app33: 33_alpha_sched_stat_test.c, 9640 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/34_edge_deadline_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test.o /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test.elf /home/abcc/RmikuOS/user/build/loongarch64/34_34_edge_deadline_test.bin
+[user] built app34: 34_edge_deadline_test.c, 11904 bytes
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test_crt0.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/35_alpha_arg_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test_runtime.o
++ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.elf
++ loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.elf /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.bin
+[user] built app35: 35_alpha_arg_test.c, 9584 bytes
+[user] generated /home/abcc/RmikuOS/kernel/src/loader/generated.rs
+=== 构建 ext4 rootfs (loongarch64) ===
+=== 构建 ext4 rootfs (loongarch64) ===
+copy rootfs overlay: user/rootfs -> target/fsroot-loongarch64
+rootfs content:
+target/fsroot-loongarch64
+target/fsroot-loongarch64/bin
+target/fsroot-loongarch64/bin/alpha_arg_test
+target/fsroot-loongarch64/bin/alpha_sched_stat_test
+target/fsroot-loongarch64/bin/alpha_sched_test
+target/fsroot-loongarch64/bin/busy
+target/fsroot-loongarch64/bin/cat
+target/fsroot-loongarch64/bin/cat_motd
+target/fsroot-loongarch64/bin/edge_deadline_test
+target/fsroot-loongarch64/bin/elf_bss_test
+target/fsroot-loongarch64/bin/estimate_pi
+target/fsroot-loongarch64/bin/fibonacci
+target/fsroot-loongarch64/bin/fork_stride_test
+target/fsroot-loongarch64/bin/fork_wait
+target/fsroot-loongarch64/bin/fs_stress
+target/fsroot-loongarch64/bin/fs_stress2
+target/fsroot-loongarch64/bin/getpid_sleep
+target/fsroot-loongarch64/bin/hello
+target/fsroot-loongarch64/bin/little_stress
+target/fsroot-loongarch64/bin/little_stress2
+target/fsroot-loongarch64/bin/little_test
+target/fsroot-loongarch64/bin/lock_test
+target/fsroot-loongarch64/bin/ls
+target/fsroot-loongarch64/bin/malloc_test
+target/fsroot-loongarch64/bin/mixed_workload_sched_test
+target/fsroot-loongarch64/bin/mmap_reuse_test
+target/fsroot-loongarch64/bin/mmap_stress
+target/fsroot-loongarch64/bin/mmap_test
+target/fsroot-loongarch64/bin/open_exec
+target/fsroot-loongarch64/bin/raw
+target/fsroot-loongarch64/bin/reset_sched_test
+target/fsroot-loongarch64/bin/sched_stat_test
+target/fsroot-loongarch64/bin/shell
+target/fsroot-loongarch64/bin/sqrt_schedule_test
+target/fsroot-loongarch64/bin/stat_test
+target/fsroot-loongarch64/bin/thread_malloc_test
+target/fsroot-loongarch64/bin/thread_stack_reuse_test
+target/fsroot-loongarch64/bin/thread_stride_test
+target/fsroot-loongarch64/bin/thread_test
+target/fsroot-loongarch64/bin/ticket_syscall_test
+target/fsroot-loongarch64/dev
+target/fsroot-loongarch64/etc
+target/fsroot-loongarch64/etc/motd
+target/fsroot-loongarch64/home
+target/fsroot-loongarch64/home/miku
+target/fsroot-loongarch64/home/miku/readme.txt
+target/fsroot-loongarch64/proc
+target/fsroot-loongarch64/share
+target/fsroot-loongarch64/share/ascii
+target/fsroot-loongarch64/share/ascii/miku.txt
+target/fsroot-loongarch64/share/docs
+target/fsroot-loongarch64/share/docs/hello.txt
+target/fsroot-loongarch64/tmp
+target/fsroot-loongarch64
+target/fsroot-loongarch64/bin
+target/fsroot-loongarch64/bin/alpha_arg_test
+target/fsroot-loongarch64/bin/alpha_sched_stat_test
+target/fsroot-loongarch64/bin/alpha_sched_test
+target/fsroot-loongarch64/bin/busy
+target/fsroot-loongarch64/bin/cat
+target/fsroot-loongarch64/bin/cat_motd
+target/fsroot-loongarch64/bin/edge_deadline_test
+target/fsroot-loongarch64/bin/elf_bss_test
+target/fsroot-loongarch64/bin/estimate_pi
+target/fsroot-loongarch64/bin/fibonacci
+target/fsroot-loongarch64/bin/fork_stride_test
+target/fsroot-loongarch64/bin/fork_wait
+target/fsroot-loongarch64/bin/fs_stress
+target/fsroot-loongarch64/bin/fs_stress2
+target/fsroot-loongarch64/bin/getpid_sleep
+target/fsroot-loongarch64/bin/hello
+target/fsroot-loongarch64/bin/little_stress
+target/fsroot-loongarch64/bin/little_stress2
+target/fsroot-loongarch64/bin/little_test
+target/fsroot-loongarch64/bin/lock_test
+target/fsroot-loongarch64/bin/ls
+target/fsroot-loongarch64/bin/malloc_test
+target/fsroot-loongarch64/bin/mixed_workload_sched_test
+target/fsroot-loongarch64/bin/mmap_reuse_test
+target/fsroot-loongarch64/bin/mmap_stress
+target/fsroot-loongarch64/bin/mmap_test
+target/fsroot-loongarch64/bin/open_exec
+target/fsroot-loongarch64/bin/raw
+target/fsroot-loongarch64/bin/reset_sched_test
+target/fsroot-loongarch64/bin/sched_stat_test
+target/fsroot-loongarch64/bin/shell
+target/fsroot-loongarch64/bin/sqrt_schedule_test
+target/fsroot-loongarch64/bin/stat_test
+target/fsroot-loongarch64/bin/thread_malloc_test
+target/fsroot-loongarch64/bin/thread_stack_reuse_test
+target/fsroot-loongarch64/bin/thread_stride_test
+target/fsroot-loongarch64/bin/thread_test
+target/fsroot-loongarch64/bin/ticket_syscall_test
+target/fsroot-loongarch64/dev
+target/fsroot-loongarch64/etc
+target/fsroot-loongarch64/etc/motd
+target/fsroot-loongarch64/home
+target/fsroot-loongarch64/home/miku
+target/fsroot-loongarch64/home/miku/readme.txt
+target/fsroot-loongarch64/proc
+target/fsroot-loongarch64/share
+target/fsroot-loongarch64/share/ascii
+target/fsroot-loongarch64/share/ascii/miku.txt
+target/fsroot-loongarch64/share/docs
+target/fsroot-loongarch64/share/docs/hello.txt
+target/fsroot-loongarch64/tmp
+created target/fs-loongarch64.img
+=== 编译内核 (loongarch64, debug, LOG=warn) ===
+   Compiling RmikuOS v0.1.0 (/home/abcc/RmikuOS)
+warning: unused import: `Write`
+ --> kernel/src/trap/loongarch64/mod.rs:9:23
+  |
+9 | use core::fmt::{self, Write};
+  |                       ^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `core::arch::asm`
+ --> kernel/src/mm/page_table/loongarch64.rs:5:5
+  |
+5 | use core::arch::asm;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `dealloc_frame`
+  --> kernel/src/mm/page_table/loongarch64.rs:35:18
+   |
+35 |     alloc_frame, dealloc_frame, align_down, align_up, PhysAddr, PhysPage...
+   |                  ^^^^^^^^^^^^^
+
+warning: unused imports: `FrameTracker`, `KERNEL_OFFSET`, `PhysAddr`, `alloc_frame`, and `phys_to_virt`
+ --> kernel/src/mm/memory_set.rs:4:5
+  |
+4 |     alloc_frame, phys_to_virt, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum,
+  |     ^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^
+5 |     FrameTracker, KERNEL_OFFSET, PAGE_SIZE,
+  |     ^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `MEMORY_END` and `MEMORY_START`
+ --> kernel/src/mm/memory_set.rs:7:19
+  |
+7 | use crate::arch::{MEMORY_END, MEMORY_START};
+  |                   ^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `PteFlags`
+ --> kernel/src/mm/memory_set.rs:8:40
+  |
+8 | use crate::mm::page_table::{PageTable, PteFlags};
+  |                                        ^^^^^^^^
+
+warning: unused imports: `KERNEL_OFFSET`, `PAGE_SIZE`, and `phys_to_virt`
+ --> kernel/src/mm/map_area.rs:4:18
+  |
+4 |     alloc_frame, phys_to_virt, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum,
+  |                  ^^^^^^^^^^^^
+5 |     FrameTracker, PAGE_SIZE, KERNEL_OFFSET
+  |                   ^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `MEMORY_END` and `MEMORY_START`
+ --> kernel/src/mm/map_area.rs:9:19
+  |
+9 | use crate::arch::{MEMORY_END, MEMORY_START};
+  |                   ^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `MEMORY_START`
+  --> kernel/src/mm/mod.rs:31:31
+   |
+31 | use crate::arch::{MEMORY_END, MEMORY_START};
+   |                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::boxed::Box`
+  --> kernel/src/mm/mod.rs:33:5
+   |
+33 | use alloc::boxed::Box;
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `PageTable` and `map_range_identity`
+  --> kernel/src/mm/mod.rs:34:24
+   |
+34 | use self::page_table::{map_range_identity, PageTable, PteFlags};
+   |                        ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> kernel/src/task/manager.rs:1:5
+  |
+1 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `MemorySet`
+ --> kernel/src/task/manager.rs:4:17
+  |
+4 | use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
+  |                 ^^^^^^^^^
+
+warning: unused import: `crate::sync::spin::Mutex`
+ --> kernel/src/task/manager.rs:6:5
+  |
+6 | use crate::sync::spin::Mutex;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::switch::__switch`
+  --> kernel/src/task/manager.rs:12:5
+   |
+12 | use super::switch::__switch;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `log::logger`
+ --> kernel/src/task/manager_wrapper.rs:3:5
+  |
+3 | use log::logger;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `PhysPageNum`
+ --> kernel/src/task/manager_wrapper.rs:5:28
+  |
+5 | use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
+  |                            ^^^^^^^^^^^
+
+warning: unused import: `super::context::TaskContext`
+  --> kernel/src/task/manager_wrapper.rs:10:5
+   |
+10 | use super::context::TaskContext;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary trailing semicolon
+   --> kernel/src/task/manager_wrapper.rs:515:7
+    |
+515 |     };;
+    |       ^ help: remove this semicolon
+    |
+    = note: `#[warn(redundant_semicolons)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `context::TaskContext`
+  --> kernel/src/task/mod.rs:10:9
+   |
+10 | pub use context::TaskContext;
+   |         ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `kernel_stack::KernelStack`
+  --> kernel/src/task/mod.rs:11:9
+   |
+11 | pub use kernel_stack::KernelStack;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ThreadControlBlock` and `ThreadStatus`
+  --> kernel/src/task/mod.rs:12:18
+   |
+12 | pub use thread::{ThreadControlBlock, ThreadStatus};
+   |                  ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: unused imports: `run_tasks` and `wake_sleeping_tasks`
+  --> kernel/src/task/mod.rs:23:5
+   |
+23 |     run_tasks,
+   |     ^^^^^^^^^
+...
+36 |     wake_sleeping_tasks,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Metadata`
+  --> kernel/src/fs/mod.rs:14:34
+   |
+14 | pub use inode::{Inode, InodeRef, Metadata, InodeType};
+   |                                  ^^^^^^^^
+
+warning: unused import: `STAT_TYPE_CHAR`
+  --> kernel/src/fs/mod.rs:46:5
+   |
+46 |     STAT_TYPE_CHAR,
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+ --> kernel/src/block/cache.rs:5:5
+  |
+5 | use alloc::vec::Vec;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused imports: `BlockCacheRef` and `BlockCache`
+  --> kernel/src/block/mod.rs:13:5
+   |
+13 |     BlockCache,
+   |     ^^^^^^^^^^
+14 |     BlockCacheRef,
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `super::virtio_mmio::VirtioMmioHeader`
+ --> kernel/src/block/virtio_probe.rs:1:5
+  |
+1 | use super::virtio_mmio::VirtioMmioHeader;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::block::device::BlockDevice`
+ --> kernel/src/block/virtio_pci.rs:1:5
+  |
+1 | use crate::block::device::BlockDevice;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `read_config_u16`
+ --> kernel/src/block/virtio_pci.rs:5:5
+  |
+5 |     read_config_u16,
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused imports: `read_volatile` and `write_volatile`
+ --> kernel/src/block/virtio_queue.rs:1:17
+  |
+1 | use core::ptr::{read_volatile, write_volatile};
+  |                 ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `read_config_u32`
+ --> kernel/src/pci/probe.rs:5:5
+  |
+5 |     read_config_u32,
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused imports: `assign_mem_bar`, `read_bar_raw`, and `read_bar`
+ --> kernel/src/pci/mod.rs:6:5
+  |
+6 |     read_bar,
+  |     ^^^^^^^^
+7 |     read_bar_raw,
+  |     ^^^^^^^^^^^^
+8 |     ensure_mem_bar,
+9 |     assign_mem_bar,
+  |     ^^^^^^^^^^^^^^
+
+warning: unused imports: `PciDeviceInfo` and `PciDeviceLocation`
+  --> kernel/src/pci/mod.rs:14:5
+   |
+14 |     PciDeviceLocation,
+   |     ^^^^^^^^^^^^^^^^^
+15 |     PciDeviceInfo,
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `crate::sync::*`
+  --> kernel/src/main.rs:27:5
+   |
+27 | use crate::sync::*;
+   |     ^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> kernel/src/mm/loongarch64.rs:108:13
+    |
+108 |         let mut pgdl = root_pa;
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> kernel/src/mm/loongarch64.rs:115:13
+    |
+115 |         let mut pgdh = root_pa;
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unnecessary `unsafe` block
+  --> kernel/src/mm/mod.rs:51:27
+   |
+51 |     let kernel_start_va = unsafe { core::ptr::addr_of!(_kernel_start) as...
+   |                           ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary `unsafe` block
+  --> kernel/src/mm/mod.rs:52:25
+   |
+52 |     let kernel_end_va = unsafe { core::ptr::addr_of!(_kernel_end) as usi...
+   |                         ^^^^^^ unnecessary `unsafe` block
+
+warning: constant `PCI_IO_BASE` is never used
+  --> kernel/src/arch/loongarch64/mod.rs:25:11
+   |
+25 | pub const PCI_IO_BASE: usize = 0x1804_0000;
+   |           ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `PCI_IO_SIZE` is never used
+  --> kernel/src/arch/loongarch64/mod.rs:26:11
+   |
+26 | pub const PCI_IO_SIZE: usize = 0x0001_0000;
+   |           ^^^^^^^^^^^
+
+warning: struct `SpinLockGuard` is never constructed
+  --> kernel/src/sync/sync.rs:36:12
+   |
+36 | pub struct SpinLockGuard<'a, T> {
+   |            ^^^^^^^^^^^^^
+
+warning: struct `UPSafeCell` is never constructed
+ --> kernel/src/sync/up.rs:3:12
+  |
+3 | pub struct UPSafeCell<T> {
+  |            ^^^^^^^^^^
+
+warning: associated items `new` and `exclusive_access` are never used
+  --> kernel/src/sync/up.rs:10:18
+   |
+ 9 | impl<T> UPSafeCell<T> {
+   | --------------------- associated items in this implementation
+10 |     pub const fn new(value: T) -> Self {
+   |                  ^^^
+...
+16 |     pub fn exclusive_access(&self) -> &mut T {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: function `clear_timer_interrupt` is never used
+   --> kernel/src/trap/loongarch64/mod.rs:152:4
+    |
+152 | fn clear_timer_interrupt() {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+  --> kernel/src/trap/loongarch64/context.rs:33:12
+   |
+18 | impl TrapContext {
+   | ---------------- methods in this implementation
+...
+33 |     pub fn user_sp(&self) -> usize {
+   |            ^^^^^^^
+...
+37 |     pub fn user_pc(&self) -> usize {
+   |            ^^^^^^^
+...
+41 |     pub fn set_user_pc(&mut self, pc: usize) {
+   |            ^^^^^^^^^^^
+...
+56 |     pub fn syscall_id(&self) -> usize {
+   |            ^^^^^^^^^^
+...
+60 |     pub fn syscall_args(&self) -> [usize; 3] {
+   |            ^^^^^^^^^^^^
+...
+71 |     pub fn syscall_ret(&self) -> usize {
+   |            ^^^^^^^^^^^
+...
+74 |     pub fn advance_pc(&mut self) {
+   |            ^^^^^^^^^^
+
+warning: constant `REG_A2` is never used
+  --> kernel/src/trap/loongarch64/context.rs:94:7
+   |
+94 | const REG_A2: usize = 6;
+   |       ^^^^^^
+
+warning: constant `REG_A7` is never used
+  --> kernel/src/trap/loongarch64/context.rs:95:7
+   |
+95 | const REG_A7: usize = 11;
+   |       ^^^^^^
+
+warning: constant `INSTRUCTION_SIZE` is never used
+  --> kernel/src/trap/loongarch64/context.rs:97:7
+   |
+97 | const INSTRUCTION_SIZE: usize = 4;
+   |       ^^^^^^^^^^^^^^^^
+
+warning: constant `PRMD_PPLV_USER` is never used
+  --> kernel/src/trap/loongarch64/context.rs:99:7
+   |
+99 | const PRMD_PPLV_USER: usize = 3;
+   |       ^^^^^^^^^^^^^^
+
+warning: constant `PRMD_PIE` is never used
+   --> kernel/src/trap/loongarch64/context.rs:100:7
+    |
+100 | const PRMD_PIE: usize = 1 << 2;
+    |       ^^^^^^^^
+
+warning: function `kernel_pte_flags` is never used
+   --> kernel/src/mm/mod.rs:116:4
+    |
+116 | fn kernel_pte_flags() -> PteFlags {
+    |    ^^^^^^^^^^^^^^^^
+
+warning: struct `SimpleRange` is never constructed
+   --> kernel/src/mm/address.rs:162:12
+    |
+162 | pub struct SimpleRange<T>
+    |            ^^^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> kernel/src/mm/address.rs:174:18
+    |
+170 | / impl<T> SimpleRange<T>
+171 | | where
+172 | |     T: Copy + PartialEq + core::ops::Add<usize, Output = T>,
+    | |____________________________________________________________- associated function in this implementation
+173 |   {
+174 |       pub const fn new(start: T, end: T) -> Self {
+    |                    ^^^
+
+warning: type alias `PPNRange` is never used
+   --> kernel/src/mm/address.rs:212:10
+    |
+212 | pub type PPNRange = SimpleRange<PhysPageNum>;
+    |          ^^^^^^^^
+
+warning: type alias `VPNRange` is never used
+   --> kernel/src/mm/address.rs:213:10
+    |
+213 | pub type VPNRange = SimpleRange<VirtPageNum>;
+    |          ^^^^^^^^
+
+warning: function `align_up` is never used
+   --> kernel/src/mm/address.rs:216:8
+    |
+216 | pub fn align_up(value: usize, align: usize) -> usize {
+    |        ^^^^^^^^
+
+warning: function `align_down` is never used
+   --> kernel/src/mm/address.rs:221:8
+    |
+221 | pub fn align_down(value: usize, align: usize) -> usize {
+    |        ^^^^^^^^^^
+
+warning: function `dump_heap_stats` is never used
+  --> kernel/src/mm/heap.rs:36:8
+   |
+36 | pub fn dump_heap_stats(tag: &str) {
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `alloc_error_handler` is never used
+  --> kernel/src/mm/heap.rs:61:4
+   |
+61 | fn alloc_error_handler(layout: Layout) -> ! {
+   |    ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `UART0` is never used
+ --> kernel/src/mm/page_table/loongarch64.rs:3:11
+  |
+3 | pub const UART0: usize = crate::arch::UART_BASE;
+  |           ^^^^^
+
+warning: constant `CSR_CRMD` is never used
+ --> kernel/src/mm/page_table/loongarch64.rs:8:7
+  |
+8 | const CSR_CRMD: usize = 0x0;
+  |       ^^^^^^^^
+
+warning: constant `CSR_DMW0` is never used
+ --> kernel/src/mm/page_table/loongarch64.rs:9:7
+  |
+9 | const CSR_DMW0: usize = 0x180;
+  |       ^^^^^^^^
+
+warning: constant `CSR_DMW1` is never used
+  --> kernel/src/mm/page_table/loongarch64.rs:10:7
+   |
+10 | const CSR_DMW1: usize = 0x181;
+   |       ^^^^^^^^
+
+warning: constant `CRMD_DA` is never used
+  --> kernel/src/mm/page_table/loongarch64.rs:12:7
+   |
+12 | const CRMD_DA: usize = 1 << 3;
+   |       ^^^^^^^
+
+warning: constant `CRMD_PG` is never used
+  --> kernel/src/mm/page_table/loongarch64.rs:13:7
+   |
+13 | const CRMD_PG: usize = 1 << 4;
+   |       ^^^^^^^
+
+warning: constant `DMW_PLV0` is never used
+  --> kernel/src/mm/page_table/loongarch64.rs:16:7
+   |
+16 | const DMW_PLV0: usize = 1 << 0;
+   |       ^^^^^^^^
+
+warning: constant `DMW_MAT_CC` is never used
+  --> kernel/src/mm/page_table/loongarch64.rs:21:7
+   |
+21 | const DMW_MAT_CC: usize = 1 << 4;
+   |       ^^^^^^^^^^
+
+warning: constant `DMW_MAT_SUC` is never used
+  --> kernel/src/mm/page_table/loongarch64.rs:22:7
+   |
+22 | const DMW_MAT_SUC: usize = 0 << 4;
+   |       ^^^^^^^^^^^
+
+warning: function `dmw` is never used
+  --> kernel/src/mm/page_table/loongarch64.rs:25:10
+   |
+25 | const fn dmw(vseg: usize, mat: usize, plv: usize) -> usize {
+   |          ^^^
+
+warning: associated items `PLV1`, `PLV2`, `MAT_SUC`, `RPLV`, `empty`, and `contains` are never used
+   --> kernel/src/mm/page_table/loongarch64.rs:80:15
+    |
+ 69 | impl PteFlags {
+    | ------------- associated items in this implementation
+...
+ 80 |     pub const PLV1: Self = Self { bits: 1 << 2 };
+    |               ^^^^
+ 81 |     pub const PLV2: Self = Self { bits: 2 << 2 };
+    |               ^^^^
+...
+ 89 |     pub const MAT_SUC: Self = Self { bits: 0 << 4 };
+    |               ^^^^^^^
+...
+108 |     pub const RPLV: Self = Self { bits: 1usize << 63 };
+    |               ^^^^
+109 |
+110 |     pub const fn empty() -> Self {
+    |                  ^^^^^
+...
+124 |     pub fn contains(self, rhs: Self) -> bool {
+    |            ^^^^^^^^
+
+warning: associated items `empty` and `flags` are never used
+   --> kernel/src/mm/page_table/loongarch64.rs:130:18
+    |
+129 | impl PageTableEntry {
+    | ------------------- associated items in this implementation
+130 |     pub const fn empty() -> Self {
+    |                  ^^^^^
+...
+158 |     pub fn flags(self) -> PteFlags {
+    |            ^^^^^
+
+warning: function `map_range_identity` is never used
+   --> kernel/src/mm/page_table/loongarch64.rs:309:8
+    |
+309 | pub fn map_range_identity(
+    |        ^^^^^^^^^^^^^^^^^^
+
+warning: function `map_range_identity_exclude` is never used
+   --> kernel/src/mm/page_table/loongarch64.rs:327:8
+    |
+327 | pub fn map_range_identity_exclude(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `kernel_rw_flags` is never used
+   --> kernel/src/mm/page_table/loongarch64.rs:374:8
+    |
+374 | pub fn kernel_rw_flags() -> PteFlags {
+    |        ^^^^^^^^^^^^^^^
+
+warning: function `kernel_rx_flags` is never used
+   --> kernel/src/mm/page_table/loongarch64.rs:383:8
+    |
+383 | pub fn kernel_rx_flags() -> PteFlags {
+    |        ^^^^^^^^^^^^^^^
+
+warning: function `mmio_rw_flags` is never used
+   --> kernel/src/mm/page_table/loongarch64.rs:392:8
+    |
+392 | pub fn mmio_rw_flags() -> PteFlags {
+    |        ^^^^^^^^^^^^^
+
+warning: function `map_range` is never used
+   --> kernel/src/mm/page_table/loongarch64.rs:432:8
+    |
+432 | pub fn map_range(
+    |        ^^^^^^^^^
+
+warning: constant `ET_DYN` is never used
+  --> kernel/src/mm/elf.rs:10:11
+   |
+10 | pub const ET_DYN: u16 = 3;
+   |           ^^^^^^
+
+warning: constant `CRMD_DA` is never used
+ --> kernel/src/mm/loongarch64.rs:9:7
+  |
+9 | const CRMD_DA: usize = 1 << 3;
+  |       ^^^^^^^
+
+warning: constant `CRMD_PG` is never used
+  --> kernel/src/mm/loongarch64.rs:10:7
+   |
+10 | const CRMD_PG: usize = 1 << 4;
+   |       ^^^^^^^
+
+warning: method `debug_count_pages` is never used
+  --> kernel/src/mm/memory_set.rs:19:12
+   |
+18 | impl MemorySet {
+   | -------------- method in this implementation
+19 |     pub fn debug_count_pages(&self) -> usize {
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: variant `Identical` is never constructed
+  --> kernel/src/mm/map_area.rs:53:5
+   |
+52 | pub enum MapType {
+   |          ------- variant in this enum
+53 |     Identical,
+   |     ^^^^^^^^^
+   |
+   = note: `MapType` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: associated function `empty` is never used
+  --> kernel/src/mm/map_area.rs:71:18
+   |
+65 | impl MapPermission {
+   | ------------------ associated function in this implementation
+...
+71 |     pub const fn empty() -> Self {
+   |                  ^^^^^
+
+warning: method `page_count` is never used
+   --> kernel/src/mm/map_area.rs:136:12
+    |
+ 96 | impl MapArea {
+    | ------------ method in this implementation
+...
+136 |     pub fn page_count(&self) -> usize {
+    |            ^^^^^^^^^^
+
+warning: constant `USER_HEAP_BASE` is never used
+  --> kernel/src/mm/user_layout.rs:11:11
+   |
+11 | pub const USER_HEAP_BASE: usize = 0x0020_0000;
+   |           ^^^^^^^^^^^^^^
+
+warning: constant `USER_MMAP_BASE` is never used
+  --> kernel/src/mm/user_layout.rs:12:11
+   |
+12 | pub const USER_MMAP_BASE: usize = 0x0080_0000;
+   |           ^^^^^^^^^^^^^^
+
+warning: static `USER_TEST_APP` is never used
+ --> kernel/src/test/user_test.rs:4:12
+  |
+4 | pub static USER_TEST_APP: &[u8] = &[
+  |            ^^^^^^^^^^^^^
+
+warning: static `USER_APP_0` is never used
+ --> kernel/src/test/loader/exit.rs:6:12
+  |
+6 | pub static USER_APP_0: &[u8] = &[
+  |            ^^^^^^^^^^
+
+warning: static `USER_APP_1` is never used
+  --> kernel/src/test/loader/exit.rs:22:12
+   |
+22 | pub static USER_APP_1: &[u8] = &[
+   |            ^^^^^^^^^^
+
+warning: function `num_apps` is never used
+  --> kernel/src/test/loader/exit.rs:69:8
+   |
+69 | pub fn num_apps() -> usize {
+   |        ^^^^^^^^
+
+warning: function `get_app_data` is never used
+  --> kernel/src/test/loader/exit.rs:73:8
+   |
+73 | pub fn get_app_data(app_id: usize) -> &'static [u8] {
+   |        ^^^^^^^^^^^^
+
+warning: function `num_apps` is never used
+  --> kernel/src/test/loader/loader.rs:75:8
+   |
+75 | pub fn num_apps() -> usize {
+   |        ^^^^^^^^
+
+warning: static `USER_APP_0` is never used
+ --> kernel/src/test/loader/yield.rs:3:12
+  |
+3 | pub static USER_APP_0: &[u8] = &[
+  |            ^^^^^^^^^^
+
+warning: static `USER_APP_1` is never used
+  --> kernel/src/test/loader/yield.rs:10:12
+   |
+10 | pub static USER_APP_1: &[u8] = &[
+   |            ^^^^^^^^^^
+
+warning: function `num_apps` is never used
+  --> kernel/src/test/loader/yield.rs:16:8
+   |
+16 | pub fn num_apps() -> usize {
+   |        ^^^^^^^^
+
+warning: function `get_app_data` is never used
+  --> kernel/src/test/loader/yield.rs:20:8
+   |
+20 | pub fn get_app_data(app_id: usize) -> &'static [u8] {
+   |        ^^^^^^^^^^^^
+
+warning: type alias `Pid` is never used
+  --> kernel/src/task/mod.rs:16:10
+   |
+16 | pub type Pid = usize;
+   |          ^^^
+
+warning: enum `JoinAction` is never used
+  --> kernel/src/task/manager.rs:35:10
+   |
+35 | pub enum JoinAction {
+   |          ^^^^^^^^^^
+
+warning: methods `count_ready_threads_in_process` and `mark_thread_zombie` are never used
+   --> kernel/src/task/manager.rs:160:12
+    |
+ 40 | impl TaskManager {
+    | ---------------- methods in this implementation
+...
+160 |     pub fn count_ready_threads_in_process(&self, pid: Pid) -> usize {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+334 |     pub fn mark_thread_zombie(&mut self, tid: Tid, exit_code: i32) {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: methods `trap_cx_ptr_addr`, `is_ready`, `is_blocking`, and `is_zombie` are never used
+   --> kernel/src/task/thread.rs:150:12
+    |
+ 57 | impl ThreadControlBlock {
+    | ----------------------- methods in this implementation
+...
+150 |     pub fn trap_cx_ptr_addr(&self) -> usize {
+    |            ^^^^^^^^^^^^^^^^
+...
+154 |     pub fn is_ready(&self) -> bool {
+    |            ^^^^^^^^
+...
+158 |     pub fn is_blocking(&self) -> bool {
+    |            ^^^^^^^^^^^
+...
+162 |     pub fn is_zombie(&self) -> bool {
+    |            ^^^^^^^^^
+
+warning: method `root_ppn` is never used
+   --> kernel/src/task/process.rs:133:12
+    |
+ 49 | impl ProcessControlBlock {
+    | ------------------------ method in this implementation
+...
+133 |     pub fn root_ppn(&self) -> PhysPageNum {
+    |            ^^^^^^^^
+
+warning: field `prot` is never read
+   --> kernel/src/task/process.rs:170:9
+    |
+167 | pub struct MmapArea {
+    |            -------- field in this struct
+...
+170 |     pub prot: usize,
+    |         ^^^^
+    |
+    = note: `MmapArea` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: associated function `thread_exit_current` is never used
+  --> kernel/src/task/manager_wrapper.rs:27:12
+   |
+26 | impl TaskManager {
+   | ---------------- associated function in this implementation
+27 |     pub fn thread_exit_current(exit_code: i32) -> ! {
+   |            ^^^^^^^^^^^^^^^^^^^
+
+warning: function `current_tid` is never used
+   --> kernel/src/task/manager_wrapper.rs:386:8
+    |
+386 | pub fn current_tid() -> Tid {
+    |        ^^^^^^^^^^^
+
+warning: function `wake_sleeping_tasks` is never used
+   --> kernel/src/task/manager_wrapper.rs:411:8
+    |
+411 | pub fn wake_sleeping_tasks() {
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: function `lookup_at` is never used
+  --> kernel/src/fs/mod.rs:26:8
+   |
+26 | pub fn lookup_at(cwd: &str, path: &str) -> Option<InodeRef> {
+   |        ^^^^^^^^^
+
+warning: function `stat` is never used
+  --> kernel/src/fs/mod.rs:66:8
+   |
+66 | pub fn stat(path: &str) -> Option<Stat> {
+   |        ^^^^
+
+warning: method `is_file` is never used
+  --> kernel/src/fs/inode.rs:38:8
+   |
+21 | pub trait Inode: Send + Sync {
+   |           ----- method in this trait
+...
+38 |     fn is_file(&self) -> bool {
+   |        ^^^^^^^
+
+warning: variant `Static` is never constructed
+  --> kernel/src/fs/common_file.rs:16:5
+   |
+15 | enum ReadOnlyData {
+   |      ------------ variant in this enum
+16 |     Static(&'static [u8]),
+   |     ^^^^^^
+
+warning: associated function `from_static` is never used
+  --> kernel/src/fs/common_file.rs:39:12
+   |
+38 | impl ReadOnlyMemFile {
+   | -------------------- associated function in this implementation
+39 |     pub fn from_static(data: &'static [u8]) -> Self {
+   |            ^^^^^^^^^^^
+
+warning: function `is_available` is never used
+   --> kernel/src/fs/ext4fs.rs:313:8
+    |
+313 | pub fn is_available() -> bool {
+    |        ^^^^^^^^^^^^
+
+warning: method `read_bytes` is never used
+  --> kernel/src/block/ramdisk.rs:16:12
+   |
+ 8 | impl RamDisk {
+   | ------------ method in this implementation
+...
+16 |     pub fn read_bytes(&self, offset: usize, buf: &mut [u8]) -> isize {
+   |            ^^^^^^^^^^
+
+warning: methods `block_id`, `read_u32`, `read_u64`, and `write_bytes` are never used
+  --> kernel/src/block/cache.rs:41:12
+   |
+21 | impl BlockCache {
+   | --------------- methods in this implementation
+...
+41 |     pub fn block_id(&self) -> usize {
+   |            ^^^^^^^^
+...
+72 |     pub fn read_u32(&self, offset: usize) -> u32 {
+   |            ^^^^^^^^
+...
+82 |     pub fn read_u64(&self, offset: usize) -> u64 {
+   |            ^^^^^^^^
+...
+96 |     pub fn write_bytes(&mut self, offset: usize, buf: &[u8]) -> isize {
+   |            ^^^^^^^^^^^
+
+warning: function `rootfs_image` is never used
+  --> kernel/src/block/ext4_image.rs:16:8
+   |
+16 | pub fn rootfs_image() -> &'static [u8] {
+   |        ^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_MAGIC_VALUE` is never used
+ --> kernel/src/block/virtio_mmio.rs:3:7
+  |
+3 | const VIRTIO_MMIO_MAGIC_VALUE: usize = 0x000;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_VERSION` is never used
+ --> kernel/src/block/virtio_mmio.rs:4:7
+  |
+4 | const VIRTIO_MMIO_VERSION: usize = 0x004;
+  |       ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_DEVICE_ID` is never used
+ --> kernel/src/block/virtio_mmio.rs:5:7
+  |
+5 | const VIRTIO_MMIO_DEVICE_ID: usize = 0x008;
+  |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_VENDOR_ID` is never used
+ --> kernel/src/block/virtio_mmio.rs:6:7
+  |
+6 | const VIRTIO_MMIO_VENDOR_ID: usize = 0x00c;
+  |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_DEVICE_FEATURES` is never used
+ --> kernel/src/block/virtio_mmio.rs:8:7
+  |
+8 | const VIRTIO_MMIO_DEVICE_FEATURES: usize = 0x010;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_DEVICE_FEATURES_SEL` is never used
+ --> kernel/src/block/virtio_mmio.rs:9:7
+  |
+9 | const VIRTIO_MMIO_DEVICE_FEATURES_SEL: usize = 0x014;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_DRIVER_FEATURES` is never used
+  --> kernel/src/block/virtio_mmio.rs:10:7
+   |
+10 | const VIRTIO_MMIO_DRIVER_FEATURES: usize = 0x020;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_DRIVER_FEATURES_SEL` is never used
+  --> kernel/src/block/virtio_mmio.rs:11:7
+   |
+11 | const VIRTIO_MMIO_DRIVER_FEATURES_SEL: usize = 0x024;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_SEL` is never used
+  --> kernel/src/block/virtio_mmio.rs:13:7
+   |
+13 | const VIRTIO_MMIO_QUEUE_SEL: usize = 0x030;
+   |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_SIZE_MAX` is never used
+  --> kernel/src/block/virtio_mmio.rs:14:7
+   |
+14 | const VIRTIO_MMIO_QUEUE_SIZE_MAX: usize = 0x034;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_SIZE` is never used
+  --> kernel/src/block/virtio_mmio.rs:15:7
+   |
+15 | const VIRTIO_MMIO_QUEUE_SIZE: usize = 0x038;
+   |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_READY` is never used
+  --> kernel/src/block/virtio_mmio.rs:16:7
+   |
+16 | const VIRTIO_MMIO_QUEUE_READY: usize = 0x044;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_NOTIFY` is never used
+  --> kernel/src/block/virtio_mmio.rs:18:7
+   |
+18 | const VIRTIO_MMIO_QUEUE_NOTIFY: usize = 0x050;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_INTERRUPT_STATUS` is never used
+  --> kernel/src/block/virtio_mmio.rs:19:7
+   |
+19 | const VIRTIO_MMIO_INTERRUPT_STATUS: usize = 0x060;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_INTERRUPT_ACK` is never used
+  --> kernel/src/block/virtio_mmio.rs:20:7
+   |
+20 | const VIRTIO_MMIO_INTERRUPT_ACK: usize = 0x064;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_STATUS` is never used
+  --> kernel/src/block/virtio_mmio.rs:22:7
+   |
+22 | const VIRTIO_MMIO_STATUS: usize = 0x070;
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_DESC_LOW` is never used
+  --> kernel/src/block/virtio_mmio.rs:24:7
+   |
+24 | const VIRTIO_MMIO_QUEUE_DESC_LOW: usize = 0x080;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_DESC_HIGH` is never used
+  --> kernel/src/block/virtio_mmio.rs:25:7
+   |
+25 | const VIRTIO_MMIO_QUEUE_DESC_HIGH: usize = 0x084;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_DRIVER_LOW` is never used
+  --> kernel/src/block/virtio_mmio.rs:26:7
+   |
+26 | const VIRTIO_MMIO_QUEUE_DRIVER_LOW: usize = 0x090;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_DRIVER_HIGH` is never used
+  --> kernel/src/block/virtio_mmio.rs:27:7
+   |
+27 | const VIRTIO_MMIO_QUEUE_DRIVER_HIGH: usize = 0x094;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_DEVICE_LOW` is never used
+  --> kernel/src/block/virtio_mmio.rs:28:7
+   |
+28 | const VIRTIO_MMIO_QUEUE_DEVICE_LOW: usize = 0x0a0;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_DEVICE_HIGH` is never used
+  --> kernel/src/block/virtio_mmio.rs:29:7
+   |
+29 | const VIRTIO_MMIO_QUEUE_DEVICE_HIGH: usize = 0x0a4;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MAGIC` is never used
+  --> kernel/src/block/virtio_mmio.rs:31:11
+   |
+31 | pub const VIRTIO_MAGIC: u32 = 0x7472_6976;
+   |           ^^^^^^^^^^^^
+
+warning: constant `VIRTIO_DEVICE_ID_BLOCK` is never used
+  --> kernel/src/block/virtio_mmio.rs:32:11
+   |
+32 | pub const VIRTIO_DEVICE_ID_BLOCK: u32 = 2;
+   |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_STATUS_ACKNOWLEDGE` is never used
+  --> kernel/src/block/virtio_mmio.rs:34:11
+   |
+34 | pub const VIRTIO_STATUS_ACKNOWLEDGE: u32 = 1;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_STATUS_DRIVER` is never used
+  --> kernel/src/block/virtio_mmio.rs:35:11
+   |
+35 | pub const VIRTIO_STATUS_DRIVER: u32 = 2;
+   |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_STATUS_DRIVER_OK` is never used
+  --> kernel/src/block/virtio_mmio.rs:36:11
+   |
+36 | pub const VIRTIO_STATUS_DRIVER_OK: u32 = 4;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_STATUS_FEATURES_OK` is never used
+  --> kernel/src/block/virtio_mmio.rs:37:11
+   |
+37 | pub const VIRTIO_STATUS_FEATURES_OK: u32 = 8;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_STATUS_FAILED` is never used
+  --> kernel/src/block/virtio_mmio.rs:38:11
+   |
+38 | pub const VIRTIO_STATUS_FAILED: u32 = 128;
+   |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_GUEST_PAGE_SIZE` is never used
+  --> kernel/src/block/virtio_mmio.rs:41:7
+   |
+41 | const VIRTIO_MMIO_GUEST_PAGE_SIZE: usize = 0x028; // legacy only
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_ALIGN` is never used
+  --> kernel/src/block/virtio_mmio.rs:42:7
+   |
+42 | const VIRTIO_MMIO_QUEUE_ALIGN: usize = 0x03c;     // legacy only
+   |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MMIO_QUEUE_PFN` is never used
+  --> kernel/src/block/virtio_mmio.rs:43:7
+   |
+43 | const VIRTIO_MMIO_QUEUE_PFN: usize = 0x040;       // legacy only
+   |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_F_VERSION_1` is never used
+  --> kernel/src/block/virtio_mmio.rs:49:11
+   |
+49 | pub const VIRTIO_F_VERSION_1: u64 = 1u64 << 32;
+   |           ^^^^^^^^^^^^^^^^^^
+
+warning: struct `VirtioMmioHeader` is never constructed
+  --> kernel/src/block/virtio_mmio.rs:52:12
+   |
+52 | pub struct VirtioMmioHeader {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+   --> kernel/src/block/virtio_mmio.rs:57:18
+    |
+ 56 | impl VirtioMmioHeader {
+    | --------------------- associated items in this implementation
+ 57 |     pub const fn new(base: usize) -> Self {
+    |                  ^^^
+...
+ 61 |     fn read32(&self, offset: usize) -> u32 {
+    |        ^^^^^^
+...
+ 67 |     fn write32(&self, offset: usize, value: u32) {
+    |        ^^^^^^^
+...
+ 73 |     pub fn magic(&self) -> u32 {
+    |            ^^^^^
+...
+ 77 |     pub fn version(&self) -> u32 {
+    |            ^^^^^^^
+...
+ 81 |     pub fn device_id(&self) -> u32 {
+    |            ^^^^^^^^^
+...
+ 85 |     pub fn vendor_id(&self) -> u32 {
+    |            ^^^^^^^^^
+...
+ 89 |     pub fn status(&self) -> u32 {
+    |            ^^^^^^
+...
+ 93 |     pub fn reset(&self) {
+    |            ^^^^^
+...
+ 98 |     pub fn set_status_bits(&self, bits: u32) {
+    |            ^^^^^^^^^^^^^^^
+...
+104 |     pub fn fail(&self) {
+    |            ^^^^
+...
+108 |     pub fn read_device_features(&self, sel: u32) -> u32 {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+114 |     pub fn write_driver_features(&self, sel: u32, features: u32) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+121 |     pub fn select_queue(&self, queue: u32) {
+    |            ^^^^^^^^^^^^
+...
+126 |     pub fn queue_size_max(&self) -> u32 {
+    |            ^^^^^^^^^^^^^^
+...
+130 |     pub fn queue_ready(&self) -> u32 {
+    |            ^^^^^^^^^^^
+...
+134 |     pub fn set_queue_size(&self, size: u32) {
+    |            ^^^^^^^^^^^^^^
+...
+138 |     pub fn set_queue_ready(&self, ready: u32) {
+    |            ^^^^^^^^^^^^^^^
+...
+143 |     fn write64_to_pair(&self, low_off: usize, high_off: usize, value: u...
+    |        ^^^^^^^^^^^^^^^
+...
+148 |     pub fn set_queue_desc_addr(&self, pa: usize) {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+156 |     pub fn set_queue_driver_addr(&self, pa: usize) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+164 |     pub fn set_queue_device_addr(&self, pa: usize) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+172 |     pub fn notify_queue(&self, queue: u32) {
+    |            ^^^^^^^^^^^^
+...
+176 |     pub fn interrupt_status(&self) -> u32 {
+    |            ^^^^^^^^^^^^^^^^
+...
+180 |     pub fn ack_interrupt(&self, bits: u32) {
+    |            ^^^^^^^^^^^^^
+...
+184 |     pub fn set_guest_page_size(&self, size: u32) {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+189 |     pub fn set_queue_align(&self, align: u32) {
+    |            ^^^^^^^^^^^^^^^
+...
+194 |     pub fn queue_pfn(&self) -> u32 {
+    |            ^^^^^^^^^
+...
+198 |     pub fn set_queue_pfn(&self, pfn: u32) {
+    |            ^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_MAGIC` is never used
+ --> kernel/src/block/virtio_probe.rs:3:7
+  |
+3 | const VIRTIO_MAGIC: u32 = 0x7472_6976;
+  |       ^^^^^^^^^^^^
+
+warning: constant `VIRTIO_DEVICE_ID_BLOCK` is never used
+ --> kernel/src/block/virtio_probe.rs:4:7
+  |
+4 | const VIRTIO_DEVICE_ID_BLOCK: u32 = 2;
+  |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `probe_virtio_blk_mmio` is never used
+  --> kernel/src/block/virtio_probe.rs:18:8
+   |
+18 | pub fn probe_virtio_blk_mmio() -> Option<usize> {
+   |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_BLK_QUEUE_SIZE` is never used
+  --> kernel/src/block/virtio_blk.rs:25:11
+   |
+25 | pub const VIRTIO_BLK_QUEUE_SIZE: usize = 8;
+   |           ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DESC_SIZE` is never used
+  --> kernel/src/block/virtio_blk.rs:27:7
+   |
+27 | const DESC_SIZE: usize = 16 * VIRTIO_BLK_QUEUE_SIZE;
+   |       ^^^^^^^^^
+
+warning: constant `AVAIL_SIZE` is never used
+  --> kernel/src/block/virtio_blk.rs:36:7
+   |
+36 | const AVAIL_SIZE: usize = 2 + 2 + 2 * VIRTIO_BLK_QUEUE_SIZE + 2;
+   |       ^^^^^^^^^^
+
+warning: function `align_up` is never used
+  --> kernel/src/block/virtio_blk.rs:38:10
+   |
+38 | const fn align_up(value: usize, align: usize) -> usize {
+   |          ^^^^^^^^
+
+warning: constant `DESC_OFFSET` is never used
+  --> kernel/src/block/virtio_blk.rs:42:7
+   |
+42 | const DESC_OFFSET: usize = 0;
+   |       ^^^^^^^^^^^
+
+warning: constant `AVAIL_OFFSET` is never used
+  --> kernel/src/block/virtio_blk.rs:43:7
+   |
+43 | const AVAIL_OFFSET: usize = DESC_OFFSET + DESC_SIZE;
+   |       ^^^^^^^^^^^^
+
+warning: constant `USED_OFFSET` is never used
+  --> kernel/src/block/virtio_blk.rs:44:7
+   |
+44 | const USED_OFFSET: usize = align_up(AVAIL_OFFSET + AVAIL_SIZE, 4);
+   |       ^^^^^^^^^^^
+
+warning: constant `USED_SIZE` is never used
+  --> kernel/src/block/virtio_blk.rs:53:7
+   |
+53 | const USED_SIZE: usize = 2 + 2 + 8 * VIRTIO_BLK_QUEUE_SIZE + 2;
+   |       ^^^^^^^^^
+
+warning: constant `QUEUE_MEM_SIZE` is never used
+  --> kernel/src/block/virtio_blk.rs:55:7
+   |
+55 | const QUEUE_MEM_SIZE: usize = USED_OFFSET + USED_SIZE;
+   |       ^^^^^^^^^^^^^^
+
+warning: constant `LEGACY_USED_OFFSET` is never used
+  --> kernel/src/block/virtio_blk.rs:61:7
+   |
+61 | const LEGACY_USED_OFFSET: usize =
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `LEGACY_QUEUE_PAGES` is never used
+  --> kernel/src/block/virtio_blk.rs:64:7
+   |
+64 | const LEGACY_QUEUE_PAGES: usize = 2;
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `MODERN_USED_OFFSET` is never used
+  --> kernel/src/block/virtio_blk.rs:66:7
+   |
+66 | const MODERN_USED_OFFSET: usize =
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `MODERN_QUEUE_PAGES` is never used
+  --> kernel/src/block/virtio_blk.rs:69:7
+   |
+69 | const MODERN_QUEUE_PAGES: usize = 1;
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: struct `VirtioBlkReq` is never constructed
+  --> kernel/src/block/virtio_blk.rs:73:8
+   |
+73 | struct VirtioBlkReq {
+   |        ^^^^^^^^^^^^
+
+warning: struct `VirtioQueue` is never constructed
+  --> kernel/src/block/virtio_blk.rs:79:12
+   |
+79 | pub struct VirtioQueue {
+   |            ^^^^^^^^^^^
+
+warning: associated functions `new_with_layout`, `new_legacy`, and `new_modern` are never used
+   --> kernel/src/block/virtio_blk.rs:91:8
+    |
+ 90 | impl VirtioQueue {
+    | ---------------- associated functions in this implementation
+ 91 |     fn new_with_layout(pages: usize, used_offset: usize) -> Option<Self> {
+    |        ^^^^^^^^^^^^^^^
+...
+117 |     pub fn new_legacy() -> Option<Self> {
+    |            ^^^^^^^^^^
+...
+121 |     pub fn new_modern() -> Option<Self> {
+    |            ^^^^^^^^^^
+
+warning: struct `VirtioBlkDevice` is never constructed
+   --> kernel/src/block/virtio_blk.rs:125:12
+    |
+125 | pub struct VirtioBlkDevice {
+    |            ^^^^^^^^^^^^^^^
+
+warning: associated function `init_from_phys_base` is never used
+   --> kernel/src/block/virtio_blk.rs:134:12
+    |
+133 | impl VirtioBlkDevice {
+    | -------------------- associated function in this implementation
+134 |     pub fn init_from_phys_base(phys_base: usize) -> Option<Arc<Self>> {
+    |            ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTQ_DESC_F_NEXT` is never used
+   --> kernel/src/block/virtio_blk.rs:355:7
+    |
+355 | const VIRTQ_DESC_F_NEXT: u16 = 1;
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTQ_DESC_F_WRITE` is never used
+   --> kernel/src/block/virtio_blk.rs:356:7
+    |
+356 | const VIRTQ_DESC_F_WRITE: u16 = 2;
+    |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTQ_AVAIL_F_NO_INTERRUPT` is never used
+   --> kernel/src/block/virtio_blk.rs:358:7
+    |
+358 | const VIRTQ_AVAIL_F_NO_INTERRUPT: u16 = 1;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_BLK_T_IN` is never used
+   --> kernel/src/block/virtio_blk.rs:360:7
+    |
+360 | const VIRTIO_BLK_T_IN: u32 = 0;
+    |       ^^^^^^^^^^^^^^^
+
+warning: constant `VIRTIO_BLK_S_OK` is never used
+   --> kernel/src/block/virtio_blk.rs:361:7
+    |
+361 | const VIRTIO_BLK_S_OK: u8 = 0;
+    |       ^^^^^^^^^^^^^^^
+
+warning: struct `VirtqDesc` is never constructed
+   --> kernel/src/block/virtio_blk.rs:365:8
+    |
+365 | struct VirtqDesc {
+    |        ^^^^^^^^^
+
+warning: struct `VirtqUsedElem` is never constructed
+   --> kernel/src/block/virtio_blk.rs:374:8
+    |
+374 | struct VirtqUsedElem {
+    |        ^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+   --> kernel/src/block/virtio_blk.rs:382:8
+    |
+381 | impl VirtioQueue {
+    | ---------------- methods in this implementation
+382 |     fn desc_va(&self) -> usize {
+    |        ^^^^^^^
+...
+386 |     fn avail_va(&self) -> usize {
+    |        ^^^^^^^^
+...
+390 |     fn used_va(&self) -> usize {
+    |        ^^^^^^^
+...
+398 |     unsafe fn desc_mut(&self, index: usize) -> *mut VirtqDesc {
+    |               ^^^^^^^^
+...
+403 |     unsafe fn avail_flags_ptr(&self) -> *mut u16 {
+    |               ^^^^^^^^^^^^^^^
+...
+407 |     unsafe fn avail_idx_ptr(&self) -> *mut u16 {
+    |               ^^^^^^^^^^^^^
+...
+411 |     unsafe fn used_idx_ptr(&self) -> *const u16 {
+    |               ^^^^^^^^^^^^
+...
+416 |     unsafe fn avail_ring_ptr(&self, index: usize) -> *mut u16 {
+    |               ^^^^^^^^^^^^^^
+...
+421 |     unsafe fn used_ring_ptr(&self, index: usize) -> *const VirtqUsedElem {
+    |               ^^^^^^^^^^^^^
+
+warning: constant `DMA_REQ_OFFSET` is never used
+   --> kernel/src/block/virtio_blk.rs:428:7
+    |
+428 | const DMA_REQ_OFFSET: usize = 0;
+    |       ^^^^^^^^^^^^^^
+
+warning: constant `DMA_DATA_OFFSET` is never used
+   --> kernel/src/block/virtio_blk.rs:429:7
+    |
+429 | const DMA_DATA_OFFSET: usize = 512;
+    |       ^^^^^^^^^^^^^^^
+
+warning: constant `DMA_STATUS_OFFSET` is never used
+   --> kernel/src/block/virtio_blk.rs:430:7
+    |
+430 | const DMA_STATUS_OFFSET: usize = DMA_DATA_OFFSET + 512;
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: struct `VirtioBlkDma` is never constructed
+   --> kernel/src/block/virtio_blk.rs:433:12
+    |
+433 | pub struct VirtioBlkDma {
+    |            ^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> kernel/src/block/virtio_blk.rs:448:12
+    |
+447 | impl VirtioBlkDma {
+    | ----------------- associated function in this implementation
+448 |     pub fn new() -> Option<Self> {
+    |            ^^^
+
+warning: struct `VirtioBlkInner` is never constructed
+   --> kernel/src/block/virtio_blk.rs:474:12
+    |
+474 | pub struct VirtioBlkInner {
+    |            ^^^^^^^^^^^^^^
+
+warning: method `read_sector_sync` is never used
+   --> kernel/src/block/virtio_blk.rs:483:8
+    |
+482 | impl VirtioBlkDevice {
+    | -------------------- method in this implementation
+483 |     fn read_sector_sync(&self, sector: usize, out: &mut [u8]) -> isize {
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `test_read_ext4_magic` is never used
+   --> kernel/src/block/virtio_blk.rs:714:8
+    |
+714 | pub fn test_read_ext4_magic(dev: Arc<VirtioBlkDevice>) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_read_some_sectors` is never used
+   --> kernel/src/block/virtio_blk.rs:745:8
+    |
+745 | pub fn test_read_some_sectors(dev: alloc::sync::Arc<VirtioBlkDevice>) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: static `VIRTIO_BLK_DEVICE` is never used
+   --> kernel/src/block/virtio_blk.rs:785:12
+    |
+785 | static mut VIRTIO_BLK_DEVICE: Option<Arc<VirtioBlkDevice>> = None;
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: function `init_global_from_phys_base` is never used
+   --> kernel/src/block/virtio_blk.rs:787:8
+    |
+787 | pub fn init_global_from_phys_base(phys_base: usize) -> Option<Arc<Virti...
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `global_device` is never used
+   --> kernel/src/block/virtio_blk.rs:797:8
+    |
+797 | pub fn global_device() -> Option<Arc<VirtioBlkDevice>> {
+    |        ^^^^^^^^^^^^^
+
+warning: function `global_block_device` is never used
+   --> kernel/src/block/virtio_blk.rs:803:8
+    |
+803 | pub fn global_block_device() -> Option<Arc<dyn BlockDevice>> {
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: fields `bar`, `offset`, and `length` are never read
+  --> kernel/src/block/virtio_pci.rs:20:9
+   |
+19 | pub struct VirtioPciRegion {
+   |            --------------- fields in this struct
+20 |     pub bar: u8,
+   |         ^^^
+21 |     pub offset: u32,
+   |         ^^^^^^
+22 |     pub length: u32,
+   |         ^^^^^^
+   |
+   = note: `VirtioPciRegion` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: constant `LEGACY_USED_OFFSET` is never used
+  --> kernel/src/block/virtio_queue.rs:61:11
+   |
+61 | pub const LEGACY_USED_OFFSET: usize =
+   |           ^^^^^^^^^^^^^^^^^^
+
+warning: fields `queue_ppn` and `pages` are never read
+  --> kernel/src/block/virtio_queue.rs:65:9
+   |
+64 | pub struct VirtioQueue {
+   |            ----------- fields in this struct
+65 |     pub queue_ppn: PhysPageNum,
+   |         ^^^^^^^^^
+...
+68 |     pub pages: usize,
+   |         ^^^^^
+
+warning: associated function `new_legacy` is never used
+  --> kernel/src/block/virtio_queue.rs:98:12
+   |
+75 | impl VirtioQueue {
+   | ---------------- associated function in this implementation
+...
+98 |     pub fn new_legacy() -> Option<Self> {
+   |            ^^^^^^^^^^
+
+warning: fields `ppn`, `pa`, and `va` are never read
+   --> kernel/src/block/virtio_queue.rs:151:9
+    |
+150 | pub struct VirtioBlkDma {
+    |            ------------ fields in this struct
+151 |     pub ppn: PhysPageNum,
+    |         ^^^
+152 |     pub pa: usize,
+    |         ^^
+153 |     pub va: usize,
+    |         ^^
+
+warning: constant `COMMON_MSIX_CONFIG` is never used
+  --> kernel/src/block/virtio_pci_blk.rs:28:7
+   |
+28 | const COMMON_MSIX_CONFIG: usize = 0x10;
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `COMMON_NUM_QUEUES` is never used
+  --> kernel/src/block/virtio_pci_blk.rs:29:7
+   |
+29 | const COMMON_NUM_QUEUES: usize = 0x12;
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `COMMON_CONFIG_GENERATION` is never used
+  --> kernel/src/block/virtio_pci_blk.rs:31:7
+   |
+31 | const COMMON_CONFIG_GENERATION: usize = 0x15;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `COMMON_QUEUE_MSIX_VECTOR` is never used
+  --> kernel/src/block/virtio_pci_blk.rs:35:7
+   |
+35 | const COMMON_QUEUE_MSIX_VECTOR: usize = 0x1a;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `device` is never read
+  --> kernel/src/block/virtio_pci_blk.rs:56:5
+   |
+52 | pub struct VirtioPciTransport {
+   |            ------------------ field in this struct
+...
+56 |     device: Option<VirtioPciRegion>,
+   |     ^^^^^^
+   |
+   = note: `VirtioPciTransport` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: constant `PCI_COMMAND_IO` is never used
+  --> kernel/src/pci/ecam.rs:84:7
+   |
+84 | const PCI_COMMAND_IO: u16 = 1 << 0;
+   |       ^^^^^^^^^^^^^^
+
+warning: function `read_bar_raw` is never used
+ --> kernel/src/pci/bar.rs:7:8
+  |
+7 | pub fn read_bar_raw(addr: PciAddress, bar: u8) -> u32 {
+  |        ^^^^^^^^^^^^
+
+warning: function `putchar_phys_raw` is never used
+  --> kernel/src/io/uart.rs:67:8
+   |
+67 | pub fn putchar_phys_raw(ch: u8) {
+   |        ^^^^^^^^^^^^^^^^
+
+warning: direct cast of function item into an integer
+  --> kernel/src/trap/loongarch64/mod.rs:50:29
+   |
+50 |     let eentry = __alltraps as usize;
+   |                             ^^^^^^^^
+   |
+   = note: `#[warn(function_casts_as_integer)]` on by default
+help: first cast to a pointer `as *const ()`
+   |
+50 |     let eentry = __alltraps as *const () as usize;
+   |                             ++++++++++++
+
+warning: creating a mutable reference to mutable static
+   --> kernel/src/mm/frame_allocator.rs:178:9
+    |
+178 |         FRAME_ALLOCATOR.init(actual_start_ppn, end_ppn);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: `#[warn(static_mut_refs)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+
+warning: creating a mutable reference to mutable static
+   --> kernel/src/mm/frame_allocator.rs:193:26
+    |
+193 |     let frame = unsafe { FRAME_ALLOCATOR.alloc() };
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+
+warning: creating a mutable reference to mutable static
+   --> kernel/src/mm/frame_allocator.rs:204:9
+    |
+204 |         FRAME_ALLOCATOR.dealloc(ppn);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+
+warning: creating a mutable reference to mutable static
+   --> kernel/src/mm/frame_allocator.rs:215:9
+    |
+215 |         FRAME_ALLOCATOR.alloc_contiguous(pages)
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+
+warning: creating a mutable reference to mutable static
+   --> kernel/src/mm/frame_allocator.rs:227:9
+    |
+227 |         FRAME_ALLOCATOR.dealloc_contiguous(base_ppn, pages);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+
+warning: direct cast of function item into an integer
+  --> kernel/src/mm/loongarch64.rs:37:34
+   |
+37 |     let refill_va = __tlb_refill as usize;
+   |                                  ^^^^^^^^
+   |
+help: first cast to a pointer `as *const ()`
+   |
+37 |     let refill_va = __tlb_refill as *const () as usize;
+   |                                  ++++++++++++
+
+warning: direct cast of function item into an integer
+  --> kernel/src/task/context.rs:34:30
+   |
+34 |             ra: __task_entry as usize,
+   |                              ^^^^^^^^
+   |
+help: first cast to a pointer `as *const ()`
+   |
+34 |             ra: __task_entry as *const () as usize,
+   |                              ++++++++++++
+
+warning: creating a shared reference to mutable static
+   --> kernel/src/fs/ext4fs.rs:317:9
+    |
+317 |         EXT4_ROOT.is_some()
+    |         ^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: creating a shared reference to mutable static
+   --> kernel/src/fs/ext4fs.rs:325:9
+    |
+325 |         EXT4_ROOT.as_ref().map(|fs| fs.root_inode())
+    |         ^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: creating a shared reference to mutable static
+   --> kernel/src/block/virtio_blk.rs:799:9
+    |
+799 |         VIRTIO_BLK_DEVICE.as_ref().cloned()
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: creating a shared reference to mutable static
+  --> kernel/src/io/uart.rs:36:9
+   |
+36 |         UART_DEV.init();
+   |         ^^^^^^^^^^^^^^^ shared reference to mutable static
+   |
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+   = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: creating a shared reference to mutable static
+  --> kernel/src/io/uart.rs:42:9
+   |
+42 |         UART_DEV.puts(s);
+   |         ^^^^^^^^^^^^^^^^ shared reference to mutable static
+   |
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+   = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: `RmikuOS` (bin "RmikuOS") generated 218 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 39 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.17s
+
+=== 启动 QEMU (loongarch64, mode=debug) ===
+KERNEL: target/loongarch64-unknown-none/debug/RmikuOS
+
+cCT[000000000100c000]psbrBjHR[0000000001020400]<ffff800001020400>LSQ[0000000002fb8063]M[0000000002fb8063][raw] before activate
+d[raw] after activate
+主核初始化完毕。
+
+RmikuOS shell
+commands:
+  help
+  exit
+  ls [path]
+  cat <path>
+
+external commands are in /bin:
+  try: ls /bin
+  cd <path>
+  pwd
+
+/ $ # repeat 1
+[93m[ WARN] [exec] open failed: /bin/#[0m
+exec failed: /bin/#
+[shell] child exit code 1
+
+/ $ alpha_arg_test 0 1 2 3
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=0 procs=3 threads=1,2,3
+[alpha_sample] alpha=0 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=226 stride=100000 pass=408500000
+[alpha_sample] alpha=0 role=1 pid=3 threads=2 tickets=100 effective=100 ready=2 run_ticks=221 stride=100000 pass=408400000
+[alpha_sample] alpha=0 role=2 pid=4 threads=3 tickets=100 effective=100 ready=3 run_ticks=208 stride=100000 pass=408400000
+[alpha_result] alpha=0 role=0 pid=2 threads=1 tickets=100 work=44288
+[alpha_result] alpha=0 role=1 pid=3 threads=2 tickets=100 work=45056
+[alpha_result] alpha=0 role=2 pid=4 threads=3 tickets=100 work=45122
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 25 1 2 3
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=25 procs=3 threads=1,2,3
+[alpha_sample] alpha=25 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=210 stride=100000 pass=340900000
+[alpha_sample] alpha=25 role=1 pid=3 threads=2 tickets=100 effective=100 ready=2 run_ticks=219 stride=100000 pass=341000000
+[alpha_sample] alpha=25 role=2 pid=2 threads=3 tickets=100 effective=100 ready=3 run_ticks=228 stride=100000 pass=341000000
+[alpha_result] alpha=25 role=0 pid=4 threads=1 tickets=100 work=40952
+[alpha_result] alpha=25 role=1 pid=3 threads=2 tickets=100 work=40128
+[alpha_result] alpha=25 role=2 pid=2 threads=3 tickets=100 work=38852
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 50 1 2 3
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=50 procs=3 threads=1,2,3
+[alpha_sample] alpha=50 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=201 stride=100000 pass=311700000
+[alpha_sample] alpha=50 role=1 pid=3 threads=2 tickets=100 effective=100 ready=2 run_ticks=226 stride=100000 pass=311700000
+[alpha_sample] alpha=50 role=2 pid=4 threads=3 tickets=100 effective=100 ready=3 run_ticks=229 stride=100000 pass=311600000
+[alpha_result] alpha=50 role=0 pid=2 threads=1 tickets=100 work=43359
+[alpha_result] alpha=50 role=1 pid=3 threads=2 tickets=100 work=41803
+[alpha_result] alpha=50 role=2 pid=4 threads=3 tickets=100 work=41344
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 75 1 2 3
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=75 procs=3 threads=1,2,3
+[alpha_sample] alpha=75 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=235 stride=100000 pass=440200000
+[alpha_sample] alpha=75 role=1 pid=3 threads=2 tickets=100 effective=100 ready=2 run_ticks=187 stride=100000 pass=440300000
+[alpha_sample] alpha=75 role=2 pid=2 threads=3 tickets=100 effective=100 ready=3 run_ticks=234 stride=100000 pass=440300000
+[alpha_result] alpha=75 role=0 pid=4 threads=1 tickets=100 work=49856
+[alpha_result] alpha=75 role=2 pid=2 threads=3 tickets=100 work=49792
+[alpha_result] alpha=75 role=1 pid=3 threads=2 tickets=100 work=51598
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 100 1 2 3
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=100 procs=3 threads=1,2,3
+[alpha_sample] alpha=100 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=87 stride=100000 pass=242900000
+[alpha_sample] alpha=100 role=1 pid=3 threads=2 tickets=100 effective=200 ready=2 run_ticks=204 stride=50000 pass=242900000
+[alpha_sample] alpha=100 role=2 pid=4 threads=3 tickets=100 effective=300 ready=3 run_ticks=367 stride=33333 pass=242930924
+[alpha_result] alpha=100 role=0 pid=2 threads=1 tickets=100 work=28736
+[alpha_result] alpha=100 role=1 pid=3 threads=2 tickets=100 work=56128
+[alpha_result] alpha=100 role=2 pid=4 threads=3 tickets=100 work=81460
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 0 1 3 5
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=0 procs=3 threads=1,3,5
+[alpha_sample] alpha=0 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=214 stride=100000 pass=449200000
+[alpha_sample] alpha=0 role=1 pid=3 threads=3 tickets=100 effective=100 ready=3 run_ticks=224 stride=100000 pass=449200000
+[alpha_sample] alpha=0 role=2 pid=2 threads=5 tickets=100 effective=100 ready=5 run_ticks=221 stride=100000 pass=449200000
+[alpha_result] alpha=0 role=0 pid=4 threads=1 tickets=100 work=54784
+[alpha_result] alpha=0 role=1 pid=3 threads=3 tickets=100 work=54766
+[alpha_result] alpha=0 role=2 pid=2 threads=5 tickets=100 work=54864
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 25 1 3 5
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=25 procs=3 threads=1,3,5
+[alpha_sample] alpha=25 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=222 stride=100000 pass=444000000
+[alpha_sample] alpha=25 role=1 pid=3 threads=3 tickets=100 effective=100 ready=3 run_ticks=221 stride=100000 pass=444000000
+[alpha_sample] alpha=25 role=2 pid=4 threads=5 tickets=100 effective=100 ready=5 run_ticks=215 stride=100000 pass=443900000
+[alpha_result] alpha=25 role=0 pid=2 threads=1 tickets=100 work=52281
+[alpha_result] alpha=25 role=1 pid=3 threads=3 tickets=100 work=52535
+[alpha_result] alpha=25 role=2 pid=4 threads=5 tickets=100 work=52609
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 50 1 3 5
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=50 procs=3 threads=1,3,5
+[alpha_sample] alpha=50 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=146 stride=100000 pass=330500000
+[alpha_sample] alpha=50 role=1 pid=3 threads=3 tickets=100 effective=100 ready=3 run_ticks=160 stride=100000 pass=330500000
+[alpha_sample] alpha=50 role=2 pid=2 threads=5 tickets=100 effective=200 ready=5 run_ticks=352 stride=50000 pass=330500000
+[alpha_result] alpha=50 role=0 pid=4 threads=1 tickets=100 work=41216
+[alpha_result] alpha=50 role=1 pid=3 threads=3 tickets=100 work=40192
+[alpha_result] alpha=50 role=2 pid=2 threads=5 tickets=100 work=78670
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 75 1 3 5
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=75 procs=3 threads=1,3,5
+[alpha_sample] alpha=75 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=168 stride=100000 pass=366000000
+[alpha_sample] alpha=75 role=1 pid=3 threads=3 tickets=100 effective=100 ready=3 run_ticks=161 stride=100000 pass=365900000
+[alpha_sample] alpha=75 role=2 pid=4 threads=5 tickets=100 effective=200 ready=5 run_ticks=329 stride=50000 pass=365900000
+[alpha_result] alpha=75 role=0 pid=2 threads=1 tickets=100 work=39552
+[alpha_result] alpha=75 role=1 pid=3 threads=3 tickets=100 work=39895
+[alpha_result] alpha=75 role=2 pid=4 threads=5 tickets=100 work=80155
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 100 1 3 5
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=100 procs=3 threads=1,3,5
+[alpha_sample] alpha=100 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=62 stride=100000 pass=161500000
+[alpha_sample] alpha=100 role=1 pid=3 threads=3 tickets=100 effective=300 ready=3 run_ticks=209 stride=33333 pass=161465082
+[alpha_sample] alpha=100 role=2 pid=2 threads=5 tickets=100 effective=500 ready=5 run_ticks=387 stride=20000 pass=161480000
+[alpha_result] alpha=100 role=0 pid=4 threads=1 tickets=100 work=18368
+[alpha_result] alpha=100 role=1 pid=3 threads=3 tickets=100 work=53729
+[alpha_result] alpha=100 role=2 pid=2 threads=5 tickets=100 work=87636
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 0 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=0 procs=3 threads=1,5,7
+[alpha_sample] alpha=0 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=243 stride=100000 pass=468100000
+[alpha_sample] alpha=0 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=220 stride=100000 pass=468100000
+[alpha_sample] alpha=0 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=195 stride=100000 pass=468000000
+[alpha_result] alpha=0 role=0 pid=2 threads=1 tickets=100 work=51456
+[alpha_result] alpha=0 role=1 pid=3 threads=5 tickets=100 work=51795
+[alpha_result] alpha=0 role=2 pid=4 threads=7 tickets=100 work=54172
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 25 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=25 procs=3 threads=1,5,7
+[alpha_sample] alpha=25 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=229 stride=100000 pass=479900000
+[alpha_sample] alpha=25 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=204 stride=100000 pass=479900000
+[alpha_sample] alpha=25 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=224 stride=100000 pass=480000000
+[alpha_result] alpha=25 role=0 pid=4 threads=1 tickets=100 work=58560
+[alpha_result] alpha=25 role=1 pid=3 threads=5 tickets=100 work=60537
+[alpha_result] alpha=25 role=2 pid=2 threads=7 tickets=100 work=58810
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 50 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=50 procs=3 threads=1,5,7
+[alpha_sample] alpha=50 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=111 stride=100000 pass=234500000
+[alpha_sample] alpha=50 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=263 stride=50000 pass=234450000
+[alpha_sample] alpha=50 role=2 pid=4 threads=7 tickets=100 effective=200 ready=7 run_ticks=282 stride=50000 pass=234450000
+[alpha_result] alpha=50 role=0 pid=2 threads=1 tickets=100 work=32272
+[alpha_result] alpha=50 role=1 pid=3 threads=5 tickets=100 work=61793
+[alpha_result] alpha=50 role=2 pid=4 threads=7 tickets=100 work=60030
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 75 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=75 procs=3 threads=1,5,7
+[alpha_sample] alpha=75 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=125 stride=100000 pass=197400000
+[alpha_sample] alpha=75 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=292 stride=50000 pass=197450000
+[alpha_sample] alpha=75 role=2 pid=2 threads=7 tickets=100 effective=200 ready=7 run_ticks=240 stride=50000 pass=197450000
+[alpha_result] alpha=75 role=0 pid=4 threads=1 tickets=100 work=27456
+[alpha_result] alpha=75 role=1 pid=3 threads=5 tickets=100 work=53184
+[alpha_result] alpha=75 role=2 pid=2 threads=7 tickets=100 work=55742
+
+alpha_arg_test PASS
+qemu-system-loongarch64: terminating on signal 15 from pid 51505 (timeout)

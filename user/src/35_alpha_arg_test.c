@@ -31,35 +31,6 @@ static void burn_iters(int iters) {
     (void)x;
 }
 
-static int parse_int(const char *s, int *out) {
-    int sign = 1;
-    int val = 0;
-
-    if (s == 0 || *s == 0) {
-        return -1;
-    }
-
-    if (*s == '-') {
-        sign = -1;
-        s++;
-    }
-
-    if (*s == 0) {
-        return -1;
-    }
-
-    while (*s) {
-        if (*s < '0' || *s > '9') {
-            return -1;
-        }
-
-        val = val * 10 + (*s - '0');
-        s++;
-    }
-
-    *out = val * sign;
-    return 0;
-}
 
 static void wait_until(usize tick) {
     while (get_ticks() < tick) {
