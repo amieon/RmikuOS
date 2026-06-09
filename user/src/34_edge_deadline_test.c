@@ -200,12 +200,12 @@ static void sample_children_stat(
 }
 
 /*
- * control 每 CONTROL_PERIOD_TICKS 必须完成一次 job。
+ * control 每 CONTROL_PERIOD_TICKS 必须s完成一次 job。
  * 如果 miss 全是 0：调大 CONTROL_JOB_BURN_ITERS 或调小 CONTROL_PERIOD_TICKS。
  * 如果 miss 全很高：调小 CONTROL_JOB_BURN_ITERS 或调大 CONTROL_PERIOD_TICKS。
  */
 
-#define CONTROL_PERIOD_TICKS 3
+#define CONTROL_PERIOD_TICKS 4
 #define CONTROL_JOB_CPU_TICKS 2
 #define CONTROL_SPIN_BURN_ITERS 200000
 
@@ -588,15 +588,14 @@ int main(void) {
     puts("scenario: edge gateway with control deadline + AI throughput + logger background\n");
     puts("control has periodic deadline; AI/logger are throughput workloads\n");
 
-    if (run_one_alpha(0) < 0) {
+    if (run_one_alpha(0) != 0) {
+        return 1;
+    }
+    if (run_one_alpha(50) != 0) {
         return 1;
     }
 
-    if (run_one_alpha(50) < 0) {
-        return 1;
-    }
-
-    if (run_one_alpha(100) < 0) {
+    if (run_one_alpha(100) != 0) {
         return 1;
     }
 
