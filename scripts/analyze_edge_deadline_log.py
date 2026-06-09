@@ -224,7 +224,6 @@ def summarize(rows):
     summary = []
 
     for key, items in sorted(groups.items()):
-        alpha, role, threads, tickets = key
 
         alpha, case, role, threads, tickets = key
 
