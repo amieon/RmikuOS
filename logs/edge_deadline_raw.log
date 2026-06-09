@@ -1914,9 +1914,9 @@ help: first cast to a pointer `as *const ()`
    |                             ++++++++++++
 
 warning: creating a mutable reference to mutable static
-   --> kernel/src/mm/frame_allocator.rs:178:9
+   --> kernel/src/mm/frame_allocator.rs:183:9
     |
-178 |         FRAME_ALLOCATOR.init(actual_start_ppn, end_ppn);
+183 |         FRAME_ALLOCATOR.init(actual_start_ppn, end_ppn);
     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
     |
     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
@@ -1924,36 +1924,36 @@ warning: creating a mutable reference to mutable static
     = note: `#[warn(static_mut_refs)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
 
 warning: creating a mutable reference to mutable static
-   --> kernel/src/mm/frame_allocator.rs:193:26
+   --> kernel/src/mm/frame_allocator.rs:198:26
     |
-193 |     let frame = unsafe { FRAME_ALLOCATOR.alloc() };
+198 |     let frame = unsafe { FRAME_ALLOCATOR.alloc() };
     |                          ^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
     |
     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
 
 warning: creating a mutable reference to mutable static
-   --> kernel/src/mm/frame_allocator.rs:204:9
+   --> kernel/src/mm/frame_allocator.rs:209:9
     |
-204 |         FRAME_ALLOCATOR.dealloc(ppn);
+209 |         FRAME_ALLOCATOR.dealloc(ppn);
     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
     |
     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
 
 warning: creating a mutable reference to mutable static
-   --> kernel/src/mm/frame_allocator.rs:215:9
+   --> kernel/src/mm/frame_allocator.rs:220:9
     |
-215 |         FRAME_ALLOCATOR.alloc_contiguous(pages)
+220 |         FRAME_ALLOCATOR.alloc_contiguous(pages)
     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
     |
     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
 
 warning: creating a mutable reference to mutable static
-   --> kernel/src/mm/frame_allocator.rs:227:9
+   --> kernel/src/mm/frame_allocator.rs:232:9
     |
-227 |         FRAME_ALLOCATOR.dealloc_contiguous(base_ppn, pages);
+232 |         FRAME_ALLOCATOR.dealloc_contiguous(base_ppn, pages);
     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
     |
     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
@@ -2027,12 +2027,12 @@ warning: creating a shared reference to mutable static
    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
 
 warning: `RmikuOS` (bin "RmikuOS") generated 218 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 39 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.46s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.23s
 
 === 启动 QEMU (loongarch64, mode=debug) ===
 KERNEL: target/loongarch64-unknown-none/debug/RmikuOS
 
-cCT[000000000100c000]psbrBjHR[0000000001020540]<ffff800001020540>LSQ[0000000002fb8063]M[0000000002fb8063][raw] before activate
+cCT[000000000100c000]psbrBjHR[0000000001020be0]<ffff800001020be0>LSQ[0000000002fb8063]M[0000000002fb8063][raw] before activate
 d[raw] after activate
 主核初始化完毕。
 
@@ -2068,12 +2068,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=376 stride=33333 pass=215331189
-[edge_sample] alpha=0 role=ai pid=3 threads=25 tickets=100 effective=100 ready=25 run_ticks=178 stride=100000 pass=215400000
-[edge_sample] alpha=0 role=logger pid=4 threads=9 tickets=50 effective=50 ready=9 run_ticks=90 stride=200000 pass=215300000
+[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=368 stride=33333 pass=222531116
+[edge_sample] alpha=0 role=ai pid=3 threads=25 tickets=100 effective=100 ready=25 run_ticks=189 stride=100000 pass=222600000
+[edge_sample] alpha=0 role=logger pid=4 threads=9 tickets=50 effective=50 ready=9 run_ticks=93 stride=200000 pass=222600000
 [edge_deadline] alpha=0 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=15844 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=32401 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=17829 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=36213 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2084,12 +2084,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=344 stride=33333 pass=172364954
-[edge_sample] alpha=25 role=ai pid=3 threads=25 tickets=100 effective=200 ready=25 run_ticks=227 stride=50000 pass=172400000
-[edge_sample] alpha=25 role=logger pid=2 threads=9 tickets=50 effective=50 ready=9 run_ticks=78 stride=200000 pass=172500000
+[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=350 stride=33333 pass=168331661
+[edge_sample] alpha=25 role=ai pid=3 threads=25 tickets=100 effective=200 ready=25 run_ticks=226 stride=50000 pass=168300000
+[edge_sample] alpha=25 role=logger pid=2 threads=9 tickets=50 effective=50 ready=9 run_ticks=70 stride=200000 pass=168500000
 [edge_deadline] alpha=25 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=11024 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=49687 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=49064 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=11369 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2100,12 +2100,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=318 stride=33333 pass=92999086
-[edge_sample] alpha=50 role=ai pid=3 threads=25 tickets=100 effective=500 ready=25 run_ticks=284 stride=20000 pass=93003329
-[edge_sample] alpha=50 role=logger pid=4 threads=9 tickets=50 effective=150 ready=9 run_ticks=49 stride=66666 pass=92999094
+[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=324 stride=33333 pass=88665795
+[edge_sample] alpha=50 role=ai pid=3 threads=25 tickets=100 effective=500 ready=25 run_ticks=281 stride=20000 pass=88653329
+[edge_sample] alpha=50 role=logger pid=4 threads=9 tickets=50 effective=150 ready=9 run_ticks=44 stride=66666 pass=88665804
 [edge_deadline] alpha=50 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=57698 jobs=0 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=19423 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=55934 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=19392 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2116,12 +2116,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=170 stride=33333 pass=54832804
-[edge_sample] alpha=75 role=ai pid=3 threads=25 tickets=100 effective=1100 ready=25 run_ticks=405 stride=9090 pass=54803889
-[edge_sample] alpha=75 role=logger pid=2 threads=9 tickets=50 effective=250 ready=9 run_ticks=77 stride=40000 pass=54820000
-[edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=4
-[edge_deadline] alpha=75 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=18069 jobs=0 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=75773 jobs=0 miss=0
+[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=175 stride=33333 pass=52932822
+[edge_sample] alpha=75 role=ai pid=3 threads=25 tickets=100 effective=1100 ready=25 run_ticks=382 stride=9090 pass=52904836
+[edge_sample] alpha=75 role=logger pid=2 threads=9 tickets=50 effective=250 ready=9 run_ticks=94 stride=40000 pass=52920000
+[edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=10
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=76062 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=16586 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2132,12 +2132,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=115 stride=33333 pass=27933076
-[edge_sample] alpha=100 role=ai pid=3 threads=25 tickets=100 effective=2500 ready=25 run_ticks=450 stride=4000 pass=27903975
-[edge_sample] alpha=100 role=logger pid=4 threads=9 tickets=50 effective=450 ready=9 run_ticks=88 stride=22222 pass=27921966
-[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=103 miss=102
-[edge_deadline] alpha=100 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=15313 jobs=0 miss=0
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=87209 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=115 stride=33333 pass=28133073
+[edge_sample] alpha=100 role=ai pid=3 threads=25 tickets=100 effective=2500 ready=25 run_ticks=438 stride=4000 pass=28103995
+[edge_sample] alpha=100 role=logger pid=4 threads=9 tickets=50 effective=450 ready=9 run_ticks=94 stride=22222 pass=28121966
+[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=100 miss=99
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=88879 jobs=0 miss=0
+[edge_deadline] alpha=100 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=15061 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2148,12 +2148,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=380 stride=33333 pass=229531063
-[edge_sample] alpha=0 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=202 stride=100000 pass=229500000
-[edge_sample] alpha=0 role=logger pid=2 threads=8 tickets=50 effective=50 ready=8 run_ticks=68 stride=200000 pass=229700000
+[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=369 stride=33333 pass=230731050
+[edge_sample] alpha=0 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=195 stride=100000 pass=230800000
+[edge_sample] alpha=0 role=logger pid=2 threads=8 tickets=50 effective=50 ready=8 run_ticks=88 stride=200000 pass=230800000
 [edge_deadline] alpha=0 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=18964 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=33924 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=36074 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=19072 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2164,12 +2164,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=368 stride=33333 pass=236130999
-[edge_sample] alpha=25 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=204 stride=100000 pass=236200000
-[edge_sample] alpha=25 role=logger pid=4 threads=8 tickets=50 effective=50 ready=8 run_ticks=81 stride=200000 pass=236100000
+[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=371 stride=33333 pass=231431047
+[edge_sample] alpha=25 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=194 stride=100000 pass=231500000
+[edge_sample] alpha=25 role=logger pid=4 threads=8 tickets=50 effective=50 ready=8 run_ticks=84 stride=200000 pass=231400000
 [edge_deadline] alpha=25 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=35595 jobs=0 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=19225 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=36003 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=18931 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2180,12 +2180,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=321 stride=33333 pass=136531998
-[edge_sample] alpha=50 role=ai pid=3 threads=14 tickets=100 effective=300 ready=14 run_ticks=256 stride=33333 pass=136548669
-[edge_sample] alpha=50 role=logger pid=2 threads=8 tickets=50 effective=100 ready=8 run_ticks=75 stride=100000 pass=136600000
+[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=339 stride=33333 pass=133032033
+[edge_sample] alpha=50 role=ai pid=3 threads=14 tickets=100 effective=300 ready=14 run_ticks=208 stride=33333 pass=133032037
+[edge_sample] alpha=50 role=logger pid=2 threads=8 tickets=50 effective=100 ready=8 run_ticks=106 stride=100000 pass=133100000
 [edge_deadline] alpha=50 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=48396 jobs=0 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=16866 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=51020 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=14678 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2196,12 +2196,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=311 stride=33333 pass=82732539
-[edge_sample] alpha=75 role=ai pid=3 threads=14 tickets=100 effective=600 ready=14 run_ticks=271 stride=16666 pass=82746833
-[edge_sample] alpha=75 role=logger pid=4 threads=8 tickets=50 effective=200 ready=8 run_ticks=71 stride=50000 pass=82750000
+[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=321 stride=33333 pass=84199192
+[edge_sample] alpha=75 role=ai pid=3 threads=14 tickets=100 effective=600 ready=14 run_ticks=262 stride=16666 pass=84180111
+[edge_sample] alpha=75 role=logger pid=4 threads=8 tickets=50 effective=200 ready=8 run_ticks=70 stride=50000 pass=84216662
 [edge_deadline] alpha=75 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=63194 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=22784 jobs=0 miss=0
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=62192 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=22214 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2212,12 +2212,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=173 stride=33333 pass=46332907
-[edge_sample] alpha=100 role=ai pid=3 threads=14 tickets=100 effective=1400 ready=14 run_ticks=376 stride=7142 pass=46302066
-[edge_sample] alpha=100 role=logger pid=2 threads=8 tickets=50 effective=400 ready=8 run_ticks=103 stride=25000 pass=46300000
-[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=100
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=73751 jobs=0 miss=0
-[edge_deadline] alpha=100 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=21675 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=164 stride=33333 pass=46132909
+[edge_sample] alpha=100 role=ai pid=3 threads=14 tickets=100 effective=1400 ready=14 run_ticks=396 stride=7142 pass=46102090
+[edge_sample] alpha=100 role=logger pid=2 threads=8 tickets=50 effective=400 ready=8 run_ticks=94 stride=25000 pass=46124998
+[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=98
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=72504 jobs=0 miss=0
+[edge_deadline] alpha=100 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=22129 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2228,12 +2228,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=390 stride=33333 pass=235331021
-[edge_sample] alpha=0 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=182 stride=100000 pass=235400000
-[edge_sample] alpha=0 role=logger pid=4 threads=4 tickets=50 effective=50 ready=4 run_ticks=81 stride=200000 pass=235400000
+[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=355 stride=33333 pass=227631098
+[edge_sample] alpha=0 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=198 stride=100000 pass=227700000
+[edge_sample] alpha=0 role=logger pid=4 threads=4 tickets=50 effective=50 ready=4 run_ticks=100 stride=200000 pass=227700000
 [edge_deadline] alpha=0 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=18496 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=35965 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=34524 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=17194 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2244,12 +2244,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=361 stride=33333 pass=220931168
-[edge_sample] alpha=25 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=203 stride=100000 pass=221000000
-[edge_sample] alpha=25 role=logger pid=2 threads=4 tickets=50 effective=50 ready=4 run_ticks=89 stride=200000 pass=221000000
+[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=361 stride=33333 pass=212831249
+[edge_sample] alpha=25 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=211 stride=100000 pass=212800000
+[edge_sample] alpha=25 role=logger pid=2 threads=4 tickets=50 effective=50 ready=4 run_ticks=82 stride=200000 pass=213000000
 [edge_deadline] alpha=25 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=34442 jobs=0 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=18252 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=29768 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=16261 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2260,12 +2260,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=335 stride=33333 pass=136332017
-[edge_sample] alpha=50 role=ai pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=262 stride=33333 pass=136315357
-[edge_sample] alpha=50 role=logger pid=4 threads=4 tickets=50 effective=100 ready=4 run_ticks=56 stride=100000 pass=136400000
+[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=325 stride=33333 pass=113165583
+[edge_sample] alpha=50 role=ai pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=232 stride=33333 pass=113165591
+[edge_sample] alpha=50 role=logger pid=4 threads=4 tickets=50 effective=100 ready=4 run_ticks=97 stride=100000 pass=113200000
 [edge_deadline] alpha=50 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=17349 jobs=0 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=47039 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=42451 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=13011 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2276,12 +2276,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=323 stride=33333 pass=111132274
-[edge_sample] alpha=75 role=ai pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=259 stride=20000 pass=111106663
-[edge_sample] alpha=75 role=logger pid=2 threads=4 tickets=50 effective=100 ready=4 run_ticks=73 stride=100000 pass=111200000
+[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=321 stride=33333 pass=98399067
+[edge_sample] alpha=75 role=ai pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=274 stride=20000 pass=98399998
+[edge_sample] alpha=75 role=logger pid=2 threads=4 tickets=50 effective=100 ready=4 run_ticks=59 stride=100000 pass=98400000
 [edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=65575 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=11840 jobs=0 miss=0
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=60572 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=12224 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2292,12 +2292,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=212 stride=33333 pass=59532795
-[edge_sample] alpha=100 role=ai pid=3 threads=9 tickets=100 effective=900 ready=9 run_ticks=377 stride=11111 pass=59510570
-[edge_sample] alpha=100 role=logger pid=4 threads=4 tickets=50 effective=200 ready=4 run_ticks=63 stride=50000 pass=59500000
-[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=4
-[edge_deadline] alpha=100 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=14912 jobs=0 miss=0
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=61399 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=241 stride=33333 pass=67532714
+[edge_sample] alpha=100 role=ai pid=3 threads=9 tickets=100 effective=900 ready=9 run_ticks=336 stride=11111 pass=67510493
+[edge_sample] alpha=100 role=logger pid=4 threads=4 tickets=50 effective=200 ready=4 run_ticks=79 stride=50000 pass=67500000
+[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=3
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=69878 jobs=0 miss=0
+[edge_deadline] alpha=100 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=15422 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2308,12 +2308,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=360 stride=33333 pass=224631147
-[edge_sample] alpha=0 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=206 stride=100000 pass=224700000
-[edge_sample] alpha=0 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=87 stride=200000 pass=224800000
+[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=374 stride=33333 pass=229031101
+[edge_sample] alpha=0 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=209 stride=100000 pass=229100000
+[edge_sample] alpha=0 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=71 stride=200000 pass=229200000
 [edge_deadline] alpha=0 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=33496 jobs=0 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=18048 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=18540 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=33548 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2324,12 +2324,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=362 stride=33333 pass=244230955
-[edge_sample] alpha=25 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=196 stride=100000 pass=244300000
-[edge_sample] alpha=25 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=96 stride=200000 pass=244200000
+[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=371 stride=33333 pass=222031175
+[edge_sample] alpha=25 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=174 stride=100000 pass=222100000
+[edge_sample] alpha=25 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=109 stride=200000 pass=222000000
 [edge_deadline] alpha=25 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=16979 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=33407 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=15722 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=33856 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2340,12 +2340,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=349 stride=33333 pass=180031600
-[edge_sample] alpha=50 role=ai pid=3 threads=7 tickets=100 effective=200 ready=7 run_ticks=233 stride=50000 pass=180050000
-[edge_sample] alpha=50 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=70 stride=200000 pass=180100000
+[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=353 stride=33333 pass=187331525
+[edge_sample] alpha=50 role=ai pid=3 threads=7 tickets=100 effective=200 ready=7 run_ticks=220 stride=50000 pass=187300000
+[edge_sample] alpha=50 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=81 stride=200000 pass=187500000
 [edge_deadline] alpha=50 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=45614 jobs=0 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=10437 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=47237 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=10368 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2356,12 +2356,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=336 stride=33333 pass=149865237
-[edge_sample] alpha=75 role=ai pid=3 threads=7 tickets=100 effective=300 ready=7 run_ticks=278 stride=33333 pass=149831905
-[edge_sample] alpha=75 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=40 stride=200000 pass=149900000
+[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=337 stride=33333 pass=139998668
+[edge_sample] alpha=75 role=ai pid=3 threads=7 tickets=100 effective=300 ready=7 run_ticks=276 stride=33333 pass=139998669
+[edge_sample] alpha=75 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=42 stride=200000 pass=140000000
 [edge_deadline] alpha=75 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=55744 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=9732 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=9088 jobs=0 miss=0
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=54060 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2372,12 +2372,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=293 stride=33333 pass=92565813
-[edge_sample] alpha=100 role=ai pid=3 threads=7 tickets=100 effective=700 ready=7 run_ticks=279 stride=14285 pass=92538601
-[edge_sample] alpha=100 role=logger pid=2 threads=3 tickets=50 effective=150 ready=3 run_ticks=82 stride=66666 pass=92599148
-[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=1
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=73303 jobs=0 miss=0
-[edge_deadline] alpha=100 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=14400 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=283 stride=33333 pass=86632538
+[edge_sample] alpha=100 role=ai pid=3 threads=7 tickets=100 effective=700 ready=7 run_ticks=305 stride=14285 pass=86624605
+[edge_sample] alpha=100 role=logger pid=2 threads=3 tickets=50 effective=150 ready=3 run_ticks=66 stride=66666 pass=86632540
+[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=2
+[edge_deadline] alpha=100 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=14848 jobs=0 miss=0
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=68583 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2388,12 +2388,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=369 stride=33333 pass=252197553
-[edge_sample] alpha=0 role=ai pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=191 stride=100000 pass=252200000
-[edge_sample] alpha=0 role=logger pid=4 threads=2 tickets=50 effective=50 ready=2 run_ticks=95 stride=200000 pass=252300000
+[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=363 stride=33333 pass=229131117
+[edge_sample] alpha=0 role=ai pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=200 stride=100000 pass=229200000
+[edge_sample] alpha=0 role=logger pid=4 threads=2 tickets=50 effective=50 ready=2 run_ticks=92 stride=200000 pass=229300000
 [edge_deadline] alpha=0 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=18368 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=36303 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=17856 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=34547 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2404,12 +2404,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=369 stride=33333 pass=250130911
-[edge_sample] alpha=25 role=ai pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=189 stride=100000 pass=250100000
-[edge_sample] alpha=25 role=logger pid=2 threads=2 tickets=50 effective=50 ready=2 run_ticks=96 stride=200000 pass=250300000
+[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=374 stride=33333 pass=233631074
+[edge_sample] alpha=25 role=ai pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=202 stride=100000 pass=233700000
+[edge_sample] alpha=25 role=logger pid=2 threads=2 tickets=50 effective=50 ready=2 run_ticks=79 stride=200000 pass=233700000
 [edge_deadline] alpha=25 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=2 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=18009 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=36172 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=2 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=18676 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=34765 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2420,12 +2420,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=348 stride=33333 pass=192764821
-[edge_sample] alpha=50 role=ai pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=233 stride=50000 pass=192800000
-[edge_sample] alpha=50 role=logger pid=4 threads=2 tickets=50 effective=50 ready=2 run_ticks=74 stride=200000 pass=192800000
+[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=346 stride=33333 pass=178131632
+[edge_sample] alpha=50 role=ai pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=253 stride=50000 pass=178150000
+[edge_sample] alpha=50 role=logger pid=4 threads=2 tickets=50 effective=50 ready=2 run_ticks=56 stride=200000 pass=178200000
 [edge_deadline] alpha=50 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=11255 jobs=0 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=49335 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=11319 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=44864 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2436,12 +2436,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=336 stride=33333 pass=161231807
-[edge_sample] alpha=75 role=ai pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=261 stride=33333 pass=161231808
-[edge_sample] alpha=75 role=logger pid=2 threads=2 tickets=50 effective=50 ready=2 run_ticks=57 stride=200000 pass=161400000
+[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=342 stride=33333 pass=151265238
+[edge_sample] alpha=75 role=ai pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=265 stride=33333 pass=151265240
+[edge_sample] alpha=75 role=logger pid=2 threads=2 tickets=50 effective=50 ready=2 run_ticks=47 stride=200000 pass=151400000
 [edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=56061 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=2 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=8591 jobs=0 miss=0
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=51707 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=2 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=8576 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2452,12 +2452,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=317 stride=33333 pass=119165564
-[edge_sample] alpha=100 role=ai pid=3 threads=5 tickets=100 effective=500 ready=5 run_ticks=274 stride=20000 pass=119160000
-[edge_sample] alpha=100 role=logger pid=4 threads=2 tickets=50 effective=100 ready=2 run_ticks=64 stride=100000 pass=119200000
-[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=100 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=12672 jobs=0 miss=0
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=64658 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=320 stride=33333 pass=93199157
+[edge_sample] alpha=100 role=ai pid=3 threads=5 tickets=100 effective=500 ready=5 run_ticks=276 stride=20000 pass=93200000
+[edge_sample] alpha=100 role=logger pid=4 threads=2 tickets=50 effective=100 ready=2 run_ticks=59 stride=100000 pass=93200000
+[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=32
+[edge_deadline] alpha=100 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=10560 jobs=0 miss=0
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=52484 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2473,12 +2473,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=369 stride=33333 pass=224531183
-[edge_sample] alpha=0 role=ai pid=3 threads=25 tickets=100 effective=100 ready=25 run_ticks=204 stride=100000 pass=224500000
-[edge_sample] alpha=0 role=logger pid=2 threads=9 tickets=50 effective=50 ready=9 run_ticks=76 stride=200000 pass=224700000
+[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=362 stride=33333 pass=208631342
+[edge_sample] alpha=0 role=ai pid=3 threads=25 tickets=100 effective=100 ready=25 run_ticks=198 stride=100000 pass=208700000
+[edge_sample] alpha=0 role=logger pid=2 threads=9 tickets=50 effective=50 ready=9 run_ticks=84 stride=200000 pass=208800000
 [edge_deadline] alpha=0 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=18906 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=34882 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=16984 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=32153 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2489,12 +2489,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=344 stride=33333 pass=178064984
-[edge_sample] alpha=25 role=ai pid=3 threads=25 tickets=100 effective=200 ready=25 run_ticks=239 stride=50000 pass=178100000
-[edge_sample] alpha=25 role=logger pid=4 threads=9 tickets=50 effective=50 ready=9 run_ticks=67 stride=200000 pass=178200000
+[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=352 stride=33333 pass=165165114
+[edge_sample] alpha=25 role=ai pid=3 threads=25 tickets=100 effective=200 ready=25 run_ticks=229 stride=50000 pass=165200000
+[edge_sample] alpha=25 role=logger pid=4 threads=9 tickets=50 effective=50 ready=9 run_ticks=67 stride=200000 pass=165300000
 [edge_deadline] alpha=25 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=11537 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=48380 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=10137 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=42566 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2505,12 +2505,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=314 stride=33333 pass=98999112
-[edge_sample] alpha=50 role=ai pid=3 threads=25 tickets=100 effective=500 ready=25 run_ticks=278 stride=20000 pass=98968326
-[edge_sample] alpha=50 role=logger pid=2 threads=9 tickets=50 effective=150 ready=9 run_ticks=57 stride=66666 pass=99032452
-[edge_deadline] alpha=50 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=149 miss=2
-[edge_deadline] alpha=50 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=19121 jobs=0 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=57183 jobs=0 miss=0
+[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=316 stride=33333 pass=96465804
+[edge_sample] alpha=50 role=ai pid=3 threads=25 tickets=100 effective=500 ready=25 run_ticks=279 stride=20000 pass=96449992
+[edge_sample] alpha=50 role=logger pid=2 threads=9 tickets=50 effective=150 ready=9 run_ticks=52 stride=66666 pass=96465814
+[edge_deadline] alpha=50 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=2
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=53455 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=18123 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2521,12 +2521,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=176 stride=33333 pass=62232816
-[edge_sample] alpha=75 role=ai pid=3 threads=25 tickets=100 effective=1100 ready=25 run_ticks=387 stride=9090 pass=62205322
-[edge_sample] alpha=75 role=logger pid=4 threads=9 tickets=50 effective=250 ready=9 run_ticks=88 stride=40000 pass=62219996
-[edge_deadline] alpha=75 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=17553 jobs=0 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=77997 jobs=0 miss=0
+[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=195 stride=33333 pass=61532824
+[edge_sample] alpha=75 role=ai pid=3 threads=25 tickets=100 effective=1100 ready=25 run_ticks=352 stride=9090 pass=61508638
+[edge_sample] alpha=75 role=logger pid=4 threads=9 tickets=50 effective=250 ready=9 run_ticks=101 stride=40000 pass=61520000
+[edge_deadline] alpha=75 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=6
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=75887 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=15591 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2537,12 +2537,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=112 stride=33333 pass=37633066
-[edge_sample] alpha=100 role=ai pid=3 threads=25 tickets=100 effective=2500 ready=25 run_ticks=451 stride=4000 pass=37603993
-[edge_sample] alpha=100 role=logger pid=2 threads=9 tickets=50 effective=450 ready=9 run_ticks=82 stride=22222 pass=37610846
-[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=104 miss=103
-[edge_deadline] alpha=100 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=15657 jobs=0 miss=0
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=88341 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=111 stride=33333 pass=36133080
+[edge_sample] alpha=100 role=ai pid=3 threads=25 tickets=100 effective=2500 ready=25 run_ticks=457 stride=4000 pass=36103971
+[edge_sample] alpha=100 role=logger pid=2 threads=9 tickets=50 effective=450 ready=9 run_ticks=82 stride=22222 pass=36110859
+[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=101 miss=101
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=84785 jobs=0 miss=0
+[edge_deadline] alpha=100 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=15276 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2553,12 +2553,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=364 stride=33333 pass=236831077
-[edge_sample] alpha=0 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=191 stride=100000 pass=236900000
-[edge_sample] alpha=0 role=logger pid=4 threads=8 tickets=50 effective=50 ready=8 run_ticks=95 stride=200000 pass=236800000
+[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=362 stride=33333 pass=223131213
+[edge_sample] alpha=0 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=197 stride=100000 pass=223200000
+[edge_sample] alpha=0 role=logger pid=4 threads=8 tickets=50 effective=50 ready=8 run_ticks=93 stride=200000 pass=223100000
 [edge_deadline] alpha=0 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=36016 jobs=0 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=17940 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=33582 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=17525 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2569,12 +2569,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=370 stride=33333 pass=238531063
-[edge_sample] alpha=25 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=190 stride=100000 pass=238600000
-[edge_sample] alpha=25 role=logger pid=2 threads=8 tickets=50 effective=50 ready=8 run_ticks=91 stride=200000 pass=238600000
+[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=365 stride=33333 pass=228331165
+[edge_sample] alpha=25 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=206 stride=100000 pass=228300000
+[edge_sample] alpha=25 role=logger pid=2 threads=8 tickets=50 effective=50 ready=8 run_ticks=79 stride=200000 pass=228500000
 [edge_deadline] alpha=25 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=36330 jobs=0 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=18445 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=33623 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=18048 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2585,12 +2585,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=334 stride=33333 pass=145431998
-[edge_sample] alpha=50 role=ai pid=3 threads=14 tickets=100 effective=300 ready=14 run_ticks=246 stride=33333 pass=145415336
-[edge_sample] alpha=50 role=logger pid=4 threads=8 tickets=50 effective=100 ready=8 run_ticks=73 stride=100000 pass=145500000
+[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=339 stride=33333 pass=137432076
+[edge_sample] alpha=50 role=ai pid=3 threads=14 tickets=100 effective=300 ready=14 run_ticks=208 stride=33333 pass=137432077
+[edge_sample] alpha=50 role=logger pid=4 threads=8 tickets=50 effective=100 ready=8 run_ticks=100 stride=100000 pass=137399994
 [edge_deadline] alpha=50 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=49647 jobs=0 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=17536 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=45177 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=13266 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2601,12 +2601,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=304 stride=33333 pass=92232532
-[edge_sample] alpha=75 role=ai pid=3 threads=14 tickets=100 effective=600 ready=14 run_ticks=277 stride=16666 pass=92230150
-[edge_sample] alpha=75 role=logger pid=2 threads=8 tickets=50 effective=200 ready=8 run_ticks=70 stride=50000 pass=92250000
-[edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=61733 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=21824 jobs=0 miss=0
+[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=277 stride=33333 pass=60532849
+[edge_sample] alpha=75 role=ai pid=3 threads=14 tickets=100 effective=600 ready=14 run_ticks=312 stride=16666 pass=60511417
+[edge_sample] alpha=75 role=logger pid=2 threads=8 tickets=50 effective=200 ready=8 run_ticks=65 stride=50000 pass=60516662
+[edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=15
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=52019 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=19462 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2617,12 +2617,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=170 stride=33333 pass=51932938
-[edge_sample] alpha=100 role=ai pid=3 threads=14 tickets=100 effective=1400 ready=14 run_ticks=387 stride=7142 pass=52002425
-[edge_sample] alpha=100 role=logger pid=4 threads=8 tickets=50 effective=400 ready=8 run_ticks=101 stride=25000 pass=52024998
-[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=149 miss=112
-[edge_deadline] alpha=100 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=21364 jobs=0 miss=0
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=73520 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=170 stride=33333 pass=53032928
+[edge_sample] alpha=100 role=ai pid=3 threads=14 tickets=100 effective=1400 ready=14 run_ticks=383 stride=7142 pass=53002326
+[edge_sample] alpha=100 role=logger pid=4 threads=8 tickets=50 effective=400 ready=8 run_ticks=97 stride=25000 pass=53024997
+[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=109
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=72719 jobs=0 miss=0
+[edge_deadline] alpha=100 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=21888 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2633,12 +2633,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=360 stride=33333 pass=245831003
-[edge_sample] alpha=0 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=204 stride=100000 pass=245900000
-[edge_sample] alpha=0 role=logger pid=2 threads=4 tickets=50 effective=50 ready=4 run_ticks=89 stride=200000 pass=245900000
+[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=372 stride=33333 pass=167631784
+[edge_sample] alpha=0 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=191 stride=100000 pass=167700000
+[edge_sample] alpha=0 role=logger pid=2 threads=4 tickets=50 effective=50 ready=4 run_ticks=90 stride=200000 pass=167700000
 [edge_deadline] alpha=0 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=18887 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=35975 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=29103 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=14656 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2649,12 +2649,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=352 stride=33333 pass=252030944
-[edge_sample] alpha=25 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=206 stride=100000 pass=252100000
-[edge_sample] alpha=25 role=logger pid=4 threads=4 tickets=50 effective=50 ready=4 run_ticks=95 stride=200000 pass=252100000
+[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=364 stride=33333 pass=190931554
+[edge_sample] alpha=25 role=ai pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=189 stride=100000 pass=191000000
+[edge_sample] alpha=25 role=logger pid=4 threads=4 tickets=50 effective=50 ready=4 run_ticks=101 stride=200000 pass=191000000
 [edge_deadline] alpha=25 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=34879 jobs=0 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=17821 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=15177 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=30989 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2665,12 +2665,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=330 stride=33333 pass=146765333
-[edge_sample] alpha=50 role=ai pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=234 stride=33333 pass=146765336
-[edge_sample] alpha=50 role=logger pid=2 threads=4 tickets=50 effective=100 ready=4 run_ticks=90 stride=100000 pass=146800000
-[edge_deadline] alpha=50 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=51290 jobs=0 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=16210 jobs=0 miss=0
+[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=327 stride=33333 pass=132398810
+[edge_sample] alpha=50 role=ai pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=239 stride=33333 pass=132415484
+[edge_sample] alpha=50 role=logger pid=2 threads=4 tickets=50 effective=100 ready=4 run_ticks=86 stride=100000 pass=132400000
+[edge_deadline] alpha=50 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=9
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=37313 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=12206 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2681,12 +2681,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=324 stride=33333 pass=117298966
-[edge_sample] alpha=75 role=ai pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=265 stride=20000 pass=117306665
-[edge_sample] alpha=75 role=logger pid=4 threads=4 tickets=50 effective=100 ready=4 run_ticks=66 stride=100000 pass=117300000
-[edge_deadline] alpha=75 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=65799 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=12256 jobs=0 miss=0
+[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=315 stride=33333 pass=91332556
+[edge_sample] alpha=75 role=ai pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=273 stride=20000 pass=91320000
+[edge_sample] alpha=75 role=logger pid=4 threads=4 tickets=50 effective=100 ready=4 run_ticks=65 stride=100000 pass=91400000
+[edge_deadline] alpha=75 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=22
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=53293 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=4 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=9954 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2697,12 +2697,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=9 logger_threads=4
-[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=258 stride=33333 pass=81099330
-[edge_sample] alpha=100 role=ai pid=3 threads=9 tickets=100 effective=900 ready=9 run_ticks=330 stride=11111 pass=81088222
-[edge_sample] alpha=100 role=logger pid=2 threads=4 tickets=50 effective=200 ready=4 run_ticks=66 stride=50000 pass=81100000
-[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=5
-[edge_deadline] alpha=100 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=17408 jobs=0 miss=0
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=75178 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=223 stride=33333 pass=77932694
+[edge_sample] alpha=100 role=ai pid=3 threads=9 tickets=100 effective=900 ready=9 run_ticks=355 stride=11111 pass=77910474
+[edge_sample] alpha=100 role=logger pid=2 threads=4 tickets=50 effective=200 ready=4 run_ticks=76 stride=50000 pass=77900000
+[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=21
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=9 tickets=100 effective=0 ready=0 run_ticks=0 work=64072 jobs=0 miss=0
+[edge_deadline] alpha=100 role=logger_result pid=2 threads=4 tickets=50 effective=0 ready=0 run_ticks=0 work=14349 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2713,12 +2713,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=361 stride=33333 pass=251430963
-[edge_sample] alpha=0 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=204 stride=100000 pass=251500000
-[edge_sample] alpha=0 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=90 stride=200000 pass=251400000
+[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=369 stride=33333 pass=241131065
+[edge_sample] alpha=0 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=193 stride=100000 pass=241200000
+[edge_sample] alpha=0 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=90 stride=200000 pass=241300000
 [edge_deadline] alpha=0 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=18496 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=36059 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=29622 jobs=0 miss=0
+[edge_deadline] alpha=0 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=15360 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2729,12 +2729,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=25 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=388 stride=33333 pass=252030960
-[edge_sample] alpha=25 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=178 stride=100000 pass=252100000
-[edge_sample] alpha=25 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=88 stride=200000 pass=252100000
+[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=360 stride=33333 pass=184531635
+[edge_sample] alpha=25 role=ai pid=3 threads=7 tickets=100 effective=100 ready=7 run_ticks=188 stride=100000 pass=184500000
+[edge_sample] alpha=25 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=106 stride=200000 pass=184700000
 [edge_deadline] alpha=25 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=18752 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=37431 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=23626 jobs=0 miss=0
+[edge_deadline] alpha=25 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=11040 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2745,12 +2745,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=50 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=342 stride=33333 pass=196831515
-[edge_sample] alpha=50 role=ai pid=3 threads=7 tickets=100 effective=200 ready=7 run_ticks=241 stride=50000 pass=196850000
-[edge_sample] alpha=50 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=71 stride=200000 pass=196800000
+[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=344 stride=33333 pass=124365573
+[edge_sample] alpha=50 role=ai pid=3 threads=7 tickets=100 effective=200 ready=7 run_ticks=243 stride=50000 pass=124400000
+[edge_sample] alpha=50 role=logger pid=4 threads=3 tickets=50 effective=50 ready=3 run_ticks=68 stride=200000 pass=124400000
 [edge_deadline] alpha=50 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=49872 jobs=0 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=11776 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=38000 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=8704 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2761,12 +2761,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=75 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=342 stride=33333 pass=161531871
-[edge_sample] alpha=75 role=ai pid=3 threads=7 tickets=100 effective=300 ready=7 run_ticks=279 stride=33333 pass=161531872
-[edge_sample] alpha=75 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=34 stride=200000 pass=161500000
+[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=336 stride=33333 pass=137665444
+[edge_sample] alpha=75 role=ai pid=3 threads=7 tickets=100 effective=300 ready=7 run_ticks=270 stride=33333 pass=137665450
+[edge_sample] alpha=75 role=logger pid=2 threads=3 tickets=50 effective=50 ready=3 run_ticks=49 stride=200000 pass=137800000
 [edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=55496 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=10042 jobs=0 miss=0
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=48469 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=2 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=7936 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2777,12 +2777,12 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=100 control_threads=1 ai_threads=7 logger_threads=3
-[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=309 stride=33333 pass=98532505
-[edge_sample] alpha=100 role=ai pid=3 threads=7 tickets=100 effective=700 ready=7 run_ticks=286 stride=14285 pass=98510154
-[edge_sample] alpha=100 role=logger pid=4 threads=3 tickets=50 effective=150 ready=3 run_ticks=61 stride=66666 pass=98565840
-[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=2
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=72470 jobs=0 miss=0
-[edge_deadline] alpha=100 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=15386 jobs=0 miss=0
+[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=256 stride=33333 pass=56532925
+[edge_sample] alpha=100 role=ai pid=3 threads=7 tickets=100 effective=700 ready=7 run_ticks=333 stride=14285 pass=56512256
+[edge_sample] alpha=100 role=logger pid=4 threads=3 tickets=50 effective=150 ready=3 run_ticks=67 stride=66666 pass=56566260
+[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=52
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=7 tickets=100 effective=0 ready=0 run_ticks=0 work=51553 jobs=0 miss=0
+[edge_deadline] alpha=100 role=logger_result pid=4 threads=3 tickets=50 effective=0 ready=0 run_ticks=0 work=11524 jobs=0 miss=0
 
 edge_deadline_arg_test PASS
 [shell] child exit code 0
@@ -2793,206 +2793,3 @@ usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_thr
 example: edge_deadline_arg_test 50 1 9 4
 
 [edge_deadline] run alpha=0 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=371 stride=33333 pass=253030963
-[edge_sample] alpha=0 role=ai pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=191 stride=100000 pass=253000000
-[edge_sample] alpha=0 role=logger pid=2 threads=2 tickets=50 effective=50 ready=2 run_ticks=93 stride=200000 pass=253200000
-[edge_deadline] alpha=0 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=2 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=18783 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=37333 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 25 1 5 2
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=25 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=367 stride=33333 pass=255930937
-[edge_sample] alpha=25 role=ai pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=205 stride=100000 pass=256000000
-[edge_sample] alpha=25 role=logger pid=4 threads=2 tickets=50 effective=50 ready=2 run_ticks=83 stride=200000 pass=255900000
-[edge_deadline] alpha=25 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=18666 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=35584 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 50 1 5 2
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=50 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=50 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=351 stride=33333 pass=201231487
-[edge_sample] alpha=50 role=ai pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=227 stride=50000 pass=201250000
-[edge_sample] alpha=50 role=logger pid=2 threads=2 tickets=50 effective=50 ready=2 run_ticks=77 stride=200000 pass=201400000
-[edge_deadline] alpha=50 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=2 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=10688 jobs=0 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=48863 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 75 1 5 2
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=75 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=75 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=348 stride=33333 pass=168531817
-[edge_sample] alpha=75 role=ai pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=256 stride=33333 pass=168531821
-[edge_sample] alpha=75 role=logger pid=4 threads=2 tickets=50 effective=50 ready=2 run_ticks=51 stride=200000 pass=168500000
-[edge_deadline] alpha=75 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=4 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=8704 jobs=0 miss=0
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=56344 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 100 1 5 2
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=100 control_threads=1 ai_threads=5 logger_threads=2
-[edge_sample] alpha=100 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=330 stride=33333 pass=118832317
-[edge_sample] alpha=100 role=ai pid=3 threads=5 tickets=100 effective=500 ready=5 run_ticks=265 stride=20000 pass=118800000
-[edge_sample] alpha=100 role=logger pid=2 threads=2 tickets=50 effective=100 ready=2 run_ticks=60 stride=100000 pass=118900000
-[edge_deadline] alpha=100 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=5 tickets=100 effective=0 ready=0 run_ticks=0 work=64768 jobs=0 miss=0
-[edge_deadline] alpha=100 role=logger_result pid=2 threads=2 tickets=50 effective=0 ready=0 run_ticks=0 work=12466 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ # repeat 3
-[93m[ WARN] [exec] open failed: /bin/#[0m
-exec failed: /bin/#
-[shell] child exit code 1
-
-/ $ edge_deadline_arg_test 0 1 25 9
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=0 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=0 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=376 stride=33333 pass=236831143
-[edge_sample] alpha=0 role=ai pid=3 threads=25 tickets=100 effective=100 ready=25 run_ticks=177 stride=100000 pass=236900000
-[edge_sample] alpha=0 role=logger pid=4 threads=9 tickets=50 effective=50 ready=9 run_ticks=94 stride=200000 pass=236800000
-[edge_deadline] alpha=0 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=17919 jobs=0 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=35919 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 25 1 25 9
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=25 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=25 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=347 stride=33333 pass=334963498
-[edge_sample] alpha=25 role=ai pid=3 threads=25 tickets=100 effective=200 ready=25 run_ticks=233 stride=50000 pass=335000000
-[edge_sample] alpha=25 role=logger pid=2 threads=9 tickets=50 effective=50 ready=9 run_ticks=70 stride=200000 pass=335000000
-[edge_deadline] alpha=25 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=11871 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=50092 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 50 1 25 9
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=50 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=50 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=326 stride=33333 pass=108165772
-[edge_sample] alpha=50 role=ai pid=3 threads=25 tickets=100 effective=500 ready=25 run_ticks=271 stride=20000 pass=108173329
-[edge_sample] alpha=50 role=logger pid=4 threads=9 tickets=50 effective=150 ready=9 run_ticks=54 stride=66666 pass=108199112
-[edge_deadline] alpha=50 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=1
-[edge_deadline] alpha=50 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=57214 jobs=0 miss=0
-[edge_deadline] alpha=50 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=18944 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 75 1 25 9
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=75 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=75 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=213 stride=33333 pass=72732794
-[edge_sample] alpha=75 role=ai pid=3 threads=25 tickets=100 effective=1100 ready=25 run_ticks=358 stride=9090 pass=72703652
-[edge_sample] alpha=75 role=logger pid=2 threads=9 tickets=50 effective=250 ready=9 run_ticks=77 stride=40000 pass=72720000
-[edge_deadline] alpha=75 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=3
-[edge_deadline] alpha=75 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=94924 jobs=0 miss=0
-[edge_deadline] alpha=75 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=21439 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 100 1 25 9
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=100 control_threads=1 ai_threads=25 logger_threads=9
-[edge_sample] alpha=100 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=115 stride=33333 pass=45733068
-[edge_sample] alpha=100 role=ai pid=3 threads=25 tickets=100 effective=2500 ready=25 run_ticks=436 stride=4000 pass=45703974
-[edge_sample] alpha=100 role=logger pid=4 threads=9 tickets=50 effective=450 ready=9 run_ticks=100 stride=22222 pass=45710850
-[edge_deadline] alpha=100 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=103 miss=102
-[edge_deadline] alpha=100 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=89419 jobs=0 miss=0
-[edge_deadline] alpha=100 role=logger_result pid=4 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=14693 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 0 1 14 8
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=0 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=0 role=control pid=4 threads=1 tickets=300 effective=300 ready=1 run_ticks=371 stride=33333 pass=253664325
-[edge_sample] alpha=0 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=194 stride=100000 pass=253700000
-[edge_sample] alpha=0 role=logger pid=2 threads=8 tickets=50 effective=50 ready=8 run_ticks=85 stride=200000 pass=253700000
-[edge_deadline] alpha=0 role=control_result pid=4 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=0 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=36349 jobs=0 miss=0
-[edge_deadline] alpha=0 role=logger_result pid=2 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=19212 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 25 1 14 8
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=25 control_threads=1 ai_threads=14 logger_threads=8
-[edge_sample] alpha=25 role=control pid=2 threads=1 tickets=300 effective=300 ready=1 run_ticks=373 stride=33333 pass=250231029
-[edge_sample] alpha=25 role=ai pid=3 threads=14 tickets=100 effective=100 ready=14 run_ticks=196 stride=100000 pass=250300000
-[edge_sample] alpha=25 role=logger pid=4 threads=8 tickets=50 effective=50 ready=8 run_ticks=83 stride=200000 pass=250200000
-[edge_deadline] alpha=25 role=control_result pid=2 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=150 miss=0
-[edge_deadline] alpha=25 role=logger_result pid=4 threads=8 tickets=50 effective=0 ready=0 run_ticks=0 work=18630 jobs=0 miss=0
-[edge_deadline] alpha=25 role=ai_result pid=3 threads=14 tickets=100 effective=0 ready=0 run_ticks=0 work=35660 jobs=0 miss=0
-
-edge_deadline_arg_test PASS
-[shell] child exit code 0
-
-/ $ edge_deadline_arg_test 50 1 14 8
-edge_deadline_arg_test start
-usage: edge_deadline_arg_test <alpha> <control_threads> <ai_threads> <logger_threads>
-example: edge_deadline_arg_test 50 1 9 4
-
-[edge_deadline] run alpha=50 control_threads=1 ai_threads=14 logger_threads=8
-[CPU0] [trap] fatal exception: ecode=0x8, esubcode=0x1, era=0xffff8000010c0360, badv=0x12d0c, estat=0x480000
-
-[31m KERNEL PANIC [0m
-[31mPANIC at kernel/src/trap/loongarch64/mod.rs:108:13[0m
-[31mfatal LoongArch exception[0m
-[31mPANIC END[0m

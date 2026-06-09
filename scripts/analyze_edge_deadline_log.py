@@ -7,7 +7,11 @@ from collections import defaultdict
 from statistics import mean, pstdev
 
 RUN_RE = re.compile(
-    r"\[edge_deadline\]\s+run\s+alpha=(?P<alpha>\d+)"
+    r"\[edge_deadline\]\s+run\s+"
+    r"alpha=(?P<alpha>\d+)"
+    r"(?:\s+control_threads=(?P<control_threads>\d+)"
+    r"\s+ai_threads=(?P<ai_threads>\d+)"
+    r"\s+logger_threads=(?P<logger_threads>\d+))?"
 )
 
 SAMPLE_RE = re.compile(
@@ -72,9 +76,24 @@ def parse_log(path):
             m = RUN_RE.search(line)
             if m:
                 run_id += 1
+                alpha = int(m.group("alpha"))
+
+                control_threads = m.group("control_threads")
+                ai_threads = m.group("ai_threads")
+                logger_threads = m.group("logger_threads")
+
+                if control_threads is not None:
+                    case = f"{control_threads}_{ai_threads}_{logger_threads}"
+                else:
+                    case = "unknown"
+
                 cur = {
                     "run_id": run_id,
-                    "alpha": int(m.group("alpha")),
+                    "alpha": alpha,
+                    "case": case,
+                    "control_threads": int(control_threads) if control_threads else "",
+                    "ai_threads": int(ai_threads) if ai_threads else "",
+                    "logger_threads": int(logger_threads) if logger_threads else "",
                     "roles": defaultdict(dict),
                 }
                 runs.append(cur)
@@ -164,6 +183,11 @@ def flatten_runs(runs):
 
                 "sample_pid": r.get("sample_pid", ""),
                 "result_pid": r.get("result_pid", ""),
+
+                "case": run["case"],
+                "control_threads": run["control_threads"],
+                "ai_threads": run["ai_threads"],
+                "logger_threads": run["logger_threads"],
             }
 
             rows.append(row)
@@ -177,6 +201,7 @@ def summarize(rows):
     for r in rows:
         key = (
             r["alpha"],
+            r["case"],
             r["role"],
             r["threads"],
             r["tickets"],
@@ -201,8 +226,11 @@ def summarize(rows):
     for key, items in sorted(groups.items()):
         alpha, role, threads, tickets = key
 
+        alpha, case, role, threads, tickets = key
+
         out = {
             "alpha": alpha,
+            "case": case,
             "role": role,
             "threads": threads,
             "tickets": tickets,
