@@ -233,7 +233,17 @@ fn primary_init() {
     // - 定时器
     // - 进程调度器
     // ...
+    pub const BOOT_BANNER: &str = r#"
+     ____            _ _         ___  ____  
+    |  _ \ _ __ ___ (_) | ___   / _ \/ ___| 
+    | |_) | '_ ` _ \| | |/ / | | | | \___ \ 
+    |  _ <| | | | | | |   <| |_| |_| |___) |
+    |_| \_\_| |_| |_|_|_|\_\\___/___/|____/ 
+
+        RmikuOS - Rusty tiny OS kernel
+    "#;
     println!("主核初始化完毕。");
+    println!("{}",BOOT_BANNER);
 
     task::init();
     task::run_first_task();
