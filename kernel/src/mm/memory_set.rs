@@ -297,10 +297,9 @@ impl MemorySet {
     pub fn from_existed_user(user_space: &Self) -> Self {
         let mut memory_set = Self::new_bare();
 
-        #[cfg(target_arch = "riscv64")]
-        {
-            memory_set.map_kernel_areas();
-        }
+
+        memory_set.map_kernel_areas();
+        
 
         for area in user_space.areas.iter() {
             if !area.is_user() {

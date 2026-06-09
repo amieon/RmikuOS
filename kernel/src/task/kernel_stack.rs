@@ -33,7 +33,16 @@ impl KernelStack {
         let base_ppn = alloc_contiguous_frames(pages)
             .expect("failed to allocate kernel stack frames");
 
-        let base_va = kernel_phys_to_virt(base_ppn.0 << PAGE_SIZE_BITS);
+        let base_pa = base_ppn.0 << PAGE_SIZE_BITS;
+        let base_va = kernel_phys_to_virt(base_pa);
+
+        assert!(
+            base_va >= crate::mm::config::KERNEL_OFFSET,
+            "[kstack] bad kernel stack va: ppn={:#x}, pa={:#x}, va={:#x}",
+            base_ppn.0,
+            base_pa,
+            base_va,
+        );
 
         unsafe {
             core::ptr::write_bytes(
