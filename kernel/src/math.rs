@@ -22,10 +22,7 @@ pub fn sched_thread_scale(n: usize, alpha: isize) -> usize {
         25 => isqrt(n_sqrt),               // alpha = 0.25
         50 => n_sqrt,                      // alpha = 0.5
         75 => {
-            let x = n_sqrt
-                .saturating_mul(n_sqrt)
-                .saturating_mul(n_sqrt);
-            isqrt(x).max(1)
+            isqrt(n.saturating_mul(n_sqrt)).max(1)
         },                                 // alpha = 0.75
         100 => n,                          // alpha = 1
         _ => n_sqrt,                       // 非法值默认 sqrt
