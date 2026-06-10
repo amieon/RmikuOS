@@ -7,7 +7,8 @@
 #define LOGGER_TICKETS 50
 
 #define START_DELAY_TICKS 80
-#define TEST_TICKS 600
+#define TEST_TICKS 2000
+
 
 #define AI_BURN_ITERS 12000
 #define LOGGER_BURN_ITERS 12000
@@ -29,7 +30,7 @@
  * 例如最后 1~2 个 window 再试 alpha=100，miss 会计入结果，
  * 但吞吐收益来不及体现。
  */
-#define MIN_REMAIN_WINDOWS_TO_PROBE 2
+#define MIN_REMAIN_WINDOWS_TO_PROBE 3
 
 /*
  * 每个窗口大约 25 个 control jobs。
