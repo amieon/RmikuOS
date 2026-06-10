@@ -18,25 +18,35 @@
 
 #define ADAPT_WINDOW_TICKS 100
 #define ALPHA_STEP 25
-#define ZERO_MISS_WINDOWS_TO_INCREASE 3
-
-#define ALPHA_STEP 25
 
 /*
  * 连续几个完全安全窗口后，才尝试提高 alpha。
- * 越大越保守。
  */
 #define SAFE_WINDOWS_TO_PROBE_UP 2
 
 /*
- * 每个窗口大约 25 个 control jobs。
- * 1 次 miss 大概就是 40 / 1000。
- *
- * >= 50/1000 认为明显不安全；
- * >= 200/1000 认为严重不安全，会快速下降。
+ * 实验快结束时不再向上探测，避免 late probe damage。
+ * 例如最后 1~2 个 window 再试 alpha=100，miss 会计入结果，
+ * 但吞吐收益来不及体现。
  */
-#define UNSAFE_MISS_PER_1000 50
-#define SEVERE_MISS_PER_1000 200
+#define MIN_REMAIN_WINDOWS_TO_PROBE 2
+
+/*
+ * 每个窗口大约 25 个 control jobs。
+ * 1 次 miss 大约是 40 / 1000。
+ *
+ * >= 100/1000 认为明显不安全；
+ * >= 500/1000 认为严重不安全。
+ *
+ * 这样 1~2 次偶发 miss 不会立刻把 alpha 打下去。
+ */
+#define UNSAFE_MISS_PER_1000 100
+#define SEVERE_MISS_PER_1000 500
+
+/*
+ * 从高 alpha 降下来后，给 control 一个窗口消化 backlog。
+ */
+#define COOLDOWN_WINDOWS_AFTER_DOWN 1
 
 static volatile usize global_start_tick;
 static volatile usize global_end_tick;
@@ -681,6 +691,7 @@ static int run_one_adaptive_case(
     * 避免反复试探同一个坏 alpha。
     */
     int max_allowed_alpha = 100;
+    int cooldown_windows = 0;
 
     int window_id = 0;
 
@@ -710,10 +721,36 @@ static int run_one_adaptive_case(
         int alpha_before = alpha;
         const char *action = "hold";
 
-        if (miss_per_1000 >= UNSAFE_MISS_PER_1000) {
+        /*
+        * 判断是否还适合继续向上探测。
+        * 如果实验快结束了，就不要再 probe 更高 alpha，
+        * 否则最后一个高 alpha 窗口可能只带来 miss，不带来足够吞吐收益。
+        */
+        usize now_tick = get_ticks();
+        usize remain_ticks = 0;
+
+        if (global_end_tick > now_tick) {
+            remain_ticks = global_end_tick - now_tick;
+        }
+
+        int can_probe_up =
+            remain_ticks > (usize)(MIN_REMAIN_WINDOWS_TO_PROBE * ADAPT_WINDOW_TICKS);
+
+        if (cooldown_windows > 0) {
             /*
-            * 当前 alpha 已经不安全。
-            * 以后本轮实验不再尝试这个 alpha 或更高 alpha。
+            * 刚从高 alpha 降下来后，control 可能还在消化上一窗口造成的 deadline backlog。
+            * 这个窗口只观察，不更新 max_allowed，避免误判当前 alpha 也不安全。
+            */
+            cooldown_windows--;
+            safe_windows = 0;
+            action = "cooldown_hold";
+        } else if (miss_per_1000 >= UNSAFE_MISS_PER_1000) {
+            /*
+            * 当前 alpha 被判定为不安全。
+            * 最高安全 alpha 最多只能是当前 alpha - 25。
+            *
+            * 注意：即使是 severe miss，也不直接跳两级。
+            * severe 只影响日志动作名；真正搜索上界仍然按一级一级确认。
             */
             int new_max = alpha - ALPHA_STEP;
 
@@ -725,30 +762,32 @@ static int run_one_adaptive_case(
                 max_allowed_alpha = new_max;
             }
 
-            if (miss_per_1000 >= SEVERE_MISS_PER_1000) {
-                alpha = clamp_alpha(alpha - 2 * ALPHA_STEP);
-                action = "severe_down";
-            } else {
-                alpha = clamp_alpha(alpha - ALPHA_STEP);
-                action = "unsafe_down";
-            }
-
-            if (alpha > max_allowed_alpha) {
-                alpha = max_allowed_alpha;
-            }
+            alpha = max_allowed_alpha;
 
             safe_windows = 0;
+            cooldown_windows = COOLDOWN_WINDOWS_AFTER_DOWN;
+
+            if (miss_per_1000 >= SEVERE_MISS_PER_1000) {
+                action = "severe_down";
+            } else {
+                action = "unsafe_down";
+            }
         } else if (window_miss == 0) {
             /*
-            * 完全无 miss，认为当前 alpha 是安全的。
-            * 连续安全若干窗口后，尝试向上探索。
+            * 完全无 miss，认为当前 alpha 暂时安全。
+            * 连续安全若干窗口后，再尝试向上探索。
             */
             safe_windows++;
 
             if (safe_windows >= SAFE_WINDOWS_TO_PROBE_UP) {
                 int next_alpha = alpha + ALPHA_STEP;
 
-                if (next_alpha <= max_allowed_alpha) {
+                if (!can_probe_up) {
+                    /*
+                    * 快结束了，不再冒险探测更高 alpha。
+                    */
+                    action = "late_safe_hold";
+                } else if (next_alpha <= max_allowed_alpha) {
                     alpha = next_alpha;
                     action = "probe_up";
                 } else {
@@ -761,8 +800,8 @@ static int run_one_adaptive_case(
             }
         } else {
             /*
-            * 有少量 miss，但没超过 unsafe 阈值。
-            * 认为处于灰区：不升也不降，避免因为 1 次抖动立刻回退。
+            * 少量 miss，但没到 unsafe 阈值。
+            * 认为是灰区，不升不降。
             */
             safe_windows = 0;
             action = "gray_hold";
