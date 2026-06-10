@@ -1,0 +1,35 @@
+# repeat 1
+adaptive_alpha_test 50 1 14 8
+adaptive_alpha_test 75 1 14 8
+adaptive_alpha_test 100 1 14 8
+adaptive_alpha_test 50 1 25 9
+adaptive_alpha_test 75 1 25 9
+adaptive_alpha_test 100 1 25 9
+# repeat 2
+adaptive_alpha_test 50 1 14 8
+adaptive_alpha_test 75 1 14 8
+adaptive_alpha_test 100 1 14 8
+adaptive_alpha_test 50 1 25 9
+adaptive_alpha_test 75 1 25 9
+adaptive_alpha_test 100 1 25 9
+# repeat 3
+adaptive_alpha_test 50 1 14 8
+adaptive_alpha_test 75 1 14 8
+adaptive_alpha_test 100 1 14 8
+adaptive_alpha_test 50 1 25 9
+adaptive_alpha_test 75 1 25 9
+adaptive_alpha_test 100 1 25 9
+# repeat 4
+adaptive_alpha_test 50 1 14 8
+adaptive_alpha_test 75 1 14 8
+adaptive_alpha_test 100 1 14 8
+adaptive_alpha_test 50 1 25 9
+adaptive_alpha_test 75 1 25 9
+adaptive_alpha_test 100 1 25 9
+# repeat 5
+adaptive_alpha_test 50 1 14 8
+adaptive_alpha_test 75 1 14 8
+adaptive_alpha_test 100 1 14 8
+adaptive_alpha_test 50 1 25 9
+adaptive_alpha_test 75 1 25 9
+adaptive_alpha_test 100 1 25 9
