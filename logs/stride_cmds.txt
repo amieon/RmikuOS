@@ -1,0 +1,30 @@
+# repeat 1
+stride_ticket_test 100 100 100
+stride_ticket_test 100 200 300
+stride_ticket_test 50 100 250
+stride_ticket_test 80 120 300
+stride_ticket_test 100 300 700
+# repeat 2
+stride_ticket_test 100 100 100
+stride_ticket_test 100 200 300
+stride_ticket_test 50 100 250
+stride_ticket_test 80 120 300
+stride_ticket_test 100 300 700
+# repeat 3
+stride_ticket_test 100 100 100
+stride_ticket_test 100 200 300
+stride_ticket_test 50 100 250
+stride_ticket_test 80 120 300
+stride_ticket_test 100 300 700
+# repeat 4
+stride_ticket_test 100 100 100
+stride_ticket_test 100 200 300
+stride_ticket_test 50 100 250
+stride_ticket_test 80 120 300
+stride_ticket_test 100 300 700
+# repeat 5
+stride_ticket_test 100 100 100
+stride_ticket_test 100 200 300
+stride_ticket_test 50 100 250
+stride_ticket_test 80 120 300
+stride_ticket_test 100 300 700
