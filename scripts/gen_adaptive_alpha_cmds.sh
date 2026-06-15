@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repeat="${1:-3}"
+repeat="${1:-5}"
 
 # initial_alpha
-alphas=(50 75 100)
+alphas=(0 25 50 75 100)
 
 # control_threads ai_threads logger_threads
 cases=(

@@ -55,6 +55,22 @@ static volatile usize global_end_tick;
 static volatile usize control_jobs[MAX_THREADS];
 static volatile usize control_miss[MAX_THREADS];
 
+/*
+ * 观测性增强：control 每线程的 tardiness / response-time 聚合量。
+ * 全部是整数原始量，平均/标准差等推导放到宿主机的 Python 脚本里做。
+ *
+ *   lateness = max(0, finish - deadline)   迟到量（ticks）
+ *   resp     = finish - release            响应时间（ticks，release <= finish）
+ *
+ * resp_min 初值用 (usize)-1 作哨兵；若整轮没有任何 job，打印时再归零。
+ */
+static volatile usize control_lateness_sum[MAX_THREADS];
+static volatile usize control_lateness_max[MAX_THREADS];
+static volatile usize control_resp_sum[MAX_THREADS];
+static volatile usize control_resp_sumsq[MAX_THREADS];
+static volatile usize control_resp_min[MAX_THREADS];
+static volatile usize control_resp_max[MAX_THREADS];
+
 static volatile usize counters[MAX_THREADS];
 
 struct arg {
@@ -62,6 +78,73 @@ struct arg {
 };
 
 static struct arg args[MAX_THREADS];
+
+static void reset_control_stats(void) {
+    for (int i = 0; i < MAX_THREADS; i++) {
+        control_jobs[i] = 0;
+        control_miss[i] = 0;
+
+        control_lateness_sum[i] = 0;
+        control_lateness_max[i] = 0;
+        control_resp_sum[i]     = 0;
+        control_resp_sumsq[i]   = 0;
+        control_resp_min[i]     = (usize)-1;   /* 哨兵：最大值 */
+        control_resp_max[i]     = 0;
+    }
+}
+
+/*
+ * 把 control_threads 个线程的统计量汇总到一组标量。
+ * resp_min 仍可能是哨兵 (usize)-1（线程没跑出 job 时），由调用方/打印处归零。
+ */
+static void aggregate_control_stats(
+    int control_threads,
+    usize *out_jobs,
+    usize *out_miss,
+    usize *out_lateness_sum,
+    usize *out_lateness_max,
+    usize *out_resp_sum,
+    usize *out_resp_sumsq,
+    usize *out_resp_min,
+    usize *out_resp_max
+) {
+    usize jobs = 0;
+    usize miss = 0;
+    usize ls = 0;
+    usize lm = 0;
+    usize rs = 0;
+    usize rsq = 0;
+    usize rmin = (usize)-1;
+    usize rmax = 0;
+
+    for (int i = 0; i < control_threads; i++) {
+        jobs += control_jobs[i];
+        miss += control_miss[i];
+
+        ls  += control_lateness_sum[i];
+        rs  += control_resp_sum[i];
+        rsq += control_resp_sumsq[i];
+
+        if (control_lateness_max[i] > lm) {
+            lm = control_lateness_max[i];
+        }
+        if (control_resp_max[i] > rmax) {
+            rmax = control_resp_max[i];
+        }
+        if (control_resp_min[i] < rmin) {
+            rmin = control_resp_min[i];
+        }
+    }
+
+    *out_jobs = jobs;
+    *out_miss = miss;
+    *out_lateness_sum = ls;
+    *out_lateness_max = lm;
+    *out_resp_sum = rs;
+    *out_resp_sumsq = rsq;
+    *out_resp_min = rmin;
+    *out_resp_max = rmax;
+}
 
 static int clamp_alpha(int alpha) {
     if (alpha < 0) {
@@ -140,38 +223,25 @@ static void print_adaptive_window(
         miss_per_1000 = miss * 1000 / jobs;
     }
 
-    pos = append_str(buf, pos, "[adaptive_window] window=");
-    pos = append_usize(buf, pos, (usize)window_id);
-
-    pos = append_str(buf, pos, " alpha_before=");
-    pos = append_usize(buf, pos, (usize)alpha_before);
-
-    pos = append_str(buf, pos, " alpha_after=");
-    pos = append_usize(buf, pos, (usize)alpha_after);
-
-    pos = append_str(buf, pos, " max_allowed=");
-    pos = append_usize(buf, pos, (usize)max_allowed_alpha);
-
-    pos = append_str(buf, pos, " safe_windows=");
-    pos = append_usize(buf, pos, (usize)safe_windows);
-
-    pos = append_str(buf, pos, " jobs=");
-    pos = append_usize(buf, pos, jobs);
-
-    pos = append_str(buf, pos, " miss=");
-    pos = append_usize(buf, pos, miss);
-
-    pos = append_str(buf, pos, " miss_per_1000=");
-    pos = append_usize(buf, pos, miss_per_1000);
-
-    pos = append_str(buf, pos, " action=");
-    pos = append_str(buf, pos, action);
-
-    pos = append_str(buf, pos, "\n");
-
-    write(1, buf, pos);
+    uprintf("[adaptive_window] window=%lu alpha_before=%lu alpha_after=%lu max_allowed=%lu safe_windows=%lu jobs=%lu miss=%lu miss_per_1000=%lu action=%s\n",
+        (usize)window_id, 
+        (usize)alpha_before, 
+        (usize)alpha_after, 
+        (usize)max_allowed_alpha, 
+        (usize)safe_windows, 
+        (usize)jobs, 
+        (usize)miss, 
+        (usize)miss_per_1000, 
+        action);
 }
 
+/*
+ * is_control 非 0 时，在行尾追加 tardiness / response 统计字段：
+ *   lateness_sum lateness_max resp_sum resp_sumsq resp_min resp_max
+ * ai / logger 传 is_control=0，行格式保持原样（后六个参数忽略）。
+ *
+ * 字段顺序必须与宿主机 plot_adaptive_alpha_log.py 的 EDGE_EXTRA_RE 对齐。
+ */
 static void print_result_line(
     int alpha,
     const char *role,
@@ -179,51 +249,42 @@ static void print_result_line(
     int tickets,
     usize work,
     usize jobs,
-    usize miss
+    usize miss,
+    int is_control,
+    usize lateness_sum,
+    usize lateness_max,
+    usize resp_sum,
+    usize resp_sumsq,
+    usize resp_min,
+    usize resp_max
 ) {
-    char buf[384];
-    int pos = 0;
+    /* 公共前半段：三种 role 完全一致。注意这里行尾不带 '\n'。 */
+    uprintf("[edge_deadline] alpha=%lu role=%s_result pid=%lu threads=%lu tickets=%lu effective=0 ready=0 run_ticks=0 work=%lu jobs=%lu miss=%lu",
+        (usize)alpha,
+        role,
+        (usize)getpid(),
+        (usize)threads,
+        (usize)tickets,
+        work,
+        jobs,
+        miss);
 
-    /*
-     * effective/ready/run_ticks 这里填 0。
-     * 真正的调度采样由父进程在 [edge_sample] 行输出。
-     * 这样 child 退出后仍然能保留 work/jobs/miss 结果。
-     */
-    pos = append_str(buf, pos, "[edge_deadline] alpha=");
-    pos = append_usize(buf, pos, (usize)alpha);
+    if (is_control) {
+        /* 整轮没有任何 job 时 resp_min 仍是哨兵，归零避免打印 2^64-1。 */
+        if (resp_min == (usize)-1) {
+            resp_min = 0;
+        }
 
-    pos = append_str(buf, pos, " role=");
-    pos = append_str(buf, pos, role);
+        uprintf(" lateness_sum=%lu lateness_max=%lu resp_sum=%lu resp_sumsq=%lu resp_min=%lu resp_max=%lu",
+            lateness_sum,
+            lateness_max,
+            resp_sum,
+            resp_sumsq,
+            resp_min,
+            resp_max);
+    }
 
-    pos = append_str(buf, pos, "_result");
-
-    pos = append_str(buf, pos, " pid=");
-    pos = append_usize(buf, pos, (usize)getpid());
-
-    pos = append_str(buf, pos, " threads=");
-    pos = append_usize(buf, pos, (usize)threads);
-
-    pos = append_str(buf, pos, " tickets=");
-    pos = append_usize(buf, pos, (usize)tickets);
-
-    pos = append_str(buf, pos, " effective=0");
-
-    pos = append_str(buf, pos, " ready=0");
-
-    pos = append_str(buf, pos, " run_ticks=0");
-
-    pos = append_str(buf, pos, " work=");
-    pos = append_usize(buf, pos, work);
-
-    pos = append_str(buf, pos, " jobs=");
-    pos = append_usize(buf, pos, jobs);
-
-    pos = append_str(buf, pos, " miss=");
-    pos = append_usize(buf, pos, miss);
-
-    pos = append_str(buf, pos, "\n");
-
-    write(1, buf, pos);
+    uprintf("\n");
 }
 
 static void print_parent_stat_line(
@@ -233,44 +294,19 @@ static void print_parent_stat_line(
     int tickets,
     struct sched_proc_stat *st
 ) {
-    char buf[384];
-    int pos = 0;
-
-    pos = append_str(buf, pos, "[edge_sample] alpha=");
-    pos = append_usize(buf, pos, (usize)alpha);
-
-    pos = append_str(buf, pos, " role=");
-    pos = append_str(buf, pos, role);
-
-    pos = append_str(buf, pos, " pid=");
-    pos = append_usize(buf, pos, (usize)st->pid);
-
-    pos = append_str(buf, pos, " threads=");
-    pos = append_usize(buf, pos, (usize)threads);
-
-    pos = append_str(buf, pos, " tickets=");
-    pos = append_usize(buf, pos, (usize)tickets);
-
-    pos = append_str(buf, pos, " effective=");
-    pos = append_usize(buf, pos, (usize)st->effective_tickets);
-
-    pos = append_str(buf, pos, " ready=");
-    pos = append_usize(buf, pos, (usize)st->ready_threads);
-
-    pos = append_str(buf, pos, " run_ticks=");
-    pos = append_usize(buf, pos, (usize)st->run_ticks);
-
-    pos = append_str(buf, pos, " stride=");
-    pos = append_usize(buf, pos, (usize)st->stride);
-
-    pos = append_str(buf, pos, " pass=");
-    pos = append_usize(buf, pos, (usize)st->pass);
-
-    pos = append_str(buf, pos, "\n");
-
-    write(1, buf, pos);
+    uprintf("[edge_sample] alpha=%lu role=%s pid=%lu threads=%lu tickets=%lu effective=%lu ready=%lu run_ticks=%lu stride=%lu pass=%lu\n",
+        (usize)alpha,
+        role,
+        (usize)st->pid,
+        (usize)threads,
+        (usize)tickets,
+        (usize)st->effective_tickets,
+        (usize)st->ready_threads,
+        (usize)st->run_ticks,
+        (usize)st->stride,
+        (usize)st->pass
+    );
 }
-
 
 static void sample_children_stat(
     int alpha,
@@ -363,6 +399,26 @@ static void control_worker(void *raw) {
             missed = 1;
         }
 
+        /* ---- 观测性增强：tardiness / response 统计 ---- */
+        usize resp = finish - release;                 /* release 一定 <= finish */
+        usize late = (finish > deadline) ? (finish - deadline) : 0;
+
+        control_resp_sum[id]   += resp;
+        control_resp_sumsq[id] += resp * resp;
+
+        if (resp < control_resp_min[id]) {
+            control_resp_min[id] = resp;
+        }
+        if (resp > control_resp_max[id]) {
+            control_resp_max[id] = resp;
+        }
+
+        control_lateness_sum[id] += late;
+        if (late > control_lateness_max[id]) {
+            control_lateness_max[id] = late;
+        }
+        /* ---- 增强结束 ---- */
+
         control_jobs[id]++;
 
         if (missed) {
@@ -420,10 +476,7 @@ static int run_control(int alpha, int control_threads) {
         return 1;
     }
 
-    for (int i = 0; i < MAX_THREADS; i++) {
-        control_jobs[i] = 0;
-        control_miss[i] = 0;
-    }
+    reset_control_stats();
 
     int tids[MAX_THREADS];
 
@@ -457,13 +510,14 @@ static int run_control(int alpha, int control_threads) {
         }
     }
 
-    usize total_jobs = 0;
-    usize total_miss = 0;
+    usize total_jobs, total_miss;
+    usize ls, lm, rs, rsq, rmin, rmax;
 
-    for (int i = 0; i < control_threads; i++) {
-        total_jobs += control_jobs[i];
-        total_miss += control_miss[i];
-    }
+    aggregate_control_stats(
+        control_threads,
+        &total_jobs, &total_miss,
+        &ls, &lm, &rs, &rsq, &rmin, &rmax
+    );
 
     print_result_line(
         alpha,
@@ -472,7 +526,9 @@ static int run_control(int alpha, int control_threads) {
         CONTROL_TICKETS,
         0,
         total_jobs,
-        total_miss
+        total_miss,
+        1,
+        ls, lm, rs, rsq, rmin, rmax
     );
 
     return 0;
@@ -531,7 +587,9 @@ static int run_ai(int alpha, int ai_threads) {
         AI_TICKETS,
         total,
         0,
-        0
+        0,
+        0,
+        0, 0, 0, 0, 0, 0
     );
 
     return 0;
@@ -590,7 +648,9 @@ static int run_logger(int alpha, int logger_threads) {
         LOGGER_TICKETS,
         total,
         0,
-        0
+        0,
+        0,
+        0, 0, 0, 0, 0, 0
     );
 
     return 0;
@@ -633,10 +693,7 @@ static int run_one_adaptive_case(
         return 1;
     }
 
-    for (int i = 0; i < MAX_THREADS; i++) {
-        control_jobs[i] = 0;
-        control_miss[i] = 0;
-    }
+    reset_control_stats();
 
     usize now = get_ticks();
     global_start_tick = now + START_DELAY_TICKS;
@@ -875,13 +932,14 @@ static int run_one_adaptive_case(
         }
     }
 
-    usize final_jobs = 0;
-    usize final_miss = 0;
+    usize final_jobs, final_miss;
+    usize ls, lm, rs, rsq, rmin, rmax;
 
-    for (int i = 0; i < control_threads; i++) {
-        final_jobs += control_jobs[i];
-        final_miss += control_miss[i];
-    }
+    aggregate_control_stats(
+        control_threads,
+        &final_jobs, &final_miss,
+        &ls, &lm, &rs, &rsq, &rmin, &rmax
+    );
 
     print_result_line(
         alpha,
@@ -890,7 +948,9 @@ static int run_one_adaptive_case(
         CONTROL_TICKETS,
         0,
         final_jobs,
-        final_miss
+        final_miss,
+        1,
+        ls, lm, rs, rsq, rmin, rmax
     );
 
     int code_ai = -1;
