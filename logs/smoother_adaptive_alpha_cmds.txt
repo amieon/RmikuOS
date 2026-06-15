@@ -1,0 +1,55 @@
+# repeat 1
+smoother_adaptive_alpha_test 0 1 14 8
+smoother_adaptive_alpha_test 25 1 14 8
+smoother_adaptive_alpha_test 50 1 14 8
+smoother_adaptive_alpha_test 75 1 14 8
+smoother_adaptive_alpha_test 100 1 14 8
+smoother_adaptive_alpha_test 0 1 25 9
+smoother_adaptive_alpha_test 25 1 25 9
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 100 1 25 9
+# repeat 2
+smoother_adaptive_alpha_test 0 1 14 8
+smoother_adaptive_alpha_test 25 1 14 8
+smoother_adaptive_alpha_test 50 1 14 8
+smoother_adaptive_alpha_test 75 1 14 8
+smoother_adaptive_alpha_test 100 1 14 8
+smoother_adaptive_alpha_test 0 1 25 9
+smoother_adaptive_alpha_test 25 1 25 9
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 100 1 25 9
+# repeat 3
+smoother_adaptive_alpha_test 0 1 14 8
+smoother_adaptive_alpha_test 25 1 14 8
+smoother_adaptive_alpha_test 50 1 14 8
+smoother_adaptive_alpha_test 75 1 14 8
+smoother_adaptive_alpha_test 100 1 14 8
+smoother_adaptive_alpha_test 0 1 25 9
+smoother_adaptive_alpha_test 25 1 25 9
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 100 1 25 9
+# repeat 4
+smoother_adaptive_alpha_test 0 1 14 8
+smoother_adaptive_alpha_test 25 1 14 8
+smoother_adaptive_alpha_test 50 1 14 8
+smoother_adaptive_alpha_test 75 1 14 8
+smoother_adaptive_alpha_test 100 1 14 8
+smoother_adaptive_alpha_test 0 1 25 9
+smoother_adaptive_alpha_test 25 1 25 9
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 100 1 25 9
+# repeat 5
+smoother_adaptive_alpha_test 0 1 14 8
+smoother_adaptive_alpha_test 25 1 14 8
+smoother_adaptive_alpha_test 50 1 14 8
+smoother_adaptive_alpha_test 75 1 14 8
+smoother_adaptive_alpha_test 100 1 14 8
+smoother_adaptive_alpha_test 0 1 25 9
+smoother_adaptive_alpha_test 25 1 25 9
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 100 1 25 9

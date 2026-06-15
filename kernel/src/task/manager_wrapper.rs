@@ -1149,7 +1149,7 @@ pub fn set_sched_alpha_current(alpha: isize) -> isize {
     }
 
     let mut manager = TASK_MANAGER.lock();
-    manager.set_sched_alpha(alpha)  // 直接透传返回值，别再吞掉
+    manager.set_sched_alpha(alpha)  
 }
 
 pub fn get_sched_alpha_current() -> isize {

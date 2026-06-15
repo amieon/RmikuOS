@@ -738,6 +738,15 @@ static int run_one_adaptive_case(
 
     wait_until(global_start_tick);
 
+    usize last_lateness_sum = 0;
+
+    /* AIMD 参数（起步值， max_tard 4~7 标定，之后在负载上拧） */
+    const int   AIMD_INC      = 3;    /* 加性增：安全时 alpha += 3 */
+    const int   AIMD_BACKOFF  = 70;   /* 乘性减：危险时 alpha = alpha*70/100 */
+    /* 滞回带：本窗口迟到总量 <= SAFE 算安全，>= DANGER 算危险，中间灰区不动 */
+    const usize SAFE_LATENESS   = 0;  /* 一点没迟 = 安全，可上探 */
+    const usize DANGER_LATENESS = 3;  /* 本窗口累计迟到 >=3 tick = 危险，回退 */
+
     usize last_jobs = 0;
     usize last_miss = 0;
 
@@ -756,22 +765,23 @@ static int run_one_adaptive_case(
     while (get_ticks() + ADAPT_WINDOW_TICKS < global_end_tick) {
         sleep(ADAPT_WINDOW_TICKS);
 
-        usize total_jobs = 0;
-        usize total_miss = 0;
-
+        /* ---- 差分采集本窗口指标 ---- */
+        usize total_jobs = 0, total_miss = 0, total_lateness = 0;
         for (int i = 0; i < control_threads; i++) {
-            total_jobs += control_jobs[i];
-            total_miss += control_miss[i];
+            total_jobs     += control_jobs[i];
+            total_miss     += control_miss[i];
+            total_lateness += control_lateness_sum[i];
         }
 
-        usize window_jobs = total_jobs - last_jobs;
-        usize window_miss = total_miss - last_miss;
+        usize window_jobs     = total_jobs     - last_jobs;
+        usize window_miss     = total_miss     - last_miss;
+        usize window_lateness = total_lateness - last_lateness_sum;
 
-        last_jobs = total_jobs;
-        last_miss = total_miss;
+        last_jobs         = total_jobs;
+        last_miss         = total_miss;
+        last_lateness_sum = total_lateness;
 
         usize miss_per_1000 = 0;
-
         if (window_jobs > 0) {
             miss_per_1000 = window_miss * 1000 / window_jobs;
         }
@@ -779,88 +789,52 @@ static int run_one_adaptive_case(
         int alpha_before = alpha;
         const char *action = "hold";
 
-        /*
-        * 判断是否还适合继续向上探测。
-        * 如果实验快结束了，就不要再 probe 更高 alpha，
-        * 否则最后一个高 alpha 窗口可能只带来 miss，不带来足够吞吐收益。
-        */
+        /* late-probe 保护：快结束了不再上探（沿用你的设计） */
         usize now_tick = get_ticks();
-        usize remain_ticks = 0;
-
-        if (global_end_tick > now_tick) {
-            remain_ticks = global_end_tick - now_tick;
-        }
-
+        usize remain_ticks = (global_end_tick > now_tick)
+                             ? (global_end_tick - now_tick) : 0;
         int can_probe_up =
             remain_ticks > (usize)(MIN_REMAIN_WINDOWS_TO_PROBE * ADAPT_WINDOW_TICKS);
 
+        /* ---- AIMD 决策核心 ---- */
         if (cooldown_windows > 0) {
-            /*
-            * 刚从高 alpha 降下来后，control 可能还在消化上一窗口造成的 deadline backlog。
-            * 这个窗口只观察，不更新 max_allowed，避免误判当前 alpha 也不安全。
-            */
+            /* 刚乘性减完，给 control 一窗口消化 backlog，只观察 */
             cooldown_windows--;
             safe_windows = 0;
             action = "cooldown_hold";
-        } else if (miss_per_1000 >= UNSAFE_MISS_PER_1000) {
-            /*
-            * 当前 alpha 被判定为不安全。
-            * 最高安全 alpha 最多只能是当前 alpha - 25。
-            *
-            * 注意：即使是 severe miss，也不直接跳两级。
-            * severe 只影响日志动作名；真正搜索上界仍然按一级一级确认。
-            */
-            int new_max = alpha - ALPHA_STEP;
-
-            if (new_max < 0) {
-                new_max = 0;
+        } else if (window_lateness >= DANGER_LATENESS) {
+            /* 危险：乘性减。整数算，至少降 1 避免卡住不动 */
+            int new_alpha = alpha * AIMD_BACKOFF / 100;
+            if (new_alpha >= alpha) {
+                new_alpha = alpha - 1;   /* 保证严格下降 */
             }
-
-            if (new_max < max_allowed_alpha) {
-                max_allowed_alpha = new_max;
+            if (new_alpha < 0) {
+                new_alpha = 0;
             }
-
-            alpha = max_allowed_alpha;
-
+            alpha = new_alpha;
             safe_windows = 0;
             cooldown_windows = COOLDOWN_WINDOWS_AFTER_DOWN;
-
-            if (miss_per_1000 >= SEVERE_MISS_PER_1000) {
-                action = "severe_down";
-            } else {
-                action = "unsafe_down";
-            }
-        } else if (window_miss == 0) {
-            /*
-            * 完全无 miss，认为当前 alpha 暂时安全。
-            * 连续安全若干窗口后，再尝试向上探索。
-            */
+            action = "aimd_backoff";
+        } else if (window_lateness <= SAFE_LATENESS) {
+            /* 安全：连续安全若干窗口后，加性增 */
             safe_windows++;
-
             if (safe_windows >= SAFE_WINDOWS_TO_PROBE_UP) {
-                int next_alpha = alpha + ALPHA_STEP;
-
                 if (!can_probe_up) {
-                    /*
-                    * 快结束了，不再冒险探测更高 alpha。
-                    */
                     action = "late_safe_hold";
-                } else if (next_alpha <= max_allowed_alpha) {
-                    alpha = next_alpha;
-                    action = "probe_up";
                 } else {
-                    action = "safe_at_limit";
+                    int new_alpha = alpha + AIMD_INC;
+                    if (new_alpha > 100) {
+                        new_alpha = 100;
+                    }
+                    alpha = new_alpha;
+                    action = "aimd_increase";
                 }
-
                 safe_windows = 0;
             } else {
                 action = "safe_hold";
             }
         } else {
-            /*
-            * 少量 miss，但没到 unsafe 阈值。
-            * 认为是灰区，不升不降。
-            */
+            /* 灰区（迟到量在 SAFE 和 DANGER 之间）：滞回，不动 */
             safe_windows = 0;
             action = "gray_hold";
         }
@@ -872,11 +846,12 @@ static int run_one_adaptive_case(
             }
         }
 
+
         print_adaptive_window(
             window_id,
             alpha_before,
             alpha,
-            max_allowed_alpha,
+            alpha,          /* max_allowed 占位：AIMD 无上界搜索概念 */
             safe_windows,
             window_jobs,
             window_miss,
@@ -996,14 +971,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (!(initial_alpha == 0 ||
-          initial_alpha == 25 ||
-          initial_alpha == 50 ||
-          initial_alpha == 75 ||
-          initial_alpha == 100)) {
-        puts("[adaptive_alpha] FAIL: alpha must be 0,25,50,75,100\n");
-        return 1;
-    }
 
     if (parse_int_ptr(argv[2], &control_threads) < 0 ||
         parse_int_ptr(argv[3], &ai_threads) < 0 ||

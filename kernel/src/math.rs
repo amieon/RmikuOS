@@ -90,81 +90,81 @@ pub fn sched_thread_scale(n: usize, alpha: isize) -> usize {
     (acc / SCALE).max(1)
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     // 旧五档实现，用于回归对照。
-//     fn scale_orig(n: usize, alpha: isize) -> usize {
-//         let n = n.max(1);
-//         let ns = isqrt(n).max(1);
-//         match alpha {
-//             0 => 1,
-//             25 => isqrt(ns),
-//             50 => ns,
-//             75 => isqrt(n.saturating_mul(ns)).max(1),
-//             100 => n,
-//             _ => ns,
-//         }
-//     }
+    // 旧五档实现，用于回归对照。
+    fn scale_orig(n: usize, alpha: isize) -> usize {
+        let n = n.max(1);
+        let ns = isqrt(n).max(1);
+        match alpha {
+            0 => 1,
+            25 => isqrt(ns),
+            50 => ns,
+            75 => isqrt(n.saturating_mul(ns)).max(1),
+            100 => n,
+            _ => ns,
+        }
+    }
 
-//     #[test]
-//     fn endpoints_exact() {
-//         for n in 1..200 {
-//             assert_eq!(sched_thread_scale(n, 0), 1);
-//             assert_eq!(sched_thread_scale(n, 100), n);
-//         }
-//     }
+    #[test]
+    fn endpoints_exact() {
+        for n in 1..200 {
+            assert_eq!(sched_thread_scale(n, 0), 1);
+            assert_eq!(sched_thread_scale(n, 100), n);
+        }
+    }
 
-//     #[test]
-//     fn never_exceeds_n_and_at_least_one() {
-//         for n in 1..500 {
-//             for a in 0..=100 {
-//                 let v = sched_thread_scale(n, a as isize);
-//                 assert!(v >= 1);
-//                 assert!(v <= n, "n={n} a={a} v={v} > n");
-//             }
-//         }
-//     }
+    #[test]
+    fn never_exceeds_n_and_at_least_one() {
+        for n in 1..500 {
+            for a in 0..=100 {
+                let v = sched_thread_scale(n, a as isize);
+                assert!(v >= 1);
+                assert!(v <= n, "n={n} a={a} v={v} > n");
+            }
+        }
+    }
 
-//     #[test]
-//     fn monotonic_in_alpha() {
-//         for n in 1..200 {
-//             let mut prev = 0;
-//             for a in 0..=100 {
-//                 let v = sched_thread_scale(n, a as isize);
-//                 assert!(v >= prev, "regress n={n} a={a}: {prev}->{v}");
-//                 prev = v;
-//             }
-//         }
-//     }
+    #[test]
+    fn monotonic_in_alpha() {
+        for n in 1..200 {
+            let mut prev = 0;
+            for a in 0..=100 {
+                let v = sched_thread_scale(n, a as isize);
+                assert!(v >= prev, "regress n={n} a={a}: {prev}->{v}");
+                prev = v;
+            }
+        }
+    }
 
-//     #[test]
-//     fn alpha_50_is_isqrt() {
-//         for n in 1..1000 {
-//             assert_eq!(sched_thread_scale(n, 50), isqrt(n).max(1));
-//         }
-//     }
+    #[test]
+    fn alpha_50_is_isqrt() {
+        for n in 1..1000 {
+            assert_eq!(sched_thread_scale(n, 50), isqrt(n).max(1));
+        }
+    }
 
-//     #[test]
-//     fn clamps_out_of_range() {
-//         // 负数与 >100 都被夹回端点
-//         assert_eq!(sched_thread_scale(50, -10), 1);
-//         assert_eq!(sched_thread_scale(50, 200), 50);
-//     }
+    #[test]
+    fn clamps_out_of_range() {
+        // 负数与 >100 都被夹回端点
+        assert_eq!(sched_thread_scale(50, -10), 1);
+        assert_eq!(sched_thread_scale(50, 200), 50);
+    }
 
-//     #[test]
-//     fn at_least_as_accurate_as_orig_at_anchors() {
-//         // 新版在锚点处精度不低于旧版（与真值 floor 比较）
-//         for n in 2..200 {
-//             for a in [25isize, 50, 75] {
-//                 let v = sched_thread_scale(n, a);
-//                 let e = (a as f64) / 100.0;
-//                 let truth = (n as f64).powf(e);
-//                 let err_new = (v as f64 - truth).abs();
-//                 let err_old = (scale_orig(n, a) as f64 - truth).abs();
-//                 assert!(err_new <= err_old + 1e-9, "n={n} a={a}");
-//             }
-//         }
-//     }
-// }
+    #[test]
+    fn at_least_as_accurate_as_orig_at_anchors() {
+        // 新版在锚点处精度不低于旧版（与真值 floor 比较）
+        for n in 2..200 {
+            for a in [25isize, 50, 75] {
+                let v = sched_thread_scale(n, a);
+                let e = (a as f64) / 100.0;
+                let truth = (n as f64).powf(e);
+                let err_new = (v as f64 - truth).abs();
+                let err_old = (scale_orig(n, a) as f64 - truth).abs();
+                assert!(err_new <= err_old + 1e-9, "n={n} a={a}");
+            }
+        }
+    }
+}
