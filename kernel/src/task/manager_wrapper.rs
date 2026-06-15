@@ -1144,15 +1144,12 @@ pub fn get_my_tickets_current() -> isize {
 }
 
 pub fn set_sched_alpha_current(alpha: isize) -> isize {
-    match alpha {
-        0 | 25 | 50 | 75 | 100 => {}
-        _ => return -1,
+    if alpha < 0 || alpha > 100 {
+        return -1;
     }
 
     let mut manager = TASK_MANAGER.lock();
-    manager.set_sched_alpha(alpha);
-
-    0
+    manager.set_sched_alpha(alpha)  // 直接透传返回值，别再吞掉
 }
 
 pub fn get_sched_alpha_current() -> isize {

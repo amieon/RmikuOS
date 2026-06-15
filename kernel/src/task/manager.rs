@@ -25,6 +25,9 @@ pub struct TaskManager {
     free_tids: Vec<Tid>,
 
     sched_alpha: isize,
+
+    scale_cache: Vec<usize>,
+    cache_alpha: isize,
 }
 
 pub enum WaitPidAction {
@@ -47,6 +50,9 @@ impl TaskManager {
             free_tids: Vec::new(),
 
             sched_alpha: 50,
+
+            scale_cache: Vec::new(),
+            cache_alpha: -1, // 哨兵：任何合法 alpha(0..=100) 都不等于它
         }
     }
 
@@ -175,10 +181,9 @@ impl TaskManager {
             .count()
     }
 
-    pub fn set_sched_alpha(&mut self, alpha: isize) -> isize{
-        match alpha {
-            0 | 25 | 50 | 75 | 100 => {}
-            _ => return -1,
+    pub fn set_sched_alpha(&mut self, alpha: isize) -> isize {
+        if alpha < 0 || alpha > 100 {
+            return -1;
         }
         self.sched_alpha = alpha;
         0
@@ -188,6 +193,31 @@ impl TaskManager {
         self.sched_alpha
     }
 
+
+    /// 取当前 alpha 下、runnable=n 的缩放因子，带缓存。
+    /// alpha 变了就为新 alpha 重算已见过的格子；n 超界就扩容补算。
+    fn scale_factor_cached(&mut self, n: usize) -> usize {
+        let alpha = self.sched_alpha;
+
+        // alpha 变化：整张已有表按新 alpha 重算（只重算见过的长度，通常很短）。
+        if self.cache_alpha != alpha {
+            for slot_n in 0..self.scale_cache.len() {
+                self.scale_cache[slot_n] =
+                    crate::math::sched_thread_scale(slot_n, alpha);
+            }
+            self.cache_alpha = alpha;
+        }
+
+        // n 超出当前表长：扩容并补算新格（用当前 alpha）。
+        if n >= self.scale_cache.len() {
+            for slot_n in self.scale_cache.len()..=n {
+                let f = crate::math::sched_thread_scale(slot_n, alpha);
+                self.scale_cache.push(f);
+            }
+        }
+
+        self.scale_cache[n]
+    }
 
     pub fn update_process_stride_by_alpha(&mut self, pid: Pid) {
         let runnable_threads = self.count_runnable_threads_in_process(pid);
@@ -199,8 +229,8 @@ impl TaskManager {
             return;
         }
 
-        let alpha = self.sched_alpha;
-        let factor = crate::math::sched_thread_scale(runnable_threads, alpha);
+        // 原来：let factor = crate::math::sched_thread_scale(runnable_threads, alpha);
+        let factor = self.scale_factor_cached(runnable_threads);
 
         let base_tickets = self.process(pid).tickets.max(1);
 
