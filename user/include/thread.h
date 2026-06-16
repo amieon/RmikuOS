@@ -4,7 +4,7 @@
 #include "lock.h"
 
 #define THREAD_STACK_SIZE (64 * 1024)
-#define THREAD_MAX_RECORDS 128
+#define THREAD_MAX_RECORDS 512
 
 struct thread_stack_record {
     int used;
