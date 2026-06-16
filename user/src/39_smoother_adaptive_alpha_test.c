@@ -1,6 +1,6 @@
 #include "user.h"
 
-#define MAX_THREADS 25
+#define MAX_THREADS 225
 
 #define CONTROL_TICKETS 300
 #define AI_TICKETS 100
@@ -208,30 +208,24 @@ static void print_adaptive_window(
     int window_id,
     int alpha_before,
     int alpha_after,
-    int max_allowed_alpha,
     int safe_windows,
     usize jobs,
     usize miss,
     const char *action
 ) {
-    char buf[512];
-    int pos = 0;
-
     usize miss_per_1000 = 0;
-
     if (jobs > 0) {
         miss_per_1000 = miss * 1000 / jobs;
     }
 
-    uprintf("[adaptive_window] window=%lu alpha_before=%lu alpha_after=%lu max_allowed=%lu safe_windows=%lu jobs=%lu miss=%lu miss_per_1000=%lu action=%s\n",
-        (usize)window_id, 
-        (usize)alpha_before, 
-        (usize)alpha_after, 
-        (usize)max_allowed_alpha, 
-        (usize)safe_windows, 
-        (usize)jobs, 
-        (usize)miss, 
-        (usize)miss_per_1000, 
+    uprintf("[adaptive_window] window=%lu alpha_before=%lu alpha_after=%lu safe_windows=%lu jobs=%lu miss=%lu miss_per_1000=%lu action=%s\n",
+        (usize)window_id,
+        (usize)alpha_before,
+        (usize)alpha_after,
+        (usize)safe_windows,
+        (usize)jobs,
+        (usize)miss,
+        (usize)miss_per_1000,
         action);
 }
 
@@ -655,6 +649,157 @@ static int run_logger(int alpha, int logger_threads) {
 
     return 0;
 }
+static int run_one_fixed_case(
+    int fixed_alpha,
+    int control_threads,
+    int ai_threads,
+    int logger_threads
+) {
+    puts("\n[adaptive_alpha] run initial_alpha=");
+    put_int(fixed_alpha);
+    puts(" control_threads=");
+    put_int(control_threads);
+    puts(" ai_threads=");
+    put_int(ai_threads);
+    puts(" logger_threads=");
+    put_int(logger_threads);
+    puts("\n");
+
+    int alpha = fixed_alpha;
+
+    if (set_sched_alpha(alpha) < 0) {
+        puts("[adaptive_alpha] FAIL: set_sched_alpha\n");
+        return 1;
+    }
+    if (reset_sched_stat() < 0) {
+        puts("[adaptive_alpha] FAIL: reset_sched_stat\n");
+        return 1;
+    }
+    if (set_my_tickets(CONTROL_TICKETS) < 0) {
+        puts("[adaptive_alpha] FAIL: set_my_tickets control\n");
+        return 1;
+    }
+
+    reset_control_stats();
+
+    usize now = get_ticks();
+    global_start_tick = now + START_DELAY_TICKS;
+    global_end_tick = global_start_tick + TEST_TICKS;
+
+    int pid_ai = fork();
+    if (pid_ai < 0) { puts("[adaptive_alpha] FAIL: fork ai\n"); return 1; }
+    if (pid_ai == 0) {
+        int code = run_ai(fixed_alpha, ai_threads);
+        exit(code);
+    }
+
+    int pid_logger = fork();
+    if (pid_logger < 0) { puts("[adaptive_alpha] FAIL: fork logger\n"); return 1; }
+    if (pid_logger == 0) {
+        int code = run_logger(fixed_alpha, logger_threads);
+        exit(code);
+    }
+
+    int tids[MAX_THREADS];
+    for (int i = 0; i < control_threads; i++) {
+        args[i].id = i;
+        tids[i] = thread_create(control_worker, &args[i]);
+        if (tids[i] < 0) {
+            puts("[adaptive_alpha] FAIL: control thread_create\n");
+            return 1;
+        }
+    }
+
+    wait_until(global_start_tick);
+
+    usize last_jobs = 0;
+    usize last_miss = 0;
+    usize last_lateness_sum = 0;
+    int window_id = 0;
+
+    /*
+     * 固定模式：保留与 AIMD 版完全相同的窗口循环结构（同样的 sleep 节奏、
+     * 同样的差分采集、同样的逐窗口打印），但循环体内不做任何决策，
+     * alpha 全程不变。这样 baseline 与 AIMD 的唯一差别就是“alpha 动不动”，
+     * 对照公平。
+     */
+    while (get_ticks() + ADAPT_WINDOW_TICKS < global_end_tick) {
+        sleep(ADAPT_WINDOW_TICKS);
+
+        usize total_jobs = 0, total_miss = 0, total_lateness = 0;
+        for (int i = 0; i < control_threads; i++) {
+            total_jobs     += control_jobs[i];
+            total_miss     += control_miss[i];
+            total_lateness += control_lateness_sum[i];
+        }
+
+        usize window_jobs = total_jobs - last_jobs;
+        usize window_miss = total_miss - last_miss;
+        /* window_lateness 不用于决策，但保留差分以维持与 AIMD 版一致的计算量 */
+        (void)(total_lateness - last_lateness_sum);
+
+        last_jobs = total_jobs;
+        last_miss = total_miss;
+        last_lateness_sum = total_lateness;
+
+        print_adaptive_window(
+            window_id,
+            alpha,          /* alpha_before == alpha_after，固定不变 */
+            alpha,
+            0,              /* safe_windows 固定模式无意义，填 0 */
+            window_jobs,
+            window_miss,
+            "fixed_hold"
+        );
+
+        window_id++;
+    }
+
+    /* 采样与最终统计：和 AIMD 版完全一致 */
+    struct sched_proc_stat st;
+    if (get_process_sched_stat(getpid(), &st) == 0) {
+        print_parent_stat_line(alpha, "control", control_threads, CONTROL_TICKETS, &st);
+    }
+    if (get_process_sched_stat(pid_ai, &st) == 0) {
+        print_parent_stat_line(alpha, "ai", ai_threads, AI_TICKETS, &st);
+    }
+    if (get_process_sched_stat(pid_logger, &st) == 0) {
+        print_parent_stat_line(alpha, "logger", logger_threads, LOGGER_TICKETS, &st);
+    }
+
+    for (int i = 0; i < control_threads; i++) {
+        int code = -1;
+        int ret = thread_join(tids[i], &code);
+        if (ret != tids[i] || code != 0) {
+            puts("[adaptive_alpha] FAIL: control join\n");
+            return 1;
+        }
+    }
+
+    usize final_jobs, final_miss;
+    usize ls, lm, rs, rsq, rmin, rmax;
+    aggregate_control_stats(control_threads,
+        &final_jobs, &final_miss, &ls, &lm, &rs, &rsq, &rmin, &rmax);
+
+    print_result_line(alpha, "control", control_threads, CONTROL_TICKETS,
+        0, final_jobs, final_miss, 1, ls, lm, rs, rsq, rmin, rmax);
+
+    int code_ai = -1, code_logger = -1;
+    int ret_ai = waitpid(pid_ai, &code_ai);
+    int ret_logger = waitpid(pid_logger, &code_logger);
+    if (ret_ai != pid_ai || code_ai != 0) {
+        puts("[adaptive_alpha] FAIL: ai child failed\n"); return 1;
+    }
+    if (ret_logger != pid_logger || code_logger != 0) {
+        puts("[adaptive_alpha] FAIL: logger child failed\n"); return 1;
+    }
+
+    puts("[adaptive_alpha] final_alpha=");
+    put_int(alpha);
+    puts("\n");
+
+    return 0;
+}
 
 static int run_one_adaptive_case(
     int initial_alpha,
@@ -846,12 +991,10 @@ static int run_one_adaptive_case(
             }
         }
 
-
         print_adaptive_window(
             window_id,
             alpha_before,
             alpha,
-            alpha,          /* max_allowed 占位：AIMD 无上界搜索概念 */
             safe_windows,
             window_jobs,
             window_miss,
@@ -953,11 +1096,14 @@ static int run_one_adaptive_case(
 
 int main(int argc, char **argv) {
     puts("adaptive_alpha_test start\n");
-    puts("usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads>\n");
+    puts("usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]\n");
+    puts("  mode = adaptive (default) | fixed\n");
     puts("example: adaptive_alpha_test 50 1 14 8\n");
+    puts("example: adaptive_alpha_test 50 1 14 8 fixed\n");
 
-    if (argc != 5) {
-        puts("[adaptive_alpha] FAIL: need exactly 4 args\n");
+    /* 4 个参数 = 默认 adaptive；5 个参数 = 末位指定模式 */
+    if (argc != 5 && argc != 6) {
+        puts("[adaptive_alpha] FAIL: need 4 args (+optional mode)\n");
         return 1;
     }
 
@@ -970,7 +1116,6 @@ int main(int argc, char **argv) {
         puts("[adaptive_alpha] FAIL: bad initial_alpha\n");
         return 1;
     }
-
 
     if (parse_int_ptr(argv[2], &control_threads) < 0 ||
         parse_int_ptr(argv[3], &ai_threads) < 0 ||
@@ -986,12 +1131,45 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    int ret = run_one_adaptive_case(
-        initial_alpha,
-        control_threads,
-        ai_threads,
-        logger_threads
-    );
+    /* 解析模式：默认 adaptive */
+    int fixed_mode = 0;
+
+    if (argc == 6) {
+        const char *m = argv[5];
+
+        if (str_eq(m, "fixed")) {
+            fixed_mode = 1;
+        } else if (str_eq(m, "adaptive")) {
+            fixed_mode = 0;
+        } else {
+            puts("[adaptive_alpha] FAIL: mode must be 'adaptive' or 'fixed'\n");
+            return 1;
+        }
+    }
+
+    int ret;
+
+    if (fixed_mode) {
+        /* fixed 模式下 initial_alpha 就是全程钉死的 alpha，
+           允许任意 0..100，便于扫 baseline 各点 */
+        if (initial_alpha < 0 || initial_alpha > 100) {
+            puts("[adaptive_alpha] FAIL: fixed alpha out of [0,100]\n");
+            return 1;
+        }
+        ret = run_one_fixed_case(
+            initial_alpha,
+            control_threads,
+            ai_threads,
+            logger_threads
+        );
+    } else {
+        ret = run_one_adaptive_case(
+            initial_alpha,
+            control_threads,
+            ai_threads,
+            logger_threads
+        );
+    }
 
     set_sched_alpha(50);
 

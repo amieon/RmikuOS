@@ -2095,7 +2095,7 @@ usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logge
 example: adaptive_alpha_test 50 1 14 8
 
 [adaptive_alpha] run initial_alpha=0 control_threads=1 ai_threads=14 logger_threads=8
-[adaptive_window] window=0 alpha_before=0 alpha_after=0 safe_windows=1 jobs=25 miss=0 miss_per_1000=0 action=safe_hold
-[adaptive_window] window=1 alpha_before=0 alpha_after=25 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=probe_up
-[adaptive_window] window=2 alpha_before=25 alpha_after=25 safe_windows=1 jobs=25 miss=0 miss_per_1000=0 action=safe_hold
-[adaptive_window] window=3 alpha_before=25 alpha_after=50 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=probe_up
+[adaptive_window] window=0 alpha_before=0 alpha_after=0 max_allowed=100 safe_windows=1 jobs=25 miss=0 miss_per_1000=0 action=safe_hold
+[adaptive_window] window=1 alpha_before=0 alpha_after=25 max_allowed=100 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=probe_up
+[adaptive_window] window=2 alpha_before=25 alpha_after=25 max_allowed=100 safe_windows=1 jobs=25 miss=0 miss_per_1000=0 action=safe_hold
+[adaptive_window] window=3 alpha_before=25 alpha_after=50 max_allowed=100 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=probe_up

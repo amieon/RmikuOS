@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""
-adaptive_alpha 日志统计 + 画图。
 
-输入：smoother_adaptive_alpha_test 重定向出来的原始日志（可含多个 run，
-      也可把多次重复实验 cat 到一个文件里）。
-输出：CSV + PNG，放到 out_dir。
-
-向后兼容：control 的 [edge_deadline] 行若没有 tardiness/resp 字段，
-自动降级，只是不画相关图，不会报错。
-
-字段契约（control_result 行结尾六个字段，顺序必须一致）：
-  lateness_sum lateness_max resp_sum resp_sumsq resp_min resp_max
-所有除法 / 开方 / 标准差都在这里算，C 端只吐原始整数。
-"""
 import csv
 import math
 import os
@@ -34,7 +21,9 @@ WINDOW_RE = re.compile(
     r"\[adaptive_window\]\s+window=(?P<window>\d+)"
     r"\s+alpha_before=(?P<alpha_before>\d+)"
     r"\s+alpha_after=(?P<alpha_after>\d+)"
-    r"\s+max_allowed=(?P<max_allowed>\d+)"
+    # max_allowed 是旧离散探测的遗留字段，AIMD 不再产生它。
+    # 设为可选，新旧日志都能解析。
+    r"(?:\s+max_allowed=(?P<max_allowed>\d+))?"
     r"\s+safe_windows=(?P<safe_windows>\d+)"
     r"\s+jobs=(?P<jobs>\d+)"
     r"\s+miss=(?P<miss>\d+)"
@@ -134,7 +123,7 @@ def parse_log(path):
                     "window": to_int(m.group("window")),
                     "alpha_before": to_int(m.group("alpha_before")),
                     "alpha_after": to_int(m.group("alpha_after")),
-                    "max_allowed": to_int(m.group("max_allowed")),
+                    "max_allowed": to_int(m.group("max_allowed")) if m.group("max_allowed") else -1,
                     "safe_windows": to_int(m.group("safe_windows")),
                     "jobs": to_int(m.group("jobs")),
                     "miss": to_int(m.group("miss")),
@@ -378,13 +367,15 @@ def plot_trace(run, out_dir):
     ws = sorted(run["windows"], key=lambda r: r["window"])
     xs = [r["window"] for r in ws]
     alpha_after = [r["alpha_after"] for r in ws]
-    max_allowed = [r["max_allowed"] for r in ws]
     miss_per_1000 = [r["miss_per_1000"] for r in ws]
     actions = [r["action"] for r in ws]
 
     plt.figure(figsize=(7, 4.5))
     plt.plot(xs, alpha_after, marker="o", label="alpha")
-    plt.plot(xs, max_allowed, marker="x", linestyle="--", label="max allowed")
+    # 旧日志里若有 max_allowed（AIMD 已废弃该量）才画，新日志不画。
+    if any(r["max_allowed"] >= 0 for r in ws):
+        max_allowed = [r["max_allowed"] for r in ws]
+        plt.plot(xs, max_allowed, marker="x", linestyle="--", label="max allowed")
     for x, y, action in zip(xs, alpha_after, actions):
         plt.text(x, y + 3, action, fontsize=7, rotation=25)
     plt.xlabel("window")

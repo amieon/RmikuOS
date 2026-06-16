@@ -129,3 +129,14 @@ static int append_usize(char *buf, int pos, usize x) {
 
     return pos;
 }
+
+static int str_eq(const char *a, const char *b) {
+    while (*a && *b) {
+        if (*a != *b) {
+            return 0;
+        }
+        a++;
+        b++;
+    }
+    return *a == 0 && *b == 0;
+}
