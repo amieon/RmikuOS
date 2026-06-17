@@ -7,7 +7,7 @@
 #define LOGGER_TICKETS 50
 
 #define START_DELAY_TICKS 80
-#define TEST_TICKS 2000
+#define TEST_TICKS 3600
 
 
 #define AI_BURN_ITERS 12000
@@ -23,7 +23,7 @@
 /*
  * 连续几个完全安全窗口后，才尝试提高 alpha。
  */
-#define SAFE_WINDOWS_TO_PROBE_UP 2
+#define SAFE_WINDOWS_TO_PROBE_UP 1
 
 /*
  * 实验快结束时不再向上探测，避免 late probe damage。
@@ -87,34 +87,22 @@ static volatile usize counters[MAX_THREADS];
  * 轻阶段只让前 ceil(ai_threads * 1/5) 个线程活跃，其余空转 yield。
  * 重阶段全部活跃。
  */
+/* 轻阶段：只留固定少量 AI 活跃（真·轻负载），不按比例 */
+#define DYN_LIGHT_ACTIVE 3
+
 static int ai_active_now(int id, int ai_threads, usize now) {
     usize span = global_end_tick - global_start_tick;
     usize seg = span / DYN_PHASES;
-
-    /* 防止 seg=0 */
-    if (seg == 0) {
-        return 1;
-    }
+    if (seg == 0) return 1;
 
     usize offset = (now > global_start_tick) ? (now - global_start_tick) : 0;
-    usize phase = offset / seg;            /* 0,1,2（末尾可能=3，并入最后一段）*/
+    usize phase = offset / seg;
+    if (phase >= DYN_PHASES) phase = DYN_PHASES - 1;
 
-    if (phase >= DYN_PHASES) {
-        phase = DYN_PHASES - 1;
-    }
-
-    /* 中间段(phase==1)为重负载：全部活跃 */
     if (phase == 1) {
-        return 1;
+        return 1;                /* 重：全部活跃 */
     }
-
-    /* 轻负载段：只有前 light_count 个线程活跃 */
-    int light_count = (ai_threads * DYN_LIGHT_NUM + DYN_LIGHT_DEN - 1) / DYN_LIGHT_DEN;
-    if (light_count < 1) {
-        light_count = 1;
-    }
-
-    return id < light_count;
+    return id < DYN_LIGHT_ACTIVE; /* 轻：只留 3 个 */
 }
 
 struct arg {
@@ -948,7 +936,7 @@ static int run_one_adaptive_case(
 
     /* AIMD 参数（起步值， max_tard 4~7 标定，之后在负载上拧） */
     const int   AIMD_INC      = 5;    /* 加性增：安全时 alpha += 3 */
-    const int   AIMD_BACKOFF  = 90;   /* 乘性减：危险时 alpha = alpha*85/100 */
+    const int   AIMD_BACKOFF  = 80;   /* 乘性减：危险时 alpha = alpha*80/100 */
     /* 滞回带：本窗口迟到总量 <= SAFE 算安全，>= DANGER 算危险，中间灰区不动 */
     const usize SAFE_LATENESS   = 0;  /* 一点没迟 = 安全，可上探 */
     const usize DANGER_LATENESS = 25;  /* 本窗口累计迟到 >=15 tick = 危险，回退 */
@@ -1009,8 +997,17 @@ static int run_one_adaptive_case(
             safe_windows = 0;
             action = "cooldown_hold";
         } else if (window_lateness >= DANGER_LATENESS) {
-            /* 危险：乘性减。整数算，至少降 1 避免卡住不动 */
-            int new_alpha = alpha * AIMD_BACKOFF / 100;
+            int new_alpha;
+
+            if (miss_per_1000 >= 900) {
+                /* 几乎全崩（如突变瞬间 1000/1000）：一步砍到底，别磨蹭 */
+                new_alpha = alpha * 40 / 100;        /* ×0.4，暴力逃逸 */
+            } else if (miss_per_1000 >= SEVERE_MISS_PER_1000) {  /* >=500 */
+                new_alpha = alpha * 60 / 100;        /* ×0.6 */
+            } else {
+                new_alpha = alpha * AIMD_BACKOFF / 100;  /* ×0.8，原温柔档 */
+            }
+
             if (new_alpha >= alpha) {
                 new_alpha = alpha - 1;   /* 保证严格下降 */
             }
