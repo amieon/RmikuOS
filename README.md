@@ -683,7 +683,7 @@ virtio-mmio  virtio-pci
 * RISC-V 64 / LoongArch64 内核启动
 * trap handling、syscall、进程调度
 * stride scheduling
-* alpha-scaled scheduling（**连续 alpha** `[0,100]`，纯整数幂 + 热路径缓存）
+* alpha-scaled scheduling（连续 alpha `[0,100]`，纯整数幂 + 热路径缓存）
 * 调度统计接口（含 deadline / tardiness / jitter 原始量）
 * `fork / exec / waitpid`
 * 用户态线程 `thread_create / thread_exit / thread_join`
@@ -696,9 +696,9 @@ virtio-mmio  virtio-pci
 * rootfs overlay、文件系统压力测试
 * alpha mechanism test
 * edge deadline 实验（含 tardiness / jitter 观测）
-* **AIMD 自适应 alpha 控制器（含分档退避）**
-* **固定 alpha 对照实验**
-* **动态负载实验（AIMD vs 固定 alpha 的帕累托对照）**
+* AIMD 自适应 alpha 控制器（含分档退避）
+* 固定 alpha 对照实验
+* 动态负载实验（AIMD vs 固定 alpha 的帕累托对照）
 
 ---
 
