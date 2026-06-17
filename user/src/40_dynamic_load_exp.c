@@ -1246,7 +1246,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    puts("\nadaptive_alpha_test PASS\n");
+    puts("\ndynamic_load_exp PASS\n");
 
     return 0;
 }
