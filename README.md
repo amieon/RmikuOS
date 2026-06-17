@@ -447,6 +447,7 @@ effective_tickets 是否随 alpha 和 ready_threads 改变
 <!-- 插图：alpha 机制实验 -->
 ![alpha effective vs tick share](logs/figs/alpha_effective_vs_tick_3_8_13.png)
 
+
 结论：alpha=0 时多线程进程不会因为线程数更多而获得明显额外 CPU；alpha 增大后，多线程进程的 effective_tickets 上升，实际 tick_share 也随之上升。alpha-scaled scheduling 机制按预期工作。
 
 ---
@@ -525,10 +526,10 @@ miss_per_1000 >= 500   ->  alpha *= 0.6   // 重度
 在恒定负载下，AIMD 在**无需预先知道最优 alpha** 的情况下，自动收敛到接近最优固定策略的工作点，并能停在离散档位够不到的连续甜点（如 alpha=49、77）上。横跨轻、中、重多种负载验证（含未参与调参的负载 case），AIMD 大多达到或超过固定策略：**用与最佳固定 alpha 相当的 deadline 质量，换取更高的吞吐**，即免去人工逐负载试参的过程。
 
 <!-- 插图：AIMD 恒定负载下的 alpha 自适应轨迹 -->
-![adaptive alpha trace](TODO_INSERT_adaptive_alpha_trace.png)
+![adaptive alpha trace](logs/fig_adaptive3/adaptive_alpha_trace_1_25_9_init75_run28.png)
 
 <!-- 插图（可选）：恒定负载 AIMD vs 固定 alpha 的 tardiness-throughput 帕累托图 -->
-![adaptive vs fixed pareto](TODO_INSERT_aimd_vs_fixed_pareto.png)
+![adaptive vs fixed pareto](logs/figs_compare_final/aimd_vs_fixed_max_tard_3_125_25.png)
 
 > 说明：当前实验多为单次或少量重复运行，结果存在噪声，极轻负载下尤为明显；增加重复次数做统计聚合是后续工作。
 
@@ -554,7 +555,8 @@ phase 2 (轻)：AI 退回少量，负载回落       -> alpha 应重新爬高
 固定 alpha 在变化负载下必然顾此失彼：固定高在 phase 1 害死 control，固定低在 phase 0/2 浪费吞吐。AIMD 则**跟着负载呼吸**——在 phase 0/2 爬高、phase 1 瞬间分档退避。
 
 <!-- 插图（重点图）：上半 alpha 轨迹（AIMD 呼吸曲线 vs 固定水平线），下半累计 control miss -->
-![dynamic load comparison](TODO_INSERT_dynamic_load_alpha_and_miss.png)
+![dynamic load comparison](logs/figs_dynamic_laod/dynamic_load_alpha_miss_work.png)
+![dynamic load tradeoff](logs/figs_dynamic_laod/dynamic_load_tradeoff.png)
 
 一组代表性结果（control=1, ai=100, logger=16，轻→重→轻）：
 
