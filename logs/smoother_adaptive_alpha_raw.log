@@ -2439,3 +2439,324 @@ example: adaptive_alpha_test 50 1 14 8
 example: adaptive_alpha_test 50 1 14 8 fixed
 
 [adaptive_alpha] run initial_alpha=100 control_threads=2 ai_threads=60 logger_threads=15
+[adaptive_window] window=0 alpha_before=100 alpha_after=90 safe_windows=0 jobs=7 miss=7 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=1 alpha_before=90 alpha_after=90 safe_windows=0 jobs=11 miss=11 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=2 alpha_before=90 alpha_after=81 safe_windows=0 jobs=11 miss=11 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=3 alpha_before=81 alpha_after=81 safe_windows=0 jobs=14 miss=14 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=4 alpha_before=81 alpha_after=72 safe_windows=0 jobs=14 miss=14 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=5 alpha_before=72 alpha_after=72 safe_windows=0 jobs=18 miss=18 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=6 alpha_before=72 alpha_after=64 safe_windows=0 jobs=20 miss=20 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=7 alpha_before=64 alpha_after=64 safe_windows=0 jobs=26 miss=26 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=8 alpha_before=64 alpha_after=57 safe_windows=0 jobs=24 miss=24 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=9 alpha_before=57 alpha_after=57 safe_windows=0 jobs=32 miss=32 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=10 alpha_before=57 alpha_after=51 safe_windows=0 jobs=30 miss=30 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=11 alpha_before=51 alpha_after=51 safe_windows=0 jobs=38 miss=38 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=12 alpha_before=51 alpha_after=45 safe_windows=0 jobs=36 miss=36 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=13 alpha_before=45 alpha_after=45 safe_windows=0 jobs=41 miss=41 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=14 alpha_before=45 alpha_after=40 safe_windows=0 jobs=42 miss=42 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=15 alpha_before=40 alpha_after=40 safe_windows=0 jobs=47 miss=47 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=16 alpha_before=40 alpha_after=36 safe_windows=0 jobs=47 miss=47 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=17 alpha_before=36 alpha_after=36 safe_windows=0 jobs=52 miss=52 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=18 alpha_before=36 alpha_after=32 safe_windows=0 jobs=50 miss=50 miss_per_1000=1000 action=aimd_backoff
+[edge_sample] alpha=32 role=control pid=1 threads=2 tickets=300 effective=300 ready=3 run_ticks=679 stride=33333 pass=47377323
+[edge_sample] alpha=32 role=ai pid=3 threads=60 tickets=100 effective=300 ready=60 run_ticks=1073 stride=33333 pass=47353256
+[edge_sample] alpha=32 role=logger pid=2 threads=15 tickets=50 effective=100 ready=15 run_ticks=219 stride=100000 pass=47364898
+[edge_deadline] alpha=32 role=control_result pid=1 threads=2 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=609 miss=609 lateness_sum=408333 lateness_max=812 resp_sum=410769 resp_sumsq=295894299 resp_min=17 resp_max=816
+[edge_deadline] alpha=100 role=logger_result pid=2 threads=15 tickets=50 effective=0 ready=0 run_ticks=0 work=38439 jobs=0 miss=0
+[edge_deadline] alpha=100 role=ai_result pid=3 threads=60 tickets=100 effective=0 ready=0 run_ticks=0 work=212613 jobs=0 miss=0
+[adaptive_alpha] final_alpha=32
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 75 1 25 9 fixed
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=75 control_threads=1 ai_threads=25 logger_threads=9
+[adaptive_window] window=0 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=1 miss_per_1000=40 action=fixed_hold
+[adaptive_window] window=1 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=2 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=1 miss_per_1000=40 action=fixed_hold
+[adaptive_window] window=3 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=4 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=5 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=6 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=7 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=3 miss_per_1000=120 action=fixed_hold
+[adaptive_window] window=8 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=9 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=10 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=1 miss_per_1000=40 action=fixed_hold
+[adaptive_window] window=11 alpha_before=75 alpha_after=75 safe_windows=0 jobs=26 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=12 alpha_before=75 alpha_after=75 safe_windows=0 jobs=24 miss=1 miss_per_1000=41 action=fixed_hold
+[adaptive_window] window=13 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=9 miss_per_1000=360 action=fixed_hold
+[adaptive_window] window=14 alpha_before=75 alpha_after=75 safe_windows=0 jobs=26 miss=1 miss_per_1000=38 action=fixed_hold
+[adaptive_window] window=15 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=5 miss_per_1000=200 action=fixed_hold
+[adaptive_window] window=16 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=7 miss_per_1000=280 action=fixed_hold
+[adaptive_window] window=17 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=18 alpha_before=75 alpha_after=75 safe_windows=0 jobs=25 miss=1 miss_per_1000=40 action=fixed_hold
+[edge_sample] alpha=75 role=control pid=1 threads=1 tickets=300 effective=300 ready=2 run_ticks=560 stride=33333 pass=74065963
+[edge_sample] alpha=75 role=ai pid=2 threads=25 tickets=100 effective=1100 ready=25 run_ticks=1161 stride=9090 pass=74040501
+[edge_sample] alpha=75 role=logger pid=3 threads=9 tickets=50 effective=250 ready=9 run_ticks=255 stride=40000 pass=74066662
+[edge_deadline] alpha=75 role=control_result pid=1 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=500 miss=38 lateness_sum=50 lateness_max=3 resp_sum=1345 resp_sumsq=4111 resp_min=2 resp_max=7
+[edge_deadline] alpha=75 role=ai_result pid=2 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=241680 jobs=0 miss=0
+[edge_deadline] alpha=75 role=logger_result pid=3 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=55604 jobs=0 miss=0
+[adaptive_alpha] final_alpha=75
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 25 2 60 15 fixed
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=25 control_threads=2 ai_threads=60 logger_threads=15
+[adaptive_window] window=0 alpha_before=25 alpha_after=25 safe_windows=0 jobs=49 miss=11 miss_per_1000=224 action=fixed_hold
+[adaptive_window] window=1 alpha_before=25 alpha_after=25 safe_windows=0 jobs=48 miss=43 miss_per_1000=895 action=fixed_hold
+[adaptive_window] window=2 alpha_before=25 alpha_after=25 safe_windows=0 jobs=50 miss=50 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=3 alpha_before=25 alpha_after=25 safe_windows=0 jobs=50 miss=50 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=4 alpha_before=25 alpha_after=25 safe_windows=0 jobs=53 miss=43 miss_per_1000=811 action=fixed_hold
+[adaptive_window] window=5 alpha_before=25 alpha_after=25 safe_windows=0 jobs=49 miss=40 miss_per_1000=816 action=fixed_hold
+[adaptive_window] window=6 alpha_before=25 alpha_after=25 safe_windows=0 jobs=49 miss=40 miss_per_1000=816 action=fixed_hold
+[adaptive_window] window=7 alpha_before=25 alpha_after=25 safe_windows=0 jobs=51 miss=51 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=8 alpha_before=25 alpha_after=25 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=9 alpha_before=25 alpha_after=25 safe_windows=0 jobs=51 miss=27 miss_per_1000=529 action=fixed_hold
+[adaptive_window] window=10 alpha_before=25 alpha_after=25 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=11 alpha_before=25 alpha_after=25 safe_windows=0 jobs=50 miss=21 miss_per_1000=420 action=fixed_hold
+[adaptive_window] window=12 alpha_before=25 alpha_after=25 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=13 alpha_before=25 alpha_after=25 safe_windows=0 jobs=51 miss=13 miss_per_1000=254 action=fixed_hold
+[adaptive_window] window=14 alpha_before=25 alpha_after=25 safe_windows=0 jobs=44 miss=24 miss_per_1000=545 action=fixed_hold
+[adaptive_window] window=15 alpha_before=25 alpha_after=25 safe_windows=0 jobs=43 miss=43 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=16 alpha_before=25 alpha_after=25 safe_windows=0 jobs=48 miss=48 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=17 alpha_before=25 alpha_after=25 safe_windows=0 jobs=46 miss=46 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=18 alpha_before=25 alpha_after=25 safe_windows=0 jobs=50 miss=50 miss_per_1000=1000 action=fixed_hold
+[edge_sample] alpha=25 role=control pid=1 threads=2 tickets=300 effective=300 ready=3 run_ticks=1713 stride=33333 pass=157831797
+[edge_sample] alpha=25 role=ai pid=3 threads=60 tickets=100 effective=200 ready=60 run_ticks=218 stride=50000 pass=157833333
+[edge_sample] alpha=25 role=logger pid=2 threads=15 tickets=50 effective=50 ready=15 run_ticks=48 stride=200000 pass=157866666
+[edge_deadline] alpha=25 role=control_result pid=1 threads=2 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=982 miss=725 lateness_sum=8802 lateness_max=40 resp_sum=12520 resp_sumsq=331268 resp_min=2 resp_max=44
+[edge_deadline] alpha=25 role=logger_result pid=2 threads=15 tickets=50 effective=0 ready=0 run_ticks=0 work=27712 jobs=0 miss=0
+[edge_deadline] alpha=25 role=ai_result pid=3 threads=60 tickets=100 effective=0 ready=0 run_ticks=0 work=108968 jobs=0 miss=0
+[adaptive_alpha] final_alpha=25
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 75 2 40 10
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=75 control_threads=2 ai_threads=40 logger_threads=10
+[adaptive_window] window=0 alpha_before=75 alpha_after=67 safe_windows=0 jobs=18 miss=18 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=1 alpha_before=67 alpha_after=67 safe_windows=0 jobs=24 miss=24 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=2 alpha_before=67 alpha_after=60 safe_windows=0 jobs=26 miss=26 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=3 alpha_before=60 alpha_after=60 safe_windows=0 jobs=34 miss=34 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=4 alpha_before=60 alpha_after=54 safe_windows=0 jobs=32 miss=32 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=5 alpha_before=54 alpha_after=54 safe_windows=0 jobs=30 miss=30 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=6 alpha_before=54 alpha_after=48 safe_windows=0 jobs=37 miss=37 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=7 alpha_before=48 alpha_after=48 safe_windows=0 jobs=42 miss=42 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=8 alpha_before=48 alpha_after=43 safe_windows=0 jobs=47 miss=47 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=9 alpha_before=43 alpha_after=43 safe_windows=0 jobs=56 miss=56 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=10 alpha_before=43 alpha_after=38 safe_windows=0 jobs=52 miss=52 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=11 alpha_before=38 alpha_after=38 safe_windows=0 jobs=50 miss=50 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=12 alpha_before=38 alpha_after=34 safe_windows=0 jobs=58 miss=58 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=13 alpha_before=34 alpha_after=34 safe_windows=0 jobs=53 miss=53 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=14 alpha_before=34 alpha_after=30 safe_windows=0 jobs=56 miss=56 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=15 alpha_before=30 alpha_after=30 safe_windows=0 jobs=54 miss=54 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=16 alpha_before=30 alpha_after=27 safe_windows=0 jobs=56 miss=56 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=17 alpha_before=27 alpha_after=27 safe_windows=0 jobs=51 miss=51 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=18 alpha_before=27 alpha_after=24 safe_windows=0 jobs=49 miss=49 miss_per_1000=1000 action=aimd_backoff
+[edge_sample] alpha=24 role=control pid=1 threads=2 tickets=300 effective=300 ready=3 run_ticks=1120 stride=33333 pass=86132020
+[edge_sample] alpha=24 role=ai pid=2 threads=40 tickets=100 effective=200 ready=40 run_ticks=713 stride=50000 pass=86100707
+[edge_sample] alpha=24 role=logger pid=3 threads=10 tickets=50 effective=50 ready=10 run_ticks=151 stride=200000 pass=86149831
+[edge_deadline] alpha=24 role=control_result pid=1 threads=2 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=873 miss=873 lateness_sum=231173 lateness_max=329 resp_sum=234665 resp_sumsq=66294373 resp_min=9 resp_max=333
+[edge_deadline] alpha=75 role=logger_result pid=3 threads=10 tickets=50 effective=0 ready=0 run_ticks=0 work=36608 jobs=0 miss=0
+[edge_deadline] alpha=75 role=ai_result pid=2 threads=40 tickets=100 effective=0 ready=0 run_ticks=0 work=162483 jobs=0 miss=0
+[adaptive_alpha] final_alpha=24
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 0 1 25 9 fixed
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=0 control_threads=1 ai_threads=25 logger_threads=9
+[adaptive_window] window=0 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=1 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=2 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=3 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=4 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=5 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=6 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=7 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=8 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=9 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=10 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=11 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=12 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=13 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=14 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=15 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=16 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=17 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=18 alpha_before=0 alpha_after=0 safe_windows=0 jobs=25 miss=0 miss_per_1000=0 action=fixed_hold
+[edge_sample] alpha=0 role=control pid=1 threads=1 tickets=300 effective=300 ready=2 run_ticks=1121 stride=33333 pass=302330358
+[edge_sample] alpha=0 role=ai pid=3 threads=25 tickets=100 effective=100 ready=25 run_ticks=563 stride=100000 pass=302333333
+[edge_sample] alpha=0 role=logger pid=2 threads=9 tickets=50 effective=50 ready=9 run_ticks=287 stride=200000 pass=302466666
+[edge_deadline] alpha=0 role=control_result pid=1 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=500 miss=0 lateness_sum=0 lateness_max=0 resp_sum=1012 resp_sumsq=2060 resp_min=2 resp_max=3
+[edge_deadline] alpha=0 role=logger_result pid=2 threads=9 tickets=50 effective=0 ready=0 run_ticks=0 work=50509 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=3 threads=25 tickets=100 effective=0 ready=0 run_ticks=0 work=102489 jobs=0 miss=0
+[adaptive_alpha] final_alpha=0
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 0 3 125 25 fixed
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=0 control_threads=3 ai_threads=125 logger_threads=25
+[adaptive_window] window=0 alpha_before=0 alpha_after=0 safe_windows=0 jobs=67 miss=58 miss_per_1000=865 action=fixed_hold
+[adaptive_window] window=1 alpha_before=0 alpha_after=0 safe_windows=0 jobs=81 miss=78 miss_per_1000=962 action=fixed_hold
+[adaptive_window] window=2 alpha_before=0 alpha_after=0 safe_windows=0 jobs=75 miss=57 miss_per_1000=760 action=fixed_hold
+[adaptive_window] window=3 alpha_before=0 alpha_after=0 safe_windows=0 jobs=67 miss=64 miss_per_1000=955 action=fixed_hold
+[adaptive_window] window=4 alpha_before=0 alpha_after=0 safe_windows=0 jobs=75 miss=75 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=5 alpha_before=0 alpha_after=0 safe_windows=0 jobs=80 miss=68 miss_per_1000=850 action=fixed_hold
+[adaptive_window] window=6 alpha_before=0 alpha_after=0 safe_windows=0 jobs=70 miss=69 miss_per_1000=985 action=fixed_hold
+[adaptive_window] window=7 alpha_before=0 alpha_after=0 safe_windows=0 jobs=70 miss=70 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=8 alpha_before=0 alpha_after=0 safe_windows=0 jobs=66 miss=66 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=9 alpha_before=0 alpha_after=0 safe_windows=0 jobs=66 miss=66 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=10 alpha_before=0 alpha_after=0 safe_windows=0 jobs=69 miss=69 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=11 alpha_before=0 alpha_after=0 safe_windows=0 jobs=81 miss=81 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=12 alpha_before=0 alpha_after=0 safe_windows=0 jobs=69 miss=69 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=13 alpha_before=0 alpha_after=0 safe_windows=0 jobs=93 miss=93 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=14 alpha_before=0 alpha_after=0 safe_windows=0 jobs=90 miss=88 miss_per_1000=977 action=fixed_hold
+[adaptive_window] window=15 alpha_before=0 alpha_after=0 safe_windows=0 jobs=70 miss=70 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=16 alpha_before=0 alpha_after=0 safe_windows=0 jobs=76 miss=76 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=17 alpha_before=0 alpha_after=0 safe_windows=0 jobs=82 miss=73 miss_per_1000=890 action=fixed_hold
+[adaptive_window] window=18 alpha_before=0 alpha_after=0 safe_windows=0 jobs=70 miss=69 miss_per_1000=985 action=fixed_hold
+[edge_sample] alpha=0 role=control pid=1 threads=3 tickets=300 effective=300 ready=4 run_ticks=1807 stride=33333 pass=194798103
+[edge_sample] alpha=0 role=ai pid=2 threads=125 tickets=100 effective=100 ready=125 run_ticks=92 stride=100000 pass=194833333
+[edge_sample] alpha=0 role=logger pid=3 threads=25 tickets=50 effective=50 ready=25 run_ticks=74 stride=200000 pass=194766666
+[edge_deadline] alpha=0 role=control_result pid=1 threads=3 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=1492 miss=1429 lateness_sum=26238 lateness_max=56 resp_sum=32165 resp_sumsq=1056363 resp_min=2 resp_max=60
+[edge_deadline] alpha=0 role=logger_result pid=3 threads=25 tickets=50 effective=0 ready=0 run_ticks=0 work=31964 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=2 threads=125 tickets=100 effective=0 ready=0 run_ticks=0 work=68527 jobs=0 miss=0
+[adaptive_alpha] final_alpha=0
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 75 3 125 25
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=75 control_threads=3 ai_threads=125 logger_threads=25
+[adaptive_window] window=0 alpha_before=75 alpha_after=67 safe_windows=0 jobs=20 miss=20 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=1 alpha_before=67 alpha_after=67 safe_windows=0 jobs=29 miss=29 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=2 alpha_before=67 alpha_after=60 safe_windows=0 jobs=30 miss=30 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=3 alpha_before=60 alpha_after=60 safe_windows=0 jobs=20 miss=20 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=4 alpha_before=60 alpha_after=54 safe_windows=0 jobs=19 miss=19 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=5 alpha_before=54 alpha_after=54 safe_windows=0 jobs=27 miss=27 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=6 alpha_before=54 alpha_after=48 safe_windows=0 jobs=28 miss=28 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=7 alpha_before=48 alpha_after=48 safe_windows=0 jobs=33 miss=33 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=8 alpha_before=48 alpha_after=43 safe_windows=0 jobs=32 miss=32 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=9 alpha_before=43 alpha_after=43 safe_windows=0 jobs=46 miss=46 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=10 alpha_before=43 alpha_after=38 safe_windows=0 jobs=41 miss=41 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=11 alpha_before=38 alpha_after=38 safe_windows=0 jobs=39 miss=39 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=12 alpha_before=38 alpha_after=34 safe_windows=0 jobs=46 miss=46 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=13 alpha_before=34 alpha_after=34 safe_windows=0 jobs=52 miss=52 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=14 alpha_before=34 alpha_after=30 safe_windows=0 jobs=46 miss=46 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=15 alpha_before=30 alpha_after=30 safe_windows=0 jobs=57 miss=57 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=16 alpha_before=30 alpha_after=27 safe_windows=0 jobs=49 miss=49 miss_per_1000=1000 action=aimd_backoff
+[adaptive_window] window=17 alpha_before=27 alpha_after=27 safe_windows=0 jobs=66 miss=66 miss_per_1000=1000 action=cooldown_hold
+[adaptive_window] window=18 alpha_before=27 alpha_after=24 safe_windows=0 jobs=61 miss=61 miss_per_1000=1000 action=aimd_backoff
+[edge_sample] alpha=24 role=control pid=1 threads=3 tickets=300 effective=300 ready=4 run_ticks=839 stride=33333 pass=63632422
+[edge_sample] alpha=24 role=ai pid=3 threads=125 tickets=100 effective=300 ready=125 run_ticks=923 stride=33333 pass=63608767
+[edge_sample] alpha=24 role=logger pid=2 threads=25 tickets=50 effective=100 ready=25 run_ticks=200 stride=100000 pass=63683856
+[edge_deadline] alpha=24 role=control_result pid=1 threads=3 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=794 miss=794 lateness_sum=524977 lateness_max=953 resp_sum=528153 resp_sumsq=403509257 resp_min=10 resp_max=957
+[edge_deadline] alpha=75 role=logger_result pid=2 threads=25 tickets=50 effective=0 ready=0 run_ticks=0 work=42263 jobs=0 miss=0
+[edge_deadline] alpha=75 role=ai_result pid=3 threads=125 tickets=100 effective=0 ready=0 run_ticks=0 work=204306 jobs=0 miss=0
+[adaptive_alpha] final_alpha=24
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 0 2 40 10 fixed
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=0 control_threads=2 ai_threads=40 logger_threads=10
+[adaptive_window] window=0 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=1 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=2 alpha_before=0 alpha_after=0 safe_windows=0 jobs=48 miss=15 miss_per_1000=312 action=fixed_hold
+[adaptive_window] window=3 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=4 alpha_before=0 alpha_after=0 safe_windows=0 jobs=51 miss=26 miss_per_1000=509 action=fixed_hold
+[adaptive_window] window=5 alpha_before=0 alpha_after=0 safe_windows=0 jobs=51 miss=1 miss_per_1000=19 action=fixed_hold
+[adaptive_window] window=6 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=0 miss_per_1000=0 action=fixed_hold
+[adaptive_window] window=7 alpha_before=0 alpha_after=0 safe_windows=0 jobs=49 miss=18 miss_per_1000=367 action=fixed_hold
+[adaptive_window] window=8 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=21 miss_per_1000=420 action=fixed_hold
+[adaptive_window] window=9 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=10 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=11 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=12 alpha_before=0 alpha_after=0 safe_windows=0 jobs=49 miss=41 miss_per_1000=836 action=fixed_hold
+[adaptive_window] window=13 alpha_before=0 alpha_after=0 safe_windows=0 jobs=51 miss=25 miss_per_1000=490 action=fixed_hold
+[adaptive_window] window=14 alpha_before=0 alpha_after=0 safe_windows=0 jobs=51 miss=12 miss_per_1000=235 action=fixed_hold
+[adaptive_window] window=15 alpha_before=0 alpha_after=0 safe_windows=0 jobs=49 miss=17 miss_per_1000=346 action=fixed_hold
+[adaptive_window] window=16 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=17 alpha_before=0 alpha_after=0 safe_windows=0 jobs=50 miss=25 miss_per_1000=500 action=fixed_hold
+[adaptive_window] window=18 alpha_before=0 alpha_after=0 safe_windows=0 jobs=51 miss=1 miss_per_1000=19 action=fixed_hold
+[edge_sample] alpha=0 role=control pid=1 threads=2 tickets=300 effective=300 ready=3 run_ticks=1712 stride=33333 pass=191798140
+[edge_sample] alpha=0 role=ai pid=2 threads=40 tickets=100 effective=100 ready=40 run_ticks=172 stride=100000 pass=191833333
+[edge_sample] alpha=0 role=logger pid=3 threads=10 tickets=50 effective=50 ready=10 run_ticks=86 stride=200000 pass=191866666
+[edge_deadline] alpha=0 role=control_result pid=1 threads=2 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=1000 miss=327 lateness_sum=520 lateness_max=9 resp_sum=3699 resp_sumsq=16357 resp_min=2 resp_max=13
+[edge_deadline] alpha=0 role=logger_result pid=3 threads=10 tickets=50 effective=0 ready=0 run_ticks=0 work=30976 jobs=0 miss=0
+[edge_deadline] alpha=0 role=ai_result pid=2 threads=40 tickets=100 effective=0 ready=0 run_ticks=0 work=61713 jobs=0 miss=0
+[adaptive_alpha] final_alpha=0
+
+adaptive_alpha_test PASS
+[shell] child exit code 0
+
+/ $ smoother_adaptive_alpha_test 25 3 125 25 fixed
+adaptive_alpha_test start
+usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]
+  mode = adaptive (default) | fixed
+example: adaptive_alpha_test 50 1 14 8
+example: adaptive_alpha_test 50 1 14 8 fixed
+
+[adaptive_alpha] run initial_alpha=25 control_threads=3 ai_threads=125 logger_threads=25
+[adaptive_window] window=0 alpha_before=25 alpha_after=25 safe_windows=0 jobs=64 miss=62 miss_per_1000=968 action=fixed_hold
+[adaptive_window] window=1 alpha_before=25 alpha_after=25 safe_windows=0 jobs=66 miss=66 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=2 alpha_before=25 alpha_after=25 safe_windows=0 jobs=70 miss=70 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=3 alpha_before=25 alpha_after=25 safe_windows=0 jobs=70 miss=70 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=4 alpha_before=25 alpha_after=25 safe_windows=0 jobs=60 miss=60 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=5 alpha_before=25 alpha_after=25 safe_windows=0 jobs=65 miss=65 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=6 alpha_before=25 alpha_after=25 safe_windows=0 jobs=63 miss=63 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=7 alpha_before=25 alpha_after=25 safe_windows=0 jobs=65 miss=65 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=8 alpha_before=25 alpha_after=25 safe_windows=0 jobs=63 miss=63 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=9 alpha_before=25 alpha_after=25 safe_windows=0 jobs=64 miss=64 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=10 alpha_before=25 alpha_after=25 safe_windows=0 jobs=70 miss=70 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=11 alpha_before=25 alpha_after=25 safe_windows=0 jobs=68 miss=68 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=12 alpha_before=25 alpha_after=25 safe_windows=0 jobs=63 miss=63 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=13 alpha_before=25 alpha_after=25 safe_windows=0 jobs=67 miss=67 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=14 alpha_before=25 alpha_after=25 safe_windows=0 jobs=67 miss=67 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=15 alpha_before=25 alpha_after=25 safe_windows=0 jobs=66 miss=66 miss_per_1000=1000 action=fixed_hold
+[adaptive_window] window=16 alpha_before=25 alpha_after=25 safe_windows=0 jobs=60 miss=60 miss_per_1000=1000 action=fixed_hold
