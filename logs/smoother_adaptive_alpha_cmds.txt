@@ -1,205 +1,255 @@
 # ===== repeat 1 / 5 =====
-smoother_adaptive_alpha_test 100 1 14 8 fixed
-smoother_adaptive_alpha_test 50 3 225 40
-smoother_adaptive_alpha_test 0 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15
-smoother_adaptive_alpha_test 25 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15 fixed
-smoother_adaptive_alpha_test 100 1 14 8
-smoother_adaptive_alpha_test 0 2 60 15 fixed
-smoother_adaptive_alpha_test 50 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8
-smoother_adaptive_alpha_test 75 1 14 8
-smoother_adaptive_alpha_test 100 1 25 9
-smoother_adaptive_alpha_test 50 1 25 9 fixed
-smoother_adaptive_alpha_test 75 1 14 8 fixed
-smoother_adaptive_alpha_test 0 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15
-smoother_adaptive_alpha_test 25 2 60 15
-smoother_adaptive_alpha_test 0 3 225 40
-smoother_adaptive_alpha_test 25 2 60 15 fixed
-smoother_adaptive_alpha_test 0 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8 fixed
-smoother_adaptive_alpha_test 75 3 225 40
-smoother_adaptive_alpha_test 0 1 25 9 fixed
-smoother_adaptive_alpha_test 50 1 25 9
-smoother_adaptive_alpha_test 25 3 225 40
+smoother_adaptive_alpha_test 100 4 225 64 fixed
 smoother_adaptive_alpha_test 25 1 25 9
-smoother_adaptive_alpha_test 75 3 225 40 fixed
-smoother_adaptive_alpha_test 0 1 14 8 fixed
-smoother_adaptive_alpha_test 0 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 60 15 fixed
 smoother_adaptive_alpha_test 100 1 25 9 fixed
-smoother_adaptive_alpha_test 100 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8 fixed
-smoother_adaptive_alpha_test 100 3 225 40
-smoother_adaptive_alpha_test 25 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 40 10
+smoother_adaptive_alpha_test 50 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10
+smoother_adaptive_alpha_test 75 2 40 10 fixed
+smoother_adaptive_alpha_test 50 2 40 10 fixed
+smoother_adaptive_alpha_test 100 2 60 15
+smoother_adaptive_alpha_test 75 1 25 9 fixed
+smoother_adaptive_alpha_test 25 2 60 15 fixed
+smoother_adaptive_alpha_test 75 2 40 10
+smoother_adaptive_alpha_test 0 1 25 9 fixed
+smoother_adaptive_alpha_test 0 3 125 25 fixed
+smoother_adaptive_alpha_test 75 3 125 25
+smoother_adaptive_alpha_test 0 2 40 10 fixed
+smoother_adaptive_alpha_test 25 3 125 25 fixed
+smoother_adaptive_alpha_test 100 2 40 10 fixed
+smoother_adaptive_alpha_test 100 3 125 25
+smoother_adaptive_alpha_test 75 2 60 15 fixed
+smoother_adaptive_alpha_test 50 2 40 10
+smoother_adaptive_alpha_test 75 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25 fixed
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 50 2 60 15
+smoother_adaptive_alpha_test 75 2 60 15
+smoother_adaptive_alpha_test 0 3 125 25
+smoother_adaptive_alpha_test 0 2 60 15
+smoother_adaptive_alpha_test 75 3 125 25 fixed
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 0 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25
+smoother_adaptive_alpha_test 25 1 25 9 fixed
+smoother_adaptive_alpha_test 100 3 125 25 fixed
+smoother_adaptive_alpha_test 25 3 125 25
+smoother_adaptive_alpha_test 100 1 25 9
+smoother_adaptive_alpha_test 25 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 60 15 fixed
+smoother_adaptive_alpha_test 25 4 225 64
+smoother_adaptive_alpha_test 50 2 60 15 fixed
+smoother_adaptive_alpha_test 25 2 60 15
+smoother_adaptive_alpha_test 75 4 225 64 fixed
+smoother_adaptive_alpha_test 50 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 40 10
+smoother_adaptive_alpha_test 0 4 225 64 fixed
+smoother_adaptive_alpha_test 50 1 25 9 fixed
+smoother_adaptive_alpha_test 100 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10 fixed
+smoother_adaptive_alpha_test 0 1 25 9
 # ===== repeat 2 / 5 =====
-smoother_adaptive_alpha_test 100 1 14 8 fixed
-smoother_adaptive_alpha_test 50 3 225 40
-smoother_adaptive_alpha_test 0 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15
-smoother_adaptive_alpha_test 25 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15 fixed
-smoother_adaptive_alpha_test 100 1 14 8
-smoother_adaptive_alpha_test 0 2 60 15 fixed
-smoother_adaptive_alpha_test 50 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8
-smoother_adaptive_alpha_test 75 1 14 8
-smoother_adaptive_alpha_test 100 1 25 9
-smoother_adaptive_alpha_test 50 1 25 9 fixed
-smoother_adaptive_alpha_test 75 1 14 8 fixed
-smoother_adaptive_alpha_test 0 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15
-smoother_adaptive_alpha_test 25 2 60 15
-smoother_adaptive_alpha_test 0 3 225 40
-smoother_adaptive_alpha_test 25 2 60 15 fixed
-smoother_adaptive_alpha_test 0 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8 fixed
-smoother_adaptive_alpha_test 75 3 225 40
-smoother_adaptive_alpha_test 0 1 25 9 fixed
-smoother_adaptive_alpha_test 50 1 25 9
-smoother_adaptive_alpha_test 25 3 225 40
+smoother_adaptive_alpha_test 100 4 225 64 fixed
 smoother_adaptive_alpha_test 25 1 25 9
-smoother_adaptive_alpha_test 75 3 225 40 fixed
-smoother_adaptive_alpha_test 0 1 14 8 fixed
-smoother_adaptive_alpha_test 0 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 60 15 fixed
 smoother_adaptive_alpha_test 100 1 25 9 fixed
-smoother_adaptive_alpha_test 100 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8 fixed
-smoother_adaptive_alpha_test 100 3 225 40
-smoother_adaptive_alpha_test 25 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 40 10
+smoother_adaptive_alpha_test 50 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10
+smoother_adaptive_alpha_test 75 2 40 10 fixed
+smoother_adaptive_alpha_test 50 2 40 10 fixed
+smoother_adaptive_alpha_test 100 2 60 15
+smoother_adaptive_alpha_test 75 1 25 9 fixed
+smoother_adaptive_alpha_test 25 2 60 15 fixed
+smoother_adaptive_alpha_test 75 2 40 10
+smoother_adaptive_alpha_test 0 1 25 9 fixed
+smoother_adaptive_alpha_test 0 3 125 25 fixed
+smoother_adaptive_alpha_test 75 3 125 25
+smoother_adaptive_alpha_test 0 2 40 10 fixed
+smoother_adaptive_alpha_test 25 3 125 25 fixed
+smoother_adaptive_alpha_test 100 2 40 10 fixed
+smoother_adaptive_alpha_test 100 3 125 25
+smoother_adaptive_alpha_test 75 2 60 15 fixed
+smoother_adaptive_alpha_test 50 2 40 10
+smoother_adaptive_alpha_test 75 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25 fixed
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 50 2 60 15
+smoother_adaptive_alpha_test 75 2 60 15
+smoother_adaptive_alpha_test 0 3 125 25
+smoother_adaptive_alpha_test 0 2 60 15
+smoother_adaptive_alpha_test 75 3 125 25 fixed
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 0 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25
+smoother_adaptive_alpha_test 25 1 25 9 fixed
+smoother_adaptive_alpha_test 100 3 125 25 fixed
+smoother_adaptive_alpha_test 25 3 125 25
+smoother_adaptive_alpha_test 100 1 25 9
+smoother_adaptive_alpha_test 25 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 60 15 fixed
+smoother_adaptive_alpha_test 25 4 225 64
+smoother_adaptive_alpha_test 50 2 60 15 fixed
+smoother_adaptive_alpha_test 25 2 60 15
+smoother_adaptive_alpha_test 75 4 225 64 fixed
+smoother_adaptive_alpha_test 50 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 40 10
+smoother_adaptive_alpha_test 0 4 225 64 fixed
+smoother_adaptive_alpha_test 50 1 25 9 fixed
+smoother_adaptive_alpha_test 100 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10 fixed
+smoother_adaptive_alpha_test 0 1 25 9
 # ===== repeat 3 / 5 =====
-smoother_adaptive_alpha_test 100 1 14 8 fixed
-smoother_adaptive_alpha_test 50 3 225 40
-smoother_adaptive_alpha_test 0 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15
-smoother_adaptive_alpha_test 25 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15 fixed
-smoother_adaptive_alpha_test 100 1 14 8
-smoother_adaptive_alpha_test 0 2 60 15 fixed
-smoother_adaptive_alpha_test 50 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8
-smoother_adaptive_alpha_test 75 1 14 8
-smoother_adaptive_alpha_test 100 1 25 9
-smoother_adaptive_alpha_test 50 1 25 9 fixed
-smoother_adaptive_alpha_test 75 1 14 8 fixed
-smoother_adaptive_alpha_test 0 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15
-smoother_adaptive_alpha_test 25 2 60 15
-smoother_adaptive_alpha_test 0 3 225 40
-smoother_adaptive_alpha_test 25 2 60 15 fixed
-smoother_adaptive_alpha_test 0 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8 fixed
-smoother_adaptive_alpha_test 75 3 225 40
-smoother_adaptive_alpha_test 0 1 25 9 fixed
-smoother_adaptive_alpha_test 50 1 25 9
-smoother_adaptive_alpha_test 25 3 225 40
+smoother_adaptive_alpha_test 100 4 225 64 fixed
 smoother_adaptive_alpha_test 25 1 25 9
-smoother_adaptive_alpha_test 75 3 225 40 fixed
-smoother_adaptive_alpha_test 0 1 14 8 fixed
-smoother_adaptive_alpha_test 0 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 60 15 fixed
 smoother_adaptive_alpha_test 100 1 25 9 fixed
-smoother_adaptive_alpha_test 100 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8 fixed
-smoother_adaptive_alpha_test 100 3 225 40
-smoother_adaptive_alpha_test 25 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 40 10
+smoother_adaptive_alpha_test 50 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10
+smoother_adaptive_alpha_test 75 2 40 10 fixed
+smoother_adaptive_alpha_test 50 2 40 10 fixed
+smoother_adaptive_alpha_test 100 2 60 15
+smoother_adaptive_alpha_test 75 1 25 9 fixed
+smoother_adaptive_alpha_test 25 2 60 15 fixed
+smoother_adaptive_alpha_test 75 2 40 10
+smoother_adaptive_alpha_test 0 1 25 9 fixed
+smoother_adaptive_alpha_test 0 3 125 25 fixed
+smoother_adaptive_alpha_test 75 3 125 25
+smoother_adaptive_alpha_test 0 2 40 10 fixed
+smoother_adaptive_alpha_test 25 3 125 25 fixed
+smoother_adaptive_alpha_test 100 2 40 10 fixed
+smoother_adaptive_alpha_test 100 3 125 25
+smoother_adaptive_alpha_test 75 2 60 15 fixed
+smoother_adaptive_alpha_test 50 2 40 10
+smoother_adaptive_alpha_test 75 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25 fixed
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 50 2 60 15
+smoother_adaptive_alpha_test 75 2 60 15
+smoother_adaptive_alpha_test 0 3 125 25
+smoother_adaptive_alpha_test 0 2 60 15
+smoother_adaptive_alpha_test 75 3 125 25 fixed
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 0 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25
+smoother_adaptive_alpha_test 25 1 25 9 fixed
+smoother_adaptive_alpha_test 100 3 125 25 fixed
+smoother_adaptive_alpha_test 25 3 125 25
+smoother_adaptive_alpha_test 100 1 25 9
+smoother_adaptive_alpha_test 25 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 60 15 fixed
+smoother_adaptive_alpha_test 25 4 225 64
+smoother_adaptive_alpha_test 50 2 60 15 fixed
+smoother_adaptive_alpha_test 25 2 60 15
+smoother_adaptive_alpha_test 75 4 225 64 fixed
+smoother_adaptive_alpha_test 50 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 40 10
+smoother_adaptive_alpha_test 0 4 225 64 fixed
+smoother_adaptive_alpha_test 50 1 25 9 fixed
+smoother_adaptive_alpha_test 100 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10 fixed
+smoother_adaptive_alpha_test 0 1 25 9
 # ===== repeat 4 / 5 =====
-smoother_adaptive_alpha_test 100 1 14 8 fixed
-smoother_adaptive_alpha_test 50 3 225 40
-smoother_adaptive_alpha_test 0 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15
-smoother_adaptive_alpha_test 25 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15 fixed
-smoother_adaptive_alpha_test 100 1 14 8
-smoother_adaptive_alpha_test 0 2 60 15 fixed
-smoother_adaptive_alpha_test 50 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8
-smoother_adaptive_alpha_test 75 1 14 8
-smoother_adaptive_alpha_test 100 1 25 9
-smoother_adaptive_alpha_test 50 1 25 9 fixed
-smoother_adaptive_alpha_test 75 1 14 8 fixed
-smoother_adaptive_alpha_test 0 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15
-smoother_adaptive_alpha_test 25 2 60 15
-smoother_adaptive_alpha_test 0 3 225 40
-smoother_adaptive_alpha_test 25 2 60 15 fixed
-smoother_adaptive_alpha_test 0 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8 fixed
-smoother_adaptive_alpha_test 75 3 225 40
-smoother_adaptive_alpha_test 0 1 25 9 fixed
-smoother_adaptive_alpha_test 50 1 25 9
-smoother_adaptive_alpha_test 25 3 225 40
+smoother_adaptive_alpha_test 100 4 225 64 fixed
 smoother_adaptive_alpha_test 25 1 25 9
-smoother_adaptive_alpha_test 75 3 225 40 fixed
-smoother_adaptive_alpha_test 0 1 14 8 fixed
-smoother_adaptive_alpha_test 0 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 60 15 fixed
 smoother_adaptive_alpha_test 100 1 25 9 fixed
-smoother_adaptive_alpha_test 100 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8 fixed
-smoother_adaptive_alpha_test 100 3 225 40
-smoother_adaptive_alpha_test 25 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 40 10
+smoother_adaptive_alpha_test 50 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10
+smoother_adaptive_alpha_test 75 2 40 10 fixed
+smoother_adaptive_alpha_test 50 2 40 10 fixed
+smoother_adaptive_alpha_test 100 2 60 15
+smoother_adaptive_alpha_test 75 1 25 9 fixed
+smoother_adaptive_alpha_test 25 2 60 15 fixed
+smoother_adaptive_alpha_test 75 2 40 10
+smoother_adaptive_alpha_test 0 1 25 9 fixed
+smoother_adaptive_alpha_test 0 3 125 25 fixed
+smoother_adaptive_alpha_test 75 3 125 25
+smoother_adaptive_alpha_test 0 2 40 10 fixed
+smoother_adaptive_alpha_test 25 3 125 25 fixed
+smoother_adaptive_alpha_test 100 2 40 10 fixed
+smoother_adaptive_alpha_test 100 3 125 25
+smoother_adaptive_alpha_test 75 2 60 15 fixed
+smoother_adaptive_alpha_test 50 2 40 10
+smoother_adaptive_alpha_test 75 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25 fixed
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 50 2 60 15
+smoother_adaptive_alpha_test 75 2 60 15
+smoother_adaptive_alpha_test 0 3 125 25
+smoother_adaptive_alpha_test 0 2 60 15
+smoother_adaptive_alpha_test 75 3 125 25 fixed
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 0 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25
+smoother_adaptive_alpha_test 25 1 25 9 fixed
+smoother_adaptive_alpha_test 100 3 125 25 fixed
+smoother_adaptive_alpha_test 25 3 125 25
+smoother_adaptive_alpha_test 100 1 25 9
+smoother_adaptive_alpha_test 25 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 60 15 fixed
+smoother_adaptive_alpha_test 25 4 225 64
+smoother_adaptive_alpha_test 50 2 60 15 fixed
+smoother_adaptive_alpha_test 25 2 60 15
+smoother_adaptive_alpha_test 75 4 225 64 fixed
+smoother_adaptive_alpha_test 50 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 40 10
+smoother_adaptive_alpha_test 0 4 225 64 fixed
+smoother_adaptive_alpha_test 50 1 25 9 fixed
+smoother_adaptive_alpha_test 100 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10 fixed
+smoother_adaptive_alpha_test 0 1 25 9
 # ===== repeat 5 / 5 =====
-smoother_adaptive_alpha_test 100 1 14 8 fixed
-smoother_adaptive_alpha_test 50 3 225 40
-smoother_adaptive_alpha_test 0 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15
-smoother_adaptive_alpha_test 25 1 25 9 fixed
-smoother_adaptive_alpha_test 50 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8
-smoother_adaptive_alpha_test 75 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15 fixed
-smoother_adaptive_alpha_test 100 1 14 8
-smoother_adaptive_alpha_test 0 2 60 15 fixed
-smoother_adaptive_alpha_test 50 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8
-smoother_adaptive_alpha_test 75 1 14 8
-smoother_adaptive_alpha_test 100 1 25 9
-smoother_adaptive_alpha_test 50 1 25 9 fixed
-smoother_adaptive_alpha_test 75 1 14 8 fixed
-smoother_adaptive_alpha_test 0 1 25 9
-smoother_adaptive_alpha_test 75 2 60 15
-smoother_adaptive_alpha_test 25 2 60 15
-smoother_adaptive_alpha_test 0 3 225 40
-smoother_adaptive_alpha_test 25 2 60 15 fixed
-smoother_adaptive_alpha_test 0 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15
-smoother_adaptive_alpha_test 100 2 60 15 fixed
-smoother_adaptive_alpha_test 25 1 14 8 fixed
-smoother_adaptive_alpha_test 75 3 225 40
-smoother_adaptive_alpha_test 0 1 25 9 fixed
-smoother_adaptive_alpha_test 50 1 25 9
-smoother_adaptive_alpha_test 25 3 225 40
+smoother_adaptive_alpha_test 100 4 225 64 fixed
 smoother_adaptive_alpha_test 25 1 25 9
-smoother_adaptive_alpha_test 75 3 225 40 fixed
-smoother_adaptive_alpha_test 0 1 14 8 fixed
-smoother_adaptive_alpha_test 0 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 60 15 fixed
 smoother_adaptive_alpha_test 100 1 25 9 fixed
-smoother_adaptive_alpha_test 100 3 225 40 fixed
-smoother_adaptive_alpha_test 50 1 14 8 fixed
-smoother_adaptive_alpha_test 100 3 225 40
-smoother_adaptive_alpha_test 25 3 225 40 fixed
+smoother_adaptive_alpha_test 0 2 40 10
+smoother_adaptive_alpha_test 50 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10
+smoother_adaptive_alpha_test 75 2 40 10 fixed
+smoother_adaptive_alpha_test 50 2 40 10 fixed
+smoother_adaptive_alpha_test 100 2 60 15
+smoother_adaptive_alpha_test 75 1 25 9 fixed
+smoother_adaptive_alpha_test 25 2 60 15 fixed
+smoother_adaptive_alpha_test 75 2 40 10
+smoother_adaptive_alpha_test 0 1 25 9 fixed
+smoother_adaptive_alpha_test 0 3 125 25 fixed
+smoother_adaptive_alpha_test 75 3 125 25
+smoother_adaptive_alpha_test 0 2 40 10 fixed
+smoother_adaptive_alpha_test 25 3 125 25 fixed
+smoother_adaptive_alpha_test 100 2 40 10 fixed
+smoother_adaptive_alpha_test 100 3 125 25
+smoother_adaptive_alpha_test 75 2 60 15 fixed
+smoother_adaptive_alpha_test 50 2 40 10
+smoother_adaptive_alpha_test 75 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25 fixed
+smoother_adaptive_alpha_test 75 1 25 9
+smoother_adaptive_alpha_test 50 2 60 15
+smoother_adaptive_alpha_test 75 2 60 15
+smoother_adaptive_alpha_test 0 3 125 25
+smoother_adaptive_alpha_test 0 2 60 15
+smoother_adaptive_alpha_test 75 3 125 25 fixed
+smoother_adaptive_alpha_test 50 1 25 9
+smoother_adaptive_alpha_test 0 4 225 64
+smoother_adaptive_alpha_test 50 3 125 25
+smoother_adaptive_alpha_test 25 1 25 9 fixed
+smoother_adaptive_alpha_test 100 3 125 25 fixed
+smoother_adaptive_alpha_test 25 3 125 25
+smoother_adaptive_alpha_test 100 1 25 9
+smoother_adaptive_alpha_test 25 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 60 15 fixed
+smoother_adaptive_alpha_test 25 4 225 64
+smoother_adaptive_alpha_test 50 2 60 15 fixed
+smoother_adaptive_alpha_test 25 2 60 15
+smoother_adaptive_alpha_test 75 4 225 64 fixed
+smoother_adaptive_alpha_test 50 4 225 64 fixed
+smoother_adaptive_alpha_test 100 2 40 10
+smoother_adaptive_alpha_test 0 4 225 64 fixed
+smoother_adaptive_alpha_test 50 1 25 9 fixed
+smoother_adaptive_alpha_test 100 4 225 64
+smoother_adaptive_alpha_test 25 2 40 10 fixed
+smoother_adaptive_alpha_test 0 1 25 9

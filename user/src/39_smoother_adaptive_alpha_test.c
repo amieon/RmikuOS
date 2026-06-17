@@ -886,11 +886,11 @@ static int run_one_adaptive_case(
     usize last_lateness_sum = 0;
 
     /* AIMD 参数（起步值， max_tard 4~7 标定，之后在负载上拧） */
-    const int   AIMD_INC      = 3;    /* 加性增：安全时 alpha += 3 */
-    const int   AIMD_BACKOFF  = 85;   /* 乘性减：危险时 alpha = alpha*85/100 */
+    const int   AIMD_INC      = 5;    /* 加性增：安全时 alpha += 3 */
+    const int   AIMD_BACKOFF  = 90;   /* 乘性减：危险时 alpha = alpha*85/100 */
     /* 滞回带：本窗口迟到总量 <= SAFE 算安全，>= DANGER 算危险，中间灰区不动 */
     const usize SAFE_LATENESS   = 0;  /* 一点没迟 = 安全，可上探 */
-    const usize DANGER_LATENESS = 15;  /* 本窗口累计迟到 >=15 tick = 危险，回退 */
+    const usize DANGER_LATENESS = 25;  /* 本窗口累计迟到 >=15 tick = 危险，回退 */
 
     usize last_jobs = 0;
     usize last_miss = 0;
