@@ -1164,11 +1164,11 @@ static int run_one_adaptive_case(
 }
 
 int main(int argc, char **argv) {
-    puts("adaptive_alpha_test start\n");
-    puts("usage: adaptive_alpha_test <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]\n");
+    puts("dynamic_load_exp start\n");
+    puts("usage: dynamic_load_exp <initial_alpha> <control_threads> <ai_threads> <logger_threads> [mode]\n");
     puts("  mode = adaptive (default) | fixed\n");
-    puts("example: adaptive_alpha_test 50 1 14 8\n");
-    puts("example: adaptive_alpha_test 50 1 14 8 fixed\n");
+    puts("example: dynamic_load_exp 50 1 14 8\n");
+    puts("example: dynamic_load_exp 50 1 14 8 fixed\n");
 
     /* 4 个参数 = 默认 adaptive；5 个参数 = 末位指定模式 */
     if (argc != 5 && argc != 6) {
