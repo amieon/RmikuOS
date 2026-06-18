@@ -908,7 +908,7 @@ impl TaskManager {
             if let Some(process) = process.as_mut() {
                 process.run_ticks = 0;
                 process.ready_thread_count_snapshot = 0;
-
+                process.pass = 0;
                 // process.effective_tickets = 建议 effective_tickets 保留，不要清 process.tickets;
             }
         }
