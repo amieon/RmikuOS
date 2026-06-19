@@ -2821,8 +2821,8 @@ example: dynamic_load_exp 50 1 14 8 fixed
 [edge_sample] alpha=52 role=ai pid=2 threads=100 tickets=100 effective=1000 ready=100 run_ticks=8821 stride=10000 pass=1503452854
 [edge_sample] alpha=52 role=logger pid=3 threads=16 tickets=50 effective=200 ready=16 run_ticks=9159 stride=50000 pass=1503470112
 [edge_deadline] alpha=52 role=control_result pid=1 threads=1 tickets=300 effective=0 ready=0 run_ticks=0 work=0 jobs=9000 miss=1205 lateness_sum=4579 lateness_max=25 resp_sum=29012 resp_sumsq=147812 resp_min=2 resp_max=29
-[edge_deadline] alpha=50 role=logger_result pid=3 threads=16 tickets=50 effective=0 ready=0 run_ticks=0 work=857547 jobs=0 miss=0
-[edge_deadline] alpha=50 role=ai_result pid=2 threads=100 tickets=100 effective=0 ready=0 run_ticks=0 work=584202 jobs=0 miss=0
+[edge_deadline] alpha=50 role=logger_result pid=3 threads=16 tickets=50 effective=0 ready=0 run_ticks=0 work=887547 jobs=0 miss=0
+[edge_deadline] alpha=50 role=ai_result pid=2 threads=100 tickets=100 effective=0 ready=0 run_ticks=0 work=697112 jobs=0 miss=0
 [adaptive_alpha] final_alpha=52
 
 dynamic_load_exp PASS

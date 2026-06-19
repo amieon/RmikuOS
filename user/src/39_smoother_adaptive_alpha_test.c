@@ -7,7 +7,7 @@
 #define LOGGER_TICKETS 50
 
 #define START_DELAY_TICKS 80
-#define TEST_TICKS 2000
+#define TEST_TICKS 3600
 
 
 #define AI_BURN_ITERS 12000
