@@ -250,7 +250,7 @@ loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffrees
 + loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test_runtime.o
 + loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-loongarch64.ld /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test_crt0.o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test_runtime.o -o /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.elf
 + loongarch64-unknown-linux-gnu-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.elf /home/abcc/RmikuOS/user/build/loongarch64/35_35_alpha_arg_test.bin
-[user] built app35: 35_alpha_arg_test.c, 9736 bytes
+[user] built app35: 35_alpha_arg_test.c, 9592 bytes
 + loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/36_36_edge_deadline_arg_test_crt0.o
 + loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/src/36_edge_deadline_arg_test.c -o /home/abcc/RmikuOS/user/build/loongarch64/36_36_edge_deadline_arg_test.o
 + loongarch64-unknown-linux-gnu-gcc -DUSER_ARCH_LOONGARCH64 -G0 -mno-relax -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_loongarch64.S -o /home/abcc/RmikuOS/user/build/loongarch64/36_36_edge_deadline_arg_test_runtime.o
@@ -524,9 +524,9 @@ warning: unused import: `super::context::TaskContext`
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: unnecessary trailing semicolon
-   --> kernel/src/task/manager_wrapper.rs:515:7
+   --> kernel/src/task/manager_wrapper.rs:520:7
     |
-515 |     };;
+520 |     };;
     |       ^ help: remove this semicolon
     |
     = note: `#[warn(redundant_semicolons)]` (part of `#[warn(unused)]`) on by default
@@ -1157,15 +1157,15 @@ warning: associated function `thread_exit_current` is never used
    |            ^^^^^^^^^^^^^^^^^^^
 
 warning: function `current_tid` is never used
-   --> kernel/src/task/manager_wrapper.rs:386:8
+   --> kernel/src/task/manager_wrapper.rs:391:8
     |
-386 | pub fn current_tid() -> Tid {
+391 | pub fn current_tid() -> Tid {
     |        ^^^^^^^^^^^
 
 warning: function `wake_sleeping_tasks` is never used
-   --> kernel/src/task/manager_wrapper.rs:411:8
+   --> kernel/src/task/manager_wrapper.rs:416:8
     |
-411 | pub fn wake_sleeping_tasks() {
+416 | pub fn wake_sleeping_tasks() {
     |        ^^^^^^^^^^^^^^^^^^^
 
 warning: function `lookup_at` is never used
@@ -2063,7 +2063,7 @@ warning: creating a shared reference to mutable static
    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
 
 warning: `RmikuOS` (bin "RmikuOS") generated 218 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 39 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.16s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.17s
 
 === 启动 QEMU (loongarch64, mode=debug) ===
 KERNEL: target/loongarch64-unknown-none/debug/RmikuOS
@@ -2104,12 +2104,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=0 procs=3 threads=1,5,7
-[alpha_sample] alpha=0 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=241 stride=100000 pass=392200000
-[alpha_sample] alpha=0 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=205 stride=100000 pass=392100000
-[alpha_sample] alpha=0 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=209 stride=100000 pass=392100000
-[alpha_result] alpha=0 role=0 pid=2 threads=1 tickets=100 work=42652
-[alpha_result] alpha=0 role=1 pid=3 threads=5 tickets=100 work=45248
-[alpha_result] alpha=0 role=2 pid=4 threads=7 tickets=100 work=44728
+[alpha_sample] alpha=0 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=216 stride=100000 pass=95100000
+[alpha_sample] alpha=0 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=216 stride=100000 pass=95000000
+[alpha_sample] alpha=0 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=219 stride=100000 pass=95000000
+[alpha_result] alpha=0 role=0 pid=2 threads=1 tickets=100 work=14528
+[alpha_result] alpha=0 role=2 pid=4 threads=7 tickets=100 work=13429
+[alpha_result] alpha=0 role=1 pid=3 threads=5 tickets=100 work=13737
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2118,29 +2118,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=5 procs=3 threads=1,5,7
+[alpha_sample] alpha=5 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=211 stride=100000 pass=137300000
+[alpha_sample] alpha=5 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=224 stride=100000 pass=137400000
+[alpha_sample] alpha=5 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=216 stride=100000 pass=137400000
+[alpha_result] alpha=5 role=0 pid=4 threads=1 tickets=100 work=18048
+[alpha_result] alpha=5 role=1 pid=3 threads=5 tickets=100 work=17600
+[alpha_result] alpha=5 role=2 pid=2 threads=7 tickets=100 work=17771
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 10 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=10 procs=3 threads=1,5,7
+[alpha_sample] alpha=10 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=224 stride=100000 pass=156500000
+[alpha_sample] alpha=10 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=204 stride=100000 pass=156500000
+[alpha_sample] alpha=10 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=223 stride=100000 pass=156400000
+[alpha_result] alpha=10 role=0 pid=2 threads=1 tickets=100 work=18572
+[alpha_result] alpha=10 role=1 pid=3 threads=5 tickets=100 work=19245
+[alpha_result] alpha=10 role=2 pid=4 threads=7 tickets=100 work=18295
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 15 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=15 procs=3 threads=1,5,7
+[alpha_sample] alpha=15 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=214 stride=100000 pass=130200000
+[alpha_sample] alpha=15 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=236 stride=100000 pass=130300000
+[alpha_sample] alpha=15 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=202 stride=100000 pass=130300000
+[alpha_result] alpha=15 role=0 pid=4 threads=1 tickets=100 work=17856
+[alpha_result] alpha=15 role=1 pid=3 threads=5 tickets=100 work=16550
+[alpha_result] alpha=15 role=2 pid=2 threads=7 tickets=100 work=18774
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 20 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=20 procs=3 threads=1,5,7
+[alpha_sample] alpha=20 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=207 stride=100000 pass=140200000
+[alpha_sample] alpha=20 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=213 stride=100000 pass=140200000
+[alpha_sample] alpha=20 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=227 stride=100000 pass=140100000
+[alpha_result] alpha=20 role=0 pid=2 threads=1 tickets=100 work=15739
+[alpha_result] alpha=20 role=1 pid=3 threads=5 tickets=100 work=15837
+[alpha_result] alpha=20 role=2 pid=4 threads=7 tickets=100 work=14976
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 25 1 5 7
 alpha_arg_test start
@@ -2148,12 +2184,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=25 procs=3 threads=1,5,7
-[alpha_sample] alpha=25 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=233 stride=100000 pass=401900000
-[alpha_sample] alpha=25 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=207 stride=100000 pass=402000000
-[alpha_sample] alpha=25 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=214 stride=100000 pass=402000000
-[alpha_result] alpha=25 role=0 pid=4 threads=1 tickets=100 work=45120
-[alpha_result] alpha=25 role=1 pid=3 threads=5 tickets=100 work=46503
-[alpha_result] alpha=25 role=2 pid=2 threads=7 tickets=100 work=46441
+[alpha_sample] alpha=25 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=213 stride=100000 pass=112400000
+[alpha_sample] alpha=25 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=232 stride=100000 pass=112500000
+[alpha_sample] alpha=25 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=207 stride=100000 pass=112500000
+[alpha_result] alpha=25 role=0 pid=4 threads=1 tickets=100 work=19456
+[alpha_result] alpha=25 role=1 pid=3 threads=5 tickets=100 work=18665
+[alpha_result] alpha=25 role=2 pid=2 threads=7 tickets=100 work=19681
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2162,29 +2198,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=30 procs=3 threads=1,5,7
+[alpha_sample] alpha=30 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=214 stride=100000 pass=140300000
+[alpha_sample] alpha=30 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=203 stride=100000 pass=140200000
+[alpha_sample] alpha=30 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=236 stride=100000 pass=140200000
+[alpha_result] alpha=30 role=0 pid=2 threads=1 tickets=100 work=17388
+[alpha_result] alpha=30 role=1 pid=3 threads=5 tickets=100 work=17715
+[alpha_result] alpha=30 role=2 pid=4 threads=7 tickets=100 work=16121
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 35 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=35 procs=3 threads=1,5,7
+[alpha_sample] alpha=35 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=214 stride=100000 pass=190900000
+[alpha_sample] alpha=35 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=223 stride=100000 pass=191000000
+[alpha_sample] alpha=35 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=212 stride=100000 pass=191000000
+[alpha_result] alpha=35 role=0 pid=4 threads=1 tickets=100 work=14464
+[alpha_result] alpha=35 role=1 pid=3 threads=5 tickets=100 work=14135
+[alpha_result] alpha=35 role=2 pid=2 threads=7 tickets=100 work=15297
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 40 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=40 procs=3 threads=1,5,7
+[alpha_sample] alpha=40 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=176 stride=100000 pass=118700000
+[alpha_sample] alpha=40 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=168 stride=100000 pass=118700000
+[alpha_sample] alpha=40 role=2 pid=4 threads=7 tickets=100 effective=200 ready=7 run_ticks=305 stride=50000 pass=118700000
+[alpha_result] alpha=40 role=0 pid=2 threads=1 tickets=100 work=11496
+[alpha_result] alpha=40 role=1 pid=3 threads=5 tickets=100 work=12466
+[alpha_result] alpha=40 role=2 pid=4 threads=7 tickets=100 work=26078
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 45 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=45 procs=3 threads=1,5,7
+[alpha_sample] alpha=45 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=134 stride=100000 pass=108900000
+[alpha_sample] alpha=45 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=243 stride=50000 pass=108950000
+[alpha_sample] alpha=45 role=2 pid=2 threads=7 tickets=100 effective=200 ready=7 run_ticks=274 stride=50000 pass=108950000
+[alpha_result] alpha=45 role=0 pid=4 threads=1 tickets=100 work=9984
+[alpha_result] alpha=45 role=1 pid=3 threads=5 tickets=100 work=21254
+[alpha_result] alpha=45 role=2 pid=2 threads=7 tickets=100 work=20404
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 50 1 5 7
 alpha_arg_test start
@@ -2192,12 +2264,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=50 procs=3 threads=1,5,7
-[alpha_sample] alpha=50 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=136 stride=100000 pass=115700000
-[alpha_sample] alpha=50 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=265 stride=50000 pass=115650000
-[alpha_sample] alpha=50 role=2 pid=4 threads=7 tickets=100 effective=200 ready=7 run_ticks=253 stride=50000 pass=115600000
-[alpha_result] alpha=50 role=0 pid=2 threads=1 tickets=100 work=26304
-[alpha_result] alpha=50 role=2 pid=4 threads=7 tickets=100 work=52845
-[alpha_result] alpha=50 role=1 pid=3 threads=5 tickets=100 work=52416
+[alpha_sample] alpha=50 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=127 stride=100000 pass=90900000
+[alpha_sample] alpha=50 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=266 stride=50000 pass=90850000
+[alpha_sample] alpha=50 role=2 pid=4 threads=7 tickets=100 effective=200 ready=7 run_ticks=260 stride=50000 pass=90800000
+[alpha_result] alpha=50 role=0 pid=2 threads=1 tickets=100 work=11046
+[alpha_result] alpha=50 role=1 pid=3 threads=5 tickets=100 work=21632
+[alpha_result] alpha=50 role=2 pid=4 threads=7 tickets=100 work=21988
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2206,29 +2278,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=55 procs=3 threads=1,5,7
+[alpha_sample] alpha=55 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=139 stride=100000 pass=88100000
+[alpha_sample] alpha=55 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=266 stride=50000 pass=88050000
+[alpha_sample] alpha=55 role=2 pid=2 threads=7 tickets=100 effective=200 ready=7 run_ticks=247 stride=50000 pass=88050000
+[alpha_result] alpha=55 role=0 pid=4 threads=1 tickets=100 work=11008
+[alpha_result] alpha=55 role=2 pid=2 threads=7 tickets=100 work=24308
+[alpha_result] alpha=55 role=1 pid=3 threads=5 tickets=100 work=22963
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 60 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=60 procs=3 threads=1,5,7
+[alpha_sample] alpha=60 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=111 stride=100000 pass=79000000
+[alpha_sample] alpha=60 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=222 stride=50000 pass=79000000
+[alpha_sample] alpha=60 role=2 pid=4 threads=7 tickets=100 effective=300 ready=7 run_ticks=316 stride=33333 pass=79032546
+[alpha_result] alpha=60 role=0 pid=2 threads=1 tickets=100 work=8229
+[alpha_result] alpha=60 role=2 pid=4 threads=7 tickets=100 work=26712
+[alpha_result] alpha=60 role=1 pid=3 threads=5 tickets=100 work=16553
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 65 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=65 procs=3 threads=1,5,7
+[alpha_sample] alpha=65 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=112 stride=100000 pass=97900000
+[alpha_sample] alpha=65 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=217 stride=50000 pass=97850000
+[alpha_sample] alpha=65 role=2 pid=2 threads=7 tickets=100 effective=300 ready=7 run_ticks=321 stride=33333 pass=97849026
+[alpha_result] alpha=65 role=0 pid=4 threads=1 tickets=100 work=8960
+[alpha_result] alpha=65 role=1 pid=3 threads=5 tickets=100 work=18300
+[alpha_result] alpha=65 role=2 pid=2 threads=7 tickets=100 work=26774
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 70 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=70 procs=3 threads=1,5,7
+[alpha_sample] alpha=70 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=89 stride=100000 pass=69100000
+[alpha_sample] alpha=70 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=282 stride=33333 pass=69099313
+[alpha_sample] alpha=70 role=2 pid=4 threads=7 tickets=100 effective=300 ready=7 run_ticks=277 stride=33333 pass=69082647
+[alpha_result] alpha=70 role=0 pid=2 threads=1 tickets=100 work=8239
+[alpha_result] alpha=70 role=1 pid=3 threads=5 tickets=100 work=24090
+[alpha_result] alpha=70 role=2 pid=4 threads=7 tickets=100 work=24248
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 75 1 5 7
 alpha_arg_test start
@@ -2236,12 +2344,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=75 procs=3 threads=1,5,7
-[alpha_sample] alpha=75 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=83 stride=100000 pass=142700000
-[alpha_sample] alpha=75 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=236 stride=33333 pass=142615302
-[alpha_sample] alpha=75 role=2 pid=2 threads=7 tickets=100 effective=400 ready=7 run_ticks=333 stride=25000 pass=142625000
-[alpha_result] alpha=75 role=0 pid=4 threads=1 tickets=100 work=16064
-[alpha_result] alpha=75 role=1 pid=3 threads=5 tickets=100 work=49369
-[alpha_result] alpha=75 role=2 pid=2 threads=7 tickets=100 work=63739
+[alpha_sample] alpha=75 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=80 stride=100000 pass=47800000
+[alpha_sample] alpha=75 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=267 stride=33333 pass=47816193
+[alpha_sample] alpha=75 role=2 pid=2 threads=7 tickets=100 effective=400 ready=7 run_ticks=307 stride=25000 pass=47824998
+[alpha_result] alpha=75 role=0 pid=4 threads=1 tickets=100 work=6023
+[alpha_result] alpha=75 role=1 pid=3 threads=5 tickets=100 work=17269
+[alpha_result] alpha=75 role=2 pid=2 threads=7 tickets=100 work=25626
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2250,29 +2358,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=80 procs=3 threads=1,5,7
+[alpha_sample] alpha=80 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=77 stride=100000 pass=69400000
+[alpha_sample] alpha=80 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=258 stride=33333 pass=69365977
+[alpha_sample] alpha=80 role=2 pid=4 threads=7 tickets=100 effective=400 ready=7 run_ticks=315 stride=25000 pass=69375000
+[alpha_result] alpha=80 role=0 pid=2 threads=1 tickets=100 work=6932
+[alpha_result] alpha=80 role=1 pid=3 threads=5 tickets=100 work=19712
+[alpha_result] alpha=80 role=2 pid=4 threads=7 tickets=100 work=27425
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 85 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=85 procs=3 threads=1,5,7
+[alpha_sample] alpha=85 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=67 stride=100000 pass=45600000
+[alpha_sample] alpha=85 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=241 stride=33333 pass=45616214
+[alpha_sample] alpha=85 role=2 pid=2 threads=7 tickets=100 effective=500 ready=7 run_ticks=344 stride=20000 pass=45606665
+[alpha_result] alpha=85 role=0 pid=4 threads=1 tickets=100 work=6400
+[alpha_result] alpha=85 role=1 pid=3 threads=5 tickets=100 work=17582
+[alpha_result] alpha=85 role=2 pid=2 threads=7 tickets=100 work=33437
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 90 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=90 procs=3 threads=1,5,7
+[alpha_sample] alpha=90 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=68 stride=100000 pass=54300000
+[alpha_sample] alpha=90 role=1 pid=3 threads=5 tickets=100 effective=400 ready=5 run_ticks=256 stride=25000 pass=54308332
+[alpha_sample] alpha=90 role=2 pid=4 threads=7 tickets=100 effective=500 ready=7 run_ticks=328 stride=20000 pass=54305000
+[alpha_result] alpha=90 role=0 pid=2 threads=1 tickets=100 work=5568
+[alpha_result] alpha=90 role=2 pid=4 threads=7 tickets=100 work=29477
+[alpha_result] alpha=90 role=1 pid=3 threads=5 tickets=100 work=23808
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 95 1 5 7
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=95 procs=3 threads=1,5,7
+[alpha_sample] alpha=95 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=56 stride=100000 pass=44600000
+[alpha_sample] alpha=95 role=1 pid=3 threads=5 tickets=100 effective=400 ready=5 run_ticks=236 stride=25000 pass=44700000
+[alpha_sample] alpha=95 role=2 pid=2 threads=7 tickets=100 effective=600 ready=7 run_ticks=365 stride=16666 pass=44704908
+[alpha_result] alpha=95 role=0 pid=4 threads=1 tickets=100 work=5568
+[alpha_result] alpha=95 role=1 pid=3 threads=5 tickets=100 work=22352
+[alpha_result] alpha=95 role=2 pid=2 threads=7 tickets=100 work=32760
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 100 1 5 7
 alpha_arg_test start
@@ -2280,12 +2424,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=100 procs=3 threads=1,5,7
-[alpha_sample] alpha=100 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=56 stride=100000 pass=90400000
-[alpha_sample] alpha=100 role=1 pid=3 threads=5 tickets=100 effective=500 ready=5 run_ticks=257 stride=20000 pass=90340000
-[alpha_sample] alpha=100 role=2 pid=4 threads=7 tickets=100 effective=700 ready=7 run_ticks=341 stride=14285 pass=90324440
-[alpha_result] alpha=100 role=0 pid=2 threads=1 tickets=100 work=9664
-[alpha_result] alpha=100 role=1 pid=3 threads=5 tickets=100 work=47900
-[alpha_result] alpha=100 role=2 pid=4 threads=7 tickets=100 work=68450
+[alpha_sample] alpha=100 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=51 stride=100000 pass=39500000
+[alpha_sample] alpha=100 role=1 pid=3 threads=5 tickets=100 effective=500 ready=5 run_ticks=265 stride=20000 pass=39500000
+[alpha_sample] alpha=100 role=2 pid=4 threads=7 tickets=100 effective=700 ready=7 run_ticks=340 stride=14285 pass=39512334
+[alpha_result] alpha=100 role=0 pid=2 threads=1 tickets=100 work=4352
+[alpha_result] alpha=100 role=1 pid=3 threads=5 tickets=100 work=22234
+[alpha_result] alpha=100 role=2 pid=4 threads=7 tickets=100 work=31166
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2296,12 +2440,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=0 procs=3 threads=2,6,11
-[alpha_sample] alpha=0 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=211 stride=100000 pass=347900000
-[alpha_sample] alpha=0 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=220 stride=100000 pass=347900000
-[alpha_sample] alpha=0 role=2 pid=2 threads=11 tickets=100 effective=100 ready=11 run_ticks=220 stride=100000 pass=347900000
-[alpha_result] alpha=0 role=0 pid=4 threads=2 tickets=100 work=39808
-[alpha_result] alpha=0 role=1 pid=3 threads=6 tickets=100 work=39939
-[alpha_result] alpha=0 role=2 pid=2 threads=11 tickets=100 work=39699
+[alpha_sample] alpha=0 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=188 stride=100000 pass=131700000
+[alpha_sample] alpha=0 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=236 stride=100000 pass=131800000
+[alpha_sample] alpha=0 role=2 pid=2 threads=11 tickets=100 effective=100 ready=11 run_ticks=217 stride=100000 pass=131800000
+[alpha_result] alpha=0 role=0 pid=4 threads=2 tickets=100 work=18816
+[alpha_result] alpha=0 role=1 pid=3 threads=6 tickets=100 work=16634
+[alpha_result] alpha=0 role=2 pid=2 threads=11 tickets=100 work=17465
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2310,29 +2454,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=5 procs=3 threads=2,6,11
+[alpha_sample] alpha=5 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=228 stride=100000 pass=171100000
+[alpha_sample] alpha=5 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=225 stride=100000 pass=171100000
+[alpha_sample] alpha=5 role=2 pid=4 threads=11 tickets=100 effective=100 ready=11 run_ticks=198 stride=100000 pass=171000000
+[alpha_result] alpha=5 role=0 pid=2 threads=2 tickets=100 work=16747
+[alpha_result] alpha=5 role=1 pid=3 threads=6 tickets=100 work=16996
+[alpha_result] alpha=5 role=2 pid=4 threads=11 tickets=100 work=18190
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 10 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=10 procs=3 threads=2,6,11
+[alpha_sample] alpha=10 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=219 stride=100000 pass=160400000
+[alpha_sample] alpha=10 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=220 stride=100000 pass=160500000
+[alpha_sample] alpha=10 role=2 pid=2 threads=11 tickets=100 effective=100 ready=11 run_ticks=210 stride=100000 pass=160500000
+[alpha_result] alpha=10 role=0 pid=4 threads=2 tickets=100 work=18343
+[alpha_result] alpha=10 role=1 pid=3 threads=6 tickets=100 work=17777
+[alpha_result] alpha=10 role=2 pid=2 threads=11 tickets=100 work=18402
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 15 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=15 procs=3 threads=2,6,11
+[alpha_sample] alpha=15 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=219 stride=100000 pass=123500000
+[alpha_sample] alpha=15 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=222 stride=100000 pass=123500000
+[alpha_sample] alpha=15 role=2 pid=4 threads=11 tickets=100 effective=100 ready=11 run_ticks=208 stride=100000 pass=123400000
+[alpha_result] alpha=15 role=0 pid=2 threads=2 tickets=100 work=18254
+[alpha_result] alpha=15 role=1 pid=3 threads=6 tickets=100 work=18190
+[alpha_result] alpha=15 role=2 pid=4 threads=11 tickets=100 work=19490
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 20 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=20 procs=3 threads=2,6,11
+[alpha_sample] alpha=20 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=211 stride=100000 pass=175800000
+[alpha_sample] alpha=20 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=209 stride=100000 pass=175900000
+[alpha_sample] alpha=20 role=2 pid=2 threads=11 tickets=100 effective=100 ready=11 run_ticks=229 stride=100000 pass=175900000
+[alpha_result] alpha=20 role=0 pid=4 threads=2 tickets=100 work=17600
+[alpha_result] alpha=20 role=1 pid=3 threads=6 tickets=100 work=17838
+[alpha_result] alpha=20 role=2 pid=2 threads=11 tickets=100 work=17071
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 25 2 6 11
 alpha_arg_test start
@@ -2340,12 +2520,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=25 procs=3 threads=2,6,11
-[alpha_sample] alpha=25 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=229 stride=100000 pass=377600000
-[alpha_sample] alpha=25 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=222 stride=100000 pass=377600000
-[alpha_sample] alpha=25 role=2 pid=4 threads=11 tickets=100 effective=100 ready=11 run_ticks=201 stride=100000 pass=377600000
-[alpha_result] alpha=25 role=0 pid=2 threads=2 tickets=100 work=38805
-[alpha_result] alpha=25 role=1 pid=3 threads=6 tickets=100 work=39986
-[alpha_result] alpha=25 role=2 pid=4 threads=11 tickets=100 work=41011
+[alpha_sample] alpha=25 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=220 stride=100000 pass=156000000
+[alpha_sample] alpha=25 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=213 stride=100000 pass=155900000
+[alpha_sample] alpha=25 role=2 pid=4 threads=11 tickets=100 effective=100 ready=11 run_ticks=217 stride=100000 pass=155900000
+[alpha_result] alpha=25 role=0 pid=2 threads=2 tickets=100 work=21056
+[alpha_result] alpha=25 role=1 pid=3 threads=6 tickets=100 work=21224
+[alpha_result] alpha=25 role=2 pid=4 threads=11 tickets=100 work=21478
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2354,29 +2534,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=30 procs=3 threads=2,6,11
+[alpha_sample] alpha=30 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=162 stride=100000 pass=128700000
+[alpha_sample] alpha=30 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=166 stride=100000 pass=128700000
+[alpha_sample] alpha=30 role=2 pid=2 threads=11 tickets=100 effective=200 ready=11 run_ticks=323 stride=50000 pass=128700000
+[alpha_result] alpha=30 role=0 pid=4 threads=2 tickets=100 work=15040
+[alpha_result] alpha=30 role=1 pid=3 threads=6 tickets=100 work=14757
+[alpha_result] alpha=30 role=2 pid=2 threads=11 tickets=100 work=30453
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 35 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=35 procs=3 threads=2,6,11
+[alpha_sample] alpha=35 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=161 stride=100000 pass=135600000
+[alpha_sample] alpha=35 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=157 stride=100000 pass=135600000
+[alpha_sample] alpha=35 role=2 pid=4 threads=11 tickets=100 effective=200 ready=11 run_ticks=330 stride=50000 pass=135550000
+[alpha_result] alpha=35 role=0 pid=2 threads=2 tickets=100 work=12992
+[alpha_result] alpha=35 role=1 pid=3 threads=6 tickets=100 work=13374
+[alpha_result] alpha=35 role=2 pid=4 threads=11 tickets=100 work=25783
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 40 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=40 procs=3 threads=2,6,11
+[alpha_sample] alpha=40 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=135 stride=100000 pass=86400000
+[alpha_sample] alpha=40 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=248 stride=50000 pass=86350000
+[alpha_sample] alpha=40 role=2 pid=2 threads=11 tickets=100 effective=200 ready=11 run_ticks=265 stride=50000 pass=86400000
+[alpha_result] alpha=40 role=0 pid=4 threads=2 tickets=100 work=11122
+[alpha_result] alpha=40 role=1 pid=3 threads=6 tickets=100 work=22969
+[alpha_result] alpha=40 role=2 pid=2 threads=11 tickets=100 work=21794
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 45 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=45 procs=3 threads=2,6,11
+[alpha_sample] alpha=45 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=136 stride=100000 pass=110700000
+[alpha_sample] alpha=45 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=252 stride=50000 pass=110600000
+[alpha_sample] alpha=45 role=2 pid=4 threads=11 tickets=100 effective=200 ready=11 run_ticks=258 stride=50000 pass=110600000
+[alpha_result] alpha=45 role=0 pid=2 threads=2 tickets=100 work=9760
+[alpha_result] alpha=45 role=1 pid=3 threads=6 tickets=100 work=20108
+[alpha_result] alpha=45 role=2 pid=4 threads=11 tickets=100 work=20632
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 50 2 6 11
 alpha_arg_test start
@@ -2384,12 +2600,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=50 procs=3 threads=2,6,11
-[alpha_sample] alpha=50 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=108 stride=100000 pass=190300000
-[alpha_sample] alpha=50 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=222 stride=50000 pass=190300000
-[alpha_sample] alpha=50 role=2 pid=2 threads=11 tickets=100 effective=300 ready=11 run_ticks=322 stride=33333 pass=190298210
-[alpha_result] alpha=50 role=0 pid=4 threads=2 tickets=100 work=21760
-[alpha_result] alpha=50 role=1 pid=3 threads=6 tickets=100 work=43139
-[alpha_result] alpha=50 role=2 pid=2 threads=11 tickets=100 work=65629
+[alpha_sample] alpha=50 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=112 stride=100000 pass=89700000
+[alpha_sample] alpha=50 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=212 stride=50000 pass=89700000
+[alpha_sample] alpha=50 role=2 pid=2 threads=11 tickets=100 effective=300 ready=11 run_ticks=322 stride=33333 pass=89682445
+[alpha_result] alpha=50 role=0 pid=4 threads=2 tickets=100 work=7168
+[alpha_result] alpha=50 role=1 pid=3 threads=6 tickets=100 work=14722
+[alpha_result] alpha=50 role=2 pid=2 threads=11 tickets=100 work=21569
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2398,29 +2614,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=55 procs=3 threads=2,6,11
+[alpha_sample] alpha=55 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=118 stride=100000 pass=90900000
+[alpha_sample] alpha=55 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=218 stride=50000 pass=90850000
+[alpha_sample] alpha=55 role=2 pid=4 threads=11 tickets=100 effective=300 ready=11 run_ticks=314 stride=33333 pass=90832437
+[alpha_result] alpha=55 role=0 pid=2 threads=2 tickets=100 work=8608
+[alpha_result] alpha=55 role=1 pid=3 threads=6 tickets=100 work=18373
+[alpha_result] alpha=55 role=2 pid=4 threads=11 tickets=100 work=28592
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 60 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=60 procs=3 threads=2,6,11
+[alpha_sample] alpha=60 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=95 stride=100000 pass=59800000
+[alpha_sample] alpha=60 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=177 stride=50000 pass=59800000
+[alpha_sample] alpha=60 role=2 pid=2 threads=11 tickets=100 effective=400 ready=11 run_ticks=374 stride=25000 pass=59816652
+[alpha_result] alpha=60 role=0 pid=4 threads=2 tickets=100 work=7590
+[alpha_result] alpha=60 role=1 pid=3 threads=6 tickets=100 work=16077
+[alpha_result] alpha=60 role=2 pid=2 threads=11 tickets=100 work=31500
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 65 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=65 procs=3 threads=2,6,11
+[alpha_sample] alpha=65 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=77 stride=100000 pass=61100000
+[alpha_sample] alpha=65 role=1 pid=3 threads=6 tickets=100 effective=300 ready=6 run_ticks=243 stride=33333 pass=61132726
+[alpha_sample] alpha=65 role=2 pid=4 threads=11 tickets=100 effective=400 ready=11 run_ticks=334 stride=25000 pass=61208329
+[alpha_result] alpha=65 role=0 pid=2 threads=2 tickets=100 work=7580
+[alpha_result] alpha=65 role=1 pid=3 threads=6 tickets=100 work=22299
+[alpha_result] alpha=65 role=2 pid=4 threads=11 tickets=100 work=29617
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 70 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=70 procs=3 threads=2,6,11
+[alpha_sample] alpha=70 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=68 stride=100000 pass=56200000
+[alpha_sample] alpha=70 role=1 pid=3 threads=6 tickets=100 effective=300 ready=6 run_ticks=217 stride=33333 pass=56332774
+[alpha_sample] alpha=70 role=2 pid=2 threads=11 tickets=100 effective=500 ready=11 run_ticks=369 stride=20000 pass=56300000
+[alpha_result] alpha=70 role=0 pid=4 threads=2 tickets=100 work=6016
+[alpha_result] alpha=70 role=1 pid=3 threads=6 tickets=100 work=18455
+[alpha_result] alpha=70 role=2 pid=2 threads=11 tickets=100 work=30439
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 75 2 6 11
 alpha_arg_test start
@@ -2428,12 +2680,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=75 procs=3 threads=2,6,11
-[alpha_sample] alpha=75 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=67 stride=100000 pass=113500000
-[alpha_sample] alpha=75 role=1 pid=3 threads=6 tickets=100 effective=300 ready=6 run_ticks=200 stride=33333 pass=113498992
-[alpha_sample] alpha=75 role=2 pid=4 threads=11 tickets=100 effective=600 ready=11 run_ticks=385 stride=16666 pass=113512644
-[alpha_result] alpha=75 role=0 pid=2 threads=2 tickets=100 work=12978
-[alpha_result] alpha=75 role=1 pid=3 threads=6 tickets=100 work=38337
-[alpha_result] alpha=75 role=2 pid=4 threads=11 tickets=100 work=78884
+[alpha_sample] alpha=75 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=62 stride=100000 pass=45800000
+[alpha_sample] alpha=75 role=1 pid=3 threads=6 tickets=100 effective=300 ready=6 run_ticks=187 stride=33333 pass=45832878
+[alpha_sample] alpha=75 role=2 pid=4 threads=11 tickets=100 effective=600 ready=11 run_ticks=401 stride=16666 pass=45803208
+[alpha_result] alpha=75 role=0 pid=2 threads=2 tickets=100 work=5504
+[alpha_result] alpha=75 role=1 pid=3 threads=6 tickets=100 work=17166
+[alpha_result] alpha=75 role=2 pid=4 threads=11 tickets=100 work=32747
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2442,29 +2694,65 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=80 procs=3 threads=2,6,11
+[alpha_sample] alpha=80 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=47 stride=100000 pass=45500000
+[alpha_sample] alpha=80 role=1 pid=3 threads=6 tickets=100 effective=400 ready=6 run_ticks=232 stride=25000 pass=45516665
+[alpha_sample] alpha=80 role=2 pid=2 threads=11 tickets=100 effective=600 ready=11 run_ticks=371 stride=16666 pass=45508222
+[alpha_result] alpha=80 role=0 pid=4 threads=2 tickets=100 work=5803
+[alpha_result] alpha=80 role=1 pid=3 threads=6 tickets=100 work=21206
+[alpha_result] alpha=80 role=2 pid=2 threads=11 tickets=100 work=30116
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 85 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=85 procs=3 threads=2,6,11
+[alpha_sample] alpha=85 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=53 stride=100000 pass=40300000
+[alpha_sample] alpha=85 role=1 pid=3 threads=6 tickets=100 effective=400 ready=6 run_ticks=212 stride=25000 pass=40315000
+[alpha_sample] alpha=85 role=2 pid=4 threads=11 tickets=100 effective=700 ready=11 run_ticks=385 stride=14285 pass=40305159
+[alpha_result] alpha=85 role=0 pid=2 threads=2 tickets=100 work=5248
+[alpha_result] alpha=85 role=1 pid=3 threads=6 tickets=100 work=20370
+[alpha_result] alpha=85 role=2 pid=4 threads=11 tickets=100 work=34993
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 90 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=90 procs=3 threads=2,6,11
+[alpha_sample] alpha=90 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=41 stride=100000 pass=28400000
+[alpha_sample] alpha=90 role=1 pid=3 threads=6 tickets=100 effective=500 ready=6 run_ticks=227 stride=20000 pass=28410000
+[alpha_sample] alpha=90 role=2 pid=2 threads=11 tickets=100 effective=800 ready=11 run_ticks=376 stride=12500 pass=28406065
+[alpha_result] alpha=90 role=0 pid=4 threads=2 tickets=100 work=4139
+[alpha_result] alpha=90 role=1 pid=3 threads=6 tickets=100 work=21051
+[alpha_result] alpha=90 role=2 pid=2 threads=11 tickets=100 work=32520
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 95 2 6 11
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=95 procs=3 threads=2,6,11
+[alpha_sample] alpha=95 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=44 stride=100000 pass=35700000
+[alpha_sample] alpha=95 role=1 pid=3 threads=6 tickets=100 effective=500 ready=6 run_ticks=213 stride=20000 pass=35700000
+[alpha_sample] alpha=95 role=2 pid=4 threads=11 tickets=100 effective=900 ready=11 run_ticks=392 stride=11111 pass=35707152
+[alpha_result] alpha=95 role=0 pid=2 threads=2 tickets=100 work=3520
+[alpha_result] alpha=95 role=1 pid=3 threads=6 tickets=100 work=18080
+[alpha_result] alpha=95 role=2 pid=4 threads=11 tickets=100 work=31570
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 100 2 6 11
 alpha_arg_test start
@@ -2472,12 +2760,12 @@ usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
 
 [alpha_arg] run alpha=100 procs=3 threads=2,6,11
-[alpha_sample] alpha=100 role=0 pid=4 threads=2 tickets=100 effective=200 ready=2 run_ticks=75 stride=50000 pass=66449999
-[alpha_sample] alpha=100 role=1 pid=3 threads=6 tickets=100 effective=600 ready=6 run_ticks=189 stride=16666 pass=66414594
-[alpha_sample] alpha=100 role=2 pid=2 threads=11 tickets=100 effective=1100 ready=11 run_ticks=391 stride=9090 pass=66403900
-[alpha_result] alpha=100 role=0 pid=4 threads=2 tickets=100 work=11008
-[alpha_result] alpha=100 role=1 pid=3 threads=6 tickets=100 work=34486
-[alpha_result] alpha=100 role=2 pid=2 threads=11 tickets=100 work=60467
+[alpha_sample] alpha=100 role=0 pid=4 threads=2 tickets=100 effective=200 ready=2 run_ticks=68 stride=50000 pass=23300000
+[alpha_sample] alpha=100 role=1 pid=3 threads=6 tickets=100 effective=600 ready=6 run_ticks=217 stride=16666 pass=23315750
+[alpha_sample] alpha=100 role=2 pid=2 threads=11 tickets=100 effective=1100 ready=11 run_ticks=369 stride=9090 pass=23306820
+[alpha_result] alpha=100 role=0 pid=4 threads=2 tickets=100 work=5566
+[alpha_result] alpha=100 role=2 pid=2 threads=11 tickets=100 work=31980
+[alpha_result] alpha=100 role=1 pid=3 threads=6 tickets=100 work=17318
 
 alpha_arg_test PASS
 [shell] child exit code 0
@@ -2486,91 +2774,1349 @@ alpha_arg_test PASS
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: thread count out of range
-[shell] child exit code 1
+
+[alpha_arg] run alpha=0 procs=3 threads=1,9,25
+[alpha_sample] alpha=0 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=230 stride=100000 pass=162900000
+[alpha_sample] alpha=0 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=199 stride=100000 pass=162900000
+[alpha_sample] alpha=0 role=2 pid=4 threads=25 tickets=100 effective=100 ready=25 run_ticks=211 stride=100000 pass=162800000
+[alpha_result] alpha=0 role=0 pid=2 threads=1 tickets=100 work=18298
+[alpha_result] alpha=0 role=1 pid=3 threads=9 tickets=100 work=19315
+[alpha_result] alpha=0 role=2 pid=4 threads=25 tickets=100 work=19316
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 5 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=5 procs=3 threads=1,9,25
+[alpha_sample] alpha=5 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=214 stride=100000 pass=167800000
+[alpha_sample] alpha=5 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=215 stride=100000 pass=167800000
+[alpha_sample] alpha=5 role=2 pid=2 threads=25 tickets=100 effective=100 ready=25 run_ticks=210 stride=100000 pass=167900000
+[alpha_result] alpha=5 role=0 pid=4 threads=1 tickets=100 work=18353
+[alpha_result] alpha=5 role=1 pid=3 threads=9 tickets=100 work=18338
+[alpha_result] alpha=5 role=2 pid=2 threads=25 tickets=100 work=18668
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 10 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=10 procs=3 threads=1,9,25
+[alpha_sample] alpha=10 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=214 stride=100000 pass=141700000
+[alpha_sample] alpha=10 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=209 stride=100000 pass=141600000
+[alpha_sample] alpha=10 role=2 pid=4 threads=25 tickets=100 effective=100 ready=25 run_ticks=220 stride=100000 pass=141600000
+[alpha_result] alpha=10 role=0 pid=2 threads=1 tickets=100 work=17918
+[alpha_result] alpha=10 role=1 pid=3 threads=9 tickets=100 work=18442
+[alpha_result] alpha=10 role=2 pid=4 threads=25 tickets=100 work=17548
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 15 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=15 procs=3 threads=1,9,25
+[alpha_sample] alpha=15 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=222 stride=100000 pass=158800000
+[alpha_sample] alpha=15 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=207 stride=100000 pass=158900000
+[alpha_sample] alpha=15 role=2 pid=2 threads=25 tickets=100 effective=100 ready=25 run_ticks=212 stride=100000 pass=158900000
+[alpha_result] alpha=15 role=0 pid=4 threads=1 tickets=100 work=19712
+[alpha_result] alpha=15 role=1 pid=3 threads=9 tickets=100 work=20043
+[alpha_result] alpha=15 role=2 pid=2 threads=25 tickets=100 work=20172
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 20 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=20 procs=3 threads=1,9,25
+[alpha_sample] alpha=20 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=201 stride=100000 pass=131100000
+[alpha_sample] alpha=20 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=217 stride=100000 pass=131100000
+[alpha_sample] alpha=20 role=2 pid=4 threads=25 tickets=100 effective=100 ready=25 run_ticks=228 stride=100000 pass=131100000
+[alpha_result] alpha=20 role=0 pid=2 threads=1 tickets=100 work=17472
+[alpha_result] alpha=20 role=1 pid=3 threads=9 tickets=100 work=16571
+[alpha_result] alpha=20 role=2 pid=4 threads=25 tickets=100 work=16947
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 25 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: thread count out of range
-[shell] child exit code 1
+
+[alpha_arg] run alpha=25 procs=3 threads=1,9,25
+[alpha_sample] alpha=25 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=161 stride=100000 pass=107300000
+[alpha_sample] alpha=25 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=159 stride=100000 pass=107300000
+[alpha_sample] alpha=25 role=2 pid=2 threads=25 tickets=100 effective=200 ready=25 run_ticks=328 stride=50000 pass=107300000
+[alpha_result] alpha=25 role=0 pid=4 threads=1 tickets=100 work=13858
+[alpha_result] alpha=25 role=1 pid=3 threads=9 tickets=100 work=14060
+[alpha_result] alpha=25 role=2 pid=2 threads=25 tickets=100 work=27651
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 30 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=30 procs=3 threads=1,9,25
+[alpha_sample] alpha=30 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=164 stride=100000 pass=114400000
+[alpha_sample] alpha=30 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=154 stride=100000 pass=114400000
+[alpha_sample] alpha=30 role=2 pid=4 threads=25 tickets=100 effective=200 ready=25 run_ticks=321 stride=50000 pass=114300000
+[alpha_result] alpha=30 role=0 pid=2 threads=1 tickets=100 work=13227
+[alpha_result] alpha=30 role=1 pid=3 threads=9 tickets=100 work=13415
+[alpha_result] alpha=30 role=2 pid=4 threads=25 tickets=100 work=25813
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 35 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=35 procs=3 threads=1,9,25
+[alpha_sample] alpha=35 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=98 stride=100000 pass=81800000
+[alpha_sample] alpha=35 role=1 pid=3 threads=9 tickets=100 effective=200 ready=9 run_ticks=212 stride=50000 pass=81850000
+[alpha_sample] alpha=35 role=2 pid=2 threads=25 tickets=100 effective=300 ready=25 run_ticks=329 stride=33333 pass=81832571
+[alpha_result] alpha=35 role=0 pid=4 threads=1 tickets=100 work=9536
+[alpha_result] alpha=35 role=1 pid=3 threads=9 tickets=100 work=18466
+[alpha_result] alpha=35 role=2 pid=2 threads=25 tickets=100 work=26703
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 40 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=40 procs=3 threads=1,9,25
+[alpha_sample] alpha=40 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=110 stride=100000 pass=82700000
+[alpha_sample] alpha=40 role=1 pid=3 threads=9 tickets=100 effective=200 ready=9 run_ticks=212 stride=50000 pass=82650000
+[alpha_sample] alpha=40 role=2 pid=4 threads=25 tickets=100 effective=300 ready=25 run_ticks=316 stride=33333 pass=82632542
+[alpha_result] alpha=40 role=0 pid=2 threads=1 tickets=100 work=8672
+[alpha_result] alpha=40 role=1 pid=3 threads=9 tickets=100 work=17257
+[alpha_result] alpha=40 role=2 pid=4 threads=25 tickets=100 work=26947
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 45 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=45 procs=3 threads=1,9,25
+[alpha_sample] alpha=45 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=91 stride=100000 pass=62000000
+[alpha_sample] alpha=45 role=1 pid=3 threads=9 tickets=100 effective=200 ready=9 run_ticks=196 stride=50000 pass=62000000
+[alpha_sample] alpha=45 role=2 pid=2 threads=25 tickets=100 effective=400 ready=25 run_ticks=355 stride=25000 pass=62008299
+[alpha_result] alpha=45 role=0 pid=4 threads=1 tickets=100 work=8768
+[alpha_result] alpha=45 role=1 pid=3 threads=9 tickets=100 work=16664
+[alpha_result] alpha=45 role=2 pid=2 threads=25 tickets=100 work=35362
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 50 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: thread count out of range
-[shell] child exit code 1
+
+[alpha_arg] run alpha=50 procs=3 threads=1,9,25
+[alpha_sample] alpha=50 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=67 stride=100000 pass=51000000
+[alpha_sample] alpha=50 role=1 pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=209 stride=33333 pass=51016164
+[alpha_sample] alpha=50 role=2 pid=4 threads=25 tickets=100 effective=500 ready=25 run_ticks=370 stride=20000 pass=51006654
+[alpha_result] alpha=50 role=0 pid=2 threads=1 tickets=100 work=6490
+[alpha_result] alpha=50 role=1 pid=3 threads=9 tickets=100 work=18448
+[alpha_result] alpha=50 role=2 pid=4 threads=25 tickets=100 work=29878
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 55 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=55 procs=3 threads=1,9,25
+[alpha_sample] alpha=55 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=69 stride=100000 pass=42200000
+[alpha_sample] alpha=55 role=1 pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=222 stride=33333 pass=42216253
+[alpha_sample] alpha=55 role=2 pid=2 threads=25 tickets=100 effective=500 ready=25 run_ticks=350 stride=20000 pass=42201657
+[alpha_result] alpha=55 role=0 pid=4 threads=1 tickets=100 work=6592
+[alpha_result] alpha=55 role=1 pid=3 threads=9 tickets=100 work=18213
+[alpha_result] alpha=55 role=2 pid=2 threads=25 tickets=100 work=32453
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 60 1 9 25
 alpha_arg_test start
 usage: alpha_arg_test <alpha> <threads0> <threads1> ...
 example: alpha_arg_test 50 1 3 5
-[alpha_arg] FAIL: alpha must be 0,25,50,75,100
-[shell] child exit code 1
+
+[alpha_arg] run alpha=60 procs=3 threads=1,9,25
+[alpha_sample] alpha=60 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=67 stride=100000 pass=48200000
+[alpha_sample] alpha=60 role=1 pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=188 stride=33333 pass=48232854
+[alpha_sample] alpha=60 role=2 pid=4 threads=25 tickets=100 effective=600 ready=25 run_ticks=388 stride=16666 pass=48203133
+[alpha_result] alpha=60 role=0 pid=2 threads=1 tickets=100 work=5440
+[alpha_result] alpha=60 role=1 pid=3 threads=9 tickets=100 work=17412
+[alpha_result] alpha=60 role=2 pid=4 threads=25 tickets=100 work=33587
+
+alpha_arg_test PASS
+[shell] child exit code 0
 
 / $ alpha_arg_test 65 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=65 procs=3 threads=1,9,25
+[alpha_sample] alpha=65 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=50 stride=100000 pass=36900000
+[alpha_sample] alpha=65 role=1 pid=3 threads=9 tickets=100 effective=400 ready=9 run_ticks=199 stride=25000 pass=36900000
+[alpha_sample] alpha=65 role=2 pid=2 threads=25 tickets=100 effective=800 ready=25 run_ticks=395 stride=12500 pass=36911850
+[alpha_result] alpha=65 role=0 pid=4 threads=1 tickets=100 work=4416
+[alpha_result] alpha=65 role=1 pid=3 threads=9 tickets=100 work=18550
+[alpha_result] alpha=65 role=2 pid=2 threads=25 tickets=100 work=37310
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 70 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=70 procs=3 threads=1,9,25
+[alpha_sample] alpha=70 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=46 stride=100000 pass=28400000
+[alpha_sample] alpha=70 role=1 pid=3 threads=9 tickets=100 effective=400 ready=9 run_ticks=192 stride=25000 pass=28416665
+[alpha_sample] alpha=70 role=2 pid=4 threads=25 tickets=100 effective=900 ready=25 run_ticks=399 stride=11111 pass=28405647
+[alpha_result] alpha=70 role=0 pid=2 threads=1 tickets=100 work=3759
+[alpha_result] alpha=70 role=1 pid=3 threads=9 tickets=100 work=14891
+[alpha_result] alpha=70 role=2 pid=4 threads=25 tickets=100 work=34676
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 75 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=75 procs=3 threads=1,9,25
+[alpha_sample] alpha=75 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=34 stride=100000 pass=26400000
+[alpha_sample] alpha=75 role=1 pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=187 stride=20000 pass=26419998
+[alpha_sample] alpha=75 role=2 pid=2 threads=25 tickets=100 effective=1100 ready=25 run_ticks=421 stride=9090 pass=26407321
+[alpha_result] alpha=75 role=0 pid=4 threads=1 tickets=100 work=3590
+[alpha_result] alpha=75 role=1 pid=3 threads=9 tickets=100 work=16823
+[alpha_result] alpha=75 role=2 pid=2 threads=25 tickets=100 work=36992
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 80 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=80 procs=3 threads=1,9,25
+[alpha_sample] alpha=80 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=29 stride=100000 pass=19100000
+[alpha_sample] alpha=80 role=1 pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=177 stride=20000 pass=19106665
+[alpha_sample] alpha=80 role=2 pid=4 threads=25 tickets=100 effective=1300 ready=25 run_ticks=437 stride=7692 pass=19107181
+[alpha_result] alpha=80 role=0 pid=2 threads=1 tickets=100 work=3297
+[alpha_result] alpha=80 role=1 pid=3 threads=9 tickets=100 work=15269
+[alpha_result] alpha=80 role=2 pid=4 threads=25 tickets=100 work=41913
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 85 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=85 procs=3 threads=1,9,25
+[alpha_sample] alpha=85 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=22 stride=100000 pass=23900000
+[alpha_sample] alpha=85 role=1 pid=3 threads=9 tickets=100 effective=600 ready=9 run_ticks=175 stride=16666 pass=23908582
+[alpha_sample] alpha=85 role=2 pid=2 threads=25 tickets=100 effective=1500 ready=25 run_ticks=450 stride=6666 pass=24005977
+[alpha_result] alpha=85 role=0 pid=4 threads=1 tickets=100 work=3047
+[alpha_result] alpha=85 role=1 pid=3 threads=9 tickets=100 work=16944
+[alpha_result] alpha=85 role=2 pid=2 threads=25 tickets=100 work=41351
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 90 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=90 procs=3 threads=1,9,25
+[alpha_sample] alpha=90 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=24 stride=100000 pass=16800000
+[alpha_sample] alpha=90 role=1 pid=3 threads=9 tickets=100 effective=700 ready=9 run_ticks=163 stride=14285 pass=16801097
+[alpha_sample] alpha=90 role=2 pid=4 threads=25 tickets=100 effective=1800 ready=25 run_ticks=459 stride=5555 pass=16802797
+[alpha_result] alpha=90 role=0 pid=2 threads=1 tickets=100 work=2053
+[alpha_result] alpha=90 role=1 pid=3 threads=9 tickets=100 work=14512
+[alpha_result] alpha=90 role=2 pid=4 threads=25 tickets=100 work=35904
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 95 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=95 procs=3 threads=1,9,25
+[alpha_sample] alpha=95 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=20 stride=100000 pass=16200000
+[alpha_sample] alpha=95 role=1 pid=3 threads=9 tickets=100 effective=800 ready=9 run_ticks=168 stride=12500 pass=16301780
+[alpha_sample] alpha=95 role=2 pid=2 threads=25 tickets=100 effective=2100 ready=25 run_ticks=469 stride=4761 pass=16301309
+[alpha_result] alpha=95 role=0 pid=4 threads=1 tickets=100 work=1792
+[alpha_result] alpha=95 role=1 pid=3 threads=9 tickets=100 work=13988
+[alpha_result] alpha=95 role=2 pid=2 threads=25 tickets=100 work=35297
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 100 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=100 procs=3 threads=1,9,25
+[alpha_sample] alpha=100 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=17 stride=100000 pass=13700000
+[alpha_sample] alpha=100 role=1 pid=3 threads=9 tickets=100 effective=900 ready=9 run_ticks=166 stride=11111 pass=13710975
+[alpha_sample] alpha=100 role=2 pid=4 threads=25 tickets=100 effective=2500 ready=25 run_ticks=467 stride=4000 pass=13703949
+[alpha_result] alpha=100 role=0 pid=2 threads=1 tickets=100 work=1466
+[alpha_result] alpha=100 role=1 pid=3 threads=9 tickets=100 work=13490
+[alpha_result] alpha=100 role=2 pid=4 threads=25 tickets=100 work=37370
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ # repeat 2
+[93m[ WARN] [exec] open failed: /bin/#[0m
+exec failed: /bin/#
+[shell] child exit code 1
+
+/ $ alpha_arg_test 0 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=0 procs=3 threads=1,5,7
+[alpha_sample] alpha=0 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=213 stride=100000 pass=194100000
+[alpha_sample] alpha=0 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=213 stride=100000 pass=194100000
+[alpha_sample] alpha=0 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=225 stride=100000 pass=194200000
+[alpha_result] alpha=0 role=0 pid=4 threads=1 tickets=100 work=19530
+[alpha_result] alpha=0 role=1 pid=3 threads=5 tickets=100 work=19407
+[alpha_result] alpha=0 role=2 pid=2 threads=7 tickets=100 work=18686
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 5 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=5 procs=3 threads=1,5,7
+[alpha_sample] alpha=5 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=224 stride=100000 pass=136000000
+[alpha_sample] alpha=5 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=208 stride=100000 pass=136000000
+[alpha_sample] alpha=5 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=220 stride=100000 pass=136000000
+[alpha_result] alpha=5 role=0 pid=2 threads=1 tickets=100 work=18918
+[alpha_result] alpha=5 role=1 pid=3 threads=5 tickets=100 work=19876
+[alpha_result] alpha=5 role=2 pid=4 threads=7 tickets=100 work=19782
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 10 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=10 procs=3 threads=1,5,7
+[alpha_sample] alpha=10 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=218 stride=100000 pass=180400000
+[alpha_sample] alpha=10 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=213 stride=100000 pass=180400000
+[alpha_sample] alpha=10 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=219 stride=100000 pass=180500000
+[alpha_result] alpha=10 role=0 pid=4 threads=1 tickets=100 work=17536
+[alpha_result] alpha=10 role=1 pid=3 threads=5 tickets=100 work=18112
+[alpha_result] alpha=10 role=2 pid=2 threads=7 tickets=100 work=17747
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 15 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=15 procs=3 threads=1,5,7
+[alpha_sample] alpha=15 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=215 stride=100000 pass=140600000
+[alpha_sample] alpha=15 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=209 stride=100000 pass=140600000
+[alpha_sample] alpha=15 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=226 stride=100000 pass=140500000
+[alpha_result] alpha=15 role=0 pid=2 threads=1 tickets=100 work=18240
+[alpha_result] alpha=15 role=1 pid=3 threads=5 tickets=100 work=18624
+[alpha_result] alpha=15 role=2 pid=4 threads=7 tickets=100 work=17864
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 20 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=20 procs=3 threads=1,5,7
+[alpha_sample] alpha=20 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=209 stride=100000 pass=178300000
+[alpha_sample] alpha=20 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=210 stride=100000 pass=178400000
+[alpha_sample] alpha=20 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=231 stride=100000 pass=178400000
+[alpha_result] alpha=20 role=0 pid=4 threads=1 tickets=100 work=19328
+[alpha_result] alpha=20 role=1 pid=3 threads=5 tickets=100 work=19289
+[alpha_result] alpha=20 role=2 pid=2 threads=7 tickets=100 work=18352
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 25 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=25 procs=3 threads=1,5,7
+[alpha_sample] alpha=25 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=207 stride=100000 pass=152600000
+[alpha_sample] alpha=25 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=240 stride=100000 pass=152500000
+[alpha_sample] alpha=25 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=206 stride=100000 pass=152500000
+[alpha_result] alpha=25 role=0 pid=2 threads=1 tickets=100 work=20665
+[alpha_result] alpha=25 role=1 pid=3 threads=5 tickets=100 work=19113
+[alpha_result] alpha=25 role=2 pid=4 threads=7 tickets=100 work=20737
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 30 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=30 procs=3 threads=1,5,7
+[alpha_sample] alpha=30 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=205 stride=100000 pass=169100000
+[alpha_sample] alpha=30 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=227 stride=100000 pass=169100000
+[alpha_sample] alpha=30 role=2 pid=2 threads=7 tickets=100 effective=100 ready=7 run_ticks=221 stride=100000 pass=169200000
+[alpha_result] alpha=30 role=0 pid=4 threads=1 tickets=100 work=19648
+[alpha_result] alpha=30 role=1 pid=3 threads=5 tickets=100 work=18219
+[alpha_result] alpha=30 role=2 pid=2 threads=7 tickets=100 work=18882
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 35 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=35 procs=3 threads=1,5,7
+[alpha_sample] alpha=35 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=210 stride=100000 pass=184200000
+[alpha_sample] alpha=35 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=223 stride=100000 pass=184200000
+[alpha_sample] alpha=35 role=2 pid=4 threads=7 tickets=100 effective=100 ready=7 run_ticks=221 stride=100000 pass=184200000
+[alpha_result] alpha=35 role=0 pid=2 threads=1 tickets=100 work=20462
+[alpha_result] alpha=35 role=1 pid=3 threads=5 tickets=100 work=19624
+[alpha_result] alpha=35 role=2 pid=4 threads=7 tickets=100 work=19176
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 40 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=40 procs=3 threads=1,5,7
+[alpha_sample] alpha=40 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=174 stride=100000 pass=118700000
+[alpha_sample] alpha=40 role=1 pid=3 threads=5 tickets=100 effective=100 ready=5 run_ticks=150 stride=100000 pass=118700000
+[alpha_sample] alpha=40 role=2 pid=2 threads=7 tickets=100 effective=200 ready=7 run_ticks=325 stride=50000 pass=118750000
+[alpha_result] alpha=40 role=0 pid=4 threads=1 tickets=100 work=14080
+[alpha_result] alpha=40 role=1 pid=3 threads=5 tickets=100 work=15470
+[alpha_result] alpha=40 role=2 pid=2 threads=7 tickets=100 work=29160
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 45 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=45 procs=3 threads=1,5,7
+[alpha_sample] alpha=45 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=148 stride=100000 pass=95000000
+[alpha_sample] alpha=45 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=256 stride=50000 pass=94950000
+[alpha_sample] alpha=45 role=2 pid=4 threads=7 tickets=100 effective=200 ready=7 run_ticks=247 stride=50000 pass=94900000
+[alpha_result] alpha=45 role=0 pid=2 threads=1 tickets=100 work=11520
+[alpha_result] alpha=45 role=2 pid=4 threads=7 tickets=100 work=25246
+[alpha_result] alpha=45 role=1 pid=3 threads=5 tickets=100 work=24122
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 50 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=50 procs=3 threads=1,5,7
+[alpha_sample] alpha=50 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=131 stride=100000 pass=101700000
+[alpha_sample] alpha=50 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=268 stride=50000 pass=101700000
+[alpha_sample] alpha=50 role=2 pid=2 threads=7 tickets=100 effective=200 ready=7 run_ticks=253 stride=50000 pass=101750000
+[alpha_result] alpha=50 role=0 pid=4 threads=1 tickets=100 work=11904
+[alpha_result] alpha=50 role=1 pid=3 threads=5 tickets=100 work=23607
+[alpha_result] alpha=50 role=2 pid=2 threads=7 tickets=100 work=24123
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 55 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=55 procs=3 threads=1,5,7
+[alpha_sample] alpha=55 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=133 stride=100000 pass=115100000
+[alpha_sample] alpha=55 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=266 stride=50000 pass=115100000
+[alpha_sample] alpha=55 role=2 pid=4 threads=7 tickets=100 effective=200 ready=7 run_ticks=253 stride=50000 pass=115050000
+[alpha_result] alpha=55 role=0 pid=2 threads=1 tickets=100 work=11136
+[alpha_result] alpha=55 role=1 pid=3 threads=5 tickets=100 work=21888
+[alpha_result] alpha=55 role=2 pid=4 threads=7 tickets=100 work=22498
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 60 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=60 procs=3 threads=1,5,7
+[alpha_sample] alpha=60 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=114 stride=100000 pass=82900000
+[alpha_sample] alpha=60 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=220 stride=50000 pass=82850000
+[alpha_sample] alpha=60 role=2 pid=2 threads=7 tickets=100 effective=300 ready=7 run_ticks=317 stride=33333 pass=82815847
+[alpha_result] alpha=60 role=0 pid=4 threads=1 tickets=100 work=9024
+[alpha_result] alpha=60 role=1 pid=3 threads=5 tickets=100 work=18485
+[alpha_result] alpha=60 role=2 pid=2 threads=7 tickets=100 work=28246
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 65 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=65 procs=3 threads=1,5,7
+[alpha_sample] alpha=65 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=116 stride=100000 pass=72600000
+[alpha_sample] alpha=65 role=1 pid=3 threads=5 tickets=100 effective=200 ready=5 run_ticks=207 stride=50000 pass=72550000
+[alpha_sample] alpha=65 role=2 pid=4 threads=7 tickets=100 effective=300 ready=7 run_ticks=327 stride=33333 pass=72565946
+[alpha_result] alpha=65 role=0 pid=2 threads=1 tickets=100 work=8505
+[alpha_result] alpha=65 role=1 pid=3 threads=5 tickets=100 work=17451
+[alpha_result] alpha=65 role=2 pid=4 threads=7 tickets=100 work=26374
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 70 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=70 procs=3 threads=1,5,7
+[alpha_sample] alpha=70 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=94 stride=100000 pass=78100000
+[alpha_sample] alpha=70 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=280 stride=33333 pass=78032556
+[alpha_sample] alpha=70 role=2 pid=2 threads=7 tickets=100 effective=300 ready=7 run_ticks=278 stride=33333 pass=78032556
+[alpha_result] alpha=70 role=0 pid=4 threads=1 tickets=100 work=7729
+[alpha_result] alpha=70 role=2 pid=2 threads=7 tickets=100 work=23745
+[alpha_result] alpha=70 role=1 pid=3 threads=5 tickets=100 work=23295
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 75 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=75 procs=3 threads=1,5,7
+[alpha_sample] alpha=75 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=78 stride=100000 pass=69500000
+[alpha_sample] alpha=75 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=235 stride=33333 pass=69432641
+[alpha_sample] alpha=75 role=2 pid=4 threads=7 tickets=100 effective=400 ready=7 run_ticks=340 stride=25000 pass=69424998
+[alpha_result] alpha=75 role=0 pid=2 threads=1 tickets=100 work=7138
+[alpha_result] alpha=75 role=2 pid=4 threads=7 tickets=100 work=27259
+[alpha_result] alpha=75 role=1 pid=3 threads=5 tickets=100 work=21475
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 80 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=80 procs=3 threads=1,5,7
+[alpha_sample] alpha=80 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=78 stride=100000 pass=68700000
+[alpha_sample] alpha=80 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=247 stride=33333 pass=68665984
+[alpha_sample] alpha=80 role=2 pid=2 threads=7 tickets=100 effective=400 ready=7 run_ticks=324 stride=25000 pass=68641665
+[alpha_result] alpha=80 role=0 pid=4 threads=1 tickets=100 work=7013
+[alpha_result] alpha=80 role=1 pid=3 threads=5 tickets=100 work=20410
+[alpha_result] alpha=80 role=2 pid=2 threads=7 tickets=100 work=26969
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 85 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=85 procs=3 threads=1,5,7
+[alpha_sample] alpha=85 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=78 stride=100000 pass=60500000
+[alpha_sample] alpha=85 role=1 pid=3 threads=5 tickets=100 effective=300 ready=5 run_ticks=219 stride=33333 pass=60532732
+[alpha_sample] alpha=85 role=2 pid=4 threads=7 tickets=100 effective=500 ready=7 run_ticks=358 stride=20000 pass=60510000
+[alpha_result] alpha=85 role=0 pid=2 threads=1 tickets=100 work=6144
+[alpha_result] alpha=85 role=2 pid=4 threads=7 tickets=100 work=31181
+[alpha_result] alpha=85 role=1 pid=3 threads=5 tickets=100 work=18256
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 90 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=90 procs=3 threads=1,5,7
+[alpha_sample] alpha=90 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=63 stride=100000 pass=57900000
+[alpha_sample] alpha=90 role=1 pid=3 threads=5 tickets=100 effective=400 ready=5 run_ticks=276 stride=25000 pass=57900000
+[alpha_sample] alpha=90 role=2 pid=2 threads=7 tickets=100 effective=500 ready=7 run_ticks=314 stride=20000 pass=58000000
+[alpha_result] alpha=90 role=0 pid=4 threads=1 tickets=100 work=5772
+[alpha_result] alpha=90 role=2 pid=2 threads=7 tickets=100 work=29243
+[alpha_result] alpha=90 role=1 pid=3 threads=5 tickets=100 work=22079
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 95 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=95 procs=3 threads=1,5,7
+[alpha_sample] alpha=95 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=58 stride=100000 pass=46500000
+[alpha_sample] alpha=95 role=1 pid=3 threads=5 tickets=100 effective=400 ready=5 run_ticks=238 stride=25000 pass=46500000
+[alpha_sample] alpha=95 role=2 pid=4 threads=7 tickets=100 effective=600 ready=7 run_ticks=360 stride=16666 pass=46509828
+[alpha_result] alpha=95 role=0 pid=2 threads=1 tickets=100 work=5312
+[alpha_result] alpha=95 role=1 pid=3 threads=5 tickets=100 work=19852
+[alpha_result] alpha=95 role=2 pid=4 threads=7 tickets=100 work=30286
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 100 1 5 7
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=100 procs=3 threads=1,5,7
+[alpha_sample] alpha=100 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=53 stride=100000 pass=35600000
+[alpha_sample] alpha=100 role=1 pid=3 threads=5 tickets=100 effective=500 ready=5 run_ticks=251 stride=20000 pass=35619999
+[alpha_sample] alpha=100 role=2 pid=2 threads=7 tickets=100 effective=700 ready=7 run_ticks=347 stride=14285 pass=35612530
+[alpha_result] alpha=100 role=0 pid=4 threads=1 tickets=100 work=4549
+[alpha_result] alpha=100 role=1 pid=3 threads=5 tickets=100 work=23424
+[alpha_result] alpha=100 role=2 pid=2 threads=7 tickets=100 work=34002
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 0 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=0 procs=3 threads=2,6,11
+[alpha_sample] alpha=0 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=224 stride=100000 pass=178800000
+[alpha_sample] alpha=0 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=211 stride=100000 pass=178700000
+[alpha_sample] alpha=0 role=2 pid=4 threads=11 tickets=100 effective=100 ready=11 run_ticks=213 stride=100000 pass=178700000
+[alpha_result] alpha=0 role=0 pid=2 threads=2 tickets=100 work=17720
+[alpha_result] alpha=0 role=1 pid=3 threads=6 tickets=100 work=18862
+[alpha_result] alpha=0 role=2 pid=4 threads=11 tickets=100 work=18733
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 5 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=5 procs=3 threads=2,6,11
+[alpha_sample] alpha=5 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=219 stride=100000 pass=201000000
+[alpha_sample] alpha=5 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=204 stride=100000 pass=201100000
+[alpha_sample] alpha=5 role=2 pid=2 threads=11 tickets=100 effective=100 ready=11 run_ticks=225 stride=100000 pass=201100000
+[alpha_result] alpha=5 role=0 pid=4 threads=2 tickets=100 work=18010
+[alpha_result] alpha=5 role=1 pid=3 threads=6 tickets=100 work=19013
+[alpha_result] alpha=5 role=2 pid=2 threads=11 tickets=100 work=17777
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 10 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=10 procs=3 threads=2,6,11
+[alpha_sample] alpha=10 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=227 stride=100000 pass=144700000
+[alpha_sample] alpha=10 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=205 stride=100000 pass=144600000
+[alpha_sample] alpha=10 role=2 pid=4 threads=11 tickets=100 effective=100 ready=11 run_ticks=216 stride=100000 pass=144600000
+[alpha_result] alpha=10 role=0 pid=2 threads=2 tickets=100 work=19203
+[alpha_result] alpha=10 role=1 pid=3 threads=6 tickets=100 work=20248
+[alpha_result] alpha=10 role=2 pid=4 threads=11 tickets=100 work=20207
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 15 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=15 procs=3 threads=2,6,11
+[alpha_sample] alpha=15 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=205 stride=100000 pass=150000000
+[alpha_sample] alpha=15 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=214 stride=100000 pass=150100000
+[alpha_sample] alpha=15 role=2 pid=2 threads=11 tickets=100 effective=100 ready=11 run_ticks=231 stride=100000 pass=150100000
+[alpha_result] alpha=15 role=0 pid=4 threads=2 tickets=100 work=20718
+[alpha_result] alpha=15 role=1 pid=3 threads=6 tickets=100 work=20769
+[alpha_result] alpha=15 role=2 pid=2 threads=11 tickets=100 work=19412
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 20 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=20 procs=3 threads=2,6,11
+[alpha_sample] alpha=20 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=223 stride=100000 pass=153900000
+[alpha_sample] alpha=20 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=214 stride=100000 pass=153900000
+[alpha_sample] alpha=20 role=2 pid=4 threads=11 tickets=100 effective=100 ready=11 run_ticks=212 stride=100000 pass=153800000
+[alpha_result] alpha=20 role=0 pid=2 threads=2 tickets=100 work=18432
+[alpha_result] alpha=20 role=1 pid=3 threads=6 tickets=100 work=18893
+[alpha_result] alpha=20 role=2 pid=4 threads=11 tickets=100 work=19192
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 25 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=25 procs=3 threads=2,6,11
+[alpha_sample] alpha=25 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=209 stride=100000 pass=139600000
+[alpha_sample] alpha=25 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=219 stride=100000 pass=139700000
+[alpha_sample] alpha=25 role=2 pid=2 threads=11 tickets=100 effective=100 ready=11 run_ticks=221 stride=100000 pass=139700000
+[alpha_result] alpha=25 role=0 pid=4 threads=2 tickets=100 work=17920
+[alpha_result] alpha=25 role=1 pid=3 threads=6 tickets=100 work=17662
+[alpha_result] alpha=25 role=2 pid=2 threads=11 tickets=100 work=17823
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 30 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=30 procs=3 threads=2,6,11
+[alpha_sample] alpha=30 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=169 stride=100000 pass=104600000
+[alpha_sample] alpha=30 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=159 stride=100000 pass=104500000
+[alpha_sample] alpha=30 role=2 pid=4 threads=11 tickets=100 effective=200 ready=11 run_ticks=322 stride=50000 pass=104500000
+[alpha_result] alpha=30 role=0 pid=2 threads=2 tickets=100 work=13568
+[alpha_result] alpha=30 role=1 pid=3 threads=6 tickets=100 work=13983
+[alpha_result] alpha=30 role=2 pid=4 threads=11 tickets=100 work=28280
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 35 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=35 procs=3 threads=2,6,11
+[alpha_sample] alpha=35 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=160 stride=100000 pass=120400000
+[alpha_sample] alpha=35 role=1 pid=3 threads=6 tickets=100 effective=100 ready=6 run_ticks=153 stride=100000 pass=120400000
+[alpha_sample] alpha=35 role=2 pid=2 threads=11 tickets=100 effective=200 ready=11 run_ticks=334 stride=50000 pass=120350000
+[alpha_result] alpha=35 role=0 pid=4 threads=2 tickets=100 work=13251
+[alpha_result] alpha=35 role=1 pid=3 threads=6 tickets=100 work=13165
+[alpha_result] alpha=35 role=2 pid=2 threads=11 tickets=100 work=25035
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 40 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=40 procs=3 threads=2,6,11
+[alpha_sample] alpha=40 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=123 stride=100000 pass=89100000
+[alpha_sample] alpha=40 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=258 stride=50000 pass=89100000
+[alpha_sample] alpha=40 role=2 pid=4 threads=11 tickets=100 effective=200 ready=11 run_ticks=266 stride=50000 pass=89050000
+[alpha_result] alpha=40 role=0 pid=2 threads=2 tickets=100 work=11746
+[alpha_result] alpha=40 role=1 pid=3 threads=6 tickets=100 work=21619
+[alpha_result] alpha=40 role=2 pid=4 threads=11 tickets=100 work=21992
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 45 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=45 procs=3 threads=2,6,11
+[alpha_sample] alpha=45 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=134 stride=100000 pass=101500000
+[alpha_sample] alpha=45 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=274 stride=50000 pass=101450000
+[alpha_sample] alpha=45 role=2 pid=2 threads=11 tickets=100 effective=200 ready=11 run_ticks=240 stride=50000 pass=101500000
+[alpha_result] alpha=45 role=0 pid=4 threads=2 tickets=100 work=11264
+[alpha_result] alpha=45 role=1 pid=3 threads=6 tickets=100 work=21054
+[alpha_result] alpha=45 role=2 pid=2 threads=11 tickets=100 work=23962
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 50 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=50 procs=3 threads=2,6,11
+[alpha_sample] alpha=50 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=105 stride=100000 pass=87400000
+[alpha_sample] alpha=50 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=214 stride=50000 pass=87350000
+[alpha_sample] alpha=50 role=2 pid=4 threads=11 tickets=100 effective=300 ready=11 run_ticks=328 stride=33333 pass=87315808
+[alpha_result] alpha=50 role=0 pid=2 threads=2 tickets=100 work=9856
+[alpha_result] alpha=50 role=1 pid=3 threads=6 tickets=100 work=19715
+[alpha_result] alpha=50 role=2 pid=4 threads=11 tickets=100 work=29765
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 55 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=55 procs=3 threads=2,6,11
+[alpha_sample] alpha=55 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=113 stride=100000 pass=75700000
+[alpha_sample] alpha=55 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=213 stride=50000 pass=75700000
+[alpha_sample] alpha=55 role=2 pid=2 threads=11 tickets=100 effective=300 ready=11 run_ticks=321 stride=33333 pass=75665915
+[alpha_result] alpha=55 role=0 pid=4 threads=2 tickets=100 work=9216
+[alpha_result] alpha=55 role=1 pid=3 threads=6 tickets=100 work=18845
+[alpha_result] alpha=55 role=2 pid=2 threads=11 tickets=100 work=28105
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 60 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=60 procs=3 threads=2,6,11
+[alpha_sample] alpha=60 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=86 stride=100000 pass=63300000
+[alpha_sample] alpha=60 role=1 pid=3 threads=6 tickets=100 effective=200 ready=6 run_ticks=197 stride=50000 pass=63300000
+[alpha_sample] alpha=60 role=2 pid=4 threads=11 tickets=100 effective=400 ready=11 run_ticks=366 stride=25000 pass=63324997
+[alpha_result] alpha=60 role=0 pid=2 threads=2 tickets=100 work=8870
+[alpha_result] alpha=60 role=1 pid=3 threads=6 tickets=100 work=16517
+[alpha_result] alpha=60 role=2 pid=4 threads=11 tickets=100 work=33956
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 65 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=65 procs=3 threads=2,6,11
+[alpha_sample] alpha=65 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=79 stride=100000 pass=53000000
+[alpha_sample] alpha=65 role=1 pid=3 threads=6 tickets=100 effective=300 ready=6 run_ticks=245 stride=33333 pass=53016140
+[alpha_sample] alpha=65 role=2 pid=2 threads=11 tickets=100 effective=400 ready=11 run_ticks=326 stride=25000 pass=53008331
+[alpha_result] alpha=65 role=0 pid=4 threads=2 tickets=100 work=7168
+[alpha_result] alpha=65 role=1 pid=3 threads=6 tickets=100 work=22229
+[alpha_result] alpha=65 role=2 pid=2 threads=11 tickets=100 work=29434
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 70 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=70 procs=3 threads=2,6,11
+[alpha_sample] alpha=70 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=66 stride=100000 pass=58900000
+[alpha_sample] alpha=70 role=1 pid=3 threads=6 tickets=100 effective=300 ready=6 run_ticks=229 stride=33333 pass=58916081
+[alpha_sample] alpha=70 role=2 pid=4 threads=11 tickets=100 effective=500 ready=11 run_ticks=356 stride=20000 pass=58919996
+[alpha_result] alpha=70 role=0 pid=2 threads=2 tickets=100 work=7345
+[alpha_result] alpha=70 role=1 pid=3 threads=6 tickets=100 work=21099
+[alpha_result] alpha=70 role=2 pid=4 threads=11 tickets=100 work=35323
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 75 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=75 procs=3 threads=2,6,11
+[alpha_sample] alpha=75 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=60 stride=100000 pass=38400000
+[alpha_sample] alpha=75 role=1 pid=3 threads=6 tickets=100 effective=300 ready=6 run_ticks=203 stride=33333 pass=38407954
+[alpha_sample] alpha=75 role=2 pid=2 threads=11 tickets=100 effective=600 ready=11 run_ticks=387 stride=16666 pass=38406830
+[alpha_result] alpha=75 role=0 pid=4 threads=2 tickets=100 work=6272
+[alpha_result] alpha=75 role=1 pid=3 threads=6 tickets=100 work=16873
+[alpha_result] alpha=75 role=2 pid=2 threads=11 tickets=100 work=33951
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 80 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=80 procs=3 threads=2,6,11
+[alpha_sample] alpha=80 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=59 stride=100000 pass=42800000
+[alpha_sample] alpha=80 role=1 pid=3 threads=6 tickets=100 effective=400 ready=6 run_ticks=232 stride=25000 pass=42908332
+[alpha_sample] alpha=80 role=2 pid=4 threads=11 tickets=100 effective=600 ready=11 run_ticks=363 stride=16666 pass=42908306
+[alpha_result] alpha=80 role=0 pid=2 threads=2 tickets=100 work=5568
+[alpha_result] alpha=80 role=1 pid=3 threads=6 tickets=100 work=22007
+[alpha_result] alpha=80 role=2 pid=4 threads=11 tickets=100 work=31605
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 85 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=85 procs=3 threads=2,6,11
+[alpha_sample] alpha=85 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=62 stride=100000 pass=37600000
+[alpha_sample] alpha=85 role=1 pid=3 threads=6 tickets=100 effective=400 ready=6 run_ticks=224 stride=25000 pass=37600000
+[alpha_sample] alpha=85 role=2 pid=2 threads=11 tickets=100 effective=700 ready=11 run_ticks=364 stride=14285 pass=37602902
+[alpha_result] alpha=85 role=0 pid=4 threads=2 tickets=100 work=4254
+[alpha_result] alpha=85 role=1 pid=3 threads=6 tickets=100 work=17028
+[alpha_result] alpha=85 role=2 pid=2 threads=11 tickets=100 work=31531
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 90 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=90 procs=3 threads=2,6,11
+[alpha_sample] alpha=90 role=0 pid=2 threads=2 tickets=100 effective=100 ready=2 run_ticks=43 stride=100000 pass=31700000
+[alpha_sample] alpha=90 role=1 pid=3 threads=6 tickets=100 effective=500 ready=6 run_ticks=242 stride=20000 pass=31700000
+[alpha_sample] alpha=90 role=2 pid=4 threads=11 tickets=100 effective=800 ready=11 run_ticks=361 stride=12500 pass=31708332
+[alpha_result] alpha=90 role=0 pid=2 threads=2 tickets=100 work=4528
+[alpha_result] alpha=90 role=1 pid=3 threads=6 tickets=100 work=20167
+[alpha_result] alpha=90 role=2 pid=4 threads=11 tickets=100 work=34154
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 95 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=95 procs=3 threads=2,6,11
+[alpha_sample] alpha=95 role=0 pid=4 threads=2 tickets=100 effective=100 ready=2 run_ticks=41 stride=100000 pass=34500000
+[alpha_sample] alpha=95 role=1 pid=3 threads=6 tickets=100 effective=500 ready=6 run_ticks=225 stride=20000 pass=34513332
+[alpha_sample] alpha=95 role=2 pid=2 threads=11 tickets=100 effective=900 ready=11 run_ticks=386 stride=11111 pass=34508548
+[alpha_result] alpha=95 role=0 pid=4 threads=2 tickets=100 work=3904
+[alpha_result] alpha=95 role=1 pid=3 threads=6 tickets=100 work=19402
+[alpha_result] alpha=95 role=2 pid=2 threads=11 tickets=100 work=35091
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 100 2 6 11
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=100 procs=3 threads=2,6,11
+[alpha_sample] alpha=100 role=0 pid=2 threads=2 tickets=100 effective=200 ready=2 run_ticks=62 stride=50000 pass=23000000
+[alpha_sample] alpha=100 role=1 pid=3 threads=6 tickets=100 effective=600 ready=6 run_ticks=214 stride=16666 pass=23015754
+[alpha_sample] alpha=100 role=2 pid=4 threads=11 tickets=100 effective=1100 ready=11 run_ticks=375 stride=9090 pass=23006830
+[alpha_result] alpha=100 role=0 pid=2 threads=2 tickets=100 work=6864
+[alpha_result] alpha=100 role=1 pid=3 threads=6 tickets=100 work=18491
+[alpha_result] alpha=100 role=2 pid=4 threads=11 tickets=100 work=34907
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 0 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=0 procs=3 threads=1,9,25
+[alpha_sample] alpha=0 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=212 stride=100000 pass=166800000
+[alpha_sample] alpha=0 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=218 stride=100000 pass=166800000
+[alpha_sample] alpha=0 role=2 pid=2 threads=25 tickets=100 effective=100 ready=25 run_ticks=209 stride=100000 pass=166800000
+[alpha_result] alpha=0 role=0 pid=4 threads=1 tickets=100 work=17600
+[alpha_result] alpha=0 role=1 pid=3 threads=9 tickets=100 work=16630
+[alpha_result] alpha=0 role=2 pid=2 threads=25 tickets=100 work=17314
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 5 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=5 procs=3 threads=1,9,25
+[alpha_sample] alpha=5 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=204 stride=100000 pass=131300000
+[alpha_sample] alpha=5 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=211 stride=100000 pass=131200000
+[alpha_sample] alpha=5 role=2 pid=4 threads=25 tickets=100 effective=100 ready=25 run_ticks=224 stride=100000 pass=131200000
+[alpha_result] alpha=5 role=0 pid=2 threads=1 tickets=100 work=17152
+[alpha_result] alpha=5 role=1 pid=3 threads=9 tickets=100 work=16984
+[alpha_result] alpha=5 role=2 pid=4 threads=25 tickets=100 work=16196
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 10 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=10 procs=3 threads=1,9,25
+[alpha_sample] alpha=10 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=218 stride=100000 pass=176500000
+[alpha_sample] alpha=10 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=218 stride=100000 pass=176500000
+[alpha_sample] alpha=10 role=2 pid=2 threads=25 tickets=100 effective=100 ready=25 run_ticks=201 stride=100000 pass=176600000
+[alpha_result] alpha=10 role=0 pid=4 threads=1 tickets=100 work=16081
+[alpha_result] alpha=10 role=1 pid=3 threads=9 tickets=100 work=16109
+[alpha_result] alpha=10 role=2 pid=2 threads=25 tickets=100 work=17238
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 15 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=15 procs=3 threads=1,9,25
+[alpha_sample] alpha=15 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=210 stride=100000 pass=140100000
+[alpha_sample] alpha=15 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=214 stride=100000 pass=140100000
+[alpha_sample] alpha=15 role=2 pid=4 threads=25 tickets=100 effective=100 ready=25 run_ticks=215 stride=100000 pass=140000000
+[alpha_result] alpha=15 role=0 pid=2 threads=1 tickets=100 work=17453
+[alpha_result] alpha=15 role=1 pid=3 threads=9 tickets=100 work=17192
+[alpha_result] alpha=15 role=2 pid=4 threads=25 tickets=100 work=17511
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 20 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=20 procs=3 threads=1,9,25
+[alpha_sample] alpha=20 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=220 stride=100000 pass=168600000
+[alpha_sample] alpha=20 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=205 stride=100000 pass=168600000
+[alpha_sample] alpha=20 role=2 pid=2 threads=25 tickets=100 effective=100 ready=25 run_ticks=213 stride=100000 pass=168600000
+[alpha_result] alpha=20 role=0 pid=4 threads=1 tickets=100 work=17600
+[alpha_result] alpha=20 role=1 pid=3 threads=9 tickets=100 work=18576
+[alpha_result] alpha=20 role=2 pid=2 threads=25 tickets=100 work=18272
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 25 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=25 procs=3 threads=1,9,25
+[alpha_sample] alpha=25 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=166 stride=100000 pass=86700000
+[alpha_sample] alpha=25 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=162 stride=100000 pass=86600000
+[alpha_sample] alpha=25 role=2 pid=4 threads=25 tickets=100 effective=200 ready=25 run_ticks=313 stride=50000 pass=86600000
+[alpha_result] alpha=25 role=0 pid=2 threads=1 tickets=100 work=13056
+[alpha_result] alpha=25 role=1 pid=3 threads=9 tickets=100 work=13101
+[alpha_result] alpha=25 role=2 pid=4 threads=25 tickets=100 work=26633
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 30 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=30 procs=3 threads=1,9,25
+[alpha_sample] alpha=30 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=159 stride=100000 pass=92700000
+[alpha_sample] alpha=30 role=1 pid=3 threads=9 tickets=100 effective=100 ready=9 run_ticks=167 stride=100000 pass=92700000
+[alpha_sample] alpha=30 role=2 pid=2 threads=25 tickets=100 effective=200 ready=25 run_ticks=316 stride=50000 pass=92650000
+[alpha_result] alpha=30 role=0 pid=4 threads=1 tickets=100 work=14573
+[alpha_result] alpha=30 role=1 pid=3 threads=9 tickets=100 work=14671
+[alpha_result] alpha=30 role=2 pid=2 threads=25 tickets=100 work=28631
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 35 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=35 procs=3 threads=1,9,25
+[alpha_sample] alpha=35 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=114 stride=100000 pass=85800000
+[alpha_sample] alpha=35 role=1 pid=3 threads=9 tickets=100 effective=200 ready=9 run_ticks=199 stride=50000 pass=85750000
+[alpha_sample] alpha=35 role=2 pid=4 threads=25 tickets=100 effective=300 ready=25 run_ticks=330 stride=33333 pass=85765854
+[alpha_result] alpha=35 role=0 pid=2 threads=1 tickets=100 work=8960
+[alpha_result] alpha=35 role=1 pid=3 threads=9 tickets=100 work=19719
+[alpha_result] alpha=35 role=2 pid=4 threads=25 tickets=100 work=28370
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 40 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=40 procs=3 threads=1,9,25
+[alpha_sample] alpha=40 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=99 stride=100000 pass=80700000
+[alpha_sample] alpha=40 role=1 pid=3 threads=9 tickets=100 effective=200 ready=9 run_ticks=221 stride=50000 pass=80650000
+[alpha_sample] alpha=40 role=2 pid=2 threads=25 tickets=100 effective=300 ready=25 run_ticks=323 stride=33333 pass=80682543
+[alpha_result] alpha=40 role=0 pid=4 threads=1 tickets=100 work=10048
+[alpha_result] alpha=40 role=1 pid=3 threads=9 tickets=100 work=18207
+[alpha_result] alpha=40 role=2 pid=2 threads=25 tickets=100 work=28534
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 45 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=45 procs=3 threads=1,9,25
+[alpha_sample] alpha=45 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=74 stride=100000 pass=60200000
+[alpha_sample] alpha=45 role=1 pid=3 threads=9 tickets=100 effective=200 ready=9 run_ticks=203 stride=50000 pass=60200000
+[alpha_sample] alpha=45 role=2 pid=4 threads=25 tickets=100 effective=400 ready=25 run_ticks=364 stride=25000 pass=60216657
+[alpha_result] alpha=45 role=0 pid=2 threads=1 tickets=100 work=8576
+[alpha_result] alpha=45 role=1 pid=3 threads=9 tickets=100 work=14039
+[alpha_result] alpha=45 role=2 pid=4 threads=25 tickets=100 work=30123
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 50 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=50 procs=3 threads=1,9,25
+[alpha_sample] alpha=50 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=74 stride=100000 pass=57900000
+[alpha_sample] alpha=50 role=1 pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=226 stride=33333 pass=57916093
+[alpha_sample] alpha=50 role=2 pid=2 threads=25 tickets=100 effective=500 ready=25 run_ticks=348 stride=20000 pass=57914991
+[alpha_result] alpha=50 role=0 pid=4 threads=1 tickets=100 work=6784
+[alpha_result] alpha=50 role=1 pid=3 threads=9 tickets=100 work=20291
+[alpha_result] alpha=50 role=2 pid=2 threads=25 tickets=100 work=34847
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 55 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=55 procs=3 threads=1,9,25
+[alpha_sample] alpha=55 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=63 stride=100000 pass=55100000
+[alpha_sample] alpha=55 role=1 pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=212 stride=33333 pass=55132788
+[alpha_sample] alpha=55 role=2 pid=4 threads=25 tickets=100 effective=500 ready=25 run_ticks=370 stride=20000 pass=55106653
+[alpha_result] alpha=55 role=0 pid=2 threads=1 tickets=100 work=6784
+[alpha_result] alpha=55 role=1 pid=3 threads=9 tickets=100 work=19111
+[alpha_result] alpha=55 role=2 pid=4 threads=25 tickets=100 work=30904
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 60 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=60 procs=3 threads=1,9,25
+[alpha_sample] alpha=60 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=66 stride=100000 pass=38300000
+[alpha_sample] alpha=60 role=1 pid=3 threads=9 tickets=100 effective=300 ready=9 run_ticks=190 stride=33333 pass=38316291
+[alpha_sample] alpha=60 role=2 pid=2 threads=25 tickets=100 effective=600 ready=25 run_ticks=393 stride=16666 pass=38311922
+[alpha_result] alpha=60 role=0 pid=4 threads=1 tickets=100 work=5336
+[alpha_result] alpha=60 role=1 pid=3 threads=9 tickets=100 work=16330
+[alpha_result] alpha=60 role=2 pid=2 threads=25 tickets=100 work=32354
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 65 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=65 procs=3 threads=1,9,25
+[alpha_sample] alpha=65 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=47 stride=100000 pass=42100000
+[alpha_sample] alpha=65 role=1 pid=3 threads=9 tickets=100 effective=400 ready=9 run_ticks=200 stride=25000 pass=42216664
+[alpha_sample] alpha=65 role=2 pid=4 threads=25 tickets=100 effective=800 ready=25 run_ticks=399 stride=12500 pass=42203541
+[alpha_result] alpha=65 role=0 pid=2 threads=1 tickets=100 work=4417
+[alpha_result] alpha=65 role=1 pid=3 threads=9 tickets=100 work=17385
+[alpha_result] alpha=65 role=2 pid=4 threads=25 tickets=100 work=34699
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 70 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=70 procs=3 threads=1,9,25
+[alpha_sample] alpha=70 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=50 stride=100000 pass=36000000
+[alpha_sample] alpha=70 role=1 pid=3 threads=9 tickets=100 effective=400 ready=9 run_ticks=201 stride=25000 pass=36016665
+[alpha_sample] alpha=70 role=2 pid=2 threads=25 tickets=100 effective=900 ready=25 run_ticks=396 stride=11111 pass=36005563
+[alpha_result] alpha=70 role=0 pid=4 threads=1 tickets=100 work=3968
+[alpha_result] alpha=70 role=1 pid=3 threads=9 tickets=100 work=16336
+[alpha_result] alpha=70 role=2 pid=2 threads=25 tickets=100 work=39565
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 75 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=75 procs=3 threads=1,9,25
+[alpha_sample] alpha=75 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=36 stride=100000 pass=23100000
+[alpha_sample] alpha=75 role=1 pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=194 stride=20000 pass=23106665
+[alpha_sample] alpha=75 role=2 pid=4 threads=25 tickets=100 effective=1100 ready=25 run_ticks=410 stride=9090 pass=23104409
+[alpha_result] alpha=75 role=0 pid=2 threads=1 tickets=100 work=3309
+[alpha_result] alpha=75 role=1 pid=3 threads=9 tickets=100 work=16342
+[alpha_result] alpha=75 role=2 pid=4 threads=25 tickets=100 work=36105
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 80 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=80 procs=3 threads=1,9,25
+[alpha_sample] alpha=80 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=32 stride=100000 pass=26400000
+[alpha_sample] alpha=80 role=1 pid=3 threads=9 tickets=100 effective=500 ready=9 run_ticks=163 stride=20000 pass=26411665
+[alpha_sample] alpha=80 role=2 pid=2 threads=25 tickets=100 effective=1300 ready=25 run_ticks=448 stride=7692 pass=26401603
+[alpha_result] alpha=80 role=0 pid=4 threads=1 tickets=100 work=2840
+[alpha_result] alpha=80 role=1 pid=3 threads=9 tickets=100 work=14723
+[alpha_result] alpha=80 role=2 pid=2 threads=25 tickets=100 work=38013
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 85 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=85 procs=3 threads=1,9,25
+[alpha_sample] alpha=85 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=25 stride=100000 pass=22700000
+[alpha_sample] alpha=85 role=1 pid=3 threads=9 tickets=100 effective=600 ready=9 run_ticks=177 stride=16666 pass=22709110
+[alpha_sample] alpha=85 role=2 pid=4 threads=25 tickets=100 effective=1500 ready=25 run_ticks=443 stride=6666 pass=22701532
+[alpha_result] alpha=85 role=0 pid=2 threads=1 tickets=100 work=2660
+[alpha_result] alpha=85 role=1 pid=3 threads=9 tickets=100 work=14079
+[alpha_result] alpha=85 role=2 pid=4 threads=25 tickets=100 work=35942
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 90 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=90 procs=3 threads=1,9,25
+[alpha_sample] alpha=90 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=29 stride=100000 pass=19300000
+[alpha_sample] alpha=90 role=1 pid=3 threads=9 tickets=100 effective=700 ready=9 run_ticks=178 stride=14285 pass=19308580
+[alpha_sample] alpha=90 role=2 pid=2 threads=25 tickets=100 effective=1800 ready=25 run_ticks=434 stride=5555 pass=19304111
+[alpha_result] alpha=90 role=0 pid=4 threads=1 tickets=100 work=2048
+[alpha_result] alpha=90 role=1 pid=3 threads=9 tickets=100 work=13742
+[alpha_result] alpha=90 role=2 pid=2 threads=25 tickets=100 work=37348
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 95 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=95 procs=3 threads=1,9,25
+[alpha_sample] alpha=95 role=0 pid=2 threads=1 tickets=100 effective=100 ready=1 run_ticks=21 stride=100000 pass=11700000
+[alpha_sample] alpha=95 role=1 pid=3 threads=9 tickets=100 effective=800 ready=9 run_ticks=168 stride=12500 pass=11703332
+[alpha_sample] alpha=95 role=2 pid=4 threads=25 tickets=100 effective=2100 ready=25 run_ticks=459 stride=4761 pass=11804660
+[alpha_result] alpha=95 role=0 pid=2 threads=1 tickets=100 work=1968
+[alpha_result] alpha=95 role=1 pid=3 threads=9 tickets=100 work=15118
+[alpha_result] alpha=95 role=2 pid=4 threads=25 tickets=100 work=38595
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ alpha_arg_test 100 1 9 25
+alpha_arg_test start
+usage: alpha_arg_test <alpha> <threads0> <threads1> ...
+example: alpha_arg_test 50 1 3 5
+
+[alpha_arg] run alpha=100 procs=3 threads=1,9,25
+[alpha_sample] alpha=100 role=0 pid=4 threads=1 tickets=100 effective=100 ready=1 run_ticks=14 stride=100000 pass=13100000
+[alpha_sample] alpha=100 role=1 pid=3 threads=9 tickets=100 effective=900 ready=9 run_ticks=167 stride=11111 pass=13110978
+[alpha_sample] alpha=100 role=2 pid=2 threads=25 tickets=100 effective=2500 ready=25 run_ticks=465 stride=4000 pass=13103968
+[alpha_result] alpha=100 role=0 pid=4 threads=1 tickets=100 work=1904
+[alpha_result] alpha=100 role=1 pid=3 threads=9 tickets=100 work=14541
+[alpha_result] alpha=100 role=2 pid=2 threads=25 tickets=100 work=40662
+
+alpha_arg_test PASS
+[shell] child exit code 0
+
+/ $ 

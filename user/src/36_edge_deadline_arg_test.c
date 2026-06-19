@@ -1,6 +1,6 @@
 #include "user.h"
 
-#define MAX_THREADS 25
+#define MAX_THREADS 50
 
 #define CONTROL_TICKETS 300
 #define AI_TICKETS 100

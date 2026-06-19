@@ -1,7 +1,7 @@
 #include "user.h"
 
 #define MAX_PROCS 6
-#define MAX_THREADS 16
+#define MAX_THREADS 50
 
 #define DEFAULT_TICKETS 100
 
@@ -316,10 +316,10 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (!(alpha == 0 || alpha == 25 || alpha == 50 || alpha == 75 || alpha == 100)) {
-        puts("[alpha_arg] FAIL: alpha must be 0,25,50,75,100\n");
-        return 1;
-    }
+    // if (!(alpha == 0 || alpha == 25 || alpha == 50 || alpha == 75 || alpha == 100)) {
+    //     puts("[alpha_arg] FAIL: alpha must be 0,25,50,75,100\n");
+    //     return 1;
+    // }
 
     int proc_count = argc - 2;
 
