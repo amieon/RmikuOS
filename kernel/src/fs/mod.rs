@@ -6,6 +6,7 @@ pub mod inode;
 pub mod path;
 pub mod common_file;
 pub mod ext4fs;
+pub mod pipe;
 
 //pub mod initramfs;
 mod stdio;
@@ -13,6 +14,7 @@ mod stdio;
 pub use file::{File, FileRef};
 pub use inode::{Inode, InodeRef, Metadata, InodeType};
 pub use stdio::{stdin, stdout};
+pub const EOF : isize = 0;
 
 
 pub fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {

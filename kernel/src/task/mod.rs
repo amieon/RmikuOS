@@ -61,4 +61,10 @@ pub use manager_wrapper::{
     account_current_tick,
     get_process_sched_stat,
     reset_sched_stat,
+
+    new_pipe,
+    block_current_on_pipe_write,
+    block_current_on_pipe_read,
+    wake_up_on_pipe_read,
+    wake_up_on_pipe_write,
 };

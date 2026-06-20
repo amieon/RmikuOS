@@ -9,6 +9,7 @@ pub struct Stat {
 pub const STAT_TYPE_FILE: u8 = 1;
 pub const STAT_TYPE_DIR: u8 = 2;
 pub const STAT_TYPE_CHAR: u8 = 3;
+pub const STAT_TYPE_PIPE: u8 = 4;
 
 impl Stat {
     pub const fn new(file_type: u8, size: usize) -> Self {

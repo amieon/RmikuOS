@@ -30,6 +30,9 @@ pub enum BlockReason {
     Join {
         tid: Tid,
     },
+
+    PipeRead,
+    PipeWrite,
 }
 pub const DEFAULT_THREAD_TICKETS: usize = 100;
 

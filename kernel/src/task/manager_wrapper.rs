@@ -1266,15 +1266,15 @@ pub fn reset_sched_stat() -> isize {
 }
 
 pub fn new_pipe(fd : [usize;2]) -> isize {
-    let mut manager = TASK_MANAGER.lock();
-    let pipe_fd = manager.new_pipe();
+    let file = crate::fs::pipe::make_pipe();
+    let pipe_fd = (crate::task::alloc_fd_current(file.0),crate::task::alloc_fd_current(file.1));
     if pipe_fd.0 == 0 || pipe_fd.0 == 0{
         -1
     }
     else{
         let write_fd1 = write_value_to_user(fd[0], &pipe_fd.0);
-        let write_fd2 = write_value_to_user(fd[1], &pipe_fd.1);
-        if write_fd1 == -1 || write_fd2 == -1 {
+        let write_fd0 = write_value_to_user(fd[1], &pipe_fd.1);
+        if write_fd1 == -1 || write_fd0 == -1 {
             -1
         }
         else{
@@ -1282,3 +1282,124 @@ pub fn new_pipe(fd : [usize;2]) -> isize {
         }
     }
 }
+
+
+
+pub fn block_current_on_pipe_read() -> isize {
+
+    let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+
+        log::info!(
+            "[task] thread {} is blocked in pipe read",
+            current_tid,
+        );
+
+        manager.block_thread(
+            current_tid,
+            BlockReason::PipeRead,
+        );
+
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+
+    0
+}
+
+
+
+
+pub fn block_current_on_pipe_write() -> isize {
+
+    let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+
+        log::info!(
+            "[task] thread {} is blocked in pipe write",
+            current_tid,
+        );
+
+        manager.block_thread(
+            current_tid,
+            BlockReason::PipeWrite,
+        );
+
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+
+    0
+}
+
+pub fn wake_up_on_pipe_read() -> isize {
+    let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+
+        let current_pid = manager.pid_of_tid(current_tid);
+        let tids = manager.process(current_pid).threads.clone();
+
+        for tid in tids {
+            if let Some(thread) = manager.try_thread_mut(tid) {
+                if thread.block_reason == BlockReason::PipeWrite{
+                    thread.status = ThreadStatus::Ready;
+                    thread.block_reason = BlockReason::None;
+                }
+            }
+        }
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+    0
+}
+
+
+pub fn wake_up_on_pipe_write() -> isize {
+        let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = TASK_MANAGER.lock();
+
+        let current_pid = manager.pid_of_tid(current_tid);
+        let tids = manager.process(current_pid).threads.clone();
+
+        for tid in tids {
+            if let Some(thread) = manager.try_thread_mut(tid) {
+                if thread.block_reason == BlockReason::PipeRead{
+                    thread.status = ThreadStatus::Ready;
+                    thread.block_reason = BlockReason::None;
+                }
+            }
+        }
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+    0
+}
+    
