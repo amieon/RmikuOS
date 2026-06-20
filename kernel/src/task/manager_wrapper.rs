@@ -1264,3 +1264,21 @@ pub fn reset_sched_stat() -> isize {
     let mut manager = TASK_MANAGER.lock();
     manager.reset_sched_stat()
 }
+
+pub fn new_pipe(fd : [usize;2]) -> isize {
+    let mut manager = TASK_MANAGER.lock();
+    let pipe_fd = manager.new_pipe();
+    if pipe_fd.0 == 0 || pipe_fd.0 == 0{
+        -1
+    }
+    else{
+        let write_fd1 = write_value_to_user(fd[0], &pipe_fd.0);
+        let write_fd2 = write_value_to_user(fd[1], &pipe_fd.1);
+        if write_fd1 == -1 || write_fd2 == -1 {
+            -1
+        }
+        else{
+            write_fd1
+        }
+    }
+}
