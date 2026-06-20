@@ -31,7 +31,7 @@ pub struct PipeWriteEnd { pub inner: Arc<Mutex<Pipe>> }
 
 use alloc::sync::Arc;
 
-use super::file::{File, FileRef};
+use super::file::{File, FileRef,PipeCloseKind};
 use super::stat::*;
 
 
@@ -42,6 +42,17 @@ impl File for PipeReadEnd {
 
     fn writable(&self) -> bool {
         false
+    }
+
+    fn on_fork(&self){
+        self.inner.lock().reader_count += 1;
+    }
+
+    fn on_close_kind(&self) -> super::file::PipeCloseKind {
+        let mut pipe = self.inner.lock();
+        pipe.reader_count -= 1;
+        if pipe.reader_count == 0 { PipeCloseKind:: ReaderGone }
+        else { PipeCloseKind::Nothing }
     }
 
     fn stat(&self) -> Stat {
@@ -83,6 +94,17 @@ impl File for PipeWriteEnd {
 
     fn writable(&self) -> bool {
         true
+    }
+
+    fn on_fork(&self){
+        self.inner.lock().writer_count += 1;
+    }
+    
+    fn on_close_kind(&self) -> super::file::PipeCloseKind {
+        let mut pipe = self.inner.lock();
+        pipe.writer_count -= 1;
+        if pipe.writer_count == 0 { PipeCloseKind::WriterGone }
+        else { PipeCloseKind::Nothing }
     }
 
     fn stat(&self) -> Stat {
@@ -130,7 +152,7 @@ impl Drop for PipeWriteEnd {
         let no_writers = pipe.writer_count == 0;
         drop(pipe);
         if no_writers {
-            wake_pipe_readers();   // 写端全关,唤醒读者去拿 EOF
+            wake_pipe_readers();  
         }
     }
 }
@@ -141,7 +163,7 @@ impl Drop for PipeReadEnd {
         let no_readers = pipe.reader_count == 0;
         drop(pipe);
         if no_readers {
-            wake_pipe_writers();   // 读端全关,唤醒写者去拿 EPIPE
+            wake_pipe_writers(); 
         }
     }
 }

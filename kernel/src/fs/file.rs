@@ -4,6 +4,12 @@ use crate::fs::stat::Stat;
 
 pub type FileRef = Arc<dyn File>;
 
+pub enum PipeCloseKind {
+    Nothing,
+    ReaderGone,
+    WriterGone,
+}
+
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
@@ -20,4 +26,7 @@ pub trait File: Send + Sync {
     fn getdents(&self, _buf: &mut [u8]) -> isize {
         -1
     }
+
+    fn on_fork(&self) {}
+    fn on_close_kind(&self) -> PipeCloseKind {PipeCloseKind::Nothing}
 }

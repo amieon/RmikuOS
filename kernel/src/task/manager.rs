@@ -693,18 +693,19 @@ impl TaskManager {
     }
 
     pub fn close_fd(&mut self, pid: Pid, fd: usize) -> isize {
-        let process = self.process_mut(pid);
+        let file = {
+            let process = self.process_mut(pid);
+            if fd >= process.fd_table.len() {
+                return -1;
+            }
+            let Some(file) = process.fd_table[fd].take() else {
+                return -1;
+            };
+            process.free_fds.push(fd);
+            file            
+        }; 
 
-        if fd >= process.fd_table.len() {
-            return -1;
-        }
-
-        if process.fd_table[fd].take().is_none() {
-            return -1;
-        }
-
-        process.free_fds.push(fd);
-
+        self.release_file(&file);
         0
     }
 
@@ -933,5 +934,16 @@ impl TaskManager {
         }
         0
     }
-}
 
+    pub fn release_file(&mut self, file: &crate::fs::file::FileRef) {
+        match file.on_close_kind() {
+            crate::fs::file::PipeCloseKind::WriterGone => {
+                self.wake_threads_by_reason(BlockReason::PipeRead);
+            }
+            crate::fs::file::PipeCloseKind::ReaderGone => {
+                self.wake_threads_by_reason(BlockReason::PipeWrite);
+            }
+            crate::fs::file::PipeCloseKind::Nothing => {}
+        }
+    }
+}

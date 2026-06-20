@@ -304,6 +304,11 @@ pub fn fork_current() -> isize {
 
         let child_fd_table = manager.process(parent_pid).fd_table.clone();
         let child_free_fds = manager.process(parent_pid).free_fds.clone();
+        for slot in child_fd_table.iter() {
+        if let Some(file) = slot {
+                file.on_fork();  
+            }
+        }
         let child_cwd = manager.process(parent_pid).cwd.clone();
 
         let parent_tickets = manager.process(parent_pid).tickets;
@@ -547,11 +552,17 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
             return -1;
         }
 
-        let old_space = {
+        let (old_space, closed_files) = {
             let process = manager.process_mut(current_pid);
-            process.close_non_standard_fds_on_exec();
-            core::mem::replace(&mut process.user_space, new_user_space)
-        };
+            let closed = process.close_non_standard_fds_on_exec();  
+            let old = core::mem::replace(&mut process.user_space, new_user_space);
+            (old, closed)
+        }; 
+
+
+        for file in &closed_files {
+            manager.release_file(file);
+        }
 
         *manager.thread_mut(current_tid).trap_cx_mut() = new_trap_cx;
 
@@ -744,6 +755,21 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
                 thread.block_reason = BlockReason::None;
                 thread.exit_code = exit_code;
             }
+        }
+
+        let files: Vec<crate::fs::file::FileRef> = {
+            let process = manager.process_mut(current_pid);
+            let mut v = Vec::new();
+            for slot in process.fd_table.iter_mut() {
+                if let Some(file) = slot.take() {   // take 出来,原地留 None
+                    v.push(file);
+                }
+            }
+            v
+        };
+
+        for file in &files {
+            manager.release_file(file);
         }
 
         manager.wake_parent_waiting_for(current_pid);

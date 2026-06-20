@@ -149,16 +149,15 @@ impl ProcessControlBlock {
         fd_table
     }
 
-    pub fn close_non_standard_fds_on_exec(&mut self) {
-        /*
-         * fd 0/1/2 是 stdin/stdout/stderr，exec 后保留。
-         * fd >= 3 作为普通打开文件，exec 成功后关闭。
-         */
+    pub fn close_non_standard_fds_on_exec(&mut self) -> Vec<FileRef> {
+        let mut closed = Vec::new();
         for fd in 3..self.fd_table.len() {
-            if self.fd_table[fd].take().is_some() {
+            if let Some(file) = self.fd_table[fd].take() {
                 self.free_fds.push(fd);
+                closed.push(file);
             }
         }
+        closed   // 把关掉的 file 返回出去
     }
 }
 
