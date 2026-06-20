@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
 use crate::sync::spin::Mutex;
+use crate::task::thread;
 use crate::trap::TrapContext;
 
 use super::context::TaskContext;
@@ -916,6 +917,18 @@ impl TaskManager {
         for thread in self.threads.iter_mut() {
             if let Some(thread) = thread.as_mut() {
                 thread.run_ticks = 0;
+            }
+        }
+        0
+    }
+
+    pub fn wake_threads_by_reason(&mut self, reason : BlockReason) -> isize{
+        for thread in self.threads.iter_mut() {
+            if let Some(thread) = thread.as_mut() {
+                if thread.block_reason == reason{
+                    thread.status = ThreadStatus::Ready;
+                    thread.block_reason = BlockReason::None;
+                }
             }
         }
         0

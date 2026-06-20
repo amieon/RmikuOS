@@ -1,6 +1,6 @@
 use crate::sync::spin::Mutex;
 use crate::task::{block_current_on_pipe_read,block_current_on_pipe_write};
-use crate::task::{wake_up_on_pipe_read,wake_up_on_pipe_write};
+use crate::task::{wake_pipe_writers,wake_pipe_readers};
 
 pub const PIPE_BUF_SIZE: usize = 512;
 
@@ -59,7 +59,8 @@ impl File for PipeReadEnd {
                     pipe.len -= 1;
                     count += 1;
                 }
-                wake_up_on_pipe_read();
+                drop(pipe);       
+                wake_pipe_writers();
                 return count as isize;
             }
             if pipe.writer_count <= 0 {
@@ -95,20 +96,21 @@ impl File for PipeWriteEnd {
     fn write(&self, buf: &[u8]) -> isize {
         loop{
             let mut pipe = self.inner.lock();
-            if pipe.len == PIPE_BUF_SIZE {
-                let tail = pipe.tail;        
+            if pipe.len != PIPE_BUF_SIZE {
                 let mut count = 0;
                 while count < buf.len() && pipe.len < PIPE_BUF_SIZE {
+                    let tail = pipe.tail;    
                     pipe.buf[tail] = buf[count];
                     pipe.tail = (pipe.tail + 1) % PIPE_BUF_SIZE;
                     pipe.len += 1;
                     count += 1;
                 }
-                wake_up_on_pipe_write();
+                drop(pipe);       
+                wake_pipe_readers();
                 return count as isize;
             }
             if pipe.reader_count == 0 {
-                return super::EOF;
+                return super::EPIPE;
             }
             drop(pipe);              
             block_current_on_pipe_write();
@@ -119,4 +121,27 @@ impl File for PipeWriteEnd {
 pub fn make_pipe() -> (FileRef, FileRef){
     let inner = Arc::new(Mutex::new(Pipe::new()));
     (Arc::new(PipeReadEnd{inner : inner.clone()}),Arc::new(PipeWriteEnd{inner : inner.clone()}))
+}
+
+impl Drop for PipeWriteEnd {
+    fn drop(&mut self) {
+        let mut pipe = self.inner.lock();
+        pipe.writer_count -= 1;
+        let no_writers = pipe.writer_count == 0;
+        drop(pipe);
+        if no_writers {
+            wake_pipe_readers();   // 写端全关,唤醒读者去拿 EOF
+        }
+    }
+}
+impl Drop for PipeReadEnd {
+    fn drop(&mut self) {
+        let mut pipe = self.inner.lock();
+        pipe.reader_count -= 1;
+        let no_readers = pipe.reader_count == 0;
+        drop(pipe);
+        if no_readers {
+            wake_pipe_writers();   // 读端全关,唤醒写者去拿 EPIPE
+        }
+    }
 }

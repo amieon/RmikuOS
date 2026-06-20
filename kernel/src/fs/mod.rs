@@ -15,6 +15,7 @@ pub use file::{File, FileRef};
 pub use inode::{Inode, InodeRef, Metadata, InodeType};
 pub use stdio::{stdin, stdout};
 pub const EOF : isize = 0;
+pub const EPIPE : isize = -1;
 
 
 pub fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {

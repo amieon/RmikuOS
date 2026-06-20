@@ -65,6 +65,6 @@ pub use manager_wrapper::{
     new_pipe,
     block_current_on_pipe_write,
     block_current_on_pipe_read,
-    wake_up_on_pipe_read,
-    wake_up_on_pipe_write,
+    wake_pipe_readers,
+    wake_pipe_writers,
 };
