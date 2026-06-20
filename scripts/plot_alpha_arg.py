@@ -117,42 +117,52 @@ def plot_effective(case, per_alpha, out_dir):
 
 
 def plot_tickshare(case, per_alpha, out_dir, metric):
-    """实际 CPU 份额 vs alpha：每个 role 的 metric 占该 alpha 下总量的比例。"""
+    """每个 role：实线=实际 CPU 份额(metric 占比)，同色虚线=理论应占份额(effective 占比)。
+    实线贴合虚线 = 调度器算出的权重真的兑现成了实际 CPU 时间。"""
     alphas = sorted(per_alpha.keys())
     roles = sorted({r for a in alphas for r in per_alpha[a].keys()})
 
     fig, ax = plt.subplots(figsize=(8, 5.5))
-    # 先算每个 alpha 的总量，再算各 role 占比
     role_threads = {}
-    series = {role: ([], []) for role in roles}  # role -> (xs, share%)
+    # role -> (xs, actual_share%, theory_share%)
+    series = {role: ([], [], []) for role in roles}
     for a in alphas:
-        total = 0.0
-        vals = {}
+        total_metric = 0.0
+        total_eff = 0.0
+        vals_metric, vals_eff = {}, {}
         for role in roles:
             if role in per_alpha[a]:
                 d = per_alpha[a][role]
-                v = mean(d[metric])
-                vals[role] = v
-                total += v
+                vm = mean(d[metric])
+                ve = mean(d["eff"])
+                vals_metric[role] = vm
+                vals_eff[role] = ve
+                total_metric += vm
+                total_eff += ve
                 role_threads[role] = d["threads"]
-        if total <= 0:
-            continue
         for role in roles:
-            if role in vals:
+            if role in vals_metric and total_metric > 0 and total_eff > 0:
                 series[role][0].append(a)
-                series[role][1].append(100.0 * vals[role] / total)
+                series[role][1].append(100.0 * vals_metric[role] / total_metric)
+                series[role][2].append(100.0 * vals_eff[role] / total_eff)
 
     for role in roles:
-        xs, sh = series[role]
-        if xs:
-            ax.plot(xs, sh, "-o", markersize=3,
-                    label=f"{role_threads.get(role, '?')} threads")
+        xs, actual, theory = series[role]
+        if not xs:
+            continue
+        # 实线：实际份额。取颜色后给虚线复用。
+        line, = ax.plot(xs, actual, "-o", markersize=3,
+                        label=f"{role_threads.get(role, '?')} threads (actual)")
+        # 同色虚线：理论应占份额(effective 占比)
+        ax.plot(xs, theory, "--", color=line.get_color(), alpha=0.7,
+                label=f"{role_threads.get(role, '?')} threads (expected)")
 
     ax.set_xlabel("alpha")
-    ax.set_ylabel(f"actual CPU share (% of {metric})")
-    ax.set_title(f"Actual CPU share vs alpha  (case threads={case})")
+    ax.set_ylabel(f"CPU share (%)")
+    ax.set_title(f"Actual vs expected CPU share  (case threads={case})\n"
+                 f"solid = actual ({metric}), dashed = expected (effective_tickets)")
     ax.grid(True, alpha=0.3)
-    ax.legend()
+    ax.legend(fontsize=8)
     fig.tight_layout()
     p = os.path.join(out_dir, f"tickshare_vs_alpha_{case.replace(',', '_')}.png")
     fig.savefig(p, dpi=200)
