@@ -329,33 +329,36 @@ static void build_exec_path(const char *cmd, char *out, int out_size) {
     out[pos] = 0;
 }
 
+static void run_exec(int argc, char *argv[]){
+    char path[96];
+
+    build_exec_path(argv[0], path, sizeof(path));
+
+    struct exec_args args;
+    args.argc = argc;
+
+    for (int i = 0; i < EXEC_MAX_ARGS; i++) {
+        args.argv[i].ptr = 0;
+        args.argv[i].len = 0;
+    }
+
+    for (int i = 0; i < argc && i < EXEC_MAX_ARGS; i++) {
+        args.argv[i].ptr = argv[i];
+        args.argv[i].len = strlen(argv[i]);
+    }
+
+    exec_with_args(path, &args);
+
+    puts("exec failed: ");
+    puts(path);
+    puts("\n");
+}
+
 static void run_external(int argc, char *argv[]) {
     isize pid = fork();
 
     if (pid == 0) {
-        char path[96];
-
-        build_exec_path(argv[0], path, sizeof(path));
-
-        struct exec_args args;
-        args.argc = argc;
-
-        for (int i = 0; i < EXEC_MAX_ARGS; i++) {
-            args.argv[i].ptr = 0;
-            args.argv[i].len = 0;
-        }
-
-        for (int i = 0; i < argc && i < EXEC_MAX_ARGS; i++) {
-            args.argv[i].ptr = argv[i];
-            args.argv[i].len = strlen(argv[i]);
-        }
-
-        exec_with_args(path, &args);
-
-        puts("exec failed: ");
-        puts(path);
-        puts("\n");
-
+        run_exec(argc,argv);
         exit(1);
     } else if (pid > 0) {
         int code = -1;
@@ -368,6 +371,59 @@ static void run_external(int argc, char *argv[]) {
         puts("fork failed\n");
     }
 }
+
+static void run_pipeline(char *line){
+    char * line2 = line;
+    for(int i=0;line[i] != '\0';++i)
+        if(line[i] == '|'){
+            line[i] = '\0';
+            line2 = line + i + 1;
+            break;
+        }
+    
+    char *argv1[MAX_ARGC];
+    int argc1 = parse_args(line, argv1, MAX_ARGC);
+
+    char *argv2[MAX_ARGC];
+    int argc2 = parse_args(line2, argv2, MAX_ARGC);
+    
+    int fd[2];
+    if (pipe(fd) < 0) { puts("pipe failed\n"); return; }
+    if (argc1 == 0 || argc2 == 0) { puts("pipe: empty command\n"); return; }
+
+    int pid1 = fork();
+    if (pid1 == 0) {
+        dup2(fd[1], 1);
+        close(fd[0]);
+        close(fd[1]);
+        run_exec(argc1, argv1);
+        exit(1);
+    }
+
+    int pid2 = fork();
+    if (pid2 == 0) {
+        dup2(fd[0], 0);
+        close(fd[0]);
+        close(fd[1]);
+        run_exec(argc2, argv2);
+        exit(1);
+    }
+
+
+    close(fd[0]);
+    close(fd[1]);
+    waitpid(pid1, 0);
+    waitpid(pid2, 0);
+
+}
+
+static int has_pipe(char *s){
+    for(int i=0;s[i] != '\0';++i)
+        if(s[i] == '|')
+            return 1;
+    return 0;
+}
+
 int main(void) {
     char line[LINE_SIZE];
     char *argv[MAX_ARGC];
@@ -388,6 +444,11 @@ int main(void) {
 
         if (len == 0) {
             continue;
+        }
+
+        if (has_pipe(line)) {
+            run_pipeline(line);
+            continue;         
         }
 
         int argc = parse_args(line, argv, MAX_ARGC);
