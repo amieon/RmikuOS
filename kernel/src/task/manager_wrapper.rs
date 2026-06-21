@@ -1384,4 +1384,47 @@ pub fn wake_pipe_writers() {
     let mut manager = TASK_MANAGER.lock();
     manager.wake_threads_by_reason(BlockReason::PipeWrite);
 }
+
+
+pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
+    let mut manager = TASK_MANAGER.lock();
+    let current_tid = processor::current_tid();
+    let current_pid = manager.pid_of_tid(current_tid);
     
+    if old_fd == new_fd {
+        return new_fd as isize;
+    }
+    
+    let old_file = {
+        let process = manager.process_mut(current_pid);
+        if old_fd >= process.fd_table.len(){
+            return -1;
+        }
+        match &process.fd_table[old_fd]{
+            Some(f) => f.clone(),
+            None => return -1,
+        }
+    };
+
+        
+    let new_file = {
+        let process = manager.process_mut(current_pid);
+        if new_fd >= process.fd_table.len(){
+            return -1;
+        }
+        process.fd_table[new_fd].take()
+    };
+    
+    if let Some(f) = &new_file {
+        manager.release_file(f);
+    }
+
+
+    old_file.on_fork(); 
+    {
+        let process = manager.process_mut(current_pid);
+        process.fd_table[new_fd] = Some(old_file);
+    }
+
+    new_fd as isize
+}

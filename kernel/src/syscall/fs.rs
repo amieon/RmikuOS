@@ -232,3 +232,7 @@ pub fn sys_fstat(fd: usize, stat_ptr: usize) -> isize {
 pub fn sys_pipe(fd : usize) -> isize {
     crate::task::new_pipe(fd)
 }
+
+pub fn sys_dup2(old_fd : usize,new_fd : usize) -> isize {
+    crate::task::dup2(old_fd,new_fd)
+}

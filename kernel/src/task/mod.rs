@@ -67,4 +67,5 @@ pub use manager_wrapper::{
     block_current_on_pipe_read,
     wake_pipe_readers,
     wake_pipe_writers,
+    dup2,
 };

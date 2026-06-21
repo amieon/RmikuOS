@@ -81,6 +81,22 @@ static void test2(){
     uprintf("Get 300 chars\n");
 }
 static void test3(){
+    int fd[2];
+    pipe(fd);
+    int pid = fork();
+    if (pid == 0) {
+        exec("directly_return");
+        uprintf("exec failed!\n");
+        exit(1);
+    } else {
+        close(fd[1]);
+        char buf[16];
+        int n = read(fd[0], buf, 16); 
+        uprintf("parent read n=%d (expect 0 = EOF)\n", n);
+        waitpid(pid, 0);
+    }
+}
+static void test4(){
     for (int i = 0; i < 200; i++) {
         int fd[2];
         pipe(fd);
@@ -110,5 +126,7 @@ int main(int argc, char **argv) {
     uprintf("TEST2 PASS\n");
     test3();
     uprintf("TEST3 PASS\n");
+    test4();
+    uprintf("TEST4 PASS\n");
     return 0;
 }
