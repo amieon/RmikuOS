@@ -924,11 +924,13 @@ impl TaskManager {
     }
 
     pub fn wake_threads_by_reason(&mut self, reason : BlockReason) -> isize{
-        for thread in self.threads.iter_mut() {
-            if let Some(thread) = thread.as_mut() {
-                if thread.block_reason == reason{
+        for tid in 0..self.threads.len() {
+            if let Some(thread) = self.threads[tid].as_mut() {
+                if thread.block_reason == reason {
                     thread.status = ThreadStatus::Ready;
                     thread.block_reason = BlockReason::None;
+                    let pid = thread.pid;
+                    self.process_mut(pid).ready_threads.push(tid);
                 }
             }
         }

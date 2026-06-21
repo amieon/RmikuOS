@@ -145,25 +145,3 @@ pub fn make_pipe() -> (FileRef, FileRef){
     (Arc::new(PipeReadEnd{inner : inner.clone()}),Arc::new(PipeWriteEnd{inner : inner.clone()}))
 }
 
-impl Drop for PipeWriteEnd {
-    fn drop(&mut self) {
-        let mut pipe = self.inner.lock();
-        pipe.writer_count -= 1;
-        let no_writers = pipe.writer_count == 0;
-        drop(pipe);
-        if no_writers {
-            wake_pipe_readers();  
-        }
-    }
-}
-impl Drop for PipeReadEnd {
-    fn drop(&mut self) {
-        let mut pipe = self.inner.lock();
-        pipe.reader_count -= 1;
-        let no_readers = pipe.reader_count == 0;
-        drop(pipe);
-        if no_readers {
-            wake_pipe_writers(); 
-        }
-    }
-}
