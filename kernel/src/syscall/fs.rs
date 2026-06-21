@@ -228,3 +228,7 @@ pub fn sys_fstat(fd: usize, stat_ptr: usize) -> isize {
 
     write_stat_to_user(stat_ptr, &stat)
 }
+
+pub fn sys_pipe(fd : usize) -> isize {
+    crate::task::new_pipe(fd)
+}

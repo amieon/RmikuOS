@@ -35,6 +35,7 @@ typedef long isize;
 #define SYS_GET_PROCESS_SCHED_STAT   29  
 #define SYS_RESET_SCHED_STAT         30
 #define SYS_GET_TICKS                31  
+#define SYS_PIPE                     32  
 
 
 
@@ -183,4 +184,8 @@ static inline int reset_sched_stat(void) {
 
 static inline usize get_ticks(void) {
     return syscall3(SYS_GET_TICKS, 0, 0, 0);
+}
+
+static inline int pipe(int fd[2]) {
+    return syscall(SYS_PIPE, (usize)fd, 0, 0);
 }

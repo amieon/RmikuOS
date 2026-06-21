@@ -1291,21 +1291,23 @@ pub fn reset_sched_stat() -> isize {
     manager.reset_sched_stat()
 }
 
-pub fn new_pipe(fd : [usize;2]) -> isize {
+pub fn new_pipe(fd : usize) -> isize {
     let file = crate::fs::pipe::make_pipe();
     let pipe_fd = (crate::task::alloc_fd_current(file.0),crate::task::alloc_fd_current(file.1));
     if pipe_fd.0 == 0 || pipe_fd.1 == -1{
         -1
     }
     else{
-        let write_fd1 = write_value_to_user(fd[0], &pipe_fd.0);
-        let write_fd0 = write_value_to_user(fd[1], &pipe_fd.1);
-        if write_fd1 == -1 || write_fd0 == -1 {
-            -1
+        let read_fd_i32 = pipe_fd.0 as i32;
+        let write_fd_i32 = pipe_fd.1 as i32;
+
+        let r0 = write_value_to_user(fd, &read_fd_i32);
+        let r1 = write_value_to_user(fd + core::mem::size_of::<i32>(), &write_fd_i32);
+
+        if r0 == -1 || r1 == -1 {
+            return -1;
         }
-        else{
-            write_fd1
-        }
+        0
     }
 }
 
