@@ -175,6 +175,8 @@ RmikuOS 当前支持基础进程管理：
 * `chdir`
 * `getcwd`
 * `exec`
+* `pipe`
+* `dup2`
 
 标准输入输出也通过 fd 统一处理：
 
@@ -183,6 +185,63 @@ fd 0 -> stdin
 fd 1 -> stdout
 ```
 
+---
+### Pipe and Shell Pipeline
+
+RmikuOS 实现了 Unix 匿名管道(pipe)作为基础 IPC 原语,并在 shell 中支持 `|` 管道符。
+
+#### Pipe
+
+`pipe()` 创建一对单向 fd:写端写入、读端读出,数据经由内核中一段固定大小的环形字节缓冲区(`PIPE_BUF_SIZE = 512`)传递,先进先出。管道是**字节流**而非消息流,不保留写入边界。
+
+```text
+pipe(fd)  ->  fd[0] = 读端, fd[1] = 写端
+```
+
+读写两端各实现统一的 `File` trait,因此 `read` / `write` 系统调用无需特殊处理,管道作为一种文件自动被支持。两端共享同一个 `Arc<Mutex<Pipe>>`,核心边界语义:
+
+```text
+缓冲空 + 仍有写者   -> 读者阻塞,等写入后被唤醒
+缓冲满 + 仍有读者   -> 写者阻塞,等读出后被唤醒
+缓冲空 + 写端全关   -> 读者得到 EOF(返回 0)
+读端全关           -> 写者得到 EPIPE
+```
+
+阻塞复用调度器的 block/wake 机制(`BlockReason::PipeRead / PipeWrite`),唤醒时只标记线程 Ready 并重新入就绪队列,不切换上下文。
+
+#### Reference Counting
+
+管道的 EOF / EPIPE 依赖一对手动维护的引用计数(`reader_count` / `writer_count`),它独立于 Arc 自身的引用计数,记录当前存活的读端 / 写端 fd 数量:
+
+```text
+make_pipe          -> 各置 1
+fork / dup2        -> 复制 fd 时对应计数 +1
+close / exec / exit -> 释放 fd 时对应计数 -1,归零则唤醒对端
+```
+
+三条 fd 释放路径(`close`、`exec` 时关闭非标准 fd、进程退出)统一经由 `release_file` 减计数并按需唤醒对端,保证任意多进程共享同一管道时计数始终配平。
+
+#### dup2 and Pipeline
+
+`dup2(oldfd, newfd)` 把 `newfd` 重定向到 `oldfd` 指向的文件(复制 fd 表项 + 计数 +1),是实现管道重定向的关键。shell 处理 `cmd1 | cmd2` 时:
+
+```text
+1. 按 | 切分为两个命令
+2. pipe(fd) 创建管道
+3. fork cmd1:dup2(fd[1], 1) 把 stdout 接到写端,关闭多余 fd,exec
+4. fork cmd2:dup2(fd[0], 0) 把 stdin 接到读端,关闭多余 fd,exec
+5. shell 关闭管道两端,waitpid 两个子进程
+```
+
+程序本身只认 fd 0 / 1,由 shell 在 fork 后、exec 前完成重定向,因此普通程序无需改动即可接入管道。cmd1 退出后其写端关闭,加之 shell 关闭自己的写端,`writer_count` 归零,cmd2 读到 EOF 后结束——整条 EOF 链由上述引用计数驱动。
+
+```text
+/ $ pipe_writer | pipe_reader
+hello from writer
+line2
+line3
+[reader got EOF]
+```
 ---
 
 ### ext4 Rootfs
@@ -714,12 +773,6 @@ virtio-mmio  virtio-pci
 * `open(O_CREAT)`、`write`、`mkdir`、`unlink`
 * 临时可写目录
 
-### Scheduler
-
-* 多重复实验 + 统计聚合，给现有结论加上误差带
-* per-process alpha 或调度 class（让 control/AI/logger 各自一档，而非全局单旋钮）
-* 更复杂的反馈控制器（如以 tardiness 为误差信号的 PI 控制）
-* 更丰富的动态负载模式（多阶段、随机突变）
 
 ### Network
 
