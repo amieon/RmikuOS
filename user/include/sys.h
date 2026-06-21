@@ -187,5 +187,5 @@ static inline usize get_ticks(void) {
 }
 
 static inline int pipe(int fd[2]) {
-    return syscall(SYS_PIPE, (usize)fd, 0, 0);
+    return syscall3(SYS_PIPE, (usize)fd, 0, 0);
 }
