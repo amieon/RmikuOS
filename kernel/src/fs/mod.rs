@@ -7,6 +7,7 @@ pub mod path;
 pub mod common_file;
 pub mod ext4fs;
 pub mod pipe;
+pub mod mount;
 
 //pub mod initramfs;
 mod stdio;
