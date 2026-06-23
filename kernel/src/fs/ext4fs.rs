@@ -143,6 +143,16 @@ pub struct Ext4Inode {
 
 
 
+impl super::mount::FileSystem for Ext4Fs {
+    fn root_inode(self: Arc<Self>) -> InodeRef {
+        Arc::new(Ext4Inode {
+            fs: self,           // self 就是 Arc<Ext4Fs>
+            path: String::from("/"),
+        })
+    }
+}
+
+
 fn join_path(parent: &str, name: &str) -> String {
     if parent == "/" {
         let mut s = String::from("/");
@@ -296,32 +306,15 @@ impl Inode for Ext4Inode {
 }
 
 
-static EXT4_ROOT_LOCK: Mutex<()> = Mutex::new(());
-static mut EXT4_ROOT: Option<Arc<Ext4Fs>> = None;
 
 pub fn init(device: Arc<dyn BlockDevice>) {
-    let _guard = EXT4_ROOT_LOCK.lock();
-
     let fs = Ext4Fs::load(device)
         .expect("[ext4] load rootfs failed");
-
-    unsafe {
-        EXT4_ROOT = Some(fs);
-    }
+    crate::fs::mount::mount("/", fs);
 }
+
 
 pub fn is_available() -> bool {
-    let _guard = EXT4_ROOT_LOCK.lock();
-
-    unsafe {
-        EXT4_ROOT.is_some()
-    }
+    crate::fs::mount::resolve_mount("/").is_some()
 }
 
-pub fn root_inode() -> Option<InodeRef> {
-    let _guard = EXT4_ROOT_LOCK.lock();
-
-    unsafe {
-        EXT4_ROOT.as_ref().map(|fs| fs.root_inode())
-    }
-}

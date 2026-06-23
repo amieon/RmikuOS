@@ -5,7 +5,7 @@ use super::inode::InodeRef;
 use crate::sync::spin::Mutex;
 
 pub trait FileSystem: Send + Sync {
-    fn root_inode(&self) -> InodeRef;
+    fn root_inode(self: Arc<Self>) -> InodeRef;
 }
 
 pub struct Mount {
@@ -42,7 +42,7 @@ pub fn resolve_mount(abs_path: &str) -> Option<(InodeRef, String)> {
     }
 
     let m = best?;
-    let root = m.fs.root_inode();
+    let root = m.fs.clone().root_inode();
     let rel = relative_path(abs_path, &m.mount_point);
     Some((root, rel))
 }

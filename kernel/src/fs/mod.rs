@@ -79,10 +79,7 @@ pub fn stat(path: &str) -> Option<Stat> {
     Some(Stat::new(file_type, meta.size))
 }
 
-pub fn root_inode() -> InodeRef {
-    ext4fs::root_inode()
-        .expect("[fs] rootfs not mounted")
-}
+
 
 
 use alloc::vec::Vec;
