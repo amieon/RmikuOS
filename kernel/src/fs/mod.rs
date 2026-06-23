@@ -6,6 +6,7 @@ pub mod inode;
 pub mod path;
 pub mod common_file;
 pub mod ext4fs;
+pub mod tmpfs;
 pub mod pipe;
 pub mod mount;
 

@@ -218,6 +218,7 @@ fn primary_init() {
 
     let rootfs = block::ext4_image::rootfs_ramdisk();
     fs::ext4fs::init(rootfs);
+    fs::tmpfs::init();
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
