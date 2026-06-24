@@ -38,6 +38,9 @@ pub const SYSCALL_PIPE: usize = 32;
 pub const SYSCALL_DUP2: usize = 33;
 pub const SYSCALL_MKDIR: usize = 34;
 pub const SYSCALL_CREATE: usize = 35;
+pub const SYSCALL_UNLINK: usize = 36;
+pub const SYSCALL_RMDIR: usize = 37;
+pub const SYSCALL_REMOVE_RECURSIVE: usize = 38;
 
 
 
@@ -79,6 +82,9 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_DUP2 => fs::sys_dup2(args[0],args[1]),
         SYSCALL_MKDIR => fs::sys_mkdir(args[0],args[1]),
         SYSCALL_CREATE => fs::sys_create(args[0],args[1]),
+        SYSCALL_UNLINK => fs::sys_unlink(args[0],args[1]),
+        SYSCALL_RMDIR => fs::sys_rmdir(args[0],args[1]),
+        SYSCALL_REMOVE_RECURSIVE => fs::sys_remove_recursive(args[0],args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

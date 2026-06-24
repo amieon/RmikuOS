@@ -1,4 +1,4 @@
-use alloc::{format, vec};
+use alloc::{format, string::String, vec};
 
 use crate::fs;
 
@@ -239,21 +239,30 @@ pub fn sys_dup2(old_fd : usize,new_fd : usize) -> isize {
     crate::task::dup2(old_fd,new_fd)
 }
 
-pub fn sys_mkdir(path_ptr : usize, len : usize) -> isize {
+fn user_path_to_abs(path_ptr : usize, len : usize) -> Option<String>{
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
         Some(bytes) => bytes,
-        None => return -1,
+        None => return None,
     };
 
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s.trim_matches('\0').trim(),
-        Err(_) => return -1,
+        Err(_) => return None,
     };
 
     let cwd = crate::task::current_cwd();
 
     let abs = match crate::fs::normalize_path(&cwd, path) {
         Some(p) => p,
+        None => return None,
+    };
+    Some(abs)
+}
+
+pub fn sys_mkdir(path_ptr : usize, len : usize) -> isize {
+
+    let abs = match user_path_to_abs (path_ptr, len) {
+        Some(abs) => abs,
         None => return -1,
     };
 
@@ -264,25 +273,52 @@ pub fn sys_mkdir(path_ptr : usize, len : usize) -> isize {
 }
 
 pub fn sys_create(path_ptr : usize, len : usize) -> isize {
-    let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
-        Some(bytes) => bytes,
+    let abs = match user_path_to_abs (path_ptr, len) {
+        Some(abs) => abs,
         None => return -1,
     };
 
-    let path = match core::str::from_utf8(&path_bytes) {
-        Ok(s) => s.trim_matches('\0').trim(),
-        Err(_) => return -1,
-    };
-
-    let cwd = crate::task::current_cwd();
-
-    let abs = match crate::fs::normalize_path(&cwd, path) {
-        Some(p) => p,
-        None => return -1,
-    };
-
-    match crate::fs::create_file(&abs) {
+    match crate::fs::make_dir(&abs) {
         Some(_) => 0,
         None => -1,
     }
 }
+
+pub fn sys_rmdir(path_ptr : usize, len : usize) -> isize {
+
+    let abs = match user_path_to_abs (path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+
+    match crate::fs::remove_dir(&abs) {
+        Some(_) => 0,
+        None => -1,
+    }
+}
+
+pub fn sys_remove_recursive(path_ptr : usize, len : usize) -> isize {
+    let abs = match user_path_to_abs (path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+
+    match crate::fs::remove_recursive(&abs) {
+        Some(_) => 0,
+        None => -1,
+    }
+}
+
+pub fn sys_unlink(path_ptr : usize, len : usize) -> isize {
+
+    let abs = match user_path_to_abs (path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+
+    match crate::fs::unlink_file(&abs) {
+        Some(_) => 0,
+        None => -1,
+    }
+}
+

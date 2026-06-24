@@ -140,3 +140,24 @@ pub fn make_dir(path: &str) -> Option<InodeRef> {
     let parent_inode = path::lookup_abs_path(&parent)?;
     parent_inode.mkdir(&name)
 }
+
+pub fn unlink_file(path: &str) -> Option<isize>{
+    let abs = normalize_path("/", path)?;
+    let (parent, name) = split_parent(&abs);
+    let parent_inode = path::lookup_abs_path(&parent)?;  
+    Some(parent_inode.unlink(&name))                  
+}
+
+pub fn remove_dir(path: &str) -> Option<isize> {
+    let abs = normalize_path("/", path)?;
+    let (parent, name) = split_parent(&abs);
+    let parent_inode = path::lookup_abs_path(&parent)?;
+    Some(parent_inode.rmdir(&name))
+}
+
+pub fn remove_recursive(path: &str) -> Option<isize> {
+    let abs = normalize_path("/", path)?;
+    let (parent, name) = split_parent(&abs);
+    let parent_inode = path::lookup_abs_path(&parent)?;
+    Some(parent_inode.remove_recursive(&name))
+}

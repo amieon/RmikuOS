@@ -39,6 +39,9 @@ typedef long isize;
 #define SYS_DUP2                     33
 #define SYS_MKDIR                    34
 #define SYS_CREATE                   35
+#define SYS_UNLINK                   36
+#define SYS_RMDIR                    37
+#define SYS_REMOVE_RECURSIVE         38
 
 
 
@@ -223,3 +226,26 @@ static inline isize mkdir(const char *path) {
     return mkdir2(path, strlen(path));
 }
 
+static inline isize unlink2(const char *path, usize len) {
+    return syscall3(SYS_UNLINK, (usize)path, len, 0);
+}
+
+static inline isize unlink(const char *path) {
+    return unlink2(path, strlen(path));
+}
+
+static inline isize rmdir2(const char *path, usize len) {
+    return syscall3(SYS_RMDIR, (usize)path, len, 0);
+}
+
+static inline isize rmdir(const char *path) {
+    return rmdir2(path, strlen(path));
+}
+
+static inline isize remove_recursive2(const char *path, usize len) {
+    return syscall3(SYS_REMOVE_RECURSIVE, (usize)path, len, 0);
+}
+
+static inline isize remove_recursive(const char *path) {
+    return remove_recursive2(path, strlen(path));
+}
