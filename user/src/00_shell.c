@@ -440,9 +440,9 @@ static void run_external(int argc, char *argv[]) {
         int code = -1;
         waitpid(pid, &code);
 
-        puts("[shell] child exit code ");
-        put_int(code);
-        puts("\n");
+        //puts("[shell] child exit code ");
+        //put_int(code);
+        //puts("\n");
     } else {
         puts("fork failed\n");
     }
@@ -722,65 +722,65 @@ int main(void) {
 
         if (streq(argv[0], "ls")) {
             int code = builtin_ls(argc, argv);
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 
         if (streq(argv[0], "cat")) {
             int code = builtin_cat(argc, argv);
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 
         if (streq(argv[0], "pwd")) {
             int code = builtin_pwd();
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 
         if (streq(argv[0], "cd")) {
             int code = builtin_cd(argc, argv);
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 
         if (streq(argv[0], "mkdir")) {
             int code = builtin_mkdir(argc, argv);
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 
         if (streq(argv[0], "touch")) {
             int code = builtin_create(argc, argv);
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 
         if (streq(argv[0], "rm")) {
             int code = builtin_rm(argc, argv);
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 
         if (streq(argv[0], "rmdir")) {
             int code = builtin_rmdir(argc, argv);
-            puts("[shell] builtin exit code ");
-            put_int(code);
-            puts("\n");
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
             continue;
         }
 

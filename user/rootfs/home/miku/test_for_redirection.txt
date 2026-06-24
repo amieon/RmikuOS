@@ -1,0 +1,26 @@
+echo === group1: normal commands not misfired ===
+ls
+echo_args hello world
+echo === group2: output redirect ===
+echo_args hello > /tmp/out
+cat /tmp/out
+echo_args aaa bbb ccc > /tmp/out2
+cat /tmp/out2
+echo === group3: input redirect ===
+cat_stdin < /tmp/out
+echo === group4: both in and out ===
+cat_stdin < /tmp/out > /tmp/out3
+cat /tmp/out3
+cat_stdin > /tmp/out4 < /tmp/out2
+cat /tmp/out4
+echo === group5: redirect in the middle, args preserved ===
+echo_args hello > /tmp/out5 world
+cat /tmp/out5
+echo === group6: error handling ===
+cat_stdin < /tmp/nonexist
+echo === group7: overwrite semantics ===
+echo_args first > /tmp/ov
+echo_args second > /tmp/ov
+cat /tmp/ov
+echo === done ===
+ls /tmp
