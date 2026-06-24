@@ -83,7 +83,7 @@ pub fn stat(path: &str) -> Option<Stat> {
 
 
 
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 pub fn read_all(path: &str) -> Option<Vec<u8>> {
     let inode = crate::fs::path::lookup_abs_path(path)?;
@@ -114,4 +114,29 @@ pub fn read_all(path: &str) -> Option<Vec<u8>> {
     }
 
     Some(data)
+}
+
+// "/tmp/x" → ("/tmp", "x")
+// "/tmp"   → ("/", "tmp")
+fn split_parent(path: &str) -> (String, String) {
+    let trimmed = path.trim_end_matches('/');
+    match trimmed.rfind('/') {
+        Some(0) => (String::from("/"), String::from(&trimmed[1..])),
+        Some(pos) => (String::from(&trimmed[..pos]), String::from(&trimmed[pos+1..])),
+        None => (String::from("/"), String::from(trimmed)),
+    }
+}
+
+pub fn create_file(path: &str) -> Option<InodeRef> {
+    let abs = normalize_path("/", path)?;
+    let (parent, name) = split_parent(&abs);
+    let parent_inode = path::lookup_abs_path(&parent)?;  
+    parent_inode.create(&name)                    
+}
+
+pub fn make_dir(path: &str) -> Option<InodeRef> {
+    let abs = normalize_path("/", path)?;
+    let (parent, name) = split_parent(&abs);
+    let parent_inode = path::lookup_abs_path(&parent)?;
+    parent_inode.mkdir(&name)
 }

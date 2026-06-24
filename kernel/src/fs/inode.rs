@@ -38,4 +38,12 @@ pub trait Inode: Send + Sync {
     fn is_file(&self) -> bool {
         self.metadata().inode_type == InodeType::File
     }
+
+    fn create(&self, name: &str) -> Option<InodeRef>{
+        None
+    }
+    
+    fn mkdir(&self, name: &str) -> Option<InodeRef>{
+        None
+    }
 }

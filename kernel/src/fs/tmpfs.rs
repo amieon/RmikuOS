@@ -105,6 +105,37 @@ impl Inode for TmpfsInode {
 
         entries
     }
+    fn create(&self, name: &str) -> Option<InodeRef> {
+        match &self.node {
+            TmpfsNode::Dir(dir) => {
+                let mut dir = dir.lock();
+                if dir.contains_key(name) {
+                    return None; 
+                }
+                // 新建一个空文件节点
+                let file_node = TmpfsNode::File(Arc::new(Mutex::new(Vec::new())));
+                dir.insert(String::from(name), file_node.clone_ref());
+                Some(Arc::new(TmpfsInode { node: file_node }))
+            }
+            TmpfsNode::File(_) => None,   
+        }
+    }
+
+    fn mkdir(&self, name: &str) -> Option<InodeRef> {
+        match &self.node {
+            TmpfsNode::Dir(dir) => {
+                let mut dir = dir.lock();
+                if dir.contains_key(name) {
+                    return None;
+                }
+                
+                let dir_node = TmpfsNode::Dir(Arc::new(Mutex::new(BTreeMap::new())));
+                dir.insert(String::from(name), dir_node.clone_ref());
+                Some(Arc::new(TmpfsInode { node: dir_node }))
+            }
+            TmpfsNode::File(_) => None,
+        }
+    }
 }
 
 
