@@ -71,7 +71,7 @@ pub fn sys_open(path_ptr: usize, len: usize) -> isize {
     let file = match crate::fs::open_at(&cwd, path) {
         Some(file) => file,
         None => {
-            log::warn!("[fs] open failed: cwd={}, path={}", cwd, path);
+            log::info!("[fs] open failed: cwd={}, path={}", cwd, path);
             return -1;
         }
     };
