@@ -80,45 +80,6 @@ static int parse_args(char *line, char *argv[], int max_argc) {
 
 
 
-static void copy_dirent_name(struct dirent *d, char *out, int out_size) {
-    int n = d->name_len;
-    if (n > out_size - 1) {
-        n = out_size - 1;
-    }
-
-    for (int i = 0; i < n; i++) {
-        out[i] = d->name[i];
-    }
-
-    out[n] = 0;
-}
-
-static void join_path(const char *dir, const char *name, char *out, int out_size) {
-    int pos = 0;
-
-    if (dir[0] == '.' && dir[1] == 0) {
-        for (int i = 0; name[i] && pos < out_size - 1; i++) {
-            out[pos++] = name[i];
-        }
-        out[pos] = 0;
-        return;
-    }
-
-    for (int i = 0; dir[i] && pos < out_size - 1; i++) {
-        out[pos++] = dir[i];
-    }
-
-    if (pos > 0 && out[pos - 1] != '/' && pos < out_size - 1) {
-        out[pos++] = '/';
-    }
-
-    for (int i = 0; name[i] && pos < out_size - 1; i++) {
-        out[pos++] = name[i];
-    }
-
-    out[pos] = 0;
-}
-
 
 
 static void print_help(void) {
@@ -210,128 +171,6 @@ static int builtin_create(int argc, char *argv[]) {
 
 
 
-static int builtin_ls(int argc, char *argv[]) {
-
-    const char *path = ".";
-
-    if (argc >= 2) {
-        path = argv[1];
-    }
-
-    int fd = open(path);
-    if (fd < 0) {
-        puts("ls: cannot open ");
-        puts(path);
-        puts("\n");
-        return 1;
-    }
-
-    struct dirent entries[8];
-
-    while (1) {
-        isize n = getdents(fd, entries, sizeof(entries));
-
-        if (n < 0) {
-
-            puts("ls: not a directory: ");
-            puts(path);
-            puts("\n");
-            close(fd);
-            return 1;
-        }
-
-        if (n == 0) {
-            break;
-        }
-
-        int count = n / sizeof(struct dirent);
-
-        for (int i = 0; i < count; i++) {
-            char name[64];
-            char full_path[128];
-            struct stat st;
-
-            copy_dirent_name(&entries[i], name, sizeof(name));
-            join_path(path, name, full_path, sizeof(full_path));
-
-            if (stat(full_path, &st) < 0) {
-                puts("?       ");
-                puts(name);
-                puts("\n");
-                continue;
-            }
-
-            if (st.file_type == STAT_TYPE_DIR) {
-                puts("dir     ");
-            } else if (st.file_type == STAT_TYPE_FILE) {
-                puts("file    ");
-            } else if (st.file_type == STAT_TYPE_CHAR) {
-                puts("char    ");
-            } else {
-                puts("unknown ");
-            }
-
-            put_int(st.size);
-            puts(" ");
-
-            puts(name);
-            if (st.file_type == STAT_TYPE_DIR) {
-                puts("/");
-            }
-            puts("\n");
-        }
-    }
-
-    close(fd);
-    return 0;
-}
-
-static int builtin_cat(int argc, char *argv[]) {
-    if (argc < 2) {
-        puts("cat: missing path\n");
-        return 1;
-    }
-
-
-    int ret = 0;
-
-    for (int argi = 1; argi < argc; argi++) {
-        const char *path = argv[argi];
-
-        int fd = open(path);
-        if (fd < 0) {
-            puts("cat: cannot open ");
-            puts(path);
-            puts("\n");
-            ret = 1;
-            continue;
-        }
-
-        char buf[128];
-
-        while (1) {
-            isize n = read(fd, buf, sizeof(buf));
-
-            if (n < 0) {
-                puts("cat: read failed: ");
-                puts(path);
-                puts("\n");
-                ret = 1;
-                break;
-            }
-
-            if (n == 0) {
-                break;
-            }
-
-            write(1, buf, n);
-        }
-
-        close(fd);
-    }
-
-    return ret;
-}
 
 
 static int builtin_rm(int argc, char *argv[]) {
@@ -720,21 +559,6 @@ int main(void) {
             return 0;
         }
 
-        if (streq(argv[0], "ls")) {
-            int code = builtin_ls(argc, argv);
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
-            continue;
-        }
-
-        if (streq(argv[0], "cat")) {
-            int code = builtin_cat(argc, argv);
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
-            continue;
-        }
 
         if (streq(argv[0], "pwd")) {
             int code = builtin_pwd();
