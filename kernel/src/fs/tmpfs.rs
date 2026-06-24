@@ -136,6 +136,62 @@ impl Inode for TmpfsInode {
             TmpfsNode::File(_) => None,
         }
     }
+
+    fn unlink(&self, name: &str) -> isize {
+        match &self.node {
+            TmpfsNode::Dir(dir) => {
+                let mut dir = dir.lock(); 
+                match dir.get(name) {
+                    Some(TmpfsNode::File(_)) => {
+                        dir.remove(name);
+                        0
+                    }
+                    Some(TmpfsNode::Dir(_)) => -1,  
+                    None => -1,                     
+                }
+            }
+            TmpfsNode::File(_) => -1, 
+        }
+    }
+
+    fn remove_recursive(&self, name: &str) -> isize {
+        match &self.node {
+            TmpfsNode::Dir(dir) => {
+                let mut dir = dir.lock(); 
+                match dir.get(name) {
+                    Some(_) => {
+                        dir.remove(name);
+                        0
+                    }
+                    None => -1,                     
+                }
+            }
+            TmpfsNode::File(_) => -1, 
+        }
+    }
+
+    fn rmdir(&self, name: &str) -> isize {
+        match &self.node {
+            TmpfsNode::Dir(dir) => {
+                let mut dir = dir.lock(); 
+                let is_empty_dir = match dir.get(name) {
+                    Some(TmpfsNode::Dir(child)) => {
+                        child.lock().is_empty()
+                    }
+                    Some(TmpfsNode::File(_)) => false,  
+                    None => false,                     
+                };
+                if is_empty_dir {
+                    dir.remove(name);
+                    0
+                }
+                else{
+                    -1
+                }
+            }
+            TmpfsNode::File(_) => -1, 
+        }
+    }
 }
 
 

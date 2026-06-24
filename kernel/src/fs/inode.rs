@@ -46,4 +46,16 @@ pub trait Inode: Send + Sync {
     fn mkdir(&self, name: &str) -> Option<InodeRef>{
         None
     }
+
+    fn unlink(&self, name: &str) -> isize{
+        -1
+    }
+    
+    fn rmdir(&self, name: &str) -> isize{
+        -1
+    }
+
+    fn remove_recursive(&self, name: &str) -> isize{
+        -1
+    }
 }
