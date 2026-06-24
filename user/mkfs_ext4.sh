@@ -23,7 +23,7 @@ else
 fi
 
 # 确保基础目录存在
-mkdir -p "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc"
+mkdir -p "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests"
 
 # 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then
@@ -33,14 +33,20 @@ EOF
 fi
 
 # 把编译出来的用户程序放进 /bin
-for f in user/build/${ARCH}/*.elf; do
+
+for f in user/build/${ARCH}/bin/*.elf; do
   [ -e "$f" ] || continue
-
   base="$(basename "$f" .elf)"
-
-  clean="$(printf "%s" "$base" | sed -E 's/^([0-9]+_)+//')"
-
+  clean="$(printf "%s" "$base" | sed -E 's/^([0-9]+_)+//')" 
   cp "$f" "$ROOT/bin/$clean"
+done
+
+
+for f in user/build/${ARCH}/tests/*.elf; do
+  [ -e "$f" ] || continue
+  base="$(basename "$f" .elf)"          
+  clean="$(printf "%s" "$base" | sed -E 's/^([0-9]+_)+//')"  
+  cp "$f" "$ROOT/tests/$clean"
 done
 
 # 5. 简单展示 rootfs 内容
