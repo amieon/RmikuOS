@@ -196,11 +196,11 @@ static int builtin_mkdir(int argc, char *argv[]) {
 
 static int builtin_create(int argc, char *argv[]) {
     if (argc < 2) {
-        puts("mkdir: missing operand\n");
+        puts("create: missing operand\n");
         return 1;
     }
     if (create(argv[1]) < 0) {
-        puts("mkdir: cannot create file: ");
+        puts("create: cannot create file: ");
         puts(argv[1]);
         puts("\n");
         return 1;
