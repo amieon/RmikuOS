@@ -333,6 +333,53 @@ static int builtin_cat(int argc, char *argv[]) {
     return ret;
 }
 
+
+static int builtin_rm(int argc, char *argv[]) {
+    if (argc < 2) {
+        puts("rm: missing operand\n");
+        return 1;
+    }
+
+
+    int recursive = 0;
+    int start = 1;
+    if (streq(argv[1], "-r") || streq(argv[1], "-rf") || streq(argv[1], "-f")) {
+        if (streq(argv[1], "-r") || streq(argv[1], "-rf")) recursive = 1;
+        start = 2; 
+    }
+
+    int ret = 0;
+    for (int i = start; i < argc; i++) {
+        int r;
+        if (recursive) {
+            r = remove_recursive(argv[i]); 
+        } else {
+            r = unlink(argv[i]);         
+        }
+        if (r < 0) {
+            puts("rm: cannot remove ");
+            puts(argv[i]);
+            puts("\n");
+            ret = 1;
+        }
+    }
+    return ret;
+}
+
+static int builtin_rmdir(int argc, char *argv[]) {
+    if (argc < 2) { puts("rmdir: missing operand\n"); return 1; }
+    int ret = 0;
+    for (int i = 1; i < argc; i++) {
+        if (rmdir(argv[i]) < 0) { 
+            puts("rmdir: failed to remove ");
+            puts(argv[i]);
+            puts("\n");
+            ret = 1;
+        }
+    }
+    return ret;
+}
+
 static void build_exec_path(const char *cmd, char *out, int out_size) {
     if (cmd[0] == '/') {
         int i = 0;
@@ -538,6 +585,22 @@ int main(void) {
 
         if (streq(argv[0], "touch")) {
             int code = builtin_create(argc, argv);
+            puts("[shell] builtin exit code ");
+            put_int(code);
+            puts("\n");
+            continue;
+        }
+
+        if (streq(argv[0], "rm")) {
+            int code = builtin_rm(argc, argv);
+            puts("[shell] builtin exit code ");
+            put_int(code);
+            puts("\n");
+            continue;
+        }
+
+        if (streq(argv[0], "rmdir")) {
+            int code = builtin_rmdir(argc, argv);
             puts("[shell] builtin exit code ");
             put_int(code);
             puts("\n");
