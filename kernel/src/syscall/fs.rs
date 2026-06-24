@@ -278,7 +278,7 @@ pub fn sys_create(path_ptr : usize, len : usize) -> isize {
         None => return -1,
     };
 
-    match crate::fs::make_dir(&abs) {
+    match crate::fs::create_file(&abs) {
         Some(_) => 0,
         None => -1,
     }
