@@ -292,7 +292,12 @@ pub fn sys_rmdir(path_ptr : usize, len : usize) -> isize {
     };
 
     match crate::fs::remove_dir(&abs) {
-        Some(_) => 0,
+        Some(ret) => {
+            match ret {
+                0 => 0,
+                _ => -1,
+            }
+        },
         None => -1,
     }
 }
@@ -304,7 +309,12 @@ pub fn sys_remove_recursive(path_ptr : usize, len : usize) -> isize {
     };
 
     match crate::fs::remove_recursive(&abs) {
-        Some(_) => 0,
+        Some(ret) => {
+            match ret {
+                0 => 0,
+                _ => -1,
+            }
+        },
         None => -1,
     }
 }
@@ -317,7 +327,12 @@ pub fn sys_unlink(path_ptr : usize, len : usize) -> isize {
     };
 
     match crate::fs::unlink_file(&abs) {
-        Some(_) => 0,
+        Some(ret) => {
+            match ret {
+                0 => 0,
+                _ => -1,
+            }
+        },
         None => -1,
     }
 }
