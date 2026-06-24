@@ -37,6 +37,7 @@ typedef long isize;
 #define SYS_GET_TICKS                31  
 #define SYS_PIPE                     32 
 #define SYS_DUP2                     33
+#define SYS_MKDIR                    34
 
 
 
@@ -193,4 +194,12 @@ static inline int pipe(int fd[2]) {
 
 static inline int dup2(int old_fd,int new_fd) {
     return syscall3(SYS_DUP2, (usize)old_fd, (usize)new_fd, 0);
+}
+
+static inline isize mkdir2(const char *path, usize len) {
+    return syscall3(SYS_MKDIR, (usize)path, len, 0);
+}
+
+static inline isize mkdir(const char *path) {
+    return mkdir2(path, strlen(path));
 }

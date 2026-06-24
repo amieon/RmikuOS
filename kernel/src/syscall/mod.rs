@@ -36,6 +36,7 @@ pub const SYSCALL_RESET_SCHED_STAT: usize = 30;
 pub const SYSCALL_GET_TICKS: usize = 31;
 pub const SYSCALL_PIPE: usize = 32;
 pub const SYSCALL_DUP2: usize = 33;
+pub const SYSCALL_MKDIR: usize = 34;
 
 
 
@@ -75,6 +76,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GET_TICKS => process::sys_get_ticks(),
         SYSCALL_PIPE => fs::sys_pipe(args[0]),
         SYSCALL_DUP2 => fs::sys_dup2(args[0],args[1]),
+        SYSCALL_MKDIR => fs::sys_mkdir(args[0],args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

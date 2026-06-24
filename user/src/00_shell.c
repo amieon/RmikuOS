@@ -180,6 +180,20 @@ static int builtin_cd(int argc, char *argv[]) {
     return 0;
 }
 
+static int builtin_mkdir(int argc, char *argv[]) {
+    if (argc < 2) {
+        puts("mkdir: missing operand\n");
+        return 1;
+    }
+    if (mkdir(argv[1]) < 0) {
+        puts("mkdir: cannot create directory: ");
+        puts(argv[1]);
+        puts("\n");
+        return 1;
+    }
+    return 0;
+}
+
 
 static int builtin_ls(int argc, char *argv[]) {
 
@@ -493,6 +507,14 @@ int main(void) {
 
         if (streq(argv[0], "cd")) {
             int code = builtin_cd(argc, argv);
+            puts("[shell] builtin exit code ");
+            put_int(code);
+            puts("\n");
+            continue;
+        }
+
+        if (streq(argv[0], "mkdir")) {
+            int code = builtin_mkdir(argc, argv);
             puts("[shell] builtin exit code ");
             put_int(code);
             puts("\n");
