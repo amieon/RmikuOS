@@ -38,6 +38,7 @@ typedef long isize;
 #define SYS_PIPE                     32 
 #define SYS_DUP2                     33
 #define SYS_MKDIR                    34
+#define SYS_CREATE                   35
 
 
 
@@ -105,6 +106,16 @@ static inline isize open2(const char *path, usize len) {
 
 static inline isize open(const char *path) {
     return open2(path, strlen(path));
+}
+
+static inline isize open_create(const char *path) {
+    int fd = -1;
+    if (fd = open2(path, strlen(path)) < 0){
+        if(create2(path,strlen(path)) >= 0){
+            return open2(path, strlen(path));
+        }
+    }
+    return fd;
 }
 
 static inline isize close(int fd) {
@@ -202,4 +213,12 @@ static inline isize mkdir2(const char *path, usize len) {
 
 static inline isize mkdir(const char *path) {
     return mkdir2(path, strlen(path));
+}
+
+static inline isize create2(const char *path, usize len) {
+    return syscall3(SYS_CREATE, (usize)path, len, 0);
+}
+
+static inline isize create(const char *path) {
+    return create2(path, strlen(path));
 }

@@ -194,6 +194,21 @@ static int builtin_mkdir(int argc, char *argv[]) {
     return 0;
 }
 
+static int builtin_create(int argc, char *argv[]) {
+    if (argc < 2) {
+        puts("mkdir: missing operand\n");
+        return 1;
+    }
+    if (create(argv[1]) < 0) {
+        puts("mkdir: cannot create file: ");
+        puts(argv[1]);
+        puts("\n");
+        return 1;
+    }
+    return 0;
+}
+
+
 
 static int builtin_ls(int argc, char *argv[]) {
 
@@ -515,6 +530,14 @@ int main(void) {
 
         if (streq(argv[0], "mkdir")) {
             int code = builtin_mkdir(argc, argv);
+            puts("[shell] builtin exit code ");
+            put_int(code);
+            puts("\n");
+            continue;
+        }
+
+        if (streq(argv[0], "touch")) {
+            int code = builtin_create(argc, argv);
             puts("[shell] builtin exit code ");
             put_int(code);
             puts("\n");

@@ -262,3 +262,27 @@ pub fn sys_mkdir(path_ptr : usize, len : usize) -> isize {
         None => -1,
     }
 }
+
+pub fn sys_create(path_ptr : usize, len : usize) -> isize {
+    let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
+        Some(bytes) => bytes,
+        None => return -1,
+    };
+
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s.trim_matches('\0').trim(),
+        Err(_) => return -1,
+    };
+
+    let cwd = crate::task::current_cwd();
+
+    let abs = match crate::fs::normalize_path(&cwd, path) {
+        Some(p) => p,
+        None => return -1,
+    };
+
+    match crate::fs::create_file(&abs) {
+        Some(_) => 0,
+        None => -1,
+    }
+}
