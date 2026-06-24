@@ -2,6 +2,7 @@
 #include "lock.h"
 #include "thread.h"
 #include "uprintf.h"
+#include "string.h"
 
 static int parse_int(const char *s) {
     int x = 0;

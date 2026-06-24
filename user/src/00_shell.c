@@ -493,9 +493,170 @@ static void run_pipeline(char *line){
 
 }
 
+void remove_substring(char *str, char *start, char *end) {
+    if (str == 0 || start == 0 || end == 0 || start >= end) return;
+
+    char *src = end;
+    char *dst = start;
+
+    while (*src != '\0') {
+        *dst++ = *src++;
+    }
+    *dst = '\0';
+}
+
+int handle_line(char *line,char *input,char *output){
+    int input_cnt = 0,output_cnt = 0;
+    char *input_begin  = 0;
+    char *input_end    = 0;
+    char *output_begin = 0;
+    char *output_end   = 0;
+    int input_flag = 0,output_flag = 0;
+    int len = 0;
+
+    for(int i=0;line[i] !=0;++i){
+        len++;
+        if(line[i] == '<'){
+            input_cnt++;
+            input_begin = line + i;
+
+        }
+        if(line[i] == '>'){
+            output_cnt++;
+            output_begin = line + i;
+        }
+
+        if(line[i] == ' '){
+            if(input_flag && input_begin != 0 && input_end == 0){
+                input_end = line + i;
+            }
+            if(output_flag && output_begin != 0 && output_end == 0){
+                output_end = line + i;
+            }
+        }else if(line[i] != '<' && line[i] != '>'){
+            if(input_begin != 0 && input_end == 0){
+                input_flag = 1;
+            }
+            if(output_begin != 0 && output_end == 0){
+                output_flag = 1;
+            }
+        }
+    }
+
+    if(input_cnt > 1 || output_cnt > 1)
+        return -1;
+    if(input_begin != 0 && input_end == 0)
+        input_end = line + len ;
+    if(output_begin != 0 && output_end == 0)
+        output_end = line + len ;
+
+
+    if(input_cnt == 1 && output_cnt == 1) {
+        *output_end = '\0';
+        *input_end = '\0';
+        *output_begin = ' ';
+        *input_begin = ' ';
+
+        for(int i=1;input_begin[i] != '\0';++i) {
+            input[i - 1] = input_begin[i];
+            input[i] = '\0';
+        }
+        for(int i=1;output_begin[i] != '\0';++i) {
+            output[i - 1] = output_begin[i];
+            output[i] = '\0';
+        }
+
+        if(output_end == line + len)*output_end = '\0';
+        else *output_end = ' ';
+
+        if(input_end == line + len)*input_end = '\0';
+        else *input_end = ' ';
+
+        if (input_end < output_begin) {
+            remove_substring(line, output_begin, output_end);
+            remove_substring(line, input_begin, input_end);
+        } else {
+            remove_substring(line, input_begin, input_end);
+            remove_substring(line, output_begin, output_end);
+        }
+    }else if(input_cnt == 1){
+        *input_end = '\0';
+        *input_begin = ' ';
+
+        for(int i=1;input_begin[i] != '\0';++i) {
+            input[i - 1] = input_begin[i];
+            input[i] = '\0';
+        }
+        output[0] = 0;
+
+        if(input_end == line + len)*input_end = '\0';
+        else *input_end = ' ';
+        remove_substring(line, input_begin, input_end);
+    }else if(output_cnt == 1){
+        *output_end = '\0';
+        *output_begin = ' ';
+
+        for(int i=1;output_begin[i] != '\0';++i) {
+            output[i - 1] = output_begin[i];
+            output[i] = '\0';
+        }
+        input[0] = 0;
+
+        if(output_end == line + len)*output_end = '\0';
+        else *output_end = ' ';
+        remove_substring(line, output_begin, output_end);
+    }
+    trim(line);
+    trim(output);
+    trim(input);
+    return 0;
+}
+static void run_redirectline(char *line){
+    char input[LINE_SIZE], output[LINE_SIZE];
+    handle_line(line,input,output);
+    char *argv[MAX_ARGC];
+    int argc = parse_args(line, argv, MAX_ARGC);
+
+    int pid = fork();
+    if(pid == 0){
+        if(input[0] != 0){
+            isize fd = open(input);
+            if(fd < 0){
+                uprintf("Can not open %s, please check whether it exists\n",input);
+                exit(1);
+            }
+            dup2(fd,0);
+            close(fd);
+        }   
+        if(output[0] != 0){
+            isize fd = open_create(output);
+            if(fd < 0){
+                uprintf("Can not open %s\n",output);
+                exit(1);
+            }
+            dup2(fd,1);
+            close(fd);
+        }
+        run_exec(argc,argv);
+        exit(1);
+    }else{
+        waitpid(pid,0);
+    }
+
+
+}
+
 static int has_pipe(char *s){
     for(int i=0;s[i] != '\0';++i)
         if(s[i] == '|')
+            return 1;
+    return 0;
+}
+
+
+static int has_redirect(char *s){
+    for(int i=0;s[i] != '\0';++i)
+        if(s[i] == '<' || s[i] == '>')
             return 1;
     return 0;
 }
@@ -522,9 +683,25 @@ int main(void) {
             continue;
         }
 
+        int have_pipe = 0,have_redirect = 0;
         if (has_pipe(line)) {
+            have_pipe = 1;      
+        }
+                
+        if (has_redirect(line)) {
+            have_redirect = 1;      
+        }
+        if(have_pipe && have_redirect){
+            puts("Does not support both pipe and redirection simultaneously.\n");
+            continue;
+        }
+        if(have_pipe){
             run_pipeline(line);
-            continue;         
+            continue;
+        }
+        if(have_redirect){
+            run_redirectline(line);
+            continue;
         }
 
         int argc = parse_args(line, argv, MAX_ARGC);
