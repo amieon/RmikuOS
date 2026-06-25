@@ -1,22 +1,5 @@
 #pragma once
 
-/*
- * fmt.h —— 数字 / 字符串格式化工具层。
- *
- * 内容:
- *   - 解析:parse_int
- *   - 直接输出:put_int / put_hex(走 put_char)
- *   - 缓冲拼接:append_str / append_int / append_usize
- *   - 比较:str_eq
- *   - 十六进制位:c
- *   - 完整格式化:uprintf / uvprintf(攒缓冲再一次性 write,支持 %d/%u/%x/%p/%c/%s 等)
- *
- * 这些原本散落在 user.h 顶层与 uprintf.h,现统一归到格式化工具层。
- * 所有函数都标记 static,避免被多个 .c 包含时产生重复定义。
- *
- * 依赖 io.h(put_char / write / strlen)。
- */
-
 #include "io.h"
 #include <stdarg.h>
 
@@ -165,14 +148,14 @@ static int str_eq(const char *a, const char *b) {
     return *a == 0 && *b == 0;
 }
 
-/* ============================================================
- *  uprintf —— 极简用户态 printf
+
+ /*  uprintf —— 极简用户态 printf
  *
  *  攒满一块栈缓冲再一次性 write,而不是每个字符一次系统调用。
  *
  *  支持:%d %u %ld %lu %x %lx %p %c %s %%
  *  不支持宽度 / 精度 / 补零。
- * ============================================================ */
+ */
 
 #ifndef UPRINTF_BUF_SIZE
 #define UPRINTF_BUF_SIZE 1024
