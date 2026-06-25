@@ -19,6 +19,20 @@ unsafe fn syscall3(id: usize, a0: usize, a1: usize, a2: usize) -> isize {
     ret
 }
 
+#[cfg(target_arch = "loongarch64")]
+pub unsafe fn syscall3(id: usize, a0: usize, a1: usize, a2: usize) -> isize {
+    let ret: isize;
+    core::arch::asm!(
+        "syscall 0",
+        in("$r11") id,
+        inlateout("$r4") a0 => ret,
+        in("$r5") a1,
+        in("$r6") a2,
+    );
+    ret
+}
+
+
 fn sys_write(fd: usize, buf: &[u8]) -> isize {
     unsafe { syscall3(SYS_WRITE, fd, buf.as_ptr() as usize, buf.len()) }
 }
