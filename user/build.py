@@ -26,7 +26,7 @@ ARCH_CONFIG = {
         "linker": USER_DIR / "linker-riscv64.ld",
         "runtime": LIB_DIR / "syscall_riscv64.S",
         "crt0": LIB_DIR / "crt0_riscv64.S",
-        "runtime": LIB_DIR / "syscall_riscv64.S",
+        "rust_target": "riscv64gc-unknown-none-elf", 
         "cflags": [
             "-march=rv64gc",
             "-mabi=lp64",
@@ -46,6 +46,7 @@ ARCH_CONFIG = {
         "linker": USER_DIR / "linker-loongarch64.ld",
         "crt0": LIB_DIR / "crt0_loongarch64.S",
         "runtime": LIB_DIR / "syscall_loongarch64.S",
+        "rust_target": "loongarch64-unknown-none",  
         "cflags": [
             "-DUSER_ARCH_LOONGARCH64",
             "-G0",
@@ -81,7 +82,7 @@ def rust_bytes(data: bytes, indent: str = "    ") -> str:
 def collect_sources():
     sources = []
     # (源文件, 类别)  类别用来决定装进 /bin 还是 /tests
-    for ext in ("*.S", "*.c"):
+    for ext in ("*.S", "*.c", "*.rs"):
         for p in SRC_DIR.glob(ext):
             sources.append((p, "system"))    # src → 系统程序
         for p in TESTS_DIR.glob(ext):
@@ -91,6 +92,9 @@ def collect_sources():
 
 
 def build_one(arch: str, source: Path, app_id: int, category):
+    if source.suffix == ".rs":
+        return build_rust(arch, source, app_id, category)
+    
     cfg = ARCH_CONFIG[arch]
 
     if category == "system":
@@ -201,6 +205,32 @@ def build_one(arch: str, source: Path, app_id: int, category):
         "data": data,
     }
 
+def build_rust(arch: str, source: Path, app_id: int, category):
+    cfg = ARCH_CONFIG[arch]
+    out_dir = BUILD_DIR / arch / ("bin" if category == "system" else "tests")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = source.stem
+    elf = out_dir / f"{app_id}_{stem}.elf"
+
+    run([
+        "rustc",
+        "--target", cfg["rust_target"],
+        "-C", "panic=abort",
+        "-C", "relocation-model=static",
+        "-C", f"link-arg=-T{cfg['linker']}",
+        "-o", str(elf),
+        str(source),
+    ])
+
+    print(f"[user] built rust app{app_id}: {source.name}")
+    return {
+        "id": app_id,
+        "source": source,
+        "name": stem,
+        "category": category,
+    }
+
+
 
 
 def main():
@@ -220,7 +250,7 @@ def main():
         
     sources = collect_sources()
     if not sources:
-        print(f"no .S or .c files found in {SRC_DIR}", file=sys.stderr)
+        print(f"no .rs, .S or .c files found in {SRC_DIR}", file=sys.stderr)
         sys.exit(1)
 
     apps = []
