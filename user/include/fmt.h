@@ -1,46 +1,179 @@
-#ifndef UPRINTF_H
-#define UPRINTF_H
+#pragma once
 
 /*
- * uprintf.h —— 极简用户态 printf。
+ * fmt.h —— 数字 / 字符串格式化工具层。
  *
- * 设计目标：
- *   - 不依赖任何 libc，只依赖你已有的 write(1, buf, len) 系统调用包装。
- *   - 在栈上把字符串拼好，攒满一块缓冲再一次性 write 出去，
- *     而不是每个字符 / 每个片段都做一次系统调用。
- *   - no_std / freestanding 友好：只用编译器自带的 <stdarg.h>。
+ * 内容:
+ *   - 解析:parse_int
+ *   - 直接输出:put_int / put_hex(走 put_char)
+ *   - 缓冲拼接:append_str / append_int / append_usize
+ *   - 比较:str_eq
+ *   - 十六进制位:c
+ *   - 完整格式化:uprintf / uvprintf(攒缓冲再一次性 write,支持 %d/%u/%x/%p/%c/%s 等)
  *
- * 用法：
- *   #include "user.h"     // 提供 write / usize / isize 等
- *   #include "uprintf.h"
+ * 这些原本散落在 user.h 顶层与 uprintf.h,现统一归到格式化工具层。
+ * 所有函数都标记 static,避免被多个 .c 包含时产生重复定义。
  *
- *   uprintf("alpha=%d pid=%u name=%s late=%lu hex=%x\n",
- *           alpha, (unsigned)pid, "control", (usize)late, flags);
- *
- * 支持的格式：
- *   %d   int（带符号十进制）
- *   %u   unsigned int（无符号十进制）
- *   %ld  long / isize（带符号十进制）
- *   %lu  unsigned long / usize（无符号十进制）
- *   %x   unsigned int（小写十六进制，无 0x 前缀）
- *   %lx  unsigned long / usize（小写十六进制）
- *   %p   指针（带 0x 前缀的十六进制）
- *   %c   字符
- *   %s   C 字符串（NULL 安全，打印 "(null)"）
- *   %%   字面量 '%'
- *
- * 故意不支持宽度 / 精度 / 补零（如 %08x）。需要的话再加。
- *
- * 依赖：本文件假定 write / usize / isize 由前面 include 的头（如 user.h）提供。
+ * 依赖 io.h(put_char / write / strlen)。
  */
 
+#include "io.h"
 #include <stdarg.h>
-#include "sys.h"
 
-/*
- * 单次拼接缓冲大小。打印内容超过它时，会在中途自动 flush，
- * 因此“一次 write”是常态、不是硬保证；长字符串会拆成多次 write。
- */
+/* ---- 解析 ---- */
+
+static int parse_int(const char *s) {
+    int x = 0;
+    int sign = 1;
+
+    if (*s == '-') {
+        sign = -1;
+        s++;
+    }
+
+    while (*s >= '0' && *s <= '9') {
+        x = x * 10 + (*s - '0');
+        s++;
+    }
+
+    return x * sign;
+}
+
+/* ---- 直接输出 ---- */
+
+static inline void put_int(long x) {
+    char buf[32];
+    int i = 0;
+
+    if (x == 0) {
+        put_char('0');
+        return;
+    }
+
+    if (x < 0) {
+        put_char('-');
+        x = -x;
+    }
+
+    while (x > 0) {
+        buf[i++] = '0' + (x % 10);
+        x /= 10;
+    }
+
+    while (i > 0) {
+        i--;
+        put_char(buf[i]);
+    }
+}
+
+static char c(long x) {
+    if (x <= 9) return x + '0';
+    return x - 10 + 'a';
+}
+
+static inline void put_hex(long x) {
+    char buf[32];
+    int i = 0;
+
+    if (x == 0) {
+        put_char('0');
+        return;
+    }
+
+    if (x < 0) {
+        put_char('-');
+        x = -x;
+    }
+
+    while (x > 0) {
+        buf[i++] = c(x % 16);
+        x /= 16;
+    }
+
+    while (i > 0) {
+        i--;
+        put_char(buf[i]);
+    }
+}
+
+/* ---- 缓冲拼接 ---- */
+
+static int append_str(char *buf, int pos, const char *s) {
+    while (*s) {
+        buf[pos++] = *s++;
+    }
+    return pos;
+}
+
+static int append_int(char *buf, int pos, int x) {
+    char tmp[16];
+    int n = 0;
+
+    if (x == 0) {
+        buf[pos++] = '0';
+        return pos;
+    }
+
+    if (x < 0) {
+        buf[pos++] = '-';
+        x = -x;
+    }
+
+    while (x > 0) {
+        tmp[n++] = '0' + (x % 10);
+        x /= 10;
+    }
+
+    while (n > 0) {
+        buf[pos++] = tmp[--n];
+    }
+
+    return pos;
+}
+
+static int append_usize(char *buf, int pos, usize x) {
+    char tmp[32];
+    int n = 0;
+
+    if (x == 0) {
+        buf[pos++] = '0';
+        return pos;
+    }
+
+    while (x > 0) {
+        tmp[n++] = '0' + (x % 10);
+        x /= 10;
+    }
+
+    while (n > 0) {
+        buf[pos++] = tmp[--n];
+    }
+
+    return pos;
+}
+
+/* ---- 比较 ---- */
+
+static int str_eq(const char *a, const char *b) {
+    while (*a && *b) {
+        if (*a != *b) {
+            return 0;
+        }
+        a++;
+        b++;
+    }
+    return *a == 0 && *b == 0;
+}
+
+/* ============================================================
+ *  uprintf —— 极简用户态 printf
+ *
+ *  攒满一块栈缓冲再一次性 write,而不是每个字符一次系统调用。
+ *
+ *  支持:%d %u %ld %lu %x %lx %p %c %s %%
+ *  不支持宽度 / 精度 / 补零。
+ * ============================================================ */
+
 #ifndef UPRINTF_BUF_SIZE
 #define UPRINTF_BUF_SIZE 1024
 #endif
@@ -57,12 +190,12 @@ static inline void uprintf_flush(struct uprintf_buf *b) {
     }
 }
 
-static inline void uprintf_putc(struct uprintf_buf *b, char c) {
+static inline void uprintf_putc(struct uprintf_buf *b, char ch) {
     if (b->len >= UPRINTF_BUF_SIZE) {
         uprintf_flush(b);
     }
 
-    b->data[b->len++] = c;
+    b->data[b->len++] = ch;
 }
 
 static inline void uprintf_puts_raw(struct uprintf_buf *b, const char *s) {
@@ -76,10 +209,6 @@ static inline void uprintf_puts_raw(struct uprintf_buf *b, const char *s) {
     }
 }
 
-/*
- * 无符号十进制。用临时栈缓冲倒序生成，再正序写出。
- * 20 位足够容纳 64 位无符号最大值（18446744073709551615，20 位）。
- */
 static inline void uprintf_u64_dec(struct uprintf_buf *b, unsigned long long v) {
     char tmp[20];
     int n = 0;
@@ -102,7 +231,7 @@ static inline void uprintf_u64_dec(struct uprintf_buf *b, unsigned long long v) 
 static inline void uprintf_i64_dec(struct uprintf_buf *b, long long v) {
     if (v < 0) {
         uprintf_putc(b, '-');
-        /* 转成无符号再取负，避免 LLONG_MIN 取负溢出。 */
+        /* 转成无符号再取负,避免 LLONG_MIN 取负溢出。 */
         uprintf_u64_dec(b, (unsigned long long)(-(v + 1)) + 1ULL);
     } else {
         uprintf_u64_dec(b, (unsigned long long)v);
@@ -111,7 +240,7 @@ static inline void uprintf_i64_dec(struct uprintf_buf *b, long long v) {
 
 static inline void uprintf_u64_hex(struct uprintf_buf *b, unsigned long long v) {
     static const char digits[] = "0123456789abcdef";
-    char tmp[16];   /* 64 位 = 最多 16 个十六进制位 */
+    char tmp[16];
     int n = 0;
 
     if (v == 0) {
@@ -134,14 +263,13 @@ static inline void uvprintf(const char *fmt, va_list ap) {
     b.len = 0;
 
     while (*fmt) {
-        char c = *fmt++;
+        char ch = *fmt++;
 
-        if (c != '%') {
-            uprintf_putc(&b, c);
+        if (ch != '%') {
+            uprintf_putc(&b, ch);
             continue;
         }
 
-        /* 读取一个长度修饰符 'l'（支持 %ld / %lu / %lx）。 */
         int is_long = 0;
 
         if (*fmt == 'l') {
@@ -152,7 +280,6 @@ static inline void uvprintf(const char *fmt, va_list ap) {
         char spec = *fmt;
 
         if (spec == 0) {
-            /* 格式串以孤立的 '%' 结尾：原样输出。 */
             uprintf_putc(&b, '%');
             break;
         }
@@ -202,7 +329,6 @@ static inline void uvprintf(const char *fmt, va_list ap) {
             }
 
             case 'c': {
-                /* char 在可变参数里被提升为 int。 */
                 int v = va_arg(ap, int);
                 uprintf_putc(&b, (char)v);
                 break;
@@ -220,7 +346,6 @@ static inline void uvprintf(const char *fmt, va_list ap) {
             }
 
             default: {
-                /* 未知格式：原样回显，方便发现写错的格式串。 */
                 uprintf_putc(&b, '%');
                 if (is_long) {
                     uprintf_putc(&b, 'l');
@@ -240,5 +365,3 @@ static inline void uprintf(const char *fmt, ...) {
     uvprintf(fmt, ap);
     va_end(ap);
 }
-
-#endif /* UPRINTF_H */

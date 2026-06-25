@@ -1,143 +1,34 @@
-#include "files.h"
+#pragma once
+
+/*
+ * user.h —— 用户态库总入口。
+ *
+ * 用户程序只需 #include "user.h",即可获得全部用户态接口。
+ * 本文件不放任何实现,只按依赖层次汇总各子模块:
+ *
+ *   types.h     基础类型(usize / isize)
+ *   syscall.h   系统调用号 + syscall3 / syscall6
+ *   io.h        strlen + read/write + open/close/create + puts/put_char
+ *   process.h   exit/fork/waitpid/getpid/yield/sleep + exec
+ *   fs.h        dirent/stat + getdents/stat/chdir/getcwd + mkdir/unlink/rmdir
+ *   mem.h       PROT_* + mmap/munmap + malloc/free/calloc
+ *   lock.h      spinlock / mutex
+ *   thread.h    thread_create/exit/join + 栈管理
+ *   sched.h     tickets / alpha / sched_proc_stat / get_ticks
+ *   ipc.h       pipe / dup2
+ *   string.h    trim / copy_str
+ *   fmt.h       parse_int/put_int/put_hex/append_* / str_eq / uprintf
+ */
+
+#include "types.h"
+#include "syscall.h"
+#include "io.h"
+#include "process.h"
+#include "fs.h"
+#include "mem.h"
 #include "lock.h"
 #include "thread.h"
-#include "uprintf.h"
+#include "sched.h"
+#include "ipc.h"
 #include "string.h"
-
-static int parse_int(const char *s) {
-    int x = 0;
-    int sign = 1;
-
-    if (*s == '-') {
-        sign = -1;
-        s++;
-    }
-
-    while (*s >= '0' && *s <= '9') {
-        x = x * 10 + (*s - '0');
-        s++;
-    }
-
-    return x * sign;
-}
-
-
-static inline void put_int(long x) {
-    char buf[32];
-    int i = 0;
-
-    if (x == 0) {
-        put_char('0');
-        return;
-    }
-
-    if (x < 0) {
-        put_char('-');
-        x = -x;
-    }
-
-    while (x > 0) {
-        buf[i++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (i > 0) {
-        i--;
-        put_char(buf[i]);
-    }
-}
-
-static int append_str(char *buf, int pos, const char *s) {
-    while (*s) {
-        buf[pos++] = *s++;
-    }
-    return pos;
-}
-
-static int append_int(char *buf, int pos, int x) {
-    char tmp[16];
-    int n = 0;
-
-    if (x == 0) {
-        buf[pos++] = '0';
-        return pos;
-    }
-
-    if (x < 0) {
-        buf[pos++] = '-';
-        x = -x;
-    }
-
-    while (x > 0) {
-        tmp[n++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (n > 0) {
-        buf[pos++] = tmp[--n];
-    }
-
-    return pos;
-}
-
-char c(long x){
-    if(x <= 9)return x+'0';
-    return x-10+'a';
-}
-
-static inline void put_hex(long x) {
-    char buf[32];
-    int i = 0;
-
-    if (x == 0) {
-        put_char('0');
-        return;
-    }
-
-    if (x < 0) {
-        put_char('-');
-        x = -x;
-    }
-
-    while (x > 0) {
-        buf[i++] = c(x % 16);
-        x /= 16;
-    }
-
-    while (i > 0) {
-        i--;
-        put_char(buf[i]);
-    }
-}
-
-static int append_usize(char *buf, int pos, usize x) {
-    char tmp[32];
-    int n = 0;
-
-    if (x == 0) {
-        buf[pos++] = '0';
-        return pos;
-    }
-
-    while (x > 0) {
-        tmp[n++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (n > 0) {
-        buf[pos++] = tmp[--n];
-    }
-
-    return pos;
-}
-
-static int str_eq(const char *a, const char *b) {
-    while (*a && *b) {
-        if (*a != *b) {
-            return 0;
-        }
-        a++;
-        b++;
-    }
-    return *a == 0 && *b == 0;
-}
+#include "fmt.h"

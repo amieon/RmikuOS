@@ -1,20 +1,49 @@
 #pragma once
 
-#include "sys.h"
+/*
+ * mem.h —— 内存管理层。
+ *
+ * 内容:
+ *   - 内存保护标志 PROT_*(此处是唯一定义点)
+ *   - mmap / munmap(向内核申请/归还匿名内存)
+ *   - 用户态堆分配器 malloc / free / calloc(基于 mmap 切分)
+ *
+ * 依赖 syscall.h(mmap/munmap)和 lock.h(堆分配器的互斥保护)。
+ */
+
+#include "syscall.h"
 #include "lock.h"
 
-#ifndef PROT_READ
+/* ---- 内存保护标志(唯一定义点) ---- */
+
 #define PROT_READ  1
 #define PROT_WRITE 2
 #define PROT_EXEC  4
-#endif
+
+/* ---- mmap / munmap ---- */
+
+static inline void *mmap(usize len, usize prot) {
+    isize ret = syscall3(SYS_MMAP, len, prot, 0);
+
+    if (ret < 0) {
+        return (void *)-1;
+    }
+
+    return (void *)ret;
+}
+
+static inline int munmap(void *addr, usize len) {
+    return syscall3(SYS_MUNMAP, (usize)addr, len, 0);
+}
+
+/* ---- 用户态堆分配器 ---- */
 
 #define MALLOC_ALIGNMENT 16
 #define MALLOC_PAGE_SIZE 4096
 #define MALLOC_CHUNK_SIZE (64 * 1024)
 
 typedef struct malloc_block {
-    usize size;                 // payload size
+    usize size;                 /* payload size */
     usize free;
     struct malloc_block *next;
 } malloc_block_t;
