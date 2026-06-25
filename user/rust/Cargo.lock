@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "library_system"
+version = "0.1.0"
+dependencies = [
+ "ulib",
+]
+
+[[package]]
 name = "my_math_constants"
 version = "0.1.0"
 dependencies = [
