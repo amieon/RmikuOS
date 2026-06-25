@@ -1,4 +1,3 @@
-//! 基础输入输出:read/write/open/close/create/puts + strlen。
 //! 对应 C 的 io.h。路径以 &[u8] 传入(裸字节,免去 C 的 NUL 结尾依赖);
 //! 也提供基于 &str 的便捷封装。
 

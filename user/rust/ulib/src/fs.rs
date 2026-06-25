@@ -1,4 +1,3 @@
-//! 文件系统:stat/getdents/chdir/getcwd/mkdir/unlink/rmdir/remove_recursive。
 //! 对应 C 的 fs.h。结构体用 #[repr(C)] 保证与内核的内存布局一致。
 
 use crate::number::*;
@@ -11,7 +10,7 @@ pub const STAT_TYPE_CHAR: u8 = 3;
 pub const FILE_TYPE_FILE: u8 = 1;
 pub const FILE_TYPE_DIR: u8 = 2;
 
-/// 文件元信息(布局必须与 C 的 struct stat 一致)。
+
 #[repr(C)]
 pub struct Stat {
     pub file_type: u8,
@@ -25,7 +24,7 @@ impl Stat {
     }
 }
 
-/// 目录项(布局必须与 C 的 struct dirent 一致)。
+
 #[repr(C)]
 pub struct DirEntry {
     pub file_type: u8,

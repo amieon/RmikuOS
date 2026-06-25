@@ -1,7 +1,3 @@
-//! 调度实验接口:tickets/alpha/sched_proc_stat/get_ticks。
-//!
-//! 对应 C 的 sched.h。供 Rust 写调度实验程序时使用。
-
 use crate::number::*;
 use crate::syscall::syscall3;
 
@@ -37,7 +33,7 @@ pub fn get_sched_alpha() -> isize {
     unsafe { syscall3(SYS_GET_SCHED_ALPHA, 0, 0, 0) }
 }
 
-/// 进程调度统计(布局必须与 C 的 struct sched_proc_stat 一致)。
+
 #[repr(C)]
 pub struct SchedProcStat {
     pub pid: i32,
