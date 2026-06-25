@@ -7,12 +7,12 @@ RmikuOS 是一个从零实现的教学型操作系统内核，主要用于学习
 * `riscv64`
 * `loongarch64`
 
-系统可以在 QEMU 上启动用户态 shell，并从真实的 virtio 块设备中加载 ext4 rootfs。当前系统已经支持用户程序加载、系统调用、进程与线程、VFS、只读 ext4 文件系统、virtio 块设备驱动、基础 shell，以及一套用于调度器实验的用户态 workload 与自适应调度控制器。
+系统可以在 QEMU 上启动用户态 shell，并从真实的 virtio 块设备中加载 ext4 rootfs。当前系统已经支持用户程序加载、系统调用、进程与线程、VFS、多文件系统挂载（只读 ext4 + 可写 tmpfs）、virtio 块设备驱动、管道与重定向、功能完整的 shell，以及一套用于调度器实验的用户态 workload 与自适应调度控制器。用户程序可以用 **C 或 Rust** 编写，二者共享同一套系统调用 ABI。
 
 RmikuOS 不是一个只会打印 `Hello, world` 的玩具内核。它的目标是逐步构建一个小而完整、能运行真实用户程序、能做系统实验的教学型 OS。
 
 ```text
- ____            _ _          ___  ____
+ ____            _ _         ___  ____
 |  _ \ _ __ ___ (_) | ___   / _ \/ ___|
 | |_) | '_ ` _ \| | |/ / | | | | \___ \
 |  _ <| | | | | | |   <| |_| |_| |___) |
@@ -67,10 +67,10 @@ loongarch64
 * 进程与线程
 * 虚拟内存
 * 系统调用
-* VFS
-* ext4 rootfs
+* VFS 与多文件系统挂载
+* ext4 rootfs / tmpfs
 * block cache
-* shell 和用户程序
+* shell 和用户程序（C / Rust）
 * 调度器与调度实验框架
 
 架构相关部分主要集中在：
@@ -87,48 +87,6 @@ loongarch64
 ```text
 riscv64      -> virtio-mmio
 loongarch64 -> virtio-pci
-```
-
----
-
-### User Programs and Shell
-
-RmikuOS 支持从 ext4 rootfs 中加载用户程序。
-
-当前 shell 支持：
-
-* `ls`
-* `cat`
-* `cd`
-* `pwd`
-* `stat`
-* 外部命令执行
-* 相对路径
-* 绝对路径
-* `argc / argv`
-* 当前工作目录 `cwd`
-
-示例：
-
-```text
-/ $ ls
-bin
-etc
-home
-share
-tmp
-
-/ $ cat /etc/motd
-Welcome to RmikuOS real ext4 rootfs!
-
-/ $ cd /bin
-/bin $ hello
-```
-
-第一个用户进程不再依赖内核内置 app table，而是通过 VFS 从 ext4 rootfs 中加载：
-
-```text
-/bin/shell
 ```
 
 ---
@@ -177,6 +135,11 @@ RmikuOS 当前支持基础进程管理：
 * `exec`
 * `pipe`
 * `dup2`
+* `mkdir`
+* `create`
+* `unlink`
+* `rmdir`
+* `remove_recursive`
 
 标准输入输出也通过 fd 统一处理：
 
@@ -186,19 +149,69 @@ fd 1 -> stdout
 ```
 
 ---
-### Pipe and Shell Pipeline
 
-RmikuOS 实现了 Unix 匿名管道(pipe)作为基础 IPC 原语,并在 shell 中支持 `|` 管道符。
+## User Programs and Shell
 
-#### Pipe
+RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init shell）也不依赖内核内置 app table，而是通过 VFS 从 `/bin/shell` 加载。
 
-`pipe()` 创建一对单向 fd:写端写入、读端读出,数据经由内核中一段固定大小的环形字节缓冲区(`PIPE_BUF_SIZE = 512`)传递,先进先出。管道是**字节流**而非消息流,不保留写入边界。
+### Shell 命令
+
+shell 区分**内建命令**（改变 shell 自身状态，必须内建）与**外部命令**（独立程序，可被管道 / 重定向组合）：
+
+```text
+内建：  cd  pwd  exit  help
+        mkdir  touch  rm  rmdir          (tmpfs 增删,内核原子判断类型)
+外部：  ls  cat  echo  grep  shell ...    (位于 /bin、/tests、/programs)
+```
+
+`ls` / `cat` / `echo` / `grep` 等 IO 工具被实现为**独立的外部程序**而非内建命令，这样它们才能出现在管道与重定向中（管道两端走 `fork + exec`，内建命令无法被 exec）。`cd` / `pwd` / `exit` 则保持内建，因为它们必须修改 shell 进程自身的状态。
+
+示例：
+
+```text
+/ $ ls
+dir     4096 bin/
+dir     4096 tests/
+dir     4096 programs/
+dir     4096 etc/
+...
+
+/ $ cat /etc/motd
+Welcome to RmikuOS real ext4 rootfs!
+
+/ $ mkdir /tmp/work
+/ $ touch /tmp/work/note
+/ $ ls /tmp/work
+file    0 note
+```
+
+### Command Search Path（命令搜索路径）
+
+外部命令支持在多个目录中搜索，无需输入完整路径——这相当于一个简化的 `PATH`，在`etc/path`文件中写入即可：
+
+```text
+/bin/
+/tests/
+/programs/
+```
+
+* `/bin`      系统命令（ls / cat / echo / grep / shell）
+* `/tests`    C 与单文件 Rust 测试程序
+* `/programs` cargo workspace 构建的 Rust 程序
+
+shell 执行外部命令时按顺序遍历这些目录、逐个尝试 `exec`：由于 `exec` 失败才返回、成功则进程映像被替换，第一个能成功 `exec` 的目录即被采用，全部失败才报 `command not found`。这避免了「先 stat 检查再 exec」的额外系统调用与 TOCTOU 竞态。绝对路径（`/` 开头）则直接 `exec`，不经过搜索。
+
+### Pipe（管道）
+
+RmikuOS 实现了 Unix 匿名管道作为基础 IPC 原语，shell 支持 `|` 管道符。
+
+`pipe()` 创建一对单向 fd：写端写入、读端读出，数据经由内核中一段固定大小的环形字节缓冲区（`PIPE_BUF_SIZE = 512`）传递，先进先出。管道是**字节流**而非消息流，不保留写入边界。
 
 ```text
 pipe(fd)  ->  fd[0] = 读端, fd[1] = 写端
 ```
 
-读写两端各实现统一的 `File` trait,因此 `read` / `write` 系统调用无需特殊处理,管道作为一种文件自动被支持。两端共享同一个 `Arc<Mutex<Pipe>>`,核心边界语义:
+读写两端各实现统一的 `File` trait，因此 `read` / `write` 系统调用无需特殊处理，管道作为一种文件自动被支持。两端共享同一个 `Arc<Mutex<Pipe>>`，核心边界语义：
 
 ```text
 缓冲空 + 仍有写者   -> 读者阻塞,等写入后被唤醒
@@ -207,11 +220,9 @@ pipe(fd)  ->  fd[0] = 读端, fd[1] = 写端
 读端全关           -> 写者得到 EPIPE
 ```
 
-阻塞复用调度器的 block/wake 机制(`BlockReason::PipeRead / PipeWrite`),唤醒时只标记线程 Ready 并重新入就绪队列,不切换上下文。
+阻塞复用调度器的 block/wake 机制（`BlockReason::PipeRead / PipeWrite`），唤醒时只标记线程 Ready 并重新入就绪队列，不切换上下文。
 
-#### Reference Counting
-
-管道的 EOF / EPIPE 依赖一对手动维护的引用计数(`reader_count` / `writer_count`),它独立于 Arc 自身的引用计数,记录当前存活的读端 / 写端 fd 数量:
+**引用计数**：管道的 EOF / EPIPE 依赖一对手动维护的引用计数（`reader_count` / `writer_count`），独立于 `Arc` 自身的引用计数，记录当前存活的读端 / 写端 fd 数量：
 
 ```text
 make_pipe          -> 各置 1
@@ -219,89 +230,136 @@ fork / dup2        -> 复制 fd 时对应计数 +1
 close / exec / exit -> 释放 fd 时对应计数 -1,归零则唤醒对端
 ```
 
-三条 fd 释放路径(`close`、`exec` 时关闭非标准 fd、进程退出)统一经由 `release_file` 减计数并按需唤醒对端,保证任意多进程共享同一管道时计数始终配平。
+三条 fd 释放路径（`close`、`exec` 时关闭非标准 fd、进程退出）统一经由 `release_file` 减计数并按需唤醒对端，保证任意多进程共享同一管道时计数始终配平。
 
-#### dup2 and Pipeline
+### Redirection（重定向）
 
-`dup2(oldfd, newfd)` 把 `newfd` 重定向到 `oldfd` 指向的文件(复制 fd 表项 + 计数 +1),是实现管道重定向的关键。shell 处理 `cmd1 | cmd2` 时:
+`dup2(oldfd, newfd)` 把 `newfd` 重定向到 `oldfd` 指向的对象，是管道与重定向共同的底层机制。shell 支持输入 / 输出重定向 `<` `>`：
 
 ```text
-1. 按 | 切分为两个命令
-2. pipe(fd) 创建管道
-3. fork cmd1:dup2(fd[1], 1) 把 stdout 接到写端,关闭多余 fd,exec
-4. fork cmd2:dup2(fd[0], 0) 把 stdin 接到读端,关闭多余 fd,exec
-5. shell 关闭管道两端,waitpid 两个子进程
+cmd > file     stdout 重定向到 file(不存在则创建)
+cmd < file     stdin  从 file 读取
+cmd1 | cmd2    管道(cmd1 的 stdout 接 cmd2 的 stdin)
 ```
 
-程序本身只认 fd 0 / 1,由 shell 在 fork 后、exec 前完成重定向,因此普通程序无需改动即可接入管道。cmd1 退出后其写端关闭,加之 shell 关闭自己的写端,`writer_count` 归零,cmd2 读到 EOF 后结束——整条 EOF 链由上述引用计数驱动。
+重定向与管道使用同一套 `fork → dup2 → exec` 流程：shell 在 fork 出的子进程里，于 `exec` 之前用 `dup2` 把 fd 0 / 1 替换为文件或管道端。程序本身只认 fd 0 / 1，无需任何改动即可被重定向或接入管道。
 
 ```text
+/ $ ls | grep bin
+dir     4096 bin/
+
+/ $ cat /etc/motd | grep Welcome
+Welcome to RmikuOS real ext4 rootfs!
+
+/ $ ls > /tmp/list
+/ $ grep bin < /tmp/list
+dir     4096 bin/
+
 / $ pipe_writer | pipe_reader
 hello from writer
 line2
 line3
 [reader got EOF]
 ```
+
+最后一例中 `[reader got EOF]` 是关键：它证明 `pipe_writer` 退出后，所有写端（writer 进程的 + shell 的）都干净关闭、`writer_count` 归零，reader 才收到 EOF——整条 EOF 链由前述引用计数驱动。
+
 ---
 
-### ext4 Rootfs
+## Filesystem
 
-RmikuOS 使用 ext4 镜像作为 rootfs。
-
-rootfs 由宿主机上的目录模板生成：
+RmikuOS 的文件系统建立在一层统一的 VFS 抽象之上：每个文件系统节点实现 `Inode` trait（`lookup` / `open` / `getdents` / `metadata`，以及可写的 `create` / `mkdir` / `unlink` / `rmdir`），每个文件系统实例实现 `FileSystem` trait（提供根 inode）。在此之上，一张**挂载表**把不同文件系统挂到目录树的不同位置，使只读的 ext4 与可写的 tmpfs 能在同一棵目录树中共存。
 
 ```text
-user/rootfs/
+                 路径解析 (lookup_abs_path)
+                          │
+                          ▼
+                   挂载表（最长前缀匹配）
+                  /                    \
+              "/" → ext4            "/tmp" → tmpfs
+                  │                       │
+          read-only ext4             in-memory CRUD
+          (ext4_view crate)        (Vec / BTreeMap)
+                  │
+             Block Cache
+                  │
+             BlockDevice
 ```
 
-用户可以像组织普通 Linux rootfs 一样组织目录：
+### Mount Layer（多文件系统挂载）
+
+所有路径访问都汇聚到 `lookup_abs_path` 这一个入口。它先查挂载表，按**最长前缀匹配**选出该路径所属的文件系统及其根 inode，再把挂载点内的相对路径逐级 `lookup` 下去。
 
 ```text
-user/rootfs/
-├── etc/
-│   └── motd
-├── home/
-│   └── miku/
-│       └── readme.txt
-├── share/
-│   ├── docs/
-│   └── ascii/
-├── tmp/
-├── dev/
-└── proc/
+/tmp/foo/bar
+  → 挂载点 "/tmp" 命中（比 "/" 更长，优先）
+  → 交给 tmpfs，相对路径 "foo/bar"
+  → tmpfs.root_inode().lookup("foo").lookup("bar")
+
+/etc/motd
+  → 仅 "/" 命中（兜底）
+  → 交给 ext4，相对路径 "etc/motd"
 ```
 
-构建脚本会把用户程序编译产物复制到：
+前缀匹配按**路径段**而非裸字符串进行（要求路径恰好等于挂载点，或以「挂载点 + `/`」开头），从而避免 `/tmp` 误匹配到 `/tmpfoo`。挂载机制让「加新文件系统」变成纯粹的扩展：实现 `FileSystem` + `Inode`，在启动时 `mount("/挂载点", fs)` 即可，无需改动路径解析。
+
+### Read-only ext4 Rootfs
+
+根文件系统 `/` 是一个 ext4 镜像，作为只读 rootfs 挂载。ext4 的磁盘格式解析交给第三方 crate `ext4_view`，RmikuOS 只实现其要求的块读取回调（`Ext4Read::read`），把「读到字节」接到自己的块设备与块缓存上；格式解析、目录遍历、inode 查找由 crate 完成。
 
 ```text
-/bin
+User Program → Syscall → VFS → ext4 (ext4_view) → BlockCache → BlockDevice
+                                                                  ├── RamDisk
+                                                                  ├── VirtioMmioBlockDevice (riscv64)
+                                                                  └── VirtioPciBlockDevice  (loongarch64)
 ```
 
-因此最终 rootfs 大致形如：
+rootfs 由宿主机上的目录模板 `user/rootfs/` 生成，用户程序的编译产物在打包时被复制进镜像。最终镜像大致形如：
 
 ```text
 /
-├── bin/
-│   ├── shell
-│   ├── hello
-│   ├── ls
-│   ├── cat
-│   ├── alpha_arg_test
-│   ├── edge_deadline_arg_test
-│   ├── adaptive_alpha_test
-│   └── dynamic_load_exp
+├── bin/         系统命令(shell, ls, cat, echo, grep ...)
+├── tests/       C / 单文件 Rust 测试程序
+├── programs/    cargo workspace 构建的 Rust 程序
 ├── etc/
 │   └── motd
 ├── home/
 ├── share/
-├── tmp/
+├── tmp/         tmpfs 挂载点(可写,内存)
 ├── dev/
 └── proc/
 ```
 
+> ext4 经由 `ext4_view` 以**只读**方式访问；运行时的可写存储由挂载在 `/tmp` 的 tmpfs 提供（见下）。
+
+### Writable tmpfs（可写内存文件系统）
+
+tmpfs 是一个完全活在内存中的可写文件系统，挂载于 `/tmp`，提供完整的 CRUD。文件内容是 `Arc<Mutex<Vec<u8>>>`，目录是 `Arc<Mutex<BTreeMap<String, TmpfsNode>>>`，因此「可写」只是对内存数据结构的增删改，无需触及任何磁盘格式。
+
+支持的操作：
+
+```text
+mkdir              创建目录
+create (touch)     创建空文件
+write / read       文件内容读写(每个打开的 fd 独立 offset,数据共享)
+unlink (rm)        删除文件
+rmdir              删除空目录
+remove_recursive   递归删除(rm -r)
+```
+
+几个语义直接由 Rust 的所有权与 `Arc` 机制自然得到：
+
+* **目录树共享**：`lookup` 返回子节点时 clone 的是 `Arc`，多个进程拿到同一文件即操作同一份内存——一端写、另一端可读。
+* **递归删除零额外代码**：`remove_recursive` 直接从父目录的 `BTreeMap` 中移除整个子树节点，`Arc` 连锁 drop 自动递归释放整棵子树的内存。
+* **unlink 已打开的文件**：删除只是从目录移除「名字」，若仍有进程持有该文件的 `Arc`，内存保留到最后一个 fd 关闭——与 Unix「unlink 一个 open 的文件，数据存活到 close」一致。
+
+写权限的隔离也随之成立：在只读 ext4 路径下（如 `/etc`）执行写操作会被正确拒绝（`Inode` 的写方法默认返回失败，ext4 不重写它们），而 tmpfs 重写为真正的增删。一组端到端测试覆盖了建树、文件读写、`rmdir` 非空目录失败、`unlink` 目录失败、递归删除、删除不存在项失败、以及「ext4 上 mkdir 失败」等用例。
+
+> **关于可写文件系统的设计取舍**：由于 ext4 经 `ext4_view` 只读访问，自实现可写 ext4（分配 inode / 数据块、维护位图与日志）成本极高且收益有限。tmpfs 在内存中提供了「可写文件系统」的全部语义（创建、写入、删除、共享、引用计数释放），是教学场景下更合理的路径。落盘可写文件系统（FAT）作为后续方向，参见 Roadmap。
+
 ---
 
-### Virtio Block Device
+## Virtio Block Device
 
 RmikuOS 当前已经不再只依赖内核内置 ramdisk，而是可以从 QEMU 挂载的真实磁盘镜像读取 ext4 rootfs。
 
@@ -355,6 +413,97 @@ BlockDevice
 配置 virtqueue
 提交 block read request
 读取 ext4 rootfs
+```
+
+---
+
+## User Programs in C and Rust
+
+RmikuOS 的用户程序可以用 **C 或 Rust** 编写。两者编译成相同格式的静态 ELF、走完全相同的系统调用 ABI（号在 `a7`/`r11`，参数在 `a0..`/`r4..`，触发 `ecall` / `syscall 0`，返回值在 `a0`/`r4`），因此在内核看来完全等价——**支持 Rust 用户程序内核侧零改动**，只是多了一条产出兼容 ELF 的编译流程。
+
+### syscall ABI 是语言无关的
+
+系统调用的本质是「按约定把号和参数放进寄存器，触发陷入指令」。这套约定定义在 ELF + 寄存器层面，与源语言无关：C 用一小段汇编（`syscall_<arch>.S`）实现，Rust 用 inline asm 实现，二者只要寄存器约定一致，内核 trap handler 取参数的方式就完全相同。这也是为什么加入 Rust 支持不需要改内核——它加载的是 ELF、执行的是机器码、通过寄存器约定交互。
+
+### C 用户库（分层头文件）
+
+C 侧的用户库按依赖层次拆分为一组单一职责的头文件，用户程序只需 `#include "user.h"` 即可获得全部接口：
+
+```text
+types.h     基础类型(usize / isize)
+syscall.h   系统调用号 + syscall3 / syscall6
+io.h        strlen + read/write + open/close/create + puts/put_char
+process.h   exit/fork/waitpid/getpid/yield/sleep + exec
+fs.h        dirent/stat + getdents/stat/chdir/getcwd + mkdir/unlink/rmdir
+mem.h       PROT_* + mmap/munmap + malloc/free/calloc
+lock.h      spinlock / mutex
+thread.h    thread_create/exit/join + 栈管理
+sched.h     tickets / alpha / sched_proc_stat / get_ticks
+ipc.h       pipe / dup2
+string.h    trim / copy_str
+fmt.h       parse_int / put_int / put_hex / uprintf
+```
+
+### Rust 用户程序
+
+Rust 用户程序以 `#![no_std]` + `#![no_main]` 编写，自定义 `_start` 入口（置于 `.text.entry` 段，匹配链接脚本的加载地址 `0x10000`），并提供 `panic_handler`。RmikuOS 支持两种 Rust 程序形态：
+
+* **单文件 Rust**：自包含的单个 `.rs`（自带 syscall 封装与 `_start`），用 `rustc` 直接编译，适合短小的测试程序，放在 `user/src` / `user/tests`。
+* **cargo workspace Rust**：依赖公共库 `ulib` 的程序，通过 `use ulib::...` 正规模块引用，用 `cargo` 构建整个 workspace，适合较大的工程，放在 `user/rust/programs/<crate>`。
+
+公共库 `ulib` 是一个 no_std crate，按模块对应 C 的用户库分层：
+
+```text
+ulib::number    系统调用号
+ulib::syscall   syscall3 / syscall6(架构分离,inline asm)
+ulib::io        read/write/open/close/create/puts
+ulib::process   exit/fork/waitpid/getpid/yield/exec
+ulib::fs        Stat/DirEntry + stat/getdents/mkdir/unlink/rmdir/chdir/getcwd
+ulib::sched     tickets/alpha/SchedProcStat/get_ticks
+```
+
+一个使用 `ulib` 的程序长这样：
+
+```rust
+#![no_std]
+#![no_main]
+
+use ulib::io::puts;
+use ulib::process::exit;
+
+#[no_mangle]
+#[link_section = ".text.entry"]
+pub extern "C" fn _start() -> ! {
+    puts("hello from rust ulib\n");
+    exit(0);
+}
+
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! {
+    exit(1);
+}
+```
+
+### 两个架构的链接差异
+
+riscv64 与 loongarch64 在 Rust 程序链接上有一处必须注意的差异：
+
+* **riscv64** 经 `rust-lld` 直接链接，链接器本身不引入 C 运行时，只需链接脚本与 `relocation-model=static`。
+* **loongarch64** 经 `loongarch64-unknown-linux-gnu-gcc` 链接，该 gcc 默认引入 `crt1.o` 与 libc，会与 no_std 的自定义 `_start` 冲突（`multiple definition of _start` / 未定义的 `__libc_start_main`），因此需要额外传入 `-nostartfiles -nostdlib` 禁用标准启动文件与标准库。
+
+此外，内核与用户程序在 loongarch 下共用 target triple `loongarch64-unknown-none`，根目录 `.cargo/config.toml` 中给内核设置的链接脚本会经 cargo 的配置层叠继承污染用户程序构建；用户程序构建改用 `RUSTFLAGS` 环境变量传链接参数（覆盖而非追加 config 中的 rustflags）以隔离。
+
+### 统一构建
+
+构建脚本 `user/build.py` 按来源与语言分派编译，一条 `./run.sh <arch>` 即可全部编好并打包进镜像：
+
+```text
+来源                          语言/方式            装入
+─────────────────────────────────────────────────────
+user/src/*.c                  C(系统)            /bin
+user/tests/*.c                C(测试)            /tests
+user/{src,tests}/*.rs         单文件 Rust(rustc)  /bin、/tests
+user/rust/programs/*          cargo Rust(ulib)    /programs
 ```
 
 ---
@@ -618,7 +767,7 @@ phase 2 (轻)：AI 退回少量，负载回落       -> alpha 应重新爬高
 ![dynamic load comparison](logs/figs_dynamic_laod/dynamic_load_alpha_miss_work.png)
 ![dynamic load tradeoff](logs/figs_dynamic_laod/dynamic_load_tradeoff.png)
 
-一组代表性结果（control=1, ai=100, logger=16，轻→重→轻）：
+下表为一组代表性的**早期单次**结果（control=1, ai=100, logger=16，轻→重→轻）。注意：随后改用 5 次重复并剔除冷启动后，各策略的绝对数值有所变化（见上节「恒定负载下的结论」中 1180 / 5800 / 5260 的 5 次重复数据），但「AIMD 兼顾低 miss 与不垫底吞吐」的定性结论一致。
 
 | 策略            | control miss | max tardiness | AI work |
 | --------------- | ------------ | ------------- | ------- |
@@ -651,20 +800,33 @@ RISC-V 使用 QEMU `virt` 机器和 virtio-mmio 块设备。
 
 LoongArch64 使用 QEMU `virt` 机器和 virtio-pci 块设备。
 
+> 注：在 QEMU 软件模拟下，loongarch64 的指令翻译与串口 IO 效率低于 riscv64，交互体感更慢；这是仿真环境特性，与内核逻辑无关。日常开发建议以 riscv64 为主，loongarch64 用于跨架构验证。
+
 ---
 
-## Rootfs
+## Source Layout（用户程序与 rootfs 布局）
 
-rootfs 模板目录是 `user/rootfs/`，用户程序源码放在 `user/src/`。构建后用户程序进入 `user/build/<arch>/`，随后被打包进 ext4 镜像的 `/bin`。
+```text
+user/
+├── rootfs/                 rootfs 目录模板(etc/motd, home, share ...)
+├── include/                C 用户库(分层头文件,见 "User Programs in C and Rust")
+├── lib/                    crt0 与 syscall_<arch>.S
+├── src/                    C 系统程序(ls, cat, echo, grep, shell ...) → /bin
+├── tests/                  C / 单文件 Rust 测试程序 → /tests
+├── rust/                   cargo workspace
+│   ├── ulib/               no_std 公共库 crate
+│   └── programs/<crate>/   依赖 ulib 的 Rust 程序 → /programs
+└── build.py                统一构建脚本(按来源/语言分派编译)
+```
 
-生成的 rootfs 镜像位于：
+构建产物进入 `user/build/<arch>/{bin,tests,programs}`，随后由 `user/mkfs_ext4.sh` 打包进 ext4 镜像。生成的镜像位于：
 
 ```text
 target/fs-riscv64.img
 target/fs-loongarch64.img
 ```
 
-修改 `user/rootfs` 或 `user/src` 后重新运行 `./run.sh <arch> debug`，即可在系统 shell 中看到新的文件结构和用户程序。
+修改 `user/rootfs`、`user/src`、`user/tests` 或 `user/rust` 后重新运行 `./run.sh <arch> debug`，即可在系统 shell 中看到新的文件结构与用户程序。
 
 ---
 
@@ -713,25 +875,26 @@ python3 scripts/plot_dynamic_load.py \
 ## Current Architecture
 
 ```text
-                    User Programs
-                         │
-                         ▼
-                      Syscall
-                         │
-        ┌────────────────┼────────────────┐
-        ▼                ▼                ▼
-       VFS            Scheduler        Process/Thread
-        │                │                │
-        ▼                ▼                ▼
-  read-only ext4   alpha-scaled       address space
-        │          stride scheduler    fd table
-        ▼          (continuous alpha
-   Block Cache       + AIMD policy)
-        │
-        ▼
-   BlockDevice
-   /         \
-  /           \
+                         User Programs (C / Rust)
+                                  │
+                                  ▼
+                               Syscall
+                                  │
+        ┌────────────────┬────────┴────────┬────────────────┐
+        ▼                ▼                 ▼                ▼
+       VFS           Scheduler       Process/Thread       IPC
+        │                │                 │           pipe / dup2
+        ▼                ▼                 ▼
+   Mount Table     alpha-scaled       address space
+   /        \      stride scheduler    fd table
+  ext4     tmpfs   (continuous alpha
+   │      (memory)   + AIMD policy)
+   ▼
+ Block Cache
+   │
+   ▼
+ BlockDevice
+ /         \
 virtio-mmio  virtio-pci
  RISC-V      LoongArch64
 ```
@@ -749,34 +912,37 @@ virtio-mmio  virtio-pci
 * 调度统计接口（含 deadline / tardiness / jitter 原始量）
 * `fork / exec / waitpid`
 * 用户态线程 `thread_create / thread_exit / thread_join`
-* 用户态 shell、`argc / argv`
+* 用户态 shell、`argc / argv`、内建与外部命令、命令搜索路径（/bin、/tests、/programs）
 * fd table、`open / close / read / write`、`stat / fstat`、`getdents`、`cwd / chdir / getcwd`
-* VFS、read-only ext4 rootfs
+* 管道 `pipe`、`dup2`、shell 管道 `|` 与重定向 `< >`
+* VFS 多文件系统挂载（最长前缀匹配）
+* read-only ext4 rootfs（基于 `ext4_view`）
+* 可写 tmpfs（mkdir / create / write / read / unlink / rmdir / 递归删除，挂载于 `/tmp`）
 * BlockDevice trait、RamDisk、BlockCache
 * RISC-V virtio-mmio / LoongArch64 virtio-pci block device
 * 从 ext4 `/bin/shell` 启动 init shell
-* rootfs overlay、文件系统压力测试
-* alpha mechanism test
-* edge deadline 实验（含 tardiness / jitter 观测）
-* AIMD 自适应 alpha 控制器（含分档退避）
-* 固定 alpha 对照实验
-* 动态负载实验（AIMD vs 固定 alpha 的帕累托对照）
+* C 用户库（分层头文件）与 Rust 用户库 `ulib`
+* Rust 用户程序支持（单文件 rustc + cargo workspace），双架构，syscall ABI 语言无关
+* 统一构建脚本 `build.py`（C / 单文件 Rust / cargo Rust 分派编译）
+* alpha mechanism / edge deadline / AIMD 自适应 / 动态负载 四层调度实验
 
 ---
 
 ## Roadmap
 
-### Writable Filesystem
+### Writable Filesystem on Disk
 
-短期目标先实现一个简单的内存文件系统（`tmpfs / ramfs`），而非直接做完整可写 ext4：
-
-* `open(O_CREAT)`、`write`、`mkdir`、`unlink`
-* 临时可写目录
-
+tmpfs 已提供内存中的可写文件系统。下一步面向**落盘**可写：通过 `fatfs` crate 接入 FAT 文件系统，挂载到独立块设备。前置工作是为 virtio-blk 增加写路径（当前块设备为只读）。
 
 ### Network
 
 后续实现 virtio-net，并逐步支持 Ethernet frame / ARP / IPv4 / ICMP / UDP / 简单 socket API。
+
+### Scheduler
+
+* per-process alpha 或调度 class（让 control / AI / logger 各自一档，而非全局单旋钮）
+* 更复杂的反馈控制器（如以 tardiness 为误差信号的 PI 控制）
+* 更丰富的动态负载模式（多阶段、随机突变）
 
 ---
 
@@ -784,10 +950,11 @@ virtio-mmio  virtio-pci
 
 RmikuOS 的目标不是追求一次性实现完整 Unix，而是逐步构建一个能真实运行、能调试、能扩展、能做实验的教学型操作系统。
 
-当前阶段的重点是：
+当前阶段已经做到：
 
 ```text
-让用户程序从真实 ext4 rootfs 中运行；
-让 RISC-V 和 LoongArch64 都能通过 virtio 块设备访问 QEMU 磁盘；
+让用户程序(C 与 Rust)从真实 ext4 rootfs 中运行;
+在同一目录树中挂载只读 ext4 与可写 tmpfs;
+让 RISC-V 和 LoongArch64 都能通过 virtio 块设备访问 QEMU 磁盘;
 在教学内核中实现可解释、可观测、可实验、可自适应的调度器机制。
 ```
