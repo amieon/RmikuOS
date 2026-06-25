@@ -1,0 +1,11 @@
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ulib = { path = "../../ulib" }
+
+[[bin]]
+name = "rust_hello"
+path = "src/main.rs"

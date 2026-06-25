@@ -4,3 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
+# 用户态公共库:no_std,提供 syscall 封装与各层接口

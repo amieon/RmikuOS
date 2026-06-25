@@ -1,3 +1,11 @@
 [workspace]
-members = ["ulib", "programs/rust_rust", "programs/tsur_tsur"]
+members = ["ulib", "programs/rust_hello"]
 resolver = "2"
+
+# 用户态裸机程序:统一 abort(no_std 不支持 unwind)
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "z"
