@@ -25,5 +25,5 @@ rustflags = [
 rustflags = [
     "-C", "relocation-model=static",
     "-C", "link-arg=-T../linker-loongarch64.ld",
-    "-C", "link-arg=--no-relax",
+    "-C", "link-arg=-mno-relax",     
 ]
