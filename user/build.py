@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+import shutil
 import argparse
 import subprocess
 import sys
@@ -212,6 +213,11 @@ def main():
         print(f"missing {SRC_DIR}", file=sys.stderr)
         sys.exit(1)
 
+    arch_build_dir = BUILD_DIR / args.arch
+    if arch_build_dir.exists():
+        print(f"[user] cleaning old build dir: {arch_build_dir}")
+        shutil.rmtree(arch_build_dir)
+        
     sources = collect_sources()
     if not sources:
         print(f"no .S or .c files found in {SRC_DIR}", file=sys.stderr)
