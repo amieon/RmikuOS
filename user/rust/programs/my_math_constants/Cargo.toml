@@ -1,0 +1,11 @@
+[package]
+name = "my_math_constants"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ulib = { path = "../../ulib" }
+
+[[bin]]
+name = "my_math_constants"
+path = "src/main.rs"
