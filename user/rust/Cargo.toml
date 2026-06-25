@@ -1,0 +1,3 @@
+[workspace]
+members = ["ulib", "programs/rust_rust", "programs/tsur_tsur"]
+resolver = "2"
