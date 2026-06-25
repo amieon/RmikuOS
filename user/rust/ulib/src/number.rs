@@ -1,7 +1,3 @@
-//! 系统调用号(对应 C 的 syscall.h 中的 SYS_*)。
-//!
-//! 必须与内核及 C 头文件保持完全一致。
-
 pub const SYS_EXIT: usize = 0;
 pub const SYS_YIELD: usize = 1;
 pub const SYS_WRITE: usize = 2;

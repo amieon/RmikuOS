@@ -1,5 +1,4 @@
 //! 文件系统:stat/getdents/chdir/getcwd/mkdir/unlink/rmdir/remove_recursive。
-//!
 //! 对应 C 的 fs.h。结构体用 #[repr(C)] 保证与内核的内存布局一致。
 
 use crate::number::*;
