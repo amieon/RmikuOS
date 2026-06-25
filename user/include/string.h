@@ -29,3 +29,8 @@ void trim(char *str) {
     str[new_len] = '\0';
 }
 
+void copy_str(char *dst,char *src,isize len){
+    for(int i=0;i<len&&src[i]!='\0';++i){
+        dst[i] = src[i];
+    }
+}

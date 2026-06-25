@@ -3,6 +3,7 @@
 #define LINE_SIZE 128
 #define MAX_ARGC  8
 
+
 static int streq(const char *a, const char *b) {
     int i = 0;
     while (a[i] && b[i]) {
@@ -219,7 +220,67 @@ static int builtin_rmdir(int argc, char *argv[]) {
     return ret;
 }
 
-static void build_exec_path(const char *cmd, char *out, int out_size) {
+
+
+#define MAX_DIRS 8
+#define DIR_LEN 64
+static char search_dirs[MAX_DIRS][DIR_LEN];
+static int num_dirs = 0;
+
+
+static void load_search_dirs(void) {
+    num_dirs = 0;
+
+    int fd = open("/etc/path");
+    if (fd < 0) {
+
+        copy_str(search_dirs[num_dirs++], "/bin/", DIR_LEN);
+        copy_str(search_dirs[num_dirs++], "/tests/", DIR_LEN);
+        return;
+    }
+
+
+    char buf[256];
+    int total = 0;
+    while (total < (int)sizeof(buf) - 1) {
+        isize n = read(fd, buf + total, sizeof(buf) - 1 - total);
+        if (n <= 0) break;
+        total += n;
+    }
+    buf[total] = '\0';
+    close(fd);
+
+
+    int start = 0;
+    for (int i = 0; i <= total; i++) {
+        if (buf[i] == '\n' || buf[i] == '\0') {
+            if (i > start && num_dirs < MAX_DIRS) {
+
+                int len = i - start;
+                if (len > DIR_LEN - 2) len = DIR_LEN - 2;
+                int k = 0;
+                for (int j = start; j < start + len; j++) {
+                    search_dirs[num_dirs][k++] = buf[j];
+                }
+
+                if (k > 0 && search_dirs[num_dirs][k-1] != '/') {
+                    search_dirs[num_dirs][k++] = '/';
+                }
+                search_dirs[num_dirs][k] = '\0';
+                num_dirs++;
+            }
+            start = i + 1;
+        }
+    }
+
+
+    if (num_dirs == 0) {
+        copy_str(search_dirs[num_dirs++], "/bin/", DIR_LEN);
+        copy_str(search_dirs[num_dirs++], "/tests/", DIR_LEN);
+    }
+}
+
+static void build_exec_path(const char *prefix, const char *cmd, char *out, int out_size) {
     if (cmd[0] == '/') {
         int i = 0;
         while (cmd[i] && i < out_size - 1) {
@@ -230,7 +291,6 @@ static void build_exec_path(const char *cmd, char *out, int out_size) {
         return;
     }
 
-    const char *prefix = "/bin/";
     int pos = 0;
 
     for (int i = 0; prefix[i] && pos < out_size - 1; i++) {
@@ -247,7 +307,6 @@ static void build_exec_path(const char *cmd, char *out, int out_size) {
 static void run_exec(int argc, char *argv[]){
     char path[96];
 
-    build_exec_path(argv[0], path, sizeof(path));
 
     struct exec_args args;
     args.argc = argc;
@@ -262,10 +321,24 @@ static void run_exec(int argc, char *argv[]){
         args.argv[i].len = strlen(argv[i]);
     }
 
-    exec_with_args(path, &args);
 
-    puts("exec failed: ");
-    puts(path);
+    if (argv[0][0] == '/') {
+        exec_with_args(argv[0], &args);
+        puts("exec failed: ");
+        puts(argv[0]);
+        puts("\n");
+        return;
+    }
+
+    for (int d = 0; d < num_dirs; d++) {
+        char path[96];
+        build_exec_path(search_dirs[d], argv[0], path, sizeof(path));  
+        exec_with_args(path, &args);
+
+    }
+
+    puts("command not found: ");
+    puts(argv[0]);
     puts("\n");
 }
 
@@ -506,6 +579,7 @@ int main(void) {
 
     puts("\nRmikuOS shell\n");
     print_help();
+    load_search_dirs();
 
     while (1) {
         char cwd_buf[128];
