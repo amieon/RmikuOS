@@ -3,3 +3,5 @@
 /user/build
 
 /kernel/src/loader
+
+/user/rust/target
