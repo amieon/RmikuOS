@@ -1,140 +1,152 @@
-use crate::models::{Book, MAX_BOOKS};
-use crate::storage::{load_books, save_books};
-use crate::backup::backup_data;
+use crate::models::{Book, User, MAX_BOOKS, MAX_USERS, MAX_BORROW};
+use crate::storage::{save_books, save_users};
 use crate::utils::{readline, atoi, bytes_to_str, put_int};
-use ulib::io::puts;
+use ulib::io::{puts, put_char};   // 添加 put_char
 
 pub struct LibraryManager {
-    books: [Book; MAX_BOOKS],
-    count: usize,
-    next_id: u32,
+    pub books: [Book; MAX_BOOKS],
+    pub book_count: usize,
+    pub users: [User; MAX_USERS],
+    pub user_count: usize,
 }
 
+
 impl LibraryManager {
-    pub fn new() -> Self {
-        let (books, count) = load_books();
-        let mut max_id = 0;
-        for i in 0..count {
-            if books[i].id > max_id { max_id = books[i].id; }
+    pub fn new(books: ([Book; MAX_BOOKS], usize), users: ([User; MAX_USERS], usize)) -> Self {
+        LibraryManager {
+            books: books.0,
+            book_count: books.1,
+            users: users.0,
+            user_count: users.1,
         }
-        LibraryManager { books, count, next_id: max_id + 1 }
     }
 
-    pub fn add_book(&mut self) {
-        if self.count >= MAX_BOOKS {
-            puts("图书已满，无法添加！\n");
+    // ---------- 图书管理 ----------
+    pub fn add_book(&mut self, current_user: usize) {
+        if !self.users[current_user].is_admin {
+            puts("权限不足！需要管理员权限。\n");
             return;
         }
-        puts("书名: ");
-        let mut title = [0u8; 64];
-        readline(&mut title);
-        puts("作者: ");
-        let mut author = [0u8; 32];
-        readline(&mut author);
-        puts("ISBN: ");
-        let mut isbn = [0u8; 20];
-        readline(&mut isbn);
-        puts("数量: ");
-        let mut num = [0u8; 8];
-        readline(&mut num);
+        if self.book_count >= MAX_BOOKS { puts("图书已满！\n"); return; }
+        puts("书名: "); let mut title = [0u8; 64]; readline(&mut title);
+        puts("作者: "); let mut author = [0u8; 32]; readline(&mut author);
+        puts("ISBN: "); let mut isbn = [0u8; 20]; readline(&mut isbn);
+        puts("数量: "); let mut num = [0u8; 8]; readline(&mut num);
         let total = atoi(&num);
         if total == 0 { return; }
-        let id = self.next_id;
-        self.next_id += 1;
-        let book = Book::new(id,
-                             bytes_to_str(&title),
-                             bytes_to_str(&author),
-                             bytes_to_str(&isbn),
-                             total);
-        self.books[self.count] = book;
-        self.count += 1;
-        puts("图书添加成功！ID: ");
-        put_int(id as u64);
-        puts("\n");
-        self.save();
+        let id = self.book_count as u32 + 1;
+        let book = Book::new(id, bytes_to_str(&title), bytes_to_str(&author), bytes_to_str(&isbn), total);
+        self.books[self.book_count] = book;
+        self.book_count += 1;
+        puts("添加成功！ID: "); put_int(id as u64); puts("\n");
+        self.save_all();
     }
 
-    pub fn list_all(&self) {
-        for i in 0..self.count {
-            let book = &self.books[i];
-            puts("ID: "); put_int(book.id as u64);
-            puts(" 书名: "); puts(bytes_to_str(&book.title));
-            puts(" 作者: "); puts(bytes_to_str(&book.author));
-            puts(" 总数: "); put_int(book.total as u64);
-            puts(" 可借: "); put_int(book.available as u64);
+    pub fn list_books(&self) {
+        for i in 0..self.book_count {
+            let b = &self.books[i];
+            puts("ID: "); put_int(b.id as u64);
+            puts(" 书名: "); puts(bytes_to_str(&b.title));
+            puts(" 可借: "); put_int(b.available as u64);
+            puts("/"); put_int(b.total as u64);
             puts("\n");
         }
     }
 
     pub fn search_book(&self) {
-        puts("请输入书名关键字: ");
-        let mut keyword = [0u8; 64];
-        readline(&mut keyword);
-        let kw = bytes_to_str(&keyword);
+        puts("书名关键字: ");
+        let mut kw = [0u8; 64]; readline(&mut kw);
+        let kw_str = bytes_to_str(&kw);
         let mut found = false;
-        for i in 0..self.count {
-            let book = &self.books[i];
-            if bytes_to_str(&book.title).contains(kw) {
-                puts("找到: "); puts(bytes_to_str(&book.title));
-                puts(" (ID: "); put_int(book.id as u64); puts(")\n");
+        for i in 0..self.book_count {
+            if bytes_to_str(&self.books[i].title).contains(kw_str) {
+                let b = &self.books[i];
+                puts("ID: "); put_int(b.id as u64);
+                puts(" 书名: "); puts(bytes_to_str(&b.title));
+                puts(" 可借: "); put_int(b.available as u64);
+                puts("/"); put_int(b.total as u64);
+                puts("\n");
                 found = true;
             }
         }
-        if !found { puts("未找到匹配的图书。\n"); }
+        if !found { puts("未找到\n"); }
     }
 
-    pub fn borrow_book(&mut self) {
-        puts("请输入图书 ID: ");
-        let mut buf = [0u8; 8];
-        readline(&mut buf);
+    pub fn borrow_book(&mut self, user_idx: usize) {
+        let user = &mut self.users[user_idx];
+        if user.borrow_count >= MAX_BORROW { puts("您已借满！\n"); return; }
+        puts("图书ID: ");
+        let mut buf = [0u8; 8]; readline(&mut buf);
         let id = atoi(&buf);
-        for i in 0..self.count {
-            if self.books[i].id == id {
-                if self.books[i].available > 0 {
-                    self.books[i].available -= 1;
-                    puts("借阅成功！\n");
-                    self.save();
-                } else {
-                    puts("该书已全部借出。\n");
-                }
+        for i in 0..self.book_count {
+            if self.books[i].id == id && self.books[i].available > 0 {
+                self.books[i].available -= 1;
+                user.borrowed[user.borrow_count] = id;
+                user.borrow_count += 1;
+                puts("借阅成功！\n");
+                self.save_all();
                 return;
             }
         }
-        puts("未找到该书。\n");
+        puts("该书不存在或已借完\n");
     }
 
-    pub fn return_book(&mut self) {
-        puts("请输入图书 ID: ");
-        let mut buf = [0u8; 8];
-        readline(&mut buf);
+    pub fn return_book(&mut self, user_idx: usize) {
+        let user = &mut self.users[user_idx];
+        if user.borrow_count == 0 { puts("您未借任何书\n"); return; }
+        puts("图书ID: ");
+        let mut buf = [0u8; 8]; readline(&mut buf);
         let id = atoi(&buf);
-        for i in 0..self.count {
-            if self.books[i].id == id {
-                if self.books[i].available < self.books[i].total {
-                    self.books[i].available += 1;
-                    puts("还书成功！\n");
-                    self.save();
-                } else {
-                    puts("该书已全部在库，无需归还。\n");
+        for i in 0..user.borrow_count {
+            if user.borrowed[i] == id {
+                // 在图书列表中增加可借数
+                for j in 0..self.book_count {
+                    if self.books[j].id == id {
+                        self.books[j].available += 1;
+                        break;
+                    }
                 }
+                // 删除该借阅记录
+                for k in i..user.borrow_count-1 {
+                    user.borrowed[k] = user.borrowed[k+1];
+                }
+                user.borrow_count -= 1;
+                puts("还书成功！\n");
+                self.save_all();
                 return;
             }
         }
-        puts("未找到该书。\n");
+        puts("您未借该书\n");
     }
 
-    /// 调用备份（多进程）
-    pub fn do_backup(&self) {
-        puts("启动备份子进程...\n");
-        backup_data();
-        puts("备份已在后台进行。\n");
+    pub fn my_borrows(&self, user_idx: usize) {
+        let user = &self.users[user_idx];
+        if user.borrow_count == 0 { puts("暂无借阅\n"); return; }
+        puts("您借阅的图书ID: ");
+        for i in 0..user.borrow_count {
+            put_int(user.borrowed[i] as u64);
+            put_char(b' ');
+        }
+        puts("\n");
     }
 
-    pub fn save(&self) {
-        save_books(&self.books, self.count);
+    pub fn list_users(&self, current_user: usize) {
+        if !self.users[current_user].is_admin {
+            puts("权限不足！\n");
+            return;
+        }
+        for i in 0..self.user_count {
+            let u = &self.users[i];
+            puts("ID: "); put_int(u.id as u64);
+            puts(" 用户名: "); puts(bytes_to_str(&u.username));
+            puts(" 管理员: "); puts(if u.is_admin { "是" } else { "否" });
+            puts(" 借阅: "); put_int(u.borrow_count as u64);
+            puts("\n");
+        }
     }
 
-    pub fn get_books(&self) -> &[Book] {
-        &self.books[..self.count]
+    pub fn save_all(&self) {
+        save_books(&self.books, self.book_count);
+        save_users(&self.users, self.user_count);
     }
 }
