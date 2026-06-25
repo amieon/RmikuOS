@@ -1,5 +1,5 @@
 [workspace]
-members = ["ulib", "programs/rust_hello"]
+members = ["ulib", "programs/*"]
 resolver = "2"
 
 # 用户态裸机程序:统一 abort(no_std 不支持 unwind)

@@ -1,5 +1,5 @@
 [package]
-name = "rust_hello"
+name = "rust_rust"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,5 +7,5 @@ edition = "2021"
 ulib = { path = "../../ulib" }
 
 [[bin]]
-name = "rust_hello"
+name = "rust_rust"
 path = "src/main.rs"

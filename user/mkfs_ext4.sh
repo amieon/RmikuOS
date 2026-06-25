@@ -23,7 +23,7 @@ else
 fi
 
 # 确保基础目录存在
-mkdir -p "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests"
+mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests"
 
 # 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then
@@ -47,6 +47,13 @@ for f in user/build/${ARCH}/tests/*.elf; do
   base="$(basename "$f" .elf)"          
   clean="$(printf "%s" "$base" | sed -E 's/^([0-9]+_)+//')"  
   cp "$f" "$ROOT/tests/$clean"
+done
+
+
+for f in user/build/${ARCH}/programs/*.elf; do
+  [ -e "$f" ] || continue
+  base="$(basename "$f" .elf)"
+  cp "$f" "$ROOT/programs/$base"
 done
 
 # 5. 简单展示 rootfs 内容

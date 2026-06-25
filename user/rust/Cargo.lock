@@ -3,7 +3,21 @@
 version = 4
 
 [[package]]
-name = "hello"
+name = "rust_hello"
+version = "0.1.0"
+dependencies = [
+ "ulib",
+]
+
+[[package]]
+name = "rust_rust"
+version = "0.1.0"
+dependencies = [
+ "ulib",
+]
+
+[[package]]
+name = "tsur_tsur"
 version = "0.1.0"
 dependencies = [
  "ulib",
