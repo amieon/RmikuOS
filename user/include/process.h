@@ -1,15 +1,5 @@
 #pragma once
 
-/*
- * process.h —— 进程控制层。
- *
- * 内容:
- *   - exit / getpid / fork / waitpid / yield / sleep(进程生命周期)
- *   - exec / exec2 / exec_with_args(加载新程序映像)
- *   - exec 参数结构(user_arg / exec_args)
- *
- * 依赖 io.h(exec 需要 strlen)。
- */
 
 #include "io.h"
 

@@ -1,15 +1,5 @@
 #pragma once
 
-/*
- * mem.h —— 内存管理层。
- *
- * 内容:
- *   - 内存保护标志 PROT_*(此处是唯一定义点)
- *   - mmap / munmap(向内核申请/归还匿名内存)
- *   - 用户态堆分配器 malloc / free / calloc(基于 mmap 切分)
- *
- * 依赖 syscall.h(mmap/munmap)和 lock.h(堆分配器的互斥保护)。
- */
 
 #include "syscall.h"
 #include "lock.h"

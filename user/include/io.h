@@ -1,17 +1,5 @@
 #pragma once
 
-/*
- * io.h —— 基础输入输出层。
- *
- * 内容:
- *   - strlen(字符串长度,IO 包装频繁使用,放在这里作为基础工具)
- *   - read / write(裸读写)
- *   - open / open2 / create / create2 / open_create / close(文件描述符开关)
- *   - puts / put_char(便捷输出)
- *
- * 只依赖 syscall 层。更高层的 fs.h(目录/stat)、fmt.h(格式化输出)
- * 都建立在这里的 write / strlen 之上。
- */
 
 #include "syscall.h"
 

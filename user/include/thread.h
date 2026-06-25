@@ -1,22 +1,5 @@
 #pragma once
 
-/*
- * thread.h —— 用户态线程层。
- *
- * 内容:
- *   - 原始线程系统调用封装(sys_thread_create_raw / exit_raw / join_raw)
- *   - 线程入口 trampoline __thread_entry
- *   - 线程栈记录表(create 时 mmap 栈、join 时 munmap 回收)
- *   - 高级 thread_create / thread_exit / thread_join
- *
- * 依赖:
- *   - mem.h:线程栈用 mmap 申请、munmap 回收(需要 PROT_*)
- *   - lock.h:栈记录表的互斥保护
- *   - io.h:warning 信息 puts 输出
- *
- * 注意:tickets 相关接口(set/get_thread_tickets)已移至 sched.h。
- */
-
 #include "mem.h"
 #include "lock.h"
 #include "io.h"

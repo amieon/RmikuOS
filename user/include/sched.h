@@ -1,19 +1,6 @@
 #pragma once
 
-/*
- * sched.h —— 调度实验接口层。
- *
- * 内容:
- *   - 进程 / 线程 / 自身 tickets 的读写
- *   - 调度 alpha 旋钮的读写
- *   - 进程调度统计 sched_proc_stat + 采集 / 复位
- *   - get_ticks(时钟节拍计数)
- *
- * 这些是为调度器实验(alpha 机制、AIMD 自适应、动态负载)提供的
- * 可观测 / 可调节接口,从原 sys.h 中拆出,单独成层。
- *
- * 只依赖 syscall.h。
- */
+
 
 #include "syscall.h"
 

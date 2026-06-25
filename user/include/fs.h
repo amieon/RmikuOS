@@ -1,17 +1,5 @@
 #pragma once
 
-/*
- * fs.h —— 文件系统层。
- *
- * 内容:
- *   - 目录项结构 dirent + getdents(读目录)
- *   - 文件元信息 stat 结构 + stat / stat2 / fstat
- *   - 工作目录 chdir / chdir2 / getcwd
- *   - 目录/文件增删 mkdir / unlink / rmdir / remove_recursive
- *
- * 依赖 io.h(strlen)。基础的 open / close / read / write 在 io.h,
- * 这里放"文件系统语义"层面的操作。
- */
 
 #include "io.h"
 

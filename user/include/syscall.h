@@ -1,19 +1,7 @@
 #pragma once
 
-/*
- * syscall.h —— 系统调用层。
- *
- * 内容:
- *   - 全部系统调用号(SYS_*)
- *   - 原始 syscall3 / syscall6 入口(由 syscall_<arch>.S 提供实现)
- *
- * 这是除 types.h 外最底层的头文件。其余所有"对内核发起请求"的包装
- * (io / fs / mem / sched / ipc / thread)都建立在这两个原始入口之上。
- */
-
 #include "types.h"
 
-/* ---- 系统调用号 ---- */
 
 #define SYS_EXIT       0
 #define SYS_YIELD      1
