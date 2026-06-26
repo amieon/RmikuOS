@@ -63,6 +63,43 @@ pub fn putchar_raw(ch: u8) {
     }
 }
 
+
+pub fn print_i32(num: i32) {
+
+    let mut buffer = [0u8; 16];
+    let mut idx = buffer.len();
+
+
+    let mut n = num as i64;
+    let is_negative = n < 0;
+    if is_negative {
+        n = -n;
+    }
+
+
+    if n == 0 {
+        puts_raw("0");
+        return;
+    }
+
+
+    while n > 0 {
+        idx -= 1;
+        buffer[idx] = (n % 10) as u8 + b'0';
+        n /= 10;
+    }
+
+
+    if is_negative {
+        idx -= 1;
+        buffer[idx] = b'-';
+    }
+
+
+    let s = core::str::from_utf8(&buffer[idx..]).unwrap();
+    puts_raw(s);
+}
+
 #[cfg(target_arch = "loongarch64")]
 pub fn putchar_phys_raw(ch: u8) {
     let uart = crate::arch::UART_PADDR as *mut u8;
