@@ -74,7 +74,7 @@ echo "created $IMG"
 if [ ! -f "$FAT_IMG" ]; then
   echo "=== 构建 FAT 镜像 ($ARCH) ==="
   truncate -s 32M "$FAT_IMG"
-  mkfs.fat -F 32 "$FAT_IMG"
+  mkfs.fat -F 16 "$FAT_IMG"
   echo "created $FAT_IMG (fresh FAT32)"
 else
   echo "FAT image exists, reuse: $FAT_IMG"

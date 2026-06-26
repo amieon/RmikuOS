@@ -209,7 +209,7 @@ fn primary_init() {
 
                 if let Some(ref fdev) = fat_dev {
                      //test::test_second_disk_rw::test_second_disk_rw(fdev.clone());
-                     test::test_fat_mount::test_fat_raw_read(fdev.clone());
+                     test::test_fat_mount::test_sequential_reads(fdev.clone());
                      test::test_fat_mount::test_fat_mount(fdev.clone());
                 }
 

@@ -375,22 +375,32 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     /// Panics in non-optimized build if `storage` position returned by `seek` is not zero.
     pub fn new<T: IntoStorage<IO>>(storage: T, options: FsOptions<TP, OCC>) -> Result<Self, Error<IO::Error>> {
         // Make sure given image is not seeked
+          
         let mut disk = storage.into_storage();
+          
         trace!("FileSystem::new");
         debug_assert!(disk.seek(SeekFrom::Current(0))? == 0);
 
         // read boot sector
+          
         let bpb = {
+            log::error!("2");
             let boot = BootSector::deserialize(&mut disk)?;
+            log::error!("2");
             boot.validate(options.strict)?;
+            log::error!("2");
             boot.bpb
         };
+          
 
         let root_dir_sectors = bpb.root_dir_sectors();
+          
         let first_data_sector = bpb.first_data_sector();
+          
         let total_clusters = bpb.total_clusters();
+          
         let fat_type = FatType::from_clusters(total_clusters);
-
+          
         // read FSInfo sector if this is FAT32
         let mut fs_info = if fat_type == FatType::Fat32 {
             disk.seek(SeekFrom::Start(bpb.bytes_from_sectors(bpb.fs_info_sector())))?;
@@ -398,15 +408,15 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
         } else {
             FsInfoSector::default()
         };
-
+          
         // if dirty flag is set completly ignore free_cluster_count in FSInfo
         if bpb.status_flags().dirty {
             fs_info.free_cluster_count = None;
         }
-
+          
         // Validate the numbers stored in the free_cluster_count and next_free_cluster are within bounds for volume
         fs_info.validate_and_fix(total_clusters);
-
+          
         // return FileSystem struct
         let status_flags = bpb.status_flags();
         trace!("FileSystem::new end");

@@ -45,6 +45,7 @@ pub(crate) struct BiosParameterBlock {
 
 impl BiosParameterBlock {
     fn deserialize<R: Read>(rdr: &mut R) -> Result<Self, R::Error> {
+         
         let mut bpb = Self {
             bytes_per_sector: rdr.read_u16_le()?,
             sectors_per_cluster: rdr.read_u8()?,
@@ -60,7 +61,7 @@ impl BiosParameterBlock {
             total_sectors_32: rdr.read_u32_le()?,
             ..Self::default()
         };
-
+         
         if bpb.is_fat32() {
             bpb.sectors_per_fat_32 = rdr.read_u32_le()?;
             bpb.extended_flags = rdr.read_u16_le()?;
@@ -70,14 +71,19 @@ impl BiosParameterBlock {
             bpb.backup_boot_sector = rdr.read_u16_le()?;
             rdr.read_exact(&mut bpb.reserved_0)?;
         }
-
+         
         bpb.drive_num = rdr.read_u8()?;
+         
         bpb.reserved_1 = rdr.read_u8()?;
+         
         bpb.ext_sig = rdr.read_u8()?; // 0x29
+         
         bpb.volume_id = rdr.read_u32_le()?;
+         
         rdr.read_exact(&mut bpb.volume_label)?;
+         
         rdr.read_exact(&mut bpb.fs_type_label)?;
-
+         
         // when the extended boot signature is anything other than 0x29, the fields are invalid
         if bpb.ext_sig != 0x29 {
             // fields after ext_sig are not used - clean them
@@ -85,7 +91,7 @@ impl BiosParameterBlock {
             bpb.volume_label = [0; 11];
             bpb.fs_type_label = [0; 8];
         }
-
+         
         Ok(bpb)
     }
 
@@ -275,43 +281,58 @@ impl BiosParameterBlock {
     }
 
     fn validate_total_clusters<E: IoError>(&self) -> Result<(), Error<E>> {
+          
         let is_fat32 = self.is_fat32();
         let total_clusters = self.total_clusters();
         let fat_type = FatType::from_clusters(total_clusters);
+          
         if is_fat32 != (fat_type == FatType::Fat32) {
             error!("Invalid BPB: result of FAT32 determination from total number of clusters and sectors_per_fat_16 field differs");
             return Err(Error::CorruptedFileSystem);
         }
+          
         if fat_type == FatType::Fat32 && total_clusters > 0x0FFF_FFFF {
             error!("Invalid BPB: too many clusters {}", total_clusters);
             return Err(Error::CorruptedFileSystem);
         }
-
+          
         let bits_per_fat_entry = fat_type.bits_per_fat_entry();
         let total_fat_entries = self.sectors_per_fat() * u32::from(self.bytes_per_sector) * 8 / bits_per_fat_entry;
         let usable_fat_entries = total_fat_entries - RESERVED_FAT_ENTRIES;
+          
         if usable_fat_entries < total_clusters {
             warn!(
                 "FAT is too small (allows allocation of {} clusters) compared to the total number of clusters ({})",
                 usable_fat_entries, total_clusters
             );
         }
+          
         Ok(())
     }
 
     fn validate<E: IoError>(&self) -> Result<(), Error<E>> {
+          
         if self.fs_version != 0 {
             error!("Unsupported filesystem version: expected 0 but got {}", self.fs_version);
             return Err(Error::CorruptedFileSystem);
         }
+          
         self.validate_bytes_per_sector()?;
+          
         self.validate_sectors_per_cluster()?;
+          
         self.validate_reserved_sectors()?;
+          
         self.validate_fats()?;
+          
         self.validate_root_entries()?;
+          
         self.validate_total_sectors()?;
+          
         self.validate_sectors_per_fat()?;
+          
         self.validate_total_clusters()?;
+          
         Ok(())
     }
 
@@ -420,16 +441,21 @@ pub(crate) struct BootSector {
 impl BootSector {
     pub(crate) fn deserialize<R: Read>(rdr: &mut R) -> Result<Self, R::Error> {
         let mut boot = Self::default();
+         
         rdr.read_exact(&mut boot.bootjmp)?;
+         
         rdr.read_exact(&mut boot.oem_name)?;
+         
         boot.bpb = BiosParameterBlock::deserialize(rdr)?;
-
+         
         if boot.bpb.is_fat32() {
             rdr.read_exact(&mut boot.boot_code[0..420])?;
         } else {
             rdr.read_exact(&mut boot.boot_code[0..448])?;
         }
+         
         rdr.read_exact(&mut boot.boot_sig)?;
+         
         Ok(boot)
     }
 
@@ -448,6 +474,7 @@ impl BootSector {
     }
 
     pub(crate) fn validate<E: IoError>(&self, strict: bool) -> Result<(), Error<E>> {
+          
         if strict && self.boot_sig != [0x55, 0xAA] {
             error!(
                 "Invalid boot sector signature: expected [0x55, 0xAA] but got {:?}",
@@ -455,10 +482,13 @@ impl BootSector {
             );
             return Err(Error::CorruptedFileSystem);
         }
+          
         if strict && self.bootjmp[0] != 0xEB && self.bootjmp[0] != 0xE9 {
             warn!("Unknown opcode {:x} in bootjmp boot sector field", self.bootjmp[0]);
         }
+          
         self.bpb.validate()?;
+          
         Ok(())
     }
 }
