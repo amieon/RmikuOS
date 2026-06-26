@@ -9,6 +9,7 @@ dependencies = [
  "buddy_system_allocator",
  "cc",
  "ext4-view",
+ "fatfs",
  "log",
 ]
 
@@ -60,6 +61,14 @@ checksum = "ecf18f4817ea4baf95d700eb763642e65f77a94e630867028024b6725848a028"
 dependencies = [
  "bitflags",
  "crc",
+]
+
+[[package]]
+name = "fatfs"
+version = "0.4.0"
+dependencies = [
+ "bitflags",
+ "log",
 ]
 
 [[package]]
