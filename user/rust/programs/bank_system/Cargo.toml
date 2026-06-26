@@ -1,0 +1,11 @@
+[package]
+name = "bank_system"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ulib = { path = "../../ulib" }
+
+[[bin]]
+name = "bank_system"
+path = "src/main.rs"
