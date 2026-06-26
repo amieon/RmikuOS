@@ -384,11 +384,11 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
         // read boot sector
           
         let bpb = {
-            log::error!("2");
+
             let boot = BootSector::deserialize(&mut disk)?;
-            log::error!("2");
+
             boot.validate(options.strict)?;
-            log::error!("2");
+
             boot.bpb
         };
           

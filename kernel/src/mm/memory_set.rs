@@ -223,18 +223,7 @@ impl MemorySet {
             ) + crate::mm::PAGE_SIZE;
             self.insert_linear_pa_range(shutdown_begin, shutdown_end, kernel_perm);
         }
-        // #[cfg(target_arch = "loongarch64")]
-        // {
-        //     let shutdown_begin = crate::mm::align_down(
-        //         crate::shutdown::LOONGARCH_ACPI_PM1_CNT,
-        //         crate::mm::PAGE_SIZE,
-        //     );
-        //     let shutdown_end = crate::mm::align_down(
-        //         crate::shutdown::LOONGARCH_ACPI_PM1_CNT + crate::mm::PAGE_SIZE - 1,
-        //         crate::mm::PAGE_SIZE,
-        //     ) + crate::mm::PAGE_SIZE;
-        //     self.insert_linear_pa_range(shutdown_begin, shutdown_end, kernel_perm);
-        // }
+
     }
 
     pub fn copy_data(&self, start_va: VirtAddr, data: &[u8]) {

@@ -101,10 +101,9 @@ pub fn read_all(path: &str) -> Option<Vec<u8>> {
     let mut data = Vec::new();
     let mut buf = [0u8; 512];
 
-    let mut cnt = 0;
+
     loop {
-        cnt = cnt + 1;
-       log::error!("1");
+
         let n = file.read(&mut buf);
 
         if n < 0 {
@@ -114,9 +113,8 @@ pub fn read_all(path: &str) -> Option<Vec<u8>> {
         if n == 0 {
             break;
         }
-        log::error!("2");
 
-        crate::io::uart::print_i32(cnt);
+
         data.extend_from_slice(&buf[..n as usize]);
     }
 

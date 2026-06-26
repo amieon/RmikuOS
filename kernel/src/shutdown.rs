@@ -10,8 +10,6 @@ pub fn shutdown() -> ! {
     loop {}
 }
 
-#[cfg(target_arch = "loongarch64")]
-pub const LOONGARCH_ACPI_PM1_CNT: usize = 0x100E001C;  
 
 #[cfg(target_arch = "loongarch64")]
 pub fn shutdown() -> ! {
