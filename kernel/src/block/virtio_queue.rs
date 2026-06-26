@@ -19,6 +19,7 @@ pub const VIRTQ_DESC_F_WRITE: u16 = 2;
 pub const VIRTQ_AVAIL_F_NO_INTERRUPT: u16 = 1;
 
 pub const VIRTIO_BLK_T_IN: u32 = 0;
+pub const VIRTIO_BLK_T_OUT: u32 = 1;
 pub const VIRTIO_BLK_S_OK: u8 = 0;
 
 #[repr(C)]
