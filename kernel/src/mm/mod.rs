@@ -92,10 +92,10 @@ pub fn init_paging() {
     let root = kernel_space.root_ppn();
     let _kernel_space = Box::leak(Box::new(kernel_space));
 
-    crate::io::uart::puts_raw("[raw] before activate\n");
+    //crate::io::uart::puts_raw("[raw] before activate\n");
     activate_kernel_page_table(root);
     
-    crate::io::uart::puts_raw("[raw] after activate\n");
+    //crate::io::uart::puts_raw("[raw] after activate\n");
 
     log::info!("[mm] kernel MemorySet activated");
 

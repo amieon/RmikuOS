@@ -13,3 +13,4 @@
 #include "ipc.h"
 #include "string.h"
 #include "fmt.h"
+#include "shutdown.h"

@@ -209,6 +209,13 @@ impl MemorySet {
 
             self.insert_linear_pa_range(start, end, mmio_perm);
         }
+
+        let shutdown_begin = crate::mm::align_down(crate::shutdown::SIFIVE_TEST_BASE, crate::mm::PAGE_SIZE);
+        let shutdown_end = crate::mm::align_down(
+                    crate::shutdown::SIFIVE_TEST_BASE + crate::mm::PAGE_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE;
+        self.insert_linear_pa_range(shutdown_begin,shutdown_end,kernel_perm);
     }
 
     pub fn copy_data(&self, start_va: VirtAddr, data: &[u8]) {

@@ -682,6 +682,15 @@ int main(void) {
             continue;
         }
 
+        if (streq(argv[0], "shutdown")) {
+            puts("bye bye~\n");
+            shutdown();
+           // puts("[shell] builtin exit code ");
+           //put_int(code);
+           //puts("\n");
+            continue;
+        }
+
         run_external(argc, argv);
     }
 

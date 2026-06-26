@@ -2,6 +2,7 @@ pub mod device;
 pub mod ramdisk;
 pub mod cache;
 pub mod ext4_image;
+pub mod blockio;
 
 
 pub use device::BlockDevice;
