@@ -170,7 +170,9 @@ fn primary_init() {
                     .expect("virtio-blk init failed");
 
                 crate::block::virtio_blk::test_read_ext4_magic(dev.clone());
-
+                
+                //test::write_setion_test::test_write_read(dev.clone());
+                
                 log::info!("[rootfs] using riscv64 virtio-mmio block device");
 
                 dev as alloc::sync::Arc<dyn crate::block::BlockDevice>
@@ -211,14 +213,17 @@ fn primary_init() {
         }
     };
 
-    crate::fs::ext4fs::init(rootfs_device);
+
 
 
     timer::init();
 
-    let rootfs = block::ext4_image::rootfs_ramdisk();
-    fs::ext4fs::init(rootfs);
+    // let rootfs = block::ext4_image::rootfs_ramdisk();
+    // fs::ext4fs::init(rootfs);
+    fs::ext4fs::init(rootfs_device);
     fs::tmpfs::init();
+
+
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
@@ -228,12 +233,6 @@ fn primary_init() {
     log::info!("最大支持核数: {}", arch::MAX_HARTS);
 
 
-    // 未来在这里初始化：
-    // - 内存分配器
-    // - 中断控制器（PLIC / 7A2000 中断控制器）
-    // - 定时器
-    // - 进程调度器
-    // ...
     pub const BOOT_BANNER: &str = r#"
      ____            _ _         ___  ____  
     |  _ \ _ __ ___ (_) | ___   / _ \/ ___| 

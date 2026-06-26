@@ -358,6 +358,7 @@ const VIRTQ_DESC_F_WRITE: u16 = 2;
 const VIRTQ_AVAIL_F_NO_INTERRUPT: u16 = 1;
 
 const VIRTIO_BLK_T_IN: u32 = 0;
+const VIRTIO_BLK_T_OUT: u32 = 1;
 const VIRTIO_BLK_S_OK: u8 = 0;
 
 #[repr(C)]
@@ -682,6 +683,152 @@ impl VirtioBlkDevice {
     }
 }
 
+impl VirtioBlkDevice {
+    fn write_sector_sync(&self, sector: usize, in_buf: &[u8]) -> isize {
+        if in_buf.len() != 512 {
+            return -1;
+        }
+
+        let mut inner = self.inner.lock();
+
+        let desc0 = unsafe { inner.queue0.desc_mut(0) };
+        let desc1 = unsafe { inner.queue0.desc_mut(1) };
+        let desc2 = unsafe { inner.queue0.desc_mut(2) };
+
+        let avail_flags = unsafe { inner.queue0.avail_flags_ptr() };
+        let avail_idx_ptr = unsafe { inner.queue0.avail_idx_ptr() };
+        let used_idx_ptr = unsafe { inner.queue0.used_idx_ptr() };
+
+        let req_va = inner.dma.req_va;
+        let data_va = inner.dma.data_va;
+        let status_va = inner.dma.status_va;
+
+        let req_pa = inner.dma.req_pa;
+        let data_pa = inner.dma.data_pa;
+        let status_pa = inner.dma.status_pa;
+
+        let old_avail_idx = inner.avail_idx;
+        let ring_index = (old_avail_idx as usize) % VIRTIO_BLK_QUEUE_SIZE;
+        let avail_ring = unsafe { inner.queue0.avail_ring_ptr(ring_index) };
+
+        unsafe {
+            // 1. request header —— 差异1:类型改成 OUT(写)
+            let req = VirtioBlkReq {
+                req_type: VIRTIO_BLK_T_OUT,
+                reserved: 0,
+                sector: sector as u64,
+            };
+            write_volatile(req_va as *mut VirtioBlkReq, req);
+
+            write_volatile(status_va as *mut u8, 0xff);
+
+            // 差异3:写之前,把要写的数据填进 DMA data buffer(给设备读)
+            let dst = core::slice::from_raw_parts_mut(data_va as *mut u8, 512);
+            dst.copy_from_slice(&in_buf[..512]);
+
+            // 2. descriptor chain
+            write_volatile(
+                desc0,
+                VirtqDesc {
+                    addr: req_pa as u64,
+                    len: core::mem::size_of::<VirtioBlkReq>() as u32,
+                    flags: VIRTQ_DESC_F_NEXT,
+                    next: 1,
+                },
+            );
+
+            write_volatile(
+                desc1,
+                VirtqDesc {
+                    addr: data_pa as u64,
+                    len: 512,
+                    // 差异2:写时数据缓冲是"设备读取",不设 F_WRITE
+                    flags: VIRTQ_DESC_F_NEXT,
+                    next: 2,
+                },
+            );
+
+            write_volatile(
+                desc2,
+                VirtqDesc {
+                    addr: status_pa as u64,
+                    len: 1,
+                    flags: VIRTQ_DESC_F_WRITE,   // status 仍是设备写,保留
+                    next: 0,
+                },
+            );
+
+            // 3. 放进 avail ring(与读相同)
+            write_volatile(avail_flags, VIRTQ_AVAIL_F_NO_INTERRUPT);
+            write_volatile(avail_ring, 0);
+
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+
+            let new_avail_idx = old_avail_idx.wrapping_add(1);
+            inner.avail_idx = new_avail_idx;
+            write_volatile(avail_idx_ptr, new_avail_idx);
+
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+
+            // 4. 通知设备
+            self.header.notify_queue(0);
+
+            // 5. 等 used ring(与读相同)
+            let mut spin = 0usize;
+            loop {
+                let used_idx = read_volatile(used_idx_ptr);
+                if used_idx != inner.last_used_idx {
+                    break;
+                }
+                spin += 1;
+                if spin > 10_000_000 {
+                    log::error!(
+                        "[virtio-blk] write sector {} timeout, avail_idx={}, used_idx={}, last_used_idx={}",
+                        sector, inner.avail_idx, used_idx, inner.last_used_idx,
+                    );
+                    return -1;
+                }
+                core::hint::spin_loop();
+            }
+
+            // 6. 读 used elem
+            let used_ring_index = (inner.last_used_idx as usize) % VIRTIO_BLK_QUEUE_SIZE;
+            let used_ptr = inner.queue0.used_ring_ptr(used_ring_index);
+            let used = read_volatile(used_ptr);
+            inner.last_used_idx = inner.last_used_idx.wrapping_add(1);
+
+            // 7. ack interrupt
+            let isr = self.header.interrupt_status();
+            if isr != 0 {
+                self.header.ack_interrupt(isr);
+            }
+
+            // 8. 检查 status
+            let status = read_volatile(status_va as *const u8);
+
+            log::info!(
+                "[virtio-blk] write done sector={}, used.id={}, used.len={}, status={}",
+                sector, used.id, used.len, status,
+            );
+
+            if used.id != 0 {
+                log::error!("[virtio-blk] unexpected used id: {}", used.id);
+                return -1;
+            }
+            if status != VIRTIO_BLK_S_OK {
+                log::error!("[virtio-blk] write sector {} failed, status={}", sector, status);
+                return -1;
+            }
+
+            // 差异3:写不需要 copy out(没有数据要读回)
+        }
+
+        512
+    }
+}
+
+
+
 
 use super::device::BlockDevice;
 impl BlockDevice for VirtioBlkDevice {
@@ -705,8 +852,11 @@ impl BlockDevice for VirtioBlkDevice {
         self.read_sector_sync(block_id, buf)
     }
 
-    fn write_block(&self, _block_id: usize, _buf: &[u8]) -> isize {
-        -1
+    fn write_block(&self, block_id: usize, buf: &[u8]) -> isize {
+        if buf.len() != 512 {
+            return -1;
+        }
+        self.write_sector_sync(block_id, buf)
     }
 }
 
