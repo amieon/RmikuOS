@@ -165,20 +165,64 @@ fn primary_init() {
     let rootfs_device: alloc::sync::Arc<dyn crate::block::BlockDevice> = {
         #[cfg(target_arch = "riscv64")]
         {
-            if let Some(phys_base) = crate::block::virtio_probe::probe_virtio_blk_mmio() {
-                let dev = crate::block::virtio_blk::VirtioBlkDevice::init_from_phys_base(phys_base)
-                    .expect("virtio-blk init failed");
+            let all = crate::block::virtio_probe::probe_all_virtio_blk_mmio();
 
-                crate::block::virtio_blk::test_read_ext4_magic(dev.clone());
-                
-                //test::write_setion_test::test_write_read(dev.clone());
-                
-                log::info!("[rootfs] using riscv64 virtio-mmio block device");
-
-                dev as alloc::sync::Arc<dyn crate::block::BlockDevice>
-            } else {
-                log::warn!("[rootfs] virtio-mmio not found, fallback to ramdisk");
+            if all.is_empty() {
+                log::warn!("[rootfs] no virtio-blk found, fallback to ramdisk");
                 crate::block::ext4_image::rootfs_ramdisk()
+            } else {
+                use alloc::sync::Arc;
+                use block::virtio_blk::VirtioBlkDevice;
+                use block::BlockDevice;
+
+                let mut ext4_dev: Option<Arc<VirtioBlkDevice>> = None;
+                let mut fat_dev: Option<Arc<VirtioBlkDevice>> = None;
+
+                for phys_base in all {
+                    let dev = match VirtioBlkDevice::init_from_phys_base(phys_base) {
+                        Some(d) => d,
+                        None => {
+                            log::warn!("[rootfs] init virtio-blk at {:#x} failed, skip", phys_base);
+                            continue;
+                        }
+                    };
+
+                    // 读 sector 2,看 ext4 magic(offset 56 = 0xef53)
+                    let mut buf = [0u8; 512];
+                    let ok = dev.read_block(2, &mut buf) == 512;
+                    let magic = if ok {
+                        u16::from_le_bytes([buf[56], buf[57]])
+                    } else {
+                        0
+                    };
+
+                    if magic == 0xef53 {
+                        log::info!("[rootfs] disk at {:#x} is ext4 (magic=0xef53)", phys_base);
+                        ext4_dev = Some(dev);
+                    } else {
+                        log::info!("[rootfs] disk at {:#x} is non-ext4 (magic={:#x}) -> FAT candidate", phys_base, magic);
+                        fat_dev = Some(dev);
+                    }
+                }
+
+
+                if let Some(ref fdev) = fat_dev {
+                     test::test_second_disk_rw::test_second_disk_rw(fdev.clone());
+                }
+
+                // TODO(FAT): 把 fat_dev 接进 fatfs + 挂载 /fat,这步之后做
+                // 现在先存着,或先不管,只验证它能读写
+
+                match ext4_dev {
+                    Some(d) => {
+                        log::info!("[rootfs] using ext4 virtio-mmio block device");
+                        d as Arc<dyn BlockDevice>
+                    }
+                    None => {
+                        log::warn!("[rootfs] no ext4 disk found, fallback to ramdisk");
+                        crate::block::ext4_image::rootfs_ramdisk()
+                    }
+                }
             }
         }
 
@@ -212,6 +256,8 @@ fn primary_init() {
             }
         }
     };
+
+
 
 
 

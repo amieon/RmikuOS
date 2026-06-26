@@ -102,11 +102,13 @@ case "$ARCH" in
       -m 128M
       -nographic
       -kernel "$KERNEL_ELF"
-
       -drive "file=target/fs-riscv64.img,format=raw,if=none,id=blk0"
       -device "virtio-blk-device,drive=blk0"
+      -drive "file=target/fat-riscv64.img,format=raw,if=none,id=blk1"
+      -device "virtio-blk-device,drive=blk1"
     )
     ;;
+
   loongarch64)
     KERNEL_BIN="${KERNEL_ELF}.bin"
     "$LA_OBJCOPY" -O binary "$KERNEL_ELF" "$KERNEL_BIN"
