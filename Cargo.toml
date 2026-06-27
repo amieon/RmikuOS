@@ -21,4 +21,4 @@ opt-level = "s"
 log = { version = "0.4", default-features = false }
 buddy_system_allocator = "0.13"
 ext4-view = { version = "0.9.3", default-features = false }
-fatfs = { path = "third_party/fatfs",  default-features = false, features = ["alloc"] }
+fatfs = { path = "third_party/fatfs", default-features = false, features = ["alloc", "lfn"] }
