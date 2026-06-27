@@ -25,7 +25,7 @@ pub trait Inode: Send + Sync {
         None
     }
 
-    fn open(&self) -> Option<FileRef>;
+    fn open(&self, flags:usize) -> Option<FileRef>;
 
     fn getdents(&self) -> Vec<DirEntry> {
         Vec::new()
@@ -46,7 +46,7 @@ pub trait Inode: Send + Sync {
     fn mkdir(&self, name: &str) -> Option<InodeRef>{
         None
     }
-    
+
     fn truncate(&self) -> isize {
         -1 
     }

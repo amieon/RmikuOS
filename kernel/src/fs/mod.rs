@@ -10,6 +10,7 @@ pub mod tmpfs;
 pub mod pipe;
 pub mod mount;
 pub mod fatfs;
+pub mod flag;
 
 //pub mod initramfs;
 mod stdio;
@@ -33,14 +34,14 @@ pub fn lookup_at(cwd: &str, path: &str) -> Option<InodeRef> {
     path::lookup_path_at(cwd, path)
 }
 
-pub fn open(path: &str) -> Option<FileRef> {
-    let inode = path::lookup_abs_path(path)?;
-    inode.open()
+pub fn open(path: &str, flags: usize) -> Option<FileRef> {
+    let inode: alloc::sync::Arc<dyn Inode> = path::lookup_abs_path(path)?;
+    inode.open(flags)
 }
 
-pub fn open_at(cwd: &str, path: &str) -> Option<FileRef> {
+pub fn open_at(cwd: &str, path: &str, flags: usize) -> Option<FileRef> {
     let inode = path::lookup_path_at(cwd, path)?;
-    inode.open()
+    inode.open(flags)
 }
 
 pub mod stat;
@@ -86,7 +87,7 @@ pub fn stat(path: &str) -> Option<Stat> {
 
 use alloc::{string::String, vec::Vec};
 
-use crate::io::uart::putchar_raw;
+use crate::{fs::flag::O_RDONLY, io::uart::putchar_raw};
 
 pub fn read_all(path: &str) -> Option<Vec<u8>> {
     let inode = crate::fs::path::lookup_abs_path(path)?;
@@ -97,7 +98,7 @@ pub fn read_all(path: &str) -> Option<Vec<u8>> {
         return None;
     }
 
-    let file = inode.open()?;
+    let file = inode.open(O_RDONLY)?;
 
     let mut data = Vec::new();
     let mut buf = [0u8; 512];

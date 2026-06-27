@@ -479,7 +479,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 
     let argc = argv.len();
 
-    let file = match crate::fs::open(path) {
+    let file = match crate::fs::open(path, crate::fs::flag::O_RDONLY) {
         Some(file) => file,
         None => {
             log::info!("[exec] open failed: {}", path);

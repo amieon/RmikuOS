@@ -68,7 +68,7 @@ pub fn sys_open(path_ptr: usize, len: usize, flags: usize) -> isize {
 
     let cwd = crate::task::current_cwd();
 
-    let file = match crate::fs::open_at(&cwd, path) {
+    let file = match crate::fs::open_at(&cwd, path, flags) {
         Some(file) => file,
         None => {
             log::info!("[fs] open failed: cwd={}, path={}", cwd, path);

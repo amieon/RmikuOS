@@ -4,7 +4,9 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::char::REPLACEMENT_CHARACTER;
 use core::fmt;
+use super::flag::*;
 
 use ext4_view::{
     Ext4,
@@ -233,7 +235,11 @@ impl Inode for Ext4Inode {
         }
     }
 
-    fn open(&self) -> Option<FileRef> {
+    fn open(&self, flags: usize) -> Option<FileRef> {
+        if flags&(O_APPEND|O_WRONLY|O_TRUNC|O_RDWR) != 0 {
+            return None;
+        }
+
         let meta = {
             let fs = self.fs.inner.lock();
             fs.metadata(self.path.as_str()).ok()?

@@ -9,6 +9,7 @@ use alloc::string::ToString;
 
 use crate::block::blockio::BlockIo;
 use crate::block::BlockDevice;
+use crate::fs::flag::*;
 use crate::sync::spin::Mutex;
 
 use super::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE};
@@ -41,11 +42,12 @@ pub struct FatFile {
     fs: Arc<FatFs>,
     path: String,        // fatfs 相对路径(不带开头 /)
     offset: Mutex<u64>,
+    append: bool,
 }
 
 impl FatFile {
-    pub fn new(fs: Arc<FatFs>, path: String) -> Self {
-        Self { fs, path, offset: Mutex::new(0) }
+    pub fn new(fs: Arc<FatFs>, path: String, append: bool) -> Self {
+        Self { fs, path, offset: Mutex::new(0), append }
     }
 }
 
@@ -86,7 +88,6 @@ impl File for FatFile {
     fn write(&self, buf: &[u8]) -> isize {
         let mut off = self.offset.lock();
         let cur = *off;
-
         let n = {
             let fs = self.fs.inner.lock();
             let root = fs.root_dir();
@@ -239,7 +240,7 @@ impl Inode for FatInode {
         }
     }
 
-    fn open(&self) -> Option<FileRef> {
+    fn open(&self, flags : usize) -> Option<FileRef> {
         // 判断类型(在块里),拿到结论后构造
         enum Kind { Dir, File, NotFound }
 
@@ -266,7 +267,7 @@ impl Inode for FatInode {
             Kind::File => {
                 // 可写 FatFile,存 owned 路径
                 let fat_path = to_fat_path(&self.path).to_string();
-                Some(Arc::new(FatFile::new(self.fs.clone(), fat_path)))
+                Some(Arc::new(FatFile::new(self.fs.clone(), fat_path, flags&O_APPEND!=0)))
             }
             Kind::NotFound => None,
         }

@@ -7,6 +7,7 @@ use crate::fs::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE};
 use crate::fs::mount::FileSystem;
 use crate::sync::spin::Mutex;
 use super::*;
+use super::flag::*;
 
 
 enum TmpfsNode{
@@ -78,10 +79,10 @@ impl Inode for TmpfsInode {
     }
     }
 
-    fn open(&self) -> Option<FileRef> {
+    fn open(&self, flags:usize) -> Option<FileRef> {
         match &self.node {
             TmpfsNode::File(data) => {
-                Some(Arc::new(TmpfsFile::new(data.clone())))
+                Some(Arc::new(TmpfsFile::new(data.clone(),flags&O_APPEND!= 0)))
             }
             TmpfsNode::Dir(_) => {
                 Some(Arc::new(ReadOnlyDirFile::new(self.getdents())))
@@ -215,7 +216,8 @@ pub fn is_available() -> bool {
 
 pub struct TmpfsFile {
     data: Arc<Mutex<Vec<u8>>>,
-    offset: Mutex<usize>,     
+    offset: Mutex<usize>,  
+    append: bool,    
 }
 
 impl File for TmpfsFile {
@@ -237,6 +239,9 @@ impl File for TmpfsFile {
     fn write(&self, buf: &[u8]) -> isize {
         let mut data = self.data.lock();
         let mut off = self.offset.lock();
+        if self.append {
+            *off = data.len(); 
+        }
         for &b in buf {
             if *off < data.len() {
                 data[*off] = b;       
@@ -256,10 +261,11 @@ impl File for TmpfsFile {
 
 
 impl TmpfsFile {
-    pub fn new(data: Arc<Mutex<Vec<u8>>>) -> Self {
+    pub fn new(data: Arc<Mutex<Vec<u8>>>,append : bool) -> Self {
         TmpfsFile {
             data,                         
             offset: Mutex::new(0),
+            append: append,
         }
     }
 }
