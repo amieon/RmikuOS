@@ -224,6 +224,7 @@ impl MemorySet {
             self.insert_linear_pa_range(shutdown_begin, shutdown_end, kernel_perm);
         }
 
+
     }
 
     pub fn copy_data(&self, start_va: VirtAddr, data: &[u8]) {
