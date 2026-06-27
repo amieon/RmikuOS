@@ -594,6 +594,13 @@ int main(void) {
         if (len == 0) {
             continue;
         }
+        
+        for (int i = 0; line[i]; i++) {
+            if (line[i] == '#' && (i == 0 || line[i-1] == ' ')) {
+                line[i] = '\0';   // 从这里截断
+                break;
+            }
+        }
 
         int have_pipe = 0,have_redirect = 0;
         if (has_pipe(line)) {
