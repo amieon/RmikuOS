@@ -92,6 +92,8 @@ pub fn test_fat_table_head(fat_dev: Arc<dyn BlockDevice>) {
     //   FAT[2] = ff ff ff 0f  (根目录簇的 EOC,通常根在簇 2)
 }
 
+
+
 pub fn test_sequential_reads(fat_dev: Arc<dyn BlockDevice>) {
     use fatfs::{Read, Seek, SeekFrom};
     let mut io = BlockIo::new(fat_dev, 65536);
@@ -108,4 +110,65 @@ pub fn test_sequential_reads(fat_dev: Arc<dyn BlockDevice>) {
     let mut s2 = [0u8; 4];
     io.read(&mut s2).unwrap();                // 读 4 字节(struc_sig)
     log::info!("[seq] struc = {:02x?} (expect 72 72 41 61)", s2);
+}
+
+pub fn test_fat_write_persist(fat_dev: Arc<dyn BlockDevice>) {
+    let io = BlockIo::new(fat_dev, 65536);
+
+    let fs = match fatfs::FileSystem::new(io, fatfs::FsOptions::new()) {
+        Ok(fs) => fs,
+        Err(e) => {
+            log::error!("[fat] mount failed: {:?}", e);
+            return;
+        }
+    };
+    log::info!("[fat] mount OK!");
+
+    let root = fs.root_dir();
+
+
+    log::info!("[fat] === listing root dir ===");
+    let mut found_hello = false;
+    for entry in root.iter() {
+        match entry {
+            Ok(e) => {
+                let name = e.file_name();
+                log::info!("[fat]   entry: {} ({} bytes)", name, e.len());
+                if name == "HELLO.TXT" || name == "hello.txt" {
+                    found_hello = true;
+                }
+            }
+            Err(e) => {
+                log::error!("[fat]   iter error: {:?}", e);
+                break;
+            }
+        }
+    }
+
+    if found_hello {
+
+        log::info!("[fat] *** hello.txt EXISTS (persisted across reboot!) ***");
+        use fatfs::Read;
+        match root.open_file("hello.txt") {
+            Ok(mut file) => {
+                let mut buf = [0u8; 128];
+                let n = file.read(&mut buf).unwrap_or(0);
+                log::info!("[fat] read back {} bytes: {:?}",
+                    n, core::str::from_utf8(&buf[..n]).unwrap_or("<invalid utf8>"));
+            }
+            Err(e) => log::error!("[fat] open_file failed: {:?}", e),
+        }
+    } else {
+
+        log::info!("[fat] hello.txt not found, creating it (first run)");
+        use fatfs::Write;
+        match root.create_file("hello.txt") {
+            Ok(mut file) => {
+                file.write_all(b"hello fat from rmikuos\n").unwrap();
+                file.flush().unwrap();
+                log::info!("[fat] *** wrote hello.txt, reboot to verify persistence ***");
+            }
+            Err(e) => log::error!("[fat] create_file failed: {:?}", e),
+        }
+    }
 }

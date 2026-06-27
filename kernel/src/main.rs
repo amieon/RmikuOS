@@ -254,13 +254,14 @@ fn primary_init() {
                     }
 
                     // 给下一块盘留出 BAR 空间(每块盘的 BAR 区不能重叠)
-                    mmio_cursor += 0x10000;   // 留 64KB,看你 virtio-pci BAR 实际大小调整
+                    mmio_cursor += 0x10000;   // 留 64KB,看 virtio-pci BAR 实际大小调整
                 }
 
                 // FAT 盘:测写 + mount(复用通用 BlockIo + fatfs)
                 if let Some(ref fdev) = fat_dev {
-                    test::test_pci_write_read::test_pci_write_read(fdev.clone());  // loongarch 写测试
-                    // test::test_fat_mount::test_fat_mount(fdev.clone() as Arc<dyn BlockDevice>);  // 稍后
+                    //test::test_pci_write_read::test_pci_write_read(fdev.clone());  // loongarch 写测试
+                    //test::test_fat_mount::test_fat_mount(fdev.clone() as Arc<dyn BlockDevice>);  // 稍后
+                    test::test_fat_mount::test_fat_write_persist(fdev.clone());
                 }
 
                 match ext4_dev {
@@ -279,7 +280,7 @@ fn primary_init() {
 
 
 
-
+    
 
 
     timer::init();
