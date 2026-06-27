@@ -650,7 +650,7 @@ impl BlockDevice for VirtioPciBlkDevice {
     }
 
     fn num_blocks(&self) -> usize {
-        0
+        self.read_capacity() as usize
     }
 
     fn read_block(&self, block_id: usize, buf: &mut [u8]) -> isize {
@@ -663,7 +663,20 @@ impl BlockDevice for VirtioPciBlkDevice {
         self.write_sector_sync(block_id, buf)
     }
 }
+impl VirtioPciBlkDevice {
+    fn read_capacity(&self) -> u64 {
+        if let Some(dev_region) = self.transport.device {
+            unsafe {
+                let lo = read_volatile(dev_region.va as *const u32) as u64;
+                let hi = read_volatile((dev_region.va + 4) as *const u32) as u64;
+                (hi << 32) | lo
+            }
+        } else {
+            0
+        }
+    }
 
+}
 
 pub fn test_read_ext4_magic(dev: Arc<VirtioPciBlkDevice>) {
     let mut block = [0u8; 512];

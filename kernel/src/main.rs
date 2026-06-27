@@ -144,7 +144,7 @@ fn primary_init() {
 
     // 挂载 FAT(如果有 fat 盘)
     if let Some(fdev) = fat_dev {
-        fs::fatfs::init(fdev, 65536);   // 65536 = 32MB/512
+        fs::fatfs::init(fdev);
     } else {
         log::warn!("[disk] no FAT disk found, /fat not mounted");
     }

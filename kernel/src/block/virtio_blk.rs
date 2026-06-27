@@ -837,11 +837,7 @@ impl BlockDevice for VirtioBlkDevice {
     }
 
     fn num_blocks(&self) -> usize {
-        /*
-         * 第一版可以先返回 0。
-         * 后面可以从 virtio-blk config 里读 capacity。
-         */
-        0
+        self.read_capacity() as usize 
     }
 
     fn read_block(&self, block_id: usize, buf: &mut [u8]) -> isize {
@@ -857,6 +853,21 @@ impl BlockDevice for VirtioBlkDevice {
             return -1;
         }
         self.write_sector_sync(block_id, buf)
+    }
+
+    
+}
+
+impl VirtioBlkDevice {
+    // VirtioBlkDevice,读 device config 的 capacity
+    fn read_capacity(&self) -> u64 {
+        // mmio device config 在偏移 0x100
+        let config_base = self.virt_base + 0x100;
+        unsafe {
+            let lo = read_volatile(config_base as *const u32) as u64;
+            let hi = read_volatile((config_base + 4) as *const u32) as u64;
+            (hi << 32) | lo
+        }
     }
 }
 

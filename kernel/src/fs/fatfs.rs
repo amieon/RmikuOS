@@ -216,7 +216,8 @@ impl Inode for FatInode {
     }
 }
 
-pub fn init(device: Arc<dyn BlockDevice>, num_sectors: u64) {
+pub fn init(device: Arc<dyn BlockDevice>) {
+    let num_sectors = device.num_blocks() as u64;
     let fs = FatFs::load(device, num_sectors)
         .expect("[fat] load failed");
     crate::fs::mount::mount("/fat", fs);
