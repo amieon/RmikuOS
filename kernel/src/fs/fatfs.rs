@@ -13,11 +13,11 @@ use super::file::FileRef;
 use super::inode::{Inode, InodeRef, InodeType, Metadata};
 use super::{ReadOnlyDirFile, ReadOnlyMemFile};
 
-
-use fatfs::{FileSystem, FsOptions, Read};
+use crate::fs::mount::FileSystem;
+use fatfs::{FileSystem as FatFileSystem, FsOptions, Read};
 
 // fatfs FileSystem 的完整类型(0.4 默认 provider/converter)
-type FatFsInner = FileSystem<BlockIo, fatfs::NullTimeProvider, fatfs::LossyOemCpConverter>;
+type FatFsInner = FatFileSystem<BlockIo, fatfs::NullTimeProvider, fatfs::LossyOemCpConverter>;
 
 pub struct FatFs {
     inner: Mutex<FatFsInner>,
@@ -30,7 +30,7 @@ unsafe impl Sync for FatFs {}
 impl FatFs {
     pub fn load(device: Arc<dyn BlockDevice>, num_sectors: u64) -> Option<Arc<Self>> {
         let io = BlockIo::new(device, num_sectors);
-        let fs = match FileSystem::new(io, FsOptions::new()) {
+        let fs = match FatFileSystem::new(io, FsOptions::new()) {
             Ok(fs) => fs,
             Err(e) => {
                 log::error!("[fat] load failed: {:?}", e);
@@ -102,7 +102,7 @@ impl Inode for FatInode {
 
         meta
     }  // ← fs 在这里析构
-    
+
     fn lookup(&self, name: &str) -> Option<InodeRef> {
         if name.is_empty() || name == "." {
             return Some(Arc::new(Self {
@@ -114,15 +114,14 @@ impl Inode for FatInode {
             return Some(self.fs.clone().root_inode());
         }
 
-        let child_path = join_path(&self.path, name);
-        let fat_path_owned = to_fat_path(&child_path).to_string();  // 拥有,避免借用纠缠
+        let child_path = join_path(&self.path, name);   // String,你拥有
 
-        // 在块里判断存在性,只让 bool 逃出来
         let exists = {
             let fs = self.fs.inner.lock();
             let root = fs.root_dir();
-            root.open_dir(&fat_path_owned).is_ok() || root.open_file(&fat_path_owned).is_ok()
-        };  // ← fs/root 析构,exists 是 bool
+            let fat_path = to_fat_path(&child_path);    // &str,借用 child_path(不借用 fs,OK)
+            root.open_dir(fat_path).is_ok() || root.open_file(fat_path).is_ok()
+        };  // fs/root 析构;fat_path 借用的是 child_path 不是 fs,块结束就还了
 
         if exists {
             Some(Arc::new(Self {
