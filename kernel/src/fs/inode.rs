@@ -46,6 +46,10 @@ pub trait Inode: Send + Sync {
     fn mkdir(&self, name: &str) -> Option<InodeRef>{
         None
     }
+    
+    fn truncate(&self) -> isize {
+        -1 
+    }
 
     fn unlink(&self, name: &str) -> isize{
         -1

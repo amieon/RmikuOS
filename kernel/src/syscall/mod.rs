@@ -56,7 +56,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SLEEP => process::sys_sleep(args[0]),
         SYSCALL_EXEC => process::sys_exec(args[0], args[1], args[2]),
         SYSCALL_READ => fs::sys_read(args[0], args[1], args[2]),
-        SYSCALL_OPEN => fs::sys_open(args[0], args[1]),
+        SYSCALL_OPEN => fs::sys_open(args[0], args[1], args[2]),
         SYSCALL_CLOSE => fs::sys_close(args[0]),
         SYSCALL_GETDENTS => fs::sys_getdents(args[0], args[1], args[2]),
         SYSCALL_CHDIR => fs::sys_chdir(args[0], args[1]),

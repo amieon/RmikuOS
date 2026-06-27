@@ -55,7 +55,7 @@ pub fn sys_write(fd: usize, user_buf: usize, len: usize) -> isize {
     file.write(&kbuf)
 }
 
-pub fn sys_open(path_ptr: usize, len: usize) -> isize {
+pub fn sys_open(path_ptr: usize, len: usize, flags: usize) -> isize {
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
         Some(bytes) => bytes,
         None => return -1,

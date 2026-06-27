@@ -89,6 +89,13 @@ impl Inode for TmpfsInode {
         }
     }
 
+    fn truncate(&self) -> isize {
+        match &self.node {
+            TmpfsNode::File(data) => { data.lock().clear(); 0 }
+            TmpfsNode::Dir(_) => -1,
+        }
+    }
+
     fn getdents(&self) -> Vec<DirEntry> {
         let mut entries : Vec<DirEntry> = Vec::new();
 

@@ -329,6 +329,20 @@ impl Inode for FatInode {
         }
     }
 
+    fn truncate(&self) -> isize {
+        let fat_path = to_fat_path(&self.path).to_string();
+        let fs = self.fs.inner.lock();
+        let root = fs.root_dir();
+        let r = match root.open_file(&fat_path) {
+            Ok(mut f) => {
+                use fatfs::Write;  // 或 fatfs::File 的方法,看 0.4
+                match f.truncate() { Ok(_) => 0, Err(_) => -1 }
+            }
+            Err(_) => -1,
+        };
+        r
+    }
+
     fn mkdir(&self, name: &str) -> Option<InodeRef> {
         let child_path = join_path(&self.path, name);
         let fat_path = to_fat_path(&child_path).to_string();
