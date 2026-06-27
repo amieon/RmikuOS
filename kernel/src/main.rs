@@ -110,7 +110,6 @@ pub extern "C" fn rust_main(id: usize) -> ! {
 }
 
 fn primary_init() {
-    // 初始化 UART，之后所有核都能用 println!。
     io::uart::init();
     io::logger::init();
     trap::init();
@@ -119,178 +118,36 @@ fn primary_init() {
     test::heap_test::heap_test();
     test::frame_alloc_test::frame_alloc_test();
     test::page_table_test::page_table_test();
-
     test::memory_set_test::memory_set_test();
 
     mm::init_paging();
 
     test::user_memory_set_test::user_memory_set_test();
-
     test::block_cache_tset::test_block_cache();
     test::block_test::test_ramdisk();
-
-
     block::ext4_image::test_ext4_magic();
 
-    let rootfs_device: alloc::sync::Arc<dyn crate::block::BlockDevice> = {
-        #[cfg(target_arch = "riscv64")]
-        {
-            let all = crate::block::virtio_probe::probe_all_virtio_blk_mmio();
-
-            if all.is_empty() {
-                log::warn!("[rootfs] no virtio-blk found, fallback to ramdisk");
-                crate::block::ext4_image::rootfs_ramdisk()
-            } else {
-                use alloc::sync::Arc;
-                use block::virtio_blk::VirtioBlkDevice;
-                use block::BlockDevice;
-
-                let mut ext4_dev: Option<Arc<VirtioBlkDevice>> = None;
-                let mut fat_dev: Option<Arc<VirtioBlkDevice>> = None;
-
-                for phys_base in all {
-                    let dev = match VirtioBlkDevice::init_from_phys_base(phys_base) {
-                        Some(d) => d,
-                        None => {
-                            log::warn!("[rootfs] init virtio-blk at {:#x} failed, skip", phys_base);
-                            continue;
-                        }
-                    };
-
-                    // 读 sector 2,看 ext4 magic(offset 56 = 0xef53)
-                    let mut buf = [0u8; 512];
-                    let ok = dev.read_block(2, &mut buf) == 512;
-                    let magic = if ok {
-                        u16::from_le_bytes([buf[56], buf[57]])
-                    } else {
-                        0
-                    };
-
-                    if magic == 0xef53 {
-                        log::info!("[rootfs] disk at {:#x} is ext4 (magic=0xef53)", phys_base);
-                        ext4_dev = Some(dev);
-                    } else {
-                        log::info!("[rootfs] disk at {:#x} is non-ext4 (magic={:#x}) -> FAT candidate", phys_base, magic);
-                        fat_dev = Some(dev);
-                    }
-                }
-
-
-                if let Some(ref fdev) = fat_dev {
-                     //test::test_second_disk_rw::test_second_disk_rw(fdev.clone());
-                     test::test_fat_mount::test_sequential_reads(fdev.clone());
-                     test::test_fat_mount::test_fat_mount(fdev.clone());
-                }
-
-                // TODO(FAT): 把 fat_dev 接进 fatfs + 挂载 /fat,这步之后做
-                // 现在先存着,或先不管,只验证它能读写
-
-                match ext4_dev {
-                    Some(d) => {
-                        log::info!("[rootfs] using ext4 virtio-mmio block device");
-                        d as Arc<dyn BlockDevice>
-                    }
-                    None => {
-                        log::warn!("[rootfs] no ext4 disk found, fallback to ramdisk");
-                        crate::block::ext4_image::rootfs_ramdisk()
-                    }
-                }
-            }
-        }
-        #[cfg(target_arch = "loongarch64")]
-        {
-            use alloc::sync::Arc;
-            use block::virtio_pci_blk::VirtioPciBlkDevice;
-            use block::BlockDevice;
-
-            crate::pci::scan_pci_bus();
-
-            let all = crate::pci::find_all_virtio_blk_pci();
-
-            if all.is_empty() {
-                log::warn!("[rootfs] no virtio-pci blk found, fallback to ramdisk");
-                crate::block::ext4_image::rootfs_ramdisk()
-            } else {
-                let mut ext4_dev: Option<Arc<VirtioPciBlkDevice>> = None;
-                let mut fat_dev: Option<Arc<VirtioPciBlkDevice>> = None;
-
-                // 给每块盘分配 BAR 地址时,要用不同的 PCI_MMIO_BASE,避免两块盘 BAR 重叠!
-                let mut mmio_cursor = crate::arch::PCI_MMIO_BASE;
-
-                for info in all {
-                    let addr = info.loc.addr();
-
-                    // 每块盘:分配 BAR + enable + parse caps + init
-                    crate::pci::bar::ensure_mem_bar(addr, 4, mmio_cursor);
-                    crate::pci::ecam::enable_pci_device(addr);
-
-                    let regions = match crate::block::virtio_pci::parse_virtio_pci_caps(addr) {
-                        Some(r) => r,
-                        None => {
-                            log::warn!("[rootfs] parse caps failed for a pci blk, skip");
-                            continue;
-                        }
-                    };
-
-                    let dev = match VirtioPciBlkDevice::init(regions) {
-                        Some(d) => d,
-                        None => {
-                            log::warn!("[rootfs] init virtio-pci-blk failed, skip");
-                            continue;
-                        }
-                    };
-
-                    // 读 sector 2 看 ext4 magic 分盘
-                    let mut buf = [0u8; 512];
-                    let ok = dev.read_block(2, &mut buf) == 512;
-                    let magic = if ok { u16::from_le_bytes([buf[56], buf[57]]) } else { 0 };
-
-                    if magic == 0xef53 {
-                        log::info!("[rootfs] pci disk is ext4 (magic=0xef53)");
-                        ext4_dev = Some(dev);
-                    } else {
-                        log::info!("[rootfs] pci disk is non-ext4 (magic={:#x}) -> FAT candidate", magic);
-                        fat_dev = Some(dev);
-                    }
-
-                    // 给下一块盘留出 BAR 空间(每块盘的 BAR 区不能重叠)
-                    mmio_cursor += 0x10000;   // 留 64KB,看 virtio-pci BAR 实际大小调整
-                }
-
-                // FAT 盘:测写 + mount(复用通用 BlockIo + fatfs)
-                if let Some(ref fdev) = fat_dev {
-                    //test::test_pci_write_read::test_pci_write_read(fdev.clone());  // loongarch 写测试
-                    //test::test_fat_mount::test_fat_mount(fdev.clone() as Arc<dyn BlockDevice>);  // 稍后
-                    test::test_fat_mount::test_fat_write_persist(fdev.clone());
-                }
-
-                match ext4_dev {
-                    Some(d) => {
-                        log::info!("[rootfs] using ext4 virtio-pci block device");
-                        d as Arc<dyn BlockDevice>
-                    }
-                    None => {
-                        log::warn!("[rootfs] no ext4 disk found, fallback to ramdisk");
-                        crate::block::ext4_image::rootfs_ramdisk()
-                    }
-                }
-            }
-        }
-    };
-
-
-
-    
-
+    // 发现磁盘:ext4 盘 + fat 盘
+    let (ext4_dev, fat_dev) = block::discover_disks::discover_disks();
 
     timer::init();
 
-    // let rootfs = block::ext4_image::rootfs_ramdisk();
-    // fs::ext4fs::init(rootfs);
+    // 挂载 ext4 rootfs(没找到就 ramdisk 兜底)
+    let rootfs_device = ext4_dev.unwrap_or_else(|| {
+        log::warn!("[disk] no ext4 disk, fallback to ramdisk");
+        crate::block::ext4_image::rootfs_ramdisk()
+    });
     fs::ext4fs::init(rootfs_device);
+
+    // 挂载 tmpfs
     fs::tmpfs::init();
 
-
+    // 挂载 FAT(如果有 fat 盘)
+    if let Some(fdev) = fat_dev {
+        fs::fatfs::init(fdev, 65536);   // 65536 = 32MB/512
+    } else {
+        log::warn!("[disk] no FAT disk found, /fat not mounted");
+    }
 
     HART_LOCALS[0].ready.store(true, Ordering::Release);
 
@@ -298,7 +155,6 @@ fn primary_init() {
     log::info!("==== RmikuOS 多核启动 ====");
     log::info!("架构: {}", arch::NAME);
     log::info!("最大支持核数: {}", arch::MAX_HARTS);
-
 
     pub const BOOT_BANNER: &str = r#"
      ____            _ _         ___  ____  
@@ -310,11 +166,10 @@ fn primary_init() {
         RmikuOS - Rusty tiny OS kernel
     "#;
     println!("主核初始化完毕。");
-    println!("{}",BOOT_BANNER);
+    println!("{}", BOOT_BANNER);
 
     task::init();
     task::run_first_task();
-    
 }
 
 fn secondary_init(id: usize) {

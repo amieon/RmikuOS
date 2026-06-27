@@ -3,6 +3,7 @@ pub mod ramdisk;
 pub mod cache;
 pub mod ext4_image;
 pub mod blockio;
+pub mod discover_disks;
 
 
 pub use device::BlockDevice;
