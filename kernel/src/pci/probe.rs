@@ -175,3 +175,48 @@ pub fn find_virtio_blk_pci() -> Option<PciDeviceInfo> {
         None
     }
 }
+
+pub fn find_all_virtio_blk_pci() -> alloc::vec::Vec<PciDeviceInfo> {
+    let mut found = alloc::vec::Vec::new();
+
+    #[cfg(target_arch = "loongarch64")]
+    {
+        for bus in 0u8..=0 {
+            for device in 0u8..32 {
+                for function in 0u8..8 {
+                    let loc = PciDeviceLocation { bus, device, function };
+
+                    let Some(info) = read_device_info(loc) else {
+                        if function == 0 {
+                            break;
+                        }
+                        continue;
+                    };
+
+                    if info.vendor_id == PCI_VENDOR_ID_VIRTIO
+                        && (info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_MODERN
+                            || info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_TRANSITIONAL)
+                    {
+                        log::info!(
+                            "[pci] found virtio-blk-pci: bus={:02x} dev={:02x} func={} device={:#06x}",
+                            bus, device, function, info.device_id,
+                        );
+                        found.push(info);    // 收集,不 return
+                    }
+
+                    if function == 0 && (info.header_type & 0x80) == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if found.is_empty() {
+            log::warn!("[pci] no virtio-blk-pci found");
+        } else {
+            log::info!("[pci] found {} virtio-blk-pci device(s)", found.len());
+        }
+    }
+
+    found
+}

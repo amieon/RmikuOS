@@ -198,36 +198,81 @@ fn primary_init() {
             }
         }
         #[cfg(target_arch = "loongarch64")]
-        {   
+        {
+            use alloc::sync::Arc;
+            use block::virtio_pci_blk::VirtioPciBlkDevice;
+            use block::BlockDevice;
+
             crate::pci::scan_pci_bus();
-            if let Some(info) = crate::pci::find_virtio_blk_pci() {
-                let addr = info.loc.addr();
 
-                crate::pci::ensure_mem_bar(
-                    addr,
-                    4,
-                    crate::arch::PCI_MMIO_BASE,
-                );
+            let all = crate::pci::find_all_virtio_blk_pci();
 
-                crate::pci::ecam::enable_pci_device(addr);
-
-                let regions = crate::block::virtio_pci::parse_virtio_pci_caps(addr)
-                    .expect("parse virtio pci caps failed");
-
-                let dev = crate::block::virtio_pci_blk::VirtioPciBlkDevice::init(regions)
-                    .expect("virtio-pci-blk init failed");
-
-                crate::block::virtio_pci_blk::test_read_ext4_magic(dev.clone());
-
-                log::info!("[rootfs] using loongarch64 virtio-pci block device");
-
-                crate::block::virtio_pci_blk::test_read_ext4_magic(dev.clone());
-                //test::test_pci_write_read::test_pci_write_read(dev.clone());
-
-                dev as alloc::sync::Arc<dyn crate::block::BlockDevice>
-            } else {
-                log::warn!("[rootfs] virtio-pci blk not found, fallback to ramdisk");
+            if all.is_empty() {
+                log::warn!("[rootfs] no virtio-pci blk found, fallback to ramdisk");
                 crate::block::ext4_image::rootfs_ramdisk()
+            } else {
+                let mut ext4_dev: Option<Arc<VirtioPciBlkDevice>> = None;
+                let mut fat_dev: Option<Arc<VirtioPciBlkDevice>> = None;
+
+                // 给每块盘分配 BAR 地址时,要用不同的 PCI_MMIO_BASE,避免两块盘 BAR 重叠!
+                let mut mmio_cursor = crate::arch::PCI_MMIO_BASE;
+
+                for info in all {
+                    let addr = info.loc.addr();
+
+                    // 每块盘:分配 BAR + enable + parse caps + init
+                    crate::pci::bar::ensure_mem_bar(addr, 4, mmio_cursor);
+                    crate::pci::ecam::enable_pci_device(addr);
+
+                    let regions = match crate::block::virtio_pci::parse_virtio_pci_caps(addr) {
+                        Some(r) => r,
+                        None => {
+                            log::warn!("[rootfs] parse caps failed for a pci blk, skip");
+                            continue;
+                        }
+                    };
+
+                    let dev = match VirtioPciBlkDevice::init(regions) {
+                        Some(d) => d,
+                        None => {
+                            log::warn!("[rootfs] init virtio-pci-blk failed, skip");
+                            continue;
+                        }
+                    };
+
+                    // 读 sector 2 看 ext4 magic 分盘
+                    let mut buf = [0u8; 512];
+                    let ok = dev.read_block(2, &mut buf) == 512;
+                    let magic = if ok { u16::from_le_bytes([buf[56], buf[57]]) } else { 0 };
+
+                    if magic == 0xef53 {
+                        log::info!("[rootfs] pci disk is ext4 (magic=0xef53)");
+                        ext4_dev = Some(dev);
+                    } else {
+                        log::info!("[rootfs] pci disk is non-ext4 (magic={:#x}) -> FAT candidate", magic);
+                        fat_dev = Some(dev);
+                    }
+
+                    // 给下一块盘留出 BAR 空间(每块盘的 BAR 区不能重叠)
+                    mmio_cursor += 0x10000;   // 留 64KB,看你 virtio-pci BAR 实际大小调整
+                }
+
+                // FAT 盘:测写 + mount(复用通用 BlockIo + fatfs)
+                if let Some(ref fdev) = fat_dev {
+                    test::test_pci_write_read::test_pci_write_read(fdev.clone());  // loongarch 写测试
+                    // test::test_fat_mount::test_fat_mount(fdev.clone() as Arc<dyn BlockDevice>);  // 稍后
+                }
+
+                match ext4_dev {
+                    Some(d) => {
+                        log::info!("[rootfs] using ext4 virtio-pci block device");
+                        d as Arc<dyn BlockDevice>
+                    }
+                    None => {
+                        log::warn!("[rootfs] no ext4 disk found, fallback to ramdisk");
+                        crate::block::ext4_image::rootfs_ramdisk()
+                    }
+                }
             }
         }
     };

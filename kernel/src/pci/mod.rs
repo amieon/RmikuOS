@@ -15,4 +15,5 @@ pub use probe::{
     PciDeviceInfo,
     scan_pci_bus,
     find_virtio_blk_pci,
+    find_all_virtio_blk_pci,
 };

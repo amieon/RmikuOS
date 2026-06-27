@@ -124,6 +124,8 @@ case "$ARCH" in
 
       -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"
       -device "virtio-blk-pci,drive=blk0,disable-legacy=on"
+      -drive "file=target/fat-loongarch64.img,format=raw,if=none,id=blk1"
+      -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
     )
     ;;
 esac
