@@ -108,14 +108,14 @@ static int parse_args(char *line, char *argv[], int max_argc) {
                 i++;
             }
         }
+        int had_sep = (line[i] == ' ' || line[i] == '\t');
         line[w] = '\0';
-        if (line[i]) {
+        if (had_sep) {
             i++;
         }
     }
     return argc;
 }
-
 
 
 
@@ -395,342 +395,317 @@ static void run_external(int argc, char *argv[]) {
         puts("fork failed\n");
     }
 }
-
-static void run_pipeline(char *line){
-    char * line2 = line;
-    for(int i=0;line[i] != '\0';++i)
-        if(line[i] == '|'){
-            line[i] = '\0';
-            line2 = line + i + 1;
-            break;
-        }
-    
-    char *argv1[MAX_ARGC];
-    int argc1 = parse_args(line, argv1, MAX_ARGC);
-
-    char *argv2[MAX_ARGC];
-    int argc2 = parse_args(line2, argv2, MAX_ARGC);
-    
-    int fd[2];
-    if (pipe(fd) < 0) { puts("pipe failed\n"); return; }
-    if (argc1 == 0 || argc2 == 0) { puts("pipe: empty command\n"); return; }
-
-    int pid1 = fork();
-    if (pid1 == 0) {
-        dup2(fd[1], 1);
-        close(fd[0]);
-        close(fd[1]);
-        run_exec(argc1, argv1);
-        exit(1);
-    }
-
-    int pid2 = fork();
-    if (pid2 == 0) {
-        dup2(fd[0], 0);
-        close(fd[0]);
-        close(fd[1]);
-        run_exec(argc2, argv2);
-        exit(1);
-    }
+#define MAX_SEGMENTS 8    
 
 
-    close(fd[0]);
-    close(fd[1]);
-    waitpid(pid1, 0);
-    waitpid(pid2, 0);
+struct segment {
+    char *cmd_str;      
+    char  infile[LINE_SIZE];  
+    char  outfile[LINE_SIZE];
+    int   append;   
+};
 
+static char *skip_spaces(char *p) {
+    while (*p == ' ' || *p == '\t') p++;
+    return p;
 }
 
-void remove_substring(char *str, char *start, char *end) {
-    if (str == 0 || start == 0 || end == 0 || start >= end) return;
 
-    char *src = end;
-    char *dst = start;
+static int parse_redirect(char *seg_str, struct segment *out) {
+    out->cmd_str   = seg_str;
+    out->infile[0]  = 0;
+    out->outfile[0] = 0;
+    out->append     = 0;
 
-    while (*src != '\0') {
-        *dst++ = *src++;
-    }
-    *dst = '\0';
-}
-
-int handle_line(char *line,char *input,char *output){
-    int input_cnt = 0,output_cnt = 0;
-    char *input_begin  = 0;
-    char *input_end    = 0;
-    char *output_begin = 0;
-    char *output_end   = 0;
-    int input_flag = 0,output_flag = 0;
-    int len = 0;
-    int append = 0;
-
-    for(int i=0;line[i] !=0;++i){
-        len++;
-        if(line[i] == '<'){
-            input_cnt++;
-            input_begin = line + i;
-
+    int i = 0;   
+    int w = 0; 
+    while (seg_str[i]) {
+        char c = seg_str[i];
+        if (c == '"' || c == '\'') {
+            char quote = c;
+            seg_str[w++] = seg_str[i++];  
+            while (seg_str[i] && seg_str[i] != quote) {
+                if (quote == '"' && seg_str[i] == '\\' && seg_str[i+1]) {
+                    seg_str[w++] = seg_str[i++];
+                }
+                seg_str[w++] = seg_str[i++];
+            }
+            if (seg_str[i] == quote) {
+                seg_str[w++] = seg_str[i++];    
+            }
+            continue;
         }
-        if(line[i] == '>'){
-            output_cnt++;
-            output_begin = line + i;
-            if(line[i+1] == '>'){
-                ++i;
+        if (c == '\\') {
+            seg_str[w++] = seg_str[i++];
+            if (seg_str[i]) seg_str[w++] = seg_str[i++];
+            continue;
+        }
+
+        if (c == '>' || c == '<') {
+            int is_output = (c == '>');
+            int append = 0;
+
+            i++;
+            if (is_output && seg_str[i] == '>') { 
                 append = 1;
+                i++;
             }
+            i = (int)(skip_spaces(seg_str + i) - seg_str);
+
+            if (seg_str[i] == 0 ||
+                seg_str[i] == '>' || seg_str[i] == '<' || seg_str[i] == '|') {
+                return -1;
+            }
+
+
+            char target[LINE_SIZE];
+            int t = 0;
+            while (seg_str[i] && seg_str[i] != ' ' && seg_str[i] != '\t' &&
+                   seg_str[i] != '>' && seg_str[i] != '<' && seg_str[i] != '|') {
+                if (t < LINE_SIZE - 1) target[t++] = seg_str[i];
+                i++;
+            }
+            target[t] = 0;
+
+
+            if (is_output) {
+                copy_str(out->outfile, target, LINE_SIZE);
+                out->append = append;
+            } else {
+                copy_str(out->infile, target, LINE_SIZE);
+            }
+            continue;
         }
 
-        if(line[i] == ' '){
-            if(input_flag && input_begin != 0 && input_end == 0){
-                input_end = line + i;
+
+        seg_str[w++] = seg_str[i++];
+    }
+
+    seg_str[w] = 0;   
+    return 0;
+}
+
+
+static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[]) {
+    if (seg->infile[0]) {
+        isize fd = open(seg->infile, O_RDONLY);
+        if (fd < 0) {
+            uprintf("cannot open %s for input\n", seg->infile);
+            exit(1);
+        }
+        dup2(fd, 0);
+        close(fd);
+    }
+    if (seg->outfile[0]) {
+        isize fd;
+        if (seg->append)
+            fd = open(seg->outfile, O_CREAT | O_APPEND | O_WRONLY);
+        else
+            fd = open(seg->outfile, O_CREAT | O_TRUNC | O_WRONLY);
+        if (fd < 0) {
+            uprintf("cannot open %s for output\n", seg->outfile);
+            exit(1);
+        }
+        dup2(fd, 1);
+        close(fd);
+    }
+    run_exec(argc, argv);
+    exit(1);
+}
+
+
+static void run_line(char *line) {
+    char *seg_strs[MAX_SEGMENTS];
+    int   nseg = 0;
+
+
+seg_strs[nseg++] = line;
+{
+    char quote = 0; 
+    for (int i = 0; line[i]; i++) {
+        char c = line[i];
+ 
+        if (quote) {
+            if (c == '\\' && quote == '"' && line[i+1]) {
+                i++;   
+            } else if (c == quote) {
+                quote = 0;
             }
-            if(output_flag && output_begin != 0 && output_end == 0){
-                output_end = line + i;
+            continue;
+        }
+ 
+        if (c == '"' || c == '\'') {
+            quote = c;
+        } else if (c == '\\' && line[i+1]) {
+            i++;  
+        } else if (c == '|') {
+            line[i] = 0;
+            if (nseg >= MAX_SEGMENTS) {
+                puts("too many pipe segments\n");
+                return;
             }
-        }else if(line[i] != '<' && line[i] != '>'){
-            if(input_begin != 0 && input_end == 0){
-                input_flag = 1;
-            }
-            if(output_begin != 0 && output_end == 0){
-                output_flag = 1;
-            }
+            seg_strs[nseg++] = line + i + 1;
         }
     }
-    if(input_cnt > 1 || output_cnt > 1)
-        return -1;
-    if(input_begin != 0 && input_end == 0)
-        input_end = line + len +1;
-    if(output_begin != 0 && output_end == 0)
-        output_end = line + len +1;
+}
 
 
-    if(input_cnt == 1 && output_cnt == 1) {
-
-        for(int i=0;i<input_end-input_begin;++i) {
-            input[i] = input_begin[i];
+    struct segment segs[MAX_SEGMENTS];
+    for (int s = 0; s < nseg; s++) {
+        if (parse_redirect(seg_strs[s], &segs[s]) < 0) {
+            puts("syntax error in redirection\n");
+            return;   
         }
-        input[input_end-input_begin]=0;
-        for(int i=0;i<output_end-output_begin;++i) {
-            output[i] = output_begin[i];
-        }
-        output[output_end-output_begin]=0;
+    }
 
-        if (input_end < output_begin) {
-            if(output_end!=line + len +1)
-            remove_substring(line, output_begin, output_end);
-            if(output_end!=line + len +1)
-            remove_substring(line, input_begin, input_end);
+
+    static char *seg_argv[MAX_SEGMENTS][MAX_ARGC];
+    int seg_argc[MAX_SEGMENTS];
+    for (int s = 0; s < nseg; s++) {
+        seg_argc[s] = parse_args(segs[s].cmd_str, seg_argv[s], MAX_ARGC);
+        if (seg_argc[s] == 0) {
+            puts("syntax error: empty command\n");
+            return;
+        }
+    }
+
+    int prev_read = -1;
+    int pids[MAX_SEGMENTS];
+    int npid = 0;
+
+    for (int s = 0; s < nseg; s++) {
+        int pipefd[2];
+        int has_next = (s < nseg - 1);
+
+        if (has_next) {
+            if (pipe(pipefd) < 0) {
+                puts("pipe failed\n");
+                break;
+            }
+        }
+
+        int pid = fork();
+        if (pid == 0) {
+            if (prev_read >= 0) {
+                dup2(prev_read, 0);
+            }
+
+            if (has_next) {
+                dup2(pipefd[1], 1);
+            }
+
+            if (prev_read >= 0) close(prev_read);
+            if (has_next) {
+                close(pipefd[0]);
+                close(pipefd[1]);
+            }
+
+            apply_redirect_and_exec(&segs[s], seg_argc[s], seg_argv[s]);
+            exit(1);
+        } else if (pid > 0) {
+            pids[npid++] = pid;
         } else {
-            if(input_end!=line + len +1)
-            remove_substring(line, input_begin, input_end);
-            if(output_end!=line + len +1)
-            remove_substring(line, output_begin, output_end);
+            puts("fork failed\n");
         }
-        line[len - (output_end-output_begin) - (input_end-input_begin)] = '\0';
-    }else if(input_cnt == 1){
 
-        for(int i=0;i<input_end-input_begin;++i) {
-            input[i] = input_begin[i];
+  
+        if (prev_read >= 0) close(prev_read);
+        if (has_next) {
+            close(pipefd[1]);  
+            prev_read = pipefd[0]; 
+        } else {
+            prev_read = -1;
         }
-        input[input_end-input_begin]=0;
-
-        output[0] = 0;
-        if(input_end!=line + len +1)
-        remove_substring(line, input_begin, input_end);
-        line[len -(input_end-input_begin)] = '\0';
-    }else if(output_cnt == 1){
-
-        for(int i=0;i<output_end-output_begin;++i) {
-            output[i] = output_begin[i];
-        }
-        output[output_end-output_begin]=0;
-        input[0] = 0;
-        if(output_end!=line + len +1)
-        remove_substring(line, output_begin, output_end);
-        line[len - (output_end-output_begin)] = '\0';
-    }
-    trim2(line);
-    trim2(output);
-    trim2(input);
-    return append;
-}
-static void run_redirectline(char *line){
-    char input[LINE_SIZE], output[LINE_SIZE];
-    int status = handle_line(line,input,output);
-    if(status < 0)return;
-    char *argv[MAX_ARGC];
-    int argc = parse_args(line, argv, MAX_ARGC);
-
-    int pid = fork();
-    if(pid == 0){
-        if(input[0] != 0){
-            isize fd = open(input, O_RDONLY);
-            if(fd < 0){
-                uprintf("Can not open %s, please check whether it exists\n",input);
-                exit(1);
-            }
-            dup2(fd,0);
-            close(fd);
-        }   
-        if(output[0] != 0){
-            isize fd;
-            if(status == 1)
-                fd = open(output, O_CREAT|O_APPEND|O_WRONLY);
-            else
-                fd = open(output, O_CREAT|O_TRUNC|O_WRONLY);
-            if(fd < 0){
-                uprintf("Can not open %s\n",output);
-                exit(1);
-            }
-            dup2(fd,1);
-            close(fd);
-        }
-        run_exec(argc,argv);
-        exit(1);
-    }else{
-        waitpid(pid,0);
     }
 
+    if (prev_read >= 0) close(prev_read);
 
+    for (int i = 0; i < npid; i++) {
+        waitpid(pids[i], 0);
+    }
 }
 
-static int has_pipe(char *s){
-    for(int i=0;s[i] != '\0';++i)
-        if(s[i] == '|')
+static int has_pipe_or_redirect(const char *s) {
+    for (int i = 0; s[i]; i++) {
+        if (s[i] == '|' || s[i] == '<' || s[i] == '>') {
             return 1;
+        }
+    }
     return 0;
 }
-
-
-static int has_redirect(char *s){
-    for(int i=0;s[i] != '\0';++i)
-        if(s[i] == '<' || s[i] == '>')
-            return 1;
-    return 0;
-}
-
+ 
 int main(void) {
     char line[LINE_SIZE];
     char *argv[MAX_ARGC];
-
+ 
     puts("\nRmikuOS shell\n");
     print_help();
     load_search_dirs();
-
+ 
     while (1) {
         char cwd_buf[128];
-
+ 
         puts("\n");
         if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
             puts(cwd_buf);
         }
         puts(" $ ");
-
+ 
         int len = read_line(line, LINE_SIZE);
-
         if (len == 0) {
             continue;
         }
-        
+ 
+        if (has_pipe_or_redirect(line)) {
+            run_line(line);
+            continue;
+        }
 
         int argc = parse_args(line, argv, MAX_ARGC);
-
-        int have_pipe = 0,have_redirect = 0;
-        if (has_pipe(line)) {
-            have_pipe = 1;      
-        }
-                
-        if (has_redirect(line)) {
-            have_redirect = 1;      
-        }
-        if(have_pipe && have_redirect){
-            puts("Does not support both pipe and redirection simultaneously.\n");
-            continue;
-        }
-        if(have_pipe){
-            run_pipeline(line);
-            continue;
-        }
-        if(have_redirect){
-            run_redirectline(argc,argv);
-            continue;
-        }
-
-        
-
         if (argc == 0) {
             continue;
         }
-
+ 
         if (streq(argv[0], "help")) {
             print_help();
             continue;
         }
-
         if (streq(argv[0], "exit")) {
             puts("bye\n");
             return 0;
         }
-
-
         if (streq(argv[0], "pwd")) {
-            int code = builtin_pwd();
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
+            builtin_pwd();
             continue;
         }
-
         if (streq(argv[0], "cd")) {
-            int code = builtin_cd(argc, argv);
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
+            builtin_cd(argc, argv);
             continue;
         }
-
         if (streq(argv[0], "mkdir")) {
-            int code = builtin_mkdir(argc, argv);
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
+            builtin_mkdir(argc, argv);
             continue;
         }
-
         if (streq(argv[0], "touch")) {
-            int code = builtin_create(argc, argv);
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
+            builtin_create(argc, argv);
             continue;
         }
-
         if (streq(argv[0], "rm")) {
-            int code = builtin_rm(argc, argv);
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
+            builtin_rm(argc, argv);
             continue;
         }
-
         if (streq(argv[0], "rmdir")) {
-            int code = builtin_rmdir(argc, argv);
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
+            builtin_rmdir(argc, argv);
             continue;
         }
-
         if (streq(argv[0], "shutdown")) {
             puts("bye bye~\n");
             shutdown();
-           // puts("[shell] builtin exit code ");
-           //put_int(code);
-           //puts("\n");
             continue;
         }
 
         run_external(argc, argv);
     }
-
+ 
     return 0;
 }

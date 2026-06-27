@@ -73,8 +73,10 @@ void trim2(char *str) {
 }
 
 
-static inline void copy_str(char *dst, char *src, isize len) {
-    for (int i = 0; i < len && src[i] != '\0'; ++i) {
+void copy_str(char *dst, char *src, isize len){
+    int i = 0;
+    for(; i < len-1 && src[i] != '\0'; ++i){
         dst[i] = src[i];
     }
+    dst[i] = '\0';  
 }
