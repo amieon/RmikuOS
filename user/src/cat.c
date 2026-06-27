@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
     for (int argi = 1; argi < argc; argi++) {
         const char *path = argv[argi];
 
-        int fd = open(path);
+        int fd = open(path,O_RDONLY);
         if (fd < 0) {
             puts("cat: cannot open ");
             puts(path);

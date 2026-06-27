@@ -68,14 +68,14 @@ int main(void) {
 
     // --- 2. 文件读写 ---
     puts("\n[2] file write/read\n");
-    isize fd = open_create("/tmp/haha/data");
+    isize fd = open_create("/tmp/haha/data",O_RDWR);
     expect_ok("open_create /tmp/haha/data", fd);
     if (fd >= 0) {
         isize w = write(fd, "hello tmpfs", 11);
         expect_ok("write 11 bytes", w >= 0 ? w : -1);
         close(fd);
 
-        isize fd2 = open("/tmp/haha/data");
+        isize fd2 = open("/tmp/haha/data",O_RDWR);
         char buf[32];
         isize n = read(fd2, buf, sizeof(buf));
         close(fd2);

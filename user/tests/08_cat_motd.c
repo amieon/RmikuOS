@@ -3,7 +3,7 @@
 int main(void) {
     char buf[64];
 
-    int fd = open("/etc/motd");
+    int fd = open("/etc/motd",O_RDONLY);
 
     if (fd < 0) {
         puts("open /etc/motd failed\n");

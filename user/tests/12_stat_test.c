@@ -14,7 +14,7 @@ int main(void) {
     put_int(st.size);
     puts("\n");
 
-    int fd = open("/etc/motd");
+    int fd = open("/etc/motd",O_RDWR);
     if (fd < 0) {
         puts("open failed\n");
         return 1;

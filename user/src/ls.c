@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
         path = argv[1];
     }
 
-    int fd = open(path);
+    int fd = open(path,O_RDONLY);
     if (fd < 0) {
         puts("ls: cannot open ");
         puts(path);

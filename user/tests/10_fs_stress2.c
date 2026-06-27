@@ -141,7 +141,7 @@ static int check_fstat_fd(int fd, unsigned char expected_type, const char *tag) 
 }
 
 static int scan_dir(const char *path, int min_entries) {
-    int fd = open(path);
+    int fd = open(path,O_RDWR);
 
     if (fd < 0) {
         fail_msg("open dir failed", path);
@@ -217,7 +217,7 @@ static int scan_dir(const char *path, int min_entries) {
 }
 
 static int read_all_file(const char *path, int min_bytes) {
-    int fd = open(path);
+    int fd = open(path,O_RDWR);
 
     if (fd < 0) {
         fail_msg("open file failed", path);
@@ -291,7 +291,7 @@ static int fd_reuse_test(void) {
     int fds[16];
 
     for (int i = 0; i < 16; i++) {
-        fds[i] = open("/etc/motd");
+        fds[i] = open("/etc/motd",O_RDWR);
 
         if (fds[i] < 0) {
             fail_msg("fd_reuse open failed", "/etc/motd");
@@ -311,7 +311,7 @@ static int fd_reuse_test(void) {
         }
     }
 
-    int fd = open("/etc/motd");
+    int fd = open("/etc/motd",O_RDWR);
 
     if (fd < 0) {
         fail_msg("fd_reuse reopen failed", "/etc/motd");

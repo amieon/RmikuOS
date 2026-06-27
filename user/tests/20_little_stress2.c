@@ -112,7 +112,7 @@ static int check_elf_globals_once(void) {
 }
 
 static int do_file_read_probe(int child_id, int tid, int round) {
-    int fd = open("/etc/motd");
+    int fd = open("/etc/motd",O_RDWR);
 
     if (fd < 0) {
         log4("[file open fail]", child_id, tid, round, fd);

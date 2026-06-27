@@ -1,7 +1,7 @@
 #include "user.h"
 
 int main(void) {
-    int fd = open("/etc/motd");
+    int fd = open("/etc/motd",O_RDWR);
 
     if (fd < 0) {
         puts("open failed\n");

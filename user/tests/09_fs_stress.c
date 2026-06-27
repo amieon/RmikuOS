@@ -20,7 +20,7 @@ static void print_stat(const char *path) {
 
 // 列出目录下所有条目（ls 风格）
 static void do_ls(const char *path) {
-    int fd = open(path);
+    int fd = open(path,O_RDWR);
     if (fd < 0) {
         puts("  无法打开目录: ");
         puts(path);
@@ -54,7 +54,7 @@ static void do_ls(const char *path) {
 
 // 打印文件内容到 stdout (cat)
 static void do_cat(const char *path) {
-    int fd = open(path);
+    int fd = open(path,O_RDWR);
     if (fd < 0) {
         puts("  无法打开文件: ");
         puts(path);
@@ -75,7 +75,7 @@ static void do_cat(const char *path) {
 
 // 打开、读全部数据然后关闭（检查 fd 泄漏）
 static void do_open_read_close(const char *path) {
-    int fd = open(path);
+    int fd = open(path,O_RDWR);
     if (fd < 0) {
         puts("  open失败: ");
         puts(path);

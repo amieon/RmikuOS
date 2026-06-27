@@ -231,7 +231,7 @@ static int num_dirs = 0;
 static void load_search_dirs(void) {
     num_dirs = 0;
 
-    int fd = open("/etc/path");
+    int fd = open("/etc/path", O_RDONLY);
     if (fd < 0) {
 
         copy_str(search_dirs[num_dirs++], "/bin/", DIR_LEN);
@@ -532,7 +532,7 @@ static void run_redirectline(char *line){
     int pid = fork();
     if(pid == 0){
         if(input[0] != 0){
-            isize fd = open(input);
+            isize fd = open(input, O_RDONLY);
             if(fd < 0){
                 uprintf("Can not open %s, please check whether it exists\n",input);
                 exit(1);
@@ -541,7 +541,7 @@ static void run_redirectline(char *line){
             close(fd);
         }   
         if(output[0] != 0){
-            isize fd = open_create(output);
+            isize fd = open(output, O_CREAT|O_TRUNC|O_WRONLY);
             if(fd < 0){
                 uprintf("Can not open %s\n",output);
                 exit(1);
