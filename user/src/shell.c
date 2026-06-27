@@ -1,7 +1,7 @@
 #include "user.h"
 
 #define LINE_SIZE 128
-#define MAX_ARGC  8
+#define MAX_ARGC  16
 
 
 static int streq(const char *a, const char *b) {
@@ -53,32 +53,68 @@ static int read_line(char *buf, int max_len) {
 
 static int parse_args(char *line, char *argv[], int max_argc) {
     int argc = 0;
-    int i = 0;
+    int i = 0;  
 
     while (line[i]) {
         while (line[i] == ' ' || line[i] == '\t') {
-            line[i] = 0;
             i++;
         }
-
         if (!line[i]) {
             break;
         }
-
+        if (line[i] == '#') {
+            break;
+        }
         if (argc >= max_argc) {
             break;
         }
-
         argv[argc++] = &line[i];
+        int w = i;
 
         while (line[i] && line[i] != ' ' && line[i] != '\t') {
+            char c = line[i];
+            if (c == '\\') {
+                i++;
+                if (line[i]) {
+                    line[w++] = line[i];
+                    i++;
+                }
+            } else if (c == '"') {
+                i++;  
+                while (line[i] && line[i] != '"') {
+                    if (line[i] == '\\') {
+                        i++;
+                        if (line[i]) {
+                            line[w++] = line[i];
+                            i++;
+                        }
+                    } else {
+                        line[w++] = line[i++];
+                    }
+                }
+                if (line[i] == '"') {
+                    i++;   
+                }
+            } else if (c == '\'') {
+                i++; 
+                while (line[i] && line[i] != '\'') {
+                    line[w++] = line[i++];
+                }
+                if (line[i] == '\'') {
+                    i++; 
+                }
+            } else {
+                line[w++] = c;
+                i++;
+            }
+        }
+        line[w] = '\0';
+        if (line[i]) {
             i++;
         }
     }
-
     return argc;
 }
-
 
 
 
@@ -595,12 +631,8 @@ int main(void) {
             continue;
         }
         
-        for (int i = 0; line[i]; i++) {
-            if (line[i] == '#' && (i == 0 || line[i-1] == ' ')) {
-                line[i] = '\0';   // 从这里截断
-                break;
-            }
-        }
+
+        int argc = parse_args(line, argv, MAX_ARGC);
 
         int have_pipe = 0,have_redirect = 0;
         if (has_pipe(line)) {
@@ -619,11 +651,11 @@ int main(void) {
             continue;
         }
         if(have_redirect){
-            run_redirectline(line);
+            run_redirectline(argc,argv);
             continue;
         }
 
-        int argc = parse_args(line, argv, MAX_ARGC);
+        
 
         if (argc == 0) {
             continue;
