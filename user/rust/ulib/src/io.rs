@@ -1,8 +1,10 @@
 //! 对应 C 的 io.h。路径以 &[u8] 传入(裸字节,免去 C 的 NUL 结尾依赖);
 //! 也提供基于 &str 的便捷封装。
 
+
 use crate::number::*;
 use crate::syscall::syscall3;
+use crate::flag::*;
 
 /// C 风格字符串长度(到 NUL 为止)。Rust 侧一般用 slice 的 len(),
 /// 此函数仅在需要与裸指针互操作时使用。
@@ -33,8 +35,8 @@ pub fn puts(s: &str) {
     write(1, s.as_bytes());
 }
 
-pub fn open(path: &[u8]) -> isize {
-    unsafe { syscall3(SYS_OPEN, path.as_ptr() as usize, path.len(), 0) }
+pub fn open(path: &[u8], flags:usize) -> isize {
+    unsafe { syscall3(SYS_OPEN, path.as_ptr() as usize, path.len(), flags) }
 }
 
 pub fn create(path: &[u8]) -> isize {
@@ -46,13 +48,6 @@ pub fn close(fd: usize) -> isize {
 }
 
 /// 打开,不存在则创建后再打开(对应 C 的 open_create)。
-pub fn open_create(path: &[u8]) -> isize {
-    let fd = open(path);
-    if fd >= 0 {
-        return fd;
-    }
-    if create(path) < 0 {
-        return -1;
-    }
-    open(path)
+pub fn open_create(path: &[u8], flags:usize) -> isize {
+     unsafe { syscall3(SYS_OPEN, path.as_ptr() as usize, path.len(), flags|O_CREAT) }
 }

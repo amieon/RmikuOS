@@ -2,6 +2,7 @@ use crate::models::{Book, User, MAX_BOOKS, MAX_USERS, MAX_BORROW};
 use crate::utils::{bytes_to_str, atoi, copy_str_to_buf};
 use ulib::io::{open, open_create, close, write, read, puts};
 use ulib::fs::unlink;
+use ulib::flag::*;
 
 const BOOK_FILE: &[u8] = b"/tmp/books.txt";
 const USER_FILE: &[u8] = b"/tmp/users.txt";
@@ -9,7 +10,7 @@ const USER_FILE: &[u8] = b"/tmp/users.txt";
 // ---------- 图书存储 ----------
 pub fn save_books(books: &[Book; MAX_BOOKS], count: usize) {
     let _ = unlink(BOOK_FILE);
-    let fd = open_create(BOOK_FILE);
+    let fd = open_create(BOOK_FILE,O_RDWR);
     if fd < 0 { puts("保存图书失败\n"); return; }
     let mut buf = [0u8; 4096];
     let mut pos = 0;
@@ -48,7 +49,7 @@ fn write_book_line(buf: &mut [u8], book: &Book) -> usize {
 pub fn load_books() -> ([Book; MAX_BOOKS], usize) {
     let mut books = [Book::new(0, "", "", "", 0); MAX_BOOKS];
     let mut count = 0;
-    let fd = open(BOOK_FILE);
+    let fd = open(BOOK_FILE,O_RDWR);
     if fd < 0 { return (books, 0); }
     let mut buf = [0u8; 4096];
     let n = read(fd as usize, &mut buf);
@@ -93,7 +94,7 @@ fn parse_book_line(line: &[u8]) -> Option<Book> {
 // ---------- 用户存储 ----------
 pub fn save_users(users: &[User; MAX_USERS], count: usize) {
     let _ = unlink(USER_FILE);
-    let fd = open_create(USER_FILE);
+    let fd = open_create(USER_FILE,O_RDWR);
     if fd < 0 { puts("保存用户失败\n"); return; }
     let mut buf = [0u8; 4096];
     let mut pos = 0;
@@ -134,7 +135,7 @@ fn write_user_line(buf: &mut [u8], user: &User) -> usize {
 pub fn load_users() -> ([User; MAX_USERS], usize) {
     let mut users = [User::new(0, "", "", false); MAX_USERS];
     let mut count = 0;
-    let fd = open(USER_FILE);
+    let fd = open(USER_FILE,O_RDWR);
     if fd < 0 { return (users, 0); }
     let mut buf = [0u8; 4096];
     let n = read(fd as usize, &mut buf);

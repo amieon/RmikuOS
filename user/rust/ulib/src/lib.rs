@@ -6,6 +6,7 @@ pub mod io;
 pub mod process;
 pub mod fs;
 pub mod sched;
+pub mod flag;
 
 
 pub mod prelude {

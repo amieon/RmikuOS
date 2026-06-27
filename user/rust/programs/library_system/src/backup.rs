@@ -1,6 +1,7 @@
 use ulib::process::{fork, exit};
 use ulib::io::{open, open_create, close, read, write, puts};
 use ulib::fs::unlink;
+use ulib::flag::*;
 
 pub fn backup_data() {
     let pid = fork();
@@ -11,10 +12,10 @@ pub fn backup_data() {
         puts("[备份子进程] 开始备份...\n");
         let src = b"/tmp/books.txt\0";
         let dst = b"/tmp/books_backup.txt\0";
-        let src_fd = open(src);
+        let src_fd = open(src,O_RDWR);
         if src_fd < 0 { puts("源文件不存在\n"); exit(1); }
         let _ = unlink(dst);
-        let dst_fd = open_create(dst);
+        let dst_fd = open_create(dst,O_RDWR);
         if dst_fd < 0 { puts("创建备份失败\n"); close(src_fd as usize); exit(1); }
         let mut buf = [0u8; 4096];
         let n = read(src_fd as usize, &mut buf);

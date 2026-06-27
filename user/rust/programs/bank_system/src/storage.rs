@@ -2,12 +2,13 @@ use crate::models::{Account, MAX_ACCOUNTS};
 use crate::utils::{bytes_to_str, atoi};
 use ulib::io::{open, open_create, close, write, read, puts};
 use ulib::fs::unlink;
+use ulib::flag::*;
 
 const DATA_FILE: &[u8] = b"/tmp/bank_data.txt";
 
 pub fn save_accounts(accounts: &[Account; MAX_ACCOUNTS], count: usize) {
     let _ = unlink(DATA_FILE);
-    let fd = open_create(DATA_FILE);
+    let fd = open_create(DATA_FILE,O_RDWR);
     if fd < 0 { puts("保存账户失败\n"); return; }
     let mut buf = [0u8; 4096];
     let mut pos = 0;
@@ -60,7 +61,7 @@ fn write_num(buf: &mut [u8], start: usize, mut x: u32) -> usize {
 pub fn load_accounts() -> ([Account; MAX_ACCOUNTS], usize) {
     let mut accounts = [Account::new(0, "", 0); MAX_ACCOUNTS];
     let mut count = 0;
-    let fd = open(DATA_FILE);
+    let fd = open(DATA_FILE,O_RDWR);
     if fd < 0 { return (accounts, 0); }
     let mut buf = [0u8; 4096];
     let n = read(fd as usize, &mut buf);

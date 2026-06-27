@@ -12,6 +12,7 @@ use utils::{put_int, readline, atoi, result_filename, u64_to_str};
 
 use ulib::io::{puts, open, open_create, close, read, write};
 use ulib::fs::unlink;
+use ulib::flag::*;
 use ulib::process::{fork, waitpid, exit, getpid};
 
 #[no_mangle]
@@ -53,7 +54,7 @@ pub extern "C" fn _start() -> ! {
             
             // 将结果写入临时文件
             let fname = result_filename(mypid);
-            let fd = open_create(&fname);
+            let fd = open_create(&fname,O_RDWR);
             if fd >= 0 {
                 let mut buf = [0u8; 32];
                 let len = u64_to_str(result, &mut buf);
@@ -90,7 +91,7 @@ pub extern "C" fn _start() -> ! {
             continue;
         }
         let fname = result_filename(child_pids[i]);
-        let fd = open(&fname);
+        let fd = open(&fname,O_RDWR);
         if fd >= 0 {
             let mut buf = [0u8; 32];
             let n = read(fd as usize, &mut buf);

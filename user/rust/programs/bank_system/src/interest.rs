@@ -4,6 +4,7 @@ use crate::utils::put_int;
 use ulib::process::{fork, waitpid, exit};
 use ulib::io::{puts, open, open_create, close, read, write};
 use ulib::fs::unlink;
+use ulib::flag::*;
 
 fn part_filename(pid: i32) -> [u8; 64] {
     let mut fname = [0u8; 64];
@@ -77,7 +78,7 @@ pub fn apply_interest_parallel(manager: &mut crate::manager::BankManager, rate_p
     let mut new_count = 0;
     for i in 0..child_cnt {
         let fname = part_filename(pids[i] as i32);
-        let fd = open(&fname);
+        let fd = open(&fname,O_RDWR);
         if fd >= 0 {
             let mut buf = [0u8; 4096];
             let n = read(fd as usize, &mut buf);
