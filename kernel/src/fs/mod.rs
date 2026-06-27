@@ -9,6 +9,7 @@ pub mod ext4fs;
 pub mod tmpfs;
 pub mod pipe;
 pub mod mount;
+pub mod fatfs;
 
 //pub mod initramfs;
 mod stdio;
