@@ -14,4 +14,3 @@
 #include "string.h"
 #include "fmt.h"
 #include "shutdown.h"
-#include "flag.h"

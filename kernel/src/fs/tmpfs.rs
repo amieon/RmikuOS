@@ -70,19 +70,19 @@ impl Inode for TmpfsInode {
         }
 
         match &self.node {
-        TmpfsNode::Dir(dir) => {
-            let dir = dir.lock();
-            let child = dir.get(name)?;        
-            Some(Arc::new(TmpfsInode { node: child.clone_ref() }))  
+            TmpfsNode::Dir(dir) => {
+                let dir = dir.lock();
+                let child = dir.get(name)?;        
+                Some(Arc::new(TmpfsInode { node: child.clone_ref() }))  
+            }
+            TmpfsNode::File(_) => None,  
         }
-        TmpfsNode::File(_) => None,  
-    }
     }
 
     fn open(&self, flags:usize) -> Option<FileRef> {
         match &self.node {
             TmpfsNode::File(data) => {
-                Some(Arc::new(TmpfsFile::new(data.clone(),flags&O_APPEND!= 0)))
+                Some(Arc::new(TmpfsFile::new(data.clone(),flags)))
             }
             TmpfsNode::Dir(_) => {
                 Some(Arc::new(ReadOnlyDirFile::new(self.getdents())))
@@ -217,12 +217,19 @@ pub fn is_available() -> bool {
 pub struct TmpfsFile {
     data: Arc<Mutex<Vec<u8>>>,
     offset: Mutex<usize>,  
-    append: bool,    
+    flags: usize,  
 }
 
 impl File for TmpfsFile {
-    fn readable(&self) -> bool { true }
-    fn writable(&self) -> bool { true }
+    fn readable(&self) -> bool {
+        let access = self.flags & O_ACCMODE;     
+        access == O_RDONLY || access == O_RDWR
+    }
+
+    fn writable(&self) -> bool {
+        let access = self.flags& O_ACCMODE;
+        access == O_WRONLY || access == O_RDWR
+    }
 
     fn read(&self, buf: &mut [u8]) -> isize {
         let data = self.data.lock();
@@ -239,7 +246,7 @@ impl File for TmpfsFile {
     fn write(&self, buf: &[u8]) -> isize {
         let mut data = self.data.lock();
         let mut off = self.offset.lock();
-        if self.append {
+        if self.is_append() {
             *off = data.len(); 
         }
         for &b in buf {
@@ -261,11 +268,15 @@ impl File for TmpfsFile {
 
 
 impl TmpfsFile {
-    pub fn new(data: Arc<Mutex<Vec<u8>>>,append : bool) -> Self {
+    pub fn new(data: Arc<Mutex<Vec<u8>>>,flags : usize) -> Self {
         TmpfsFile {
             data,                         
             offset: Mutex::new(0),
-            append: append,
+            flags: flags,
         }
+    }
+
+    pub fn is_append(&self) -> bool {
+        return (self.flags | O_APPEND) != 0;
     }
 }

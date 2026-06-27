@@ -40,20 +40,30 @@ unsafe impl Sync for FatFs {}
 
 pub struct FatFile {
     fs: Arc<FatFs>,
-    path: String,        // fatfs 相对路径(不带开头 /)
+    path: String,      
     offset: Mutex<u64>,
-    append: bool,
+    flags: usize,
 }
 
 impl FatFile {
-    pub fn new(fs: Arc<FatFs>, path: String, append: bool) -> Self {
-        Self { fs, path, offset: Mutex::new(0), append }
+    pub fn new(fs: Arc<FatFs>, path: String, flags: usize) -> Self {
+        Self { fs, path, offset: Mutex::new(0), flags }
+    }
+    pub fn is_append(&self) -> bool {
+        return (self.flags | O_APPEND) != 0;
     }
 }
 
 impl File for FatFile {
-    fn readable(&self) -> bool { true }
-    fn writable(&self) -> bool { true }
+     fn readable(&self) -> bool {
+        let access = self.flags & O_ACCMODE;     
+        access == O_RDONLY || access == O_RDWR
+    }
+
+    fn writable(&self) -> bool {
+        let access = self.flags& O_ACCMODE;
+        access == O_WRONLY || access == O_RDWR
+    }
 
     fn read(&self, buf: &mut [u8]) -> isize {
         let mut off = self.offset.lock();
@@ -88,33 +98,46 @@ impl File for FatFile {
     fn write(&self, buf: &[u8]) -> isize {
         let mut off = self.offset.lock();
         let cur = *off;
+
         let n = {
             let fs = self.fs.inner.lock();
             let root = fs.root_dir();
             let result = match root.open_file(&self.path) {
                 Ok(mut file) => {
                     use fatfs::{Write, Seek, SeekFrom};
-                    if file.seek(SeekFrom::Start(cur)).is_err() {
-                        -1
+
+                    let seek_target = if self.is_append() {
+                        SeekFrom::End(0)    
                     } else {
-                        match file.write(buf) {
-                            Ok(n) => {
-                                let _ = file.flush();
-                                n as isize
+                        SeekFrom::Start(cur)   
+                    };
+
+                    match file.seek(seek_target) {
+                        Ok(new_pos) => {
+    
+                            match file.write(buf) {
+                                Ok(written) => {
+                                    let _ = file.flush();
+                
+                                    (written as isize, new_pos + written as u64)
+                                }
+                                Err(_) => (-1, cur),
                             }
-                            Err(_) => -1,
                         }
+                        Err(_) => (-1, cur),
                     }
                 }
-                Err(_) => -1,
+                Err(_) => (-1, cur),
             };
             result
         };
 
-        if n > 0 {
-            *off += n as u64;
+        // 更新 offset
+        let (ret, new_off) = n;
+        if ret > 0 {
+            *off = new_off;
         }
-        n
+        ret
     }
     fn stat(&self) -> Stat {
         let size = {
@@ -267,7 +290,7 @@ impl Inode for FatInode {
             Kind::File => {
                 // 可写 FatFile,存 owned 路径
                 let fat_path = to_fat_path(&self.path).to_string();
-                Some(Arc::new(FatFile::new(self.fs.clone(), fat_path, flags&O_APPEND!=0)))
+                Some(Arc::new(FatFile::new(self.fs.clone(), fat_path, flags)))
             }
             Kind::NotFound => None,
         }

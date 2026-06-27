@@ -2,6 +2,7 @@
 
 
 #include "syscall.h"
+#include "flag.h"
 
 static inline usize strlen(const char *s) {
     usize n = 0;
@@ -35,23 +36,18 @@ static inline isize create(const char *path) {
     return create2(path, strlen(path));
 }
 
-static inline isize open2(const char *path, usize len) {
-    return syscall3(SYS_OPEN, (usize)path, len, 0);
+static inline isize open2(const char *path, usize len, usize flags) {
+    return syscall3(SYS_OPEN, (usize)path, len, flags);
 }
 
-static inline isize open(const char *path) {
-    return open2(path, strlen(path));
+static inline isize open(const char *path, usize flags) {
+    return open2(path, strlen(path), flags);
 }
 
-static inline isize open_create(const char *path) {
-    int fd = -1;
-    if ((fd = open2(path, strlen(path))) < 0) {
-        if (create2(path, strlen(path)) >= 0) {
-            return open2(path, strlen(path));
-        }
-    }
-    return fd;
+static inline isize open_create(const char *path, usize flags) {
+    return open2(path, strlen(path), flags|O_CREAT);
 }
+
 
 static inline isize close(int fd) {
     return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
