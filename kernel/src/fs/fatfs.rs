@@ -75,35 +75,34 @@ fn to_fat_path(path: &str) -> &str {
 
 impl Inode for FatInode {
     fn metadata(&self) -> Metadata {
-        let fs = self.fs.inner.lock();
-        let root = fs.root_dir();
-
-        // 根目录特判
         if self.path == "/" {
             return Metadata { inode_type: InodeType::Directory, size: 0 };
         }
 
+        let fs = self.fs.inner.lock();
         let fat_path = to_fat_path(&self.path);
 
-        // 先试当目录打开
-        if root.open_dir(fat_path).is_ok() {
-            return Metadata { inode_type: InodeType::Directory, size: 0 };
-        }
+        // 所有 fatfs 操作收进这个块,只让 Metadata(独立数据)逃出来
+        let meta = {
+            let root = fs.root_dir();
 
-        // 再试当文件,取大小
-        match root.open_file(fat_path) {
-            Ok(file) => {
-                // fatfs File 没有直接的 len(),要 seek 到末尾
-                // 或者通过遍历父目录拿 entry.len()。先简单:用 seek
-                use fatfs::{Seek, SeekFrom};
-                let mut f = file;
-                let size = f.seek(SeekFrom::End(0)).unwrap_or(0) as usize;
-                Metadata { inode_type: InodeType::File, size }
+            if root.open_dir(fat_path).is_ok() {
+                Metadata { inode_type: InodeType::Directory, size: 0 }
+            } else {
+                match root.open_file(fat_path) {
+                    Ok(mut file) => {
+                        use fatfs::{Seek, SeekFrom};
+                        let size = file.seek(SeekFrom::End(0)).unwrap_or(0) as usize;
+                        Metadata { inode_type: InodeType::File, size }
+                    }
+                    Err(_) => Metadata { inode_type: InodeType::File, size: 0 },
+                }
             }
-            Err(_) => Metadata { inode_type: InodeType::File, size: 0 },
-        }
-    }
+        };  // ← root, file 在这里析构,fs 还活着,meta 是独立的
 
+        meta
+    }  // ← fs 在这里析构
+    
     fn lookup(&self, name: &str) -> Option<InodeRef> {
         if name.is_empty() || name == "." {
             return Some(Arc::new(Self {
@@ -112,17 +111,18 @@ impl Inode for FatInode {
             }));
         }
         if name == ".." {
-            return Some(self.fs.clone().root_inode());  // 兜底回根
+            return Some(self.fs.clone().root_inode());
         }
 
         let child_path = join_path(&self.path, name);
-        let fat_path = to_fat_path(&child_path);
+        let fat_path_owned = to_fat_path(&child_path).to_string();  // 拥有,避免借用纠缠
 
-        let fs = self.fs.inner.lock();
-        let root = fs.root_dir();
-
-        // 检查 child 是否存在(目录或文件)
-        let exists = root.open_dir(fat_path).is_ok() || root.open_file(fat_path).is_ok();
+        // 在块里判断存在性,只让 bool 逃出来
+        let exists = {
+            let fs = self.fs.inner.lock();
+            let root = fs.root_dir();
+            root.open_dir(&fat_path_owned).is_ok() || root.open_file(&fat_path_owned).is_ok()
+        };  // ← fs/root 析构,exists 是 bool
 
         if exists {
             Some(Arc::new(Self {
@@ -135,74 +135,82 @@ impl Inode for FatInode {
     }
 
     fn open(&self) -> Option<FileRef> {
-        let fs = self.fs.inner.lock();
-        let root = fs.root_dir();
-        let fat_path = to_fat_path(&self.path);
-
-        // 根目录 / 是目录
-        if self.path == "/" {
-            drop(fs);  // 释放锁,getdents 自己会再 lock
-            return Some(Arc::new(ReadOnlyDirFile::new(self.getdents())));
+        // 先判断类型 + 读数据,全在持锁的块里完成,只让结果逃出来
+        enum FatOpen {
+            Dir,
+            File(Vec<u8>),
+            NotFound,
         }
 
-        // 是目录?
-        if root.open_dir(fat_path).is_ok() {
-            drop(fs);
-            return Some(Arc::new(ReadOnlyDirFile::new(self.getdents())));
-        }
+        let result = {
+            let fs = self.fs.inner.lock();
+            let fat_path = to_fat_path(&self.path);
 
-        // 是文件?读全部进内存(照搬 ext4 的套路)
-        match root.open_file(fat_path) {
-            Ok(mut file) => {
-                let mut data = Vec::new();
-                let mut buf = [0u8; 512];
-                loop {
-                    match file.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => data.extend_from_slice(&buf[..n]),
-                        Err(_) => return None,
+            if self.path == "/" {
+                FatOpen::Dir
+            } else {
+                let root = fs.root_dir();
+
+                if root.open_dir(fat_path).is_ok() {
+                    FatOpen::Dir
+                } else {
+                    match root.open_file(fat_path) {
+                        Ok(mut file) => {
+                            use fatfs::Read;
+                            let mut data = Vec::new();
+                            let mut buf = [0u8; 512];
+                            let mut ok = true;
+                            loop {
+                                match file.read(&mut buf) {
+                                    Ok(0) => break,
+                                    Ok(n) => data.extend_from_slice(&buf[..n]),
+                                    Err(_) => { ok = false; break; }
+                                }
+                            }
+                            if ok { FatOpen::File(data) } else { FatOpen::NotFound }
+                        }
+                        Err(_) => FatOpen::NotFound,
                     }
                 }
-                Some(Arc::new(ReadOnlyMemFile::from_vec(data)))
             }
-            Err(_) => None,
+        };  // ← fs/root/file 全析构,result 是独立的(Vec 或枚举)
+
+        // 锁已释放,现在用结果构造 FileRef
+        match result {
+            FatOpen::Dir => Some(Arc::new(ReadOnlyDirFile::new(self.getdents()))),
+            FatOpen::File(data) => Some(Arc::new(ReadOnlyMemFile::from_vec(data))),
+            FatOpen::NotFound => None,
         }
     }
 
     fn getdents(&self) -> Vec<DirEntry> {
         let mut entries = Vec::new();
         let fs = self.fs.inner.lock();
-        let root = fs.root_dir();
         let fat_path = to_fat_path(&self.path);
 
-        // 拿到目标目录
-        let dir = if self.path == "/" {
-            root
-        } else {
-            match root.open_dir(fat_path) {
-                Ok(d) => d,
-                Err(_) => return entries,
+        {
+            let root = fs.root_dir();
+            if self.path == "/" {
+                for er in root.iter() {
+                    if let Ok(e) = er {
+                        let name = e.file_name();
+                        if name != "." && name != ".." {
+                            let t = if e.is_dir() { FILE_TYPE_DIR } else { FILE_TYPE_FILE };
+                            entries.push(DirEntry::new(&name, t));
+                        }
+                    }
+                }
+            } else if let Ok(dir) = root.open_dir(fat_path) {
+                for er in dir.iter() {
+                    if let Ok(e) = er {
+                        let name = e.file_name();
+                        if name != "." && name != ".." {
+                            let t = if e.is_dir() { FILE_TYPE_DIR } else { FILE_TYPE_FILE };
+                            entries.push(DirEntry::new(&name, t));
+                        }
+                    }
+                }
             }
-        };
-
-        for entry_result in dir.iter() {
-            let entry = match entry_result {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-
-            let name = entry.file_name();
-            if name == "." || name == ".." {
-                continue;
-            }
-
-            let dirent_type = if entry.is_dir() {
-                FILE_TYPE_DIR
-            } else {
-                FILE_TYPE_FILE
-            };
-
-            entries.push(DirEntry::new(&name, dirent_type));
         }
 
         entries
