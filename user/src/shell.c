@@ -425,6 +425,7 @@ int handle_line(char *line,char *input,char *output){
     char *output_end   = 0;
     int input_flag = 0,output_flag = 0;
     int len = 0;
+    int append = 0;
 
     for(int i=0;line[i] !=0;++i){
         len++;
@@ -436,6 +437,10 @@ int handle_line(char *line,char *input,char *output){
         if(line[i] == '>'){
             output_cnt++;
             output_begin = line + i;
+            if(line[i+1] == '>'){
+                ++i;
+                append = 1;
+            }
         }
 
         if(line[i] == ' '){
@@ -454,78 +459,68 @@ int handle_line(char *line,char *input,char *output){
             }
         }
     }
-
     if(input_cnt > 1 || output_cnt > 1)
         return -1;
     if(input_begin != 0 && input_end == 0)
-        input_end = line + len ;
+        input_end = line + len +1;
     if(output_begin != 0 && output_end == 0)
-        output_end = line + len ;
+        output_end = line + len +1;
 
 
     if(input_cnt == 1 && output_cnt == 1) {
-        *output_end = '\0';
-        *input_end = '\0';
-        *output_begin = ' ';
-        *input_begin = ' ';
 
-        for(int i=1;input_begin[i] != '\0';++i) {
-            input[i - 1] = input_begin[i];
-            input[i] = '\0';
+        for(int i=0;i<input_end-input_begin;++i) {
+            input[i] = input_begin[i];
         }
-        for(int i=1;output_begin[i] != '\0';++i) {
-            output[i - 1] = output_begin[i];
-            output[i] = '\0';
+        input[input_end-input_begin]=0;
+        for(int i=0;i<output_end-output_begin;++i) {
+            output[i] = output_begin[i];
         }
-
-        if(output_end == line + len)*output_end = '\0';
-        else *output_end = ' ';
-
-        if(input_end == line + len)*input_end = '\0';
-        else *input_end = ' ';
+        output[output_end-output_begin]=0;
 
         if (input_end < output_begin) {
+            if(output_end!=line + len +1)
             remove_substring(line, output_begin, output_end);
+            if(output_end!=line + len +1)
             remove_substring(line, input_begin, input_end);
         } else {
+            if(input_end!=line + len +1)
             remove_substring(line, input_begin, input_end);
+            if(output_end!=line + len +1)
             remove_substring(line, output_begin, output_end);
         }
+        line[len - (output_end-output_begin) - (input_end-input_begin)] = '\0';
     }else if(input_cnt == 1){
-        *input_end = '\0';
-        *input_begin = ' ';
 
-        for(int i=1;input_begin[i] != '\0';++i) {
-            input[i - 1] = input_begin[i];
-            input[i] = '\0';
+        for(int i=0;i<input_end-input_begin;++i) {
+            input[i] = input_begin[i];
         }
+        input[input_end-input_begin]=0;
+
         output[0] = 0;
-
-        if(input_end == line + len)*input_end = '\0';
-        else *input_end = ' ';
+        if(input_end!=line + len +1)
         remove_substring(line, input_begin, input_end);
+        line[len -(input_end-input_begin)] = '\0';
     }else if(output_cnt == 1){
-        *output_end = '\0';
-        *output_begin = ' ';
 
-        for(int i=1;output_begin[i] != '\0';++i) {
-            output[i - 1] = output_begin[i];
-            output[i] = '\0';
+        for(int i=0;i<output_end-output_begin;++i) {
+            output[i] = output_begin[i];
         }
+        output[output_end-output_begin]=0;
         input[0] = 0;
-
-        if(output_end == line + len)*output_end = '\0';
-        else *output_end = ' ';
+        if(output_end!=line + len +1)
         remove_substring(line, output_begin, output_end);
+        line[len - (output_end-output_begin)] = '\0';
     }
-    trim(line);
-    trim(output);
-    trim(input);
-    return 0;
+    trim2(line);
+    trim2(output);
+    trim2(input);
+    return append;
 }
 static void run_redirectline(char *line){
     char input[LINE_SIZE], output[LINE_SIZE];
-    handle_line(line,input,output);
+    int status = handle_line(line,input,output);
+    if(status < 0)return;
     char *argv[MAX_ARGC];
     int argc = parse_args(line, argv, MAX_ARGC);
 
@@ -541,7 +536,11 @@ static void run_redirectline(char *line){
             close(fd);
         }   
         if(output[0] != 0){
-            isize fd = open(output, O_CREAT|O_TRUNC|O_WRONLY);
+            isize fd;
+            if(status == 1)
+                fd = open(output, O_CREAT|O_APPEND|O_WRONLY);
+            else
+                fd = open(output, O_CREAT|O_TRUNC|O_WRONLY);
             if(fd < 0){
                 uprintf("Can not open %s\n",output);
                 exit(1);
