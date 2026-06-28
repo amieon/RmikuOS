@@ -10,7 +10,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "edit"
+name = "edit_past"
+version = "0.1.0"
+dependencies = [
+ "ulib",
+]
+
+[[package]]
+name = "editor"
 version = "0.1.0"
 dependencies = [
  "ulib",
