@@ -1,5 +1,7 @@
 #![no_std]
 
+extern crate alloc;
+
 pub mod number;
 pub mod syscall;
 pub mod io;
@@ -7,6 +9,12 @@ pub mod process;
 pub mod fs;
 pub mod sched;
 pub mod flag;
+pub mod allocator; 
+
+pub use alloc::vec::Vec;
+pub use alloc::string::String;
+pub use alloc::boxed::Box;
+pub use alloc::vec;    
 
 
 pub mod prelude {

@@ -1,16 +1,3 @@
-# RmikuOS Rust 用户态构建配置
-#
-# 默认 target 设为 riscv64(先把 riscv 跑通,loongarch 后续)。
-# 编译时也可以显式覆盖:cargo build --target loongarch64-unknown-none
-#
-# 链接脚本路径说明(重要,最易踩坑):
-#   下面 link-arg=-T<...> 的路径是相对于 "cargo 调用时的当前工作目录"。
-#   如果你在 user/rust/ 下执行 cargo build,且链接脚本在 user/linker-riscv64.ld,
-#   那相对路径就是 ../linker-riscv64.ld。
-#   若路径报 "cannot open linker script",改成绝对路径最省心,例如:
-#     -Tlink-arg 改为 =/home/you/RmikuOS/user/linker-riscv64.ld
-#   或在 build.py 里用 -C link-arg=-T<绝对路径> 注入(集成时推荐这样)。
-
 [build]
 target = "riscv64gc-unknown-none-elf"
 

@@ -1,0 +1,11 @@
+[package]
+name = "try_vec"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ulib = { path = "../../ulib" }
+
+[[bin]]
+name = "try_vec"
+path = "src/main.rs"

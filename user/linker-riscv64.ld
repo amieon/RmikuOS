@@ -29,7 +29,7 @@ SECTIONS
         *(.sdata.*)
     }
 
-    . = ALIGN(8);
+    . = ALIGN(0x1000);
 
     .bss : {
         *(.bss)

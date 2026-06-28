@@ -10,6 +10,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "edit"
+version = "0.1.0"
+dependencies = [
+ "ulib",
+]
+
+[[package]]
 name = "library_system"
 version = "0.1.0"
 dependencies = [
@@ -32,6 +39,13 @@ dependencies = [
 
 [[package]]
 name = "rust_rust"
+version = "0.1.0"
+dependencies = [
+ "ulib",
+]
+
+[[package]]
+name = "try_vec"
 version = "0.1.0"
 dependencies = [
  "ulib",
