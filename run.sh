@@ -119,7 +119,7 @@ case "$ARCH" in
       -m 2G
       -smp 1
       -nographic
-      -bios trampoline.bin
+      -kernel  "$KERNEL_ELF" 
       -device "loader,file=$KERNEL_BIN,addr=0x1000000"
 
       -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"
