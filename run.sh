@@ -63,20 +63,8 @@ build_user_apps() {
   fi
 }
 
-build_loongarch_trampoline() {
-  if [ ! -f trampoline.bin ] || [ trampoline.S -nt trampoline.bin ]; then
-    echo "=== 编译 LoongArch trampoline ==="
-    "$LA_GCC" -c -x assembler-with-cpp -o trampoline.o trampoline.S
-    "$LA_OBJCOPY" -O binary -j .text.boot trampoline.o trampoline.bin
-    rm -f trampoline.o
-  fi
-}
 
 build_user_apps
-
-if [ "$ARCH" = "loongarch64" ]; then
-  build_loongarch_trampoline
-fi
 
 LOG_LEVEL="${LOG:-warn}"
 
