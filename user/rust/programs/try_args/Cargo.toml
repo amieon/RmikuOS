@@ -1,0 +1,11 @@
+[package]
+name = "try_args"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ulib = { path = "../../ulib" }
+
+[[bin]]
+name = "try_args"
+path = "src/main.rs"

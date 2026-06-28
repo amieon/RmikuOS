@@ -10,12 +10,15 @@ pub mod fs;
 pub mod sched;
 pub mod flag;
 pub mod allocator; 
+pub mod args;
+
 
 pub use alloc::vec::Vec;
 pub use alloc::string::String;
 pub use alloc::boxed::Box;
 pub use alloc::vec;    
 
+pub use args::Args;
 
 pub mod prelude {
     pub use crate::io::{read, write, puts, put_char, open, open_create, create, close, strlen};

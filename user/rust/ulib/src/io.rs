@@ -30,10 +30,32 @@ pub fn put_char(c: u8) {
     write(1, &b);
 }
 
-/// 打印字符串到 stdout(不追加换行)。
+pub fn puts_bytes(b: &[u8]) {
+    unsafe { syscall3(SYS_WRITE, 1, b.as_ptr() as usize, b.len()) };
+}
+
 pub fn puts(s: &str) {
     write(1, s.as_bytes());
 }
+
+pub fn put_int(mut x: u64) {
+    if x == 0 {
+        put_char(b'0');
+        return;
+    }
+    let mut buf = [0u8; 20];
+    let mut i = 0;
+    while x > 0 {
+        buf[i] = b'0' + (x % 10) as u8;
+        x /= 10;
+        i += 1;
+    }
+    while i > 0 {
+        i -= 1;
+        put_char(buf[i]);
+    }
+}
+
 
 pub fn open(path: &[u8], flags:usize) -> isize {
     unsafe { syscall3(SYS_OPEN, path.as_ptr() as usize, path.len(), flags) }
