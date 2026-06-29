@@ -1,0 +1,11 @@
+[package]
+name = "float_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ulib = { path = "../../ulib" }
+
+[[bin]]
+name = "float_test"
+path = "src/main.rs"

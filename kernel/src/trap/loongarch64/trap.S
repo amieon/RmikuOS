@@ -1,4 +1,4 @@
-    .section .text.trap, "ax"
+.section .text.trap, "ax"
     .align 2
 
     .globl __alltraps
@@ -13,10 +13,15 @@
      *   era            264
      *   badv           272
      *   estat          280
+     *   f[0..31]       288..543   (浮点 f0-f31,每个 8 字节)
+     *   fcsr           544        (浮点控制状态寄存器 fcsr0)
      *
-     * total: 288 bytes
+     * total: 552 bytes
+     *
+     * 浮点上下文:每次 trap 全保存 f0-f31 + fcsr0,
+     * 保证多个浮点用户任务并发时各自浮点状态互不覆盖。
      */
-    .equ TRAP_CONTEXT_SIZE, 288
+    .equ TRAP_CONTEXT_SIZE, 552
 
     /*
      * CSR numbers.
@@ -34,10 +39,6 @@
 
     /*
      * Kernel save registers.
-     *
-     * KSAVE0: kernel_stack_top when running user
-     * KSAVE1: temporary save for original r12
-     * KSAVE2: temporary save for original r13
      */
     .equ CSR_KSAVE0, 0x30
     .equ CSR_KSAVE1, 0x31
@@ -46,20 +47,9 @@
     .equ PRMD_PPLV_MASK, 0x3
     .equ PLV_USER, 0x3
 
-
-
-    /*
-     * KERNEL_OFFSET = 0xffff800000000000
-     * signed immediate form = -0x800000000000
-     */
     .equ UART_PADDR, 0x1fe001e0
 
     .macro PUTCH_HIGH_SAFE ch
-        /*
-         * r20 = KERNEL_OFFSET + UART_PADDR
-         * Avoid .equ 0xffff8000... because GNU as may reject it as
-         * "literal value out of range".
-         */
         li.d    $r20, -0x800000000000
         li.d    $r21, UART_PADDR
         add.d   $r20, $r20, $r21
@@ -71,6 +61,91 @@
         st.b    $r21, $r20, 0
     .endm
 
+
+/*
+ * 保存浮点寄存器宏:f0-f31 + fcsr0 存进 TrapContext。
+ * 约定:r3 指向 TrapContext 起始,r12 可用作临时(此时 r12 已存)。
+ * 必须在整数寄存器(尤其 r12)已保存之后调用。
+ */
+.macro SAVE_FP_REGS
+    fst.d   $f0,  $r3, 288
+    fst.d   $f1,  $r3, 296
+    fst.d   $f2,  $r3, 304
+    fst.d   $f3,  $r3, 312
+    fst.d   $f4,  $r3, 320
+    fst.d   $f5,  $r3, 328
+    fst.d   $f6,  $r3, 336
+    fst.d   $f7,  $r3, 344
+    fst.d   $f8,  $r3, 352
+    fst.d   $f9,  $r3, 360
+    fst.d   $f10, $r3, 368
+    fst.d   $f11, $r3, 376
+    fst.d   $f12, $r3, 384
+    fst.d   $f13, $r3, 392
+    fst.d   $f14, $r3, 400
+    fst.d   $f15, $r3, 408
+    fst.d   $f16, $r3, 416
+    fst.d   $f17, $r3, 424
+    fst.d   $f18, $r3, 432
+    fst.d   $f19, $r3, 440
+    fst.d   $f20, $r3, 448
+    fst.d   $f21, $r3, 456
+    fst.d   $f22, $r3, 464
+    fst.d   $f23, $r3, 472
+    fst.d   $f24, $r3, 480
+    fst.d   $f25, $r3, 488
+    fst.d   $f26, $r3, 496
+    fst.d   $f27, $r3, 504
+    fst.d   $f28, $r3, 512
+    fst.d   $f29, $r3, 520
+    fst.d   $f30, $r3, 528
+    fst.d   $f31, $r3, 536
+    movfcsr2gr $r12, $fcsr0
+    st.d    $r12, $r3, 544
+.endm
+
+/*
+ * 恢复浮点寄存器宏:从 TrapContext 读回 f0-f31 + fcsr0。
+ * 约定:r3 指向 TrapContext 起始,r12 可用作临时(整数尚未恢复)。
+ */
+.macro RESTORE_FP_REGS
+    ld.d    $r12, $r3, 544
+    movgr2fcsr $fcsr0, $r12
+    fld.d   $f0,  $r3, 288
+    fld.d   $f1,  $r3, 296
+    fld.d   $f2,  $r3, 304
+    fld.d   $f3,  $r3, 312
+    fld.d   $f4,  $r3, 320
+    fld.d   $f5,  $r3, 328
+    fld.d   $f6,  $r3, 336
+    fld.d   $f7,  $r3, 344
+    fld.d   $f8,  $r3, 352
+    fld.d   $f9,  $r3, 360
+    fld.d   $f10, $r3, 368
+    fld.d   $f11, $r3, 376
+    fld.d   $f12, $r3, 384
+    fld.d   $f13, $r3, 392
+    fld.d   $f14, $r3, 400
+    fld.d   $f15, $r3, 408
+    fld.d   $f16, $r3, 416
+    fld.d   $f17, $r3, 424
+    fld.d   $f18, $r3, 432
+    fld.d   $f19, $r3, 440
+    fld.d   $f20, $r3, 448
+    fld.d   $f21, $r3, 456
+    fld.d   $f22, $r3, 464
+    fld.d   $f23, $r3, 472
+    fld.d   $f24, $r3, 480
+    fld.d   $f25, $r3, 488
+    fld.d   $f26, $r3, 496
+    fld.d   $f27, $r3, 504
+    fld.d   $f28, $r3, 512
+    fld.d   $f29, $r3, 520
+    fld.d   $f30, $r3, 528
+    fld.d   $f31, $r3, 536
+.endm
+
+
 /*
  * Trap entry.
  *
@@ -81,28 +156,12 @@
  * User mode convention:
  *   KSAVE0 = kernel_stack_top
  *   r3/sp  = user sp
- *
- * Important:
- *   r12/r13 are normal registers and must be saved before being used
- *   as scratch registers.
  */
 __alltraps:
 
-    /*
-     * Save original r12/r13 immediately.
-     *
-     * csrwr writes the GPR value into CSR and returns old CSR value
-     * into the same GPR, so r12/r13 are clobbered after these two
-     * instructions. That is OK because their original values are now
-     * in KSAVE1/KSAVE2.
-     */
     csrwr   $r12, CSR_KSAVE1
     csrwr   $r13, CSR_KSAVE2
 
-    /*
-     * PRMD.PPLV records previous privilege level.
-     * If PPLV == 3, trap came from user mode.
-     */
     csrrd   $r12, CSR_PRMD
     andi    $r12, $r12, PRMD_PPLV_MASK
     addi.d  $r13, $zero, PLV_USER
@@ -111,8 +170,6 @@ __alltraps:
 
 /*
  * Trap from kernel mode.
- *
- * We are already on a kernel stack.
  */
 .Ltrap_from_kernel:
     addi.d  $r3, $r3, -TRAP_CONTEXT_SIZE
@@ -121,9 +178,6 @@ __alltraps:
     st.d    $r1,  $r3, 8
     st.d    $r2,  $r3, 16
 
-    /*
-     * Save original kernel sp/r3.
-     */
     addi.d  $r12, $r3, TRAP_CONTEXT_SIZE
     st.d    $r12, $r3, 24
 
@@ -136,9 +190,6 @@ __alltraps:
     st.d    $r10, $r3, 80
     st.d    $r11, $r3, 88
 
-    /*
-     * Restore original r12/r13 from KSAVE1/KSAVE2 into TrapContext.
-     */
     csrrd   $r12, CSR_KSAVE1
     st.d    $r12, $r3, 96
 
@@ -173,15 +224,11 @@ __alltraps:
     csrrd   $r12, CSR_ESTAT
     st.d    $r12, $r3, 280
 
-    /*
-     * While handling in kernel, no user kernel-stack handoff is active.
-     */
+    /* 保存浮点(r12 已存,可用作临时) */
+    SAVE_FP_REGS
+
     csrwr   $zero, CSR_KSAVE0
 
-    /*
-     * Call Rust trap handler:
-     *   a0/r4 = &mut TrapContext
-     */
     addi.d  $r4, $r3, 0
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
@@ -191,25 +238,10 @@ __alltraps:
 
 /*
  * Trap from user mode.
- *
- * On entry:
- *   r3      = user_sp
- *   KSAVE0  = kernel_stack_top
- *   KSAVE1  = original user r12
- *   KSAVE2  = original user r13
  */
 .Ltrap_from_user:
-    /*
-     * Save user sp temporarily in r13.
-     * Original user r13 is already in KSAVE2.
-     */
     addi.d  $r13, $r3, 0
 
-    /*
-     * Switch to kernel stack:
-     *   r12 = kernel_stack_top
-     *   r3  = kernel_stack_top - TrapContext size
-     */
     csrrd   $r12, CSR_KSAVE0
     addi.d  $r3, $r12, -TRAP_CONTEXT_SIZE
 
@@ -227,9 +259,6 @@ __alltraps:
     st.d    $r10, $r3, 80
     st.d    $r11, $r3, 88
 
-    /*
-     * Restore original user r12/r13 from KSAVE1/KSAVE2 into TrapContext.
-     */
     csrrd   $r12, CSR_KSAVE1
     st.d    $r12, $r3, 96
 
@@ -264,15 +293,11 @@ __alltraps:
     csrrd   $r12, CSR_ESTAT
     st.d    $r12, $r3, 280
 
-    /*
-     * Now we are in kernel handler.
-     */
+    /* 保存浮点 */
+    SAVE_FP_REGS
+
     csrwr   $zero, CSR_KSAVE0
 
-    /*
-     * Call Rust trap handler:
-     *   a0/r4 = &mut TrapContext
-     */
     addi.d  $r4, $r3, 0
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
@@ -284,27 +309,15 @@ __alltraps:
  * Restore TrapContext.
  *
  * r4 = &mut TrapContext
- *
- * If PRMD.PPLV == 3:
- *   return to user
- *   set KSAVE0 = kernel_stack_top
- *
- * Else:
- *   return to kernel
- *   set KSAVE0 = 0
  */
 __restore_user:
 __restore:
 
     addi.d  $r3, $r4, 0
 
-    /*
-     * Load new PRMD and new ERA.
-     *
-     * Important:
-     *   csrwr clobbers its source register with old CSR value.
-     *   Therefore decide restore target before csrwr.
-     */
+    /* 先恢复浮点(此时整数寄存器尚未恢复,r12 可自由用) */
+    RESTORE_FP_REGS
+
     ld.d    $r12, $r3, 256      /* new PRMD */
     ld.d    $r13, $r3, 264      /* new ERA */
 
@@ -327,7 +340,6 @@ __restore:
 
     ld.d    $r1,  $r3, 8
     ld.d    $r2,  $r3, 16
-    /* r3/sp restored by addi.d below */
     ld.d    $r4,  $r3, 32
     ld.d    $r5,  $r3, 40
     ld.d    $r6,  $r3, 48
@@ -366,30 +378,16 @@ __restore:
  */
 .Lrestore_user:
 
-    /*
-     * Disable current kernel interrupt before setting KSAVE0.
-     *
-     * Otherwise a timer interrupt between setting KSAVE0 and ertn may
-     * enter kernel trap path and clear KSAVE0.
-     */
     csrrd   $r12, CSR_CRMD
     li.d    $r13, CRMD_IE_CLEAR_MASK
     and     $r12, $r12, $r13
     csrwr   $r12, CSR_CRMD
 
-    /*
-     * TrapContext is placed at:
-     *   kernel_stack_top - TRAP_CONTEXT_SIZE
-     *
-     * So:
-     *   kernel_stack_top = cx + TRAP_CONTEXT_SIZE
-     */
     addi.d  $r12, $r3, TRAP_CONTEXT_SIZE
     csrwr   $r12, CSR_KSAVE0
 
     ld.d    $r1,  $r3, 8
     ld.d    $r2,  $r3, 16
-    /* r3/sp restored last */
     ld.d    $r4,  $r3, 32
     ld.d    $r5,  $r3, 40
     ld.d    $r6,  $r3, 48
@@ -419,14 +417,6 @@ __restore:
     ld.d    $r30, $r3, 240
     ld.d    $r31, $r3, 248
 
-    /*
-     * Restore user sp last.
-     *
-     * Do not do any debug printing after this point:
-     *   - r20/r21 and all user GPRs are already restored;
-     *   - r3 is about to become user sp;
-     *   - any UART macro here will corrupt user context or fault.
-     */
     ld.d    $r3,  $r3, 24
 
     ertn

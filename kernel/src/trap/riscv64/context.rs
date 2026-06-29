@@ -13,6 +13,9 @@ pub struct TrapContext {
     pub stval: usize,
     /// CSR scause.
     pub scause: usize,
+
+    pub f: [u64; 32],      
+    pub fcsr: usize,          
 }
 
 impl TrapContext {
@@ -23,6 +26,8 @@ impl TrapContext {
             sepc: 0,
             stval: 0,
             scause: 0,
+            f: [0; 32],
+            fcsr: 0,
         }
     }
 
@@ -44,10 +49,10 @@ impl TrapContext {
 
     pub fn app_init_context(entry: usize, sp: usize) -> Self {
         const SSTATUS_SPIE: usize = 1 << 5;
-        const SSTATUS_SPP: usize = 1 << 8;
+        const SSTATUS_FS_INITIAL: usize = 1 << 13;  
 
         let mut cx = Self::zero();
-        cx.sstatus = SSTATUS_SPIE & !SSTATUS_SPP;
+        cx.sstatus = SSTATUS_SPIE | SSTATUS_FS_INITIAL;  
         cx.sepc = entry;
         cx.set_sp(sp);
         cx

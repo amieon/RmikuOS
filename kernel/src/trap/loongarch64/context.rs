@@ -13,6 +13,9 @@ pub struct TrapContext {
     pub badv: usize,
     /// CSR.ESTAT: exception status.
     pub estat: usize,
+
+    pub f: [u64; 32],      
+    pub fcsr: usize, 
 }
 
 impl TrapContext {
@@ -23,8 +26,12 @@ impl TrapContext {
             era: 0,
             badv: 0,
             estat: 0,
+            f :[0; 32],
+            fcsr: 0,
         }
     }
+
+
 
     pub fn set_sp(&mut self, sp: usize) {
         self.r[REG_SP] = sp;

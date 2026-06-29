@@ -42,10 +42,23 @@ fn trap_log(args: fmt::Arguments<'_>) -> fmt::Result {
     Ok(())
 }
 
+pub fn enable_fpu() {
+    const CSR_EUEN: usize = 0x2;
+    const EUEN_FPE: usize = 1 << 0;
+    unsafe {
+        let mut euen: usize;
+        core::arch::asm!("csrrd {}, 0x2", out(reg) euen);
+        euen |= EUEN_FPE;
+        core::arch::asm!("csrwr {}, 0x2", in(reg) euen);
+    }
+}
+
 pub fn init() {
     unsafe extern "C" {
         fn __alltraps();
     }
+
+    enable_fpu();
 
     let eentry = __alltraps as usize;
 
