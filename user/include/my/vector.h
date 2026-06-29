@@ -1,7 +1,7 @@
 #pragma once
-#include "../mem.h"  
+#include "../mem.h"   // malloc / free
 
-
+// 放在某个命名空间避免和别的冲突;GCN 里 using 一下或直接用 mv::Vector
 namespace mv {
 
 // 简单的 move:返回右值引用(裸机够用,不依赖 <utility>)
@@ -45,6 +45,14 @@ public:
         other.data_ = nullptr;
         other.size_ = 0;
         other.cap_  = 0;
+    }
+
+    // 范围构造:从 [first, last) 拷贝(transpose 里 cursor(begin, end-1) 要用)
+    Vector(const T* first, const T* last) : data_(nullptr), size_(0), cap_(0) {
+        unsigned long n = (unsigned long)(last - first);
+        reserve(n);
+        for (unsigned long i = 0; i < n; ++i) construct(data_ + i, first[i]);
+        size_ = n;
     }
 
     ~Vector() {
