@@ -1,21 +1,8 @@
 #pragma once
-#include "../mem.h"   // malloc / free
+#include "compat.h" 
+#include "../mem.h"      
 
-// 放在某个命名空间避免和别的冲突;GCN 里 using 一下或直接用 mv::Vector
 namespace mv {
-
-// 简单的 move:返回右值引用(裸机够用,不依赖 <utility>)
-template <typename T>
-struct remove_ref { using type = T; };
-template <typename T>
-struct remove_ref<T&> { using type = T; };
-template <typename T>
-struct remove_ref<T&&> { using type = T; };
-
-template <typename T>
-typename remove_ref<T>::type&& move(T&& x) {
-    return static_cast<typename remove_ref<T>::type&&>(x);
-}
 
 template <typename T>
 class Vector {
@@ -34,9 +21,8 @@ public:
     // 拷贝构造
     Vector(const Vector& other) : data_(nullptr), size_(0), cap_(0) {
         reserve(other.size_);
-        for (unsigned long i = 0; i < other.size_; ++i) {
+        for (unsigned long i = 0; i < other.size_; ++i)
             construct(data_ + i, other.data_[i]);
-        }
         size_ = other.size_;
     }
 
@@ -65,9 +51,8 @@ public:
         if (this == &other) return *this;
         clear();
         reserve(other.size_);
-        for (unsigned long i = 0; i < other.size_; ++i) {
+        for (unsigned long i = 0; i < other.size_; ++i)
             construct(data_ + i, other.data_[i]);
-        }
         size_ = other.size_;
         return *this;
     }
@@ -93,7 +78,6 @@ public:
     void reserve(unsigned long new_cap) {
         if (new_cap <= cap_) return;
         T* new_data = static_cast<T*>(malloc(new_cap * sizeof(T)));
-        // 把旧元素移动/拷贝到新内存
         for (unsigned long i = 0; i < size_; ++i) {
             construct(new_data + i, mv::move(data_[i]));
             destroy(data_ + i);
@@ -104,68 +88,45 @@ public:
     }
 
     void resize(unsigned long new_size) {
-        if (new_size > cap_) {
-            reserve(new_size);
-        }
-        // 增大:默认构造新元素
-        for (unsigned long i = size_; i < new_size; ++i) {
-            construct(data_ + i);
-        }
-        // 缩小:析构多余元素
-        for (unsigned long i = new_size; i < size_; ++i) {
-            destroy(data_ + i);
-        }
+        if (new_size > cap_) reserve(new_size);
+        for (unsigned long i = size_; i < new_size; ++i) construct(data_ + i);
+        for (unsigned long i = new_size; i < size_; ++i) destroy(data_ + i);
         size_ = new_size;
     }
 
     void resize(unsigned long new_size, const T& val) {
         if (new_size > cap_) reserve(new_size);
-        for (unsigned long i = size_; i < new_size; ++i) {
-            construct(data_ + i, val);
-        }
-        for (unsigned long i = new_size; i < size_; ++i) {
-            destroy(data_ + i);
-        }
+        for (unsigned long i = size_; i < new_size; ++i) construct(data_ + i, val);
+        for (unsigned long i = new_size; i < size_; ++i) destroy(data_ + i);
         size_ = new_size;
     }
 
     void assign(unsigned long n, const T& val) {
         clear();
         reserve(n);
-        for (unsigned long i = 0; i < n; ++i) {
-            construct(data_ + i, val);
-        }
+        for (unsigned long i = 0; i < n; ++i) construct(data_ + i, val);
         size_ = n;
     }
 
     // ---- 增删 ----
     void push_back(const T& val) {
-        if (size_ >= cap_) {
-            grow();
-        }
+        if (size_ >= cap_) grow();
         construct(data_ + size_, val);
         ++size_;
     }
 
     void push_back(T&& val) {
-        if (size_ >= cap_) {
-            grow();
-        }
+        if (size_ >= cap_) grow();
         construct(data_ + size_, mv::move(val));
         ++size_;
     }
 
     void pop_back() {
-        if (size_ > 0) {
-            --size_;
-            destroy(data_ + size_);
-        }
+        if (size_ > 0) { --size_; destroy(data_ + size_); }
     }
 
     void clear() {
-        for (unsigned long i = 0; i < size_; ++i) {
-            destroy(data_ + i);
-        }
+        for (unsigned long i = 0; i < size_; ++i) destroy(data_ + i);
         size_ = 0;
     }
 
@@ -182,7 +143,7 @@ public:
     T* data() { return data_; }
     const T* data() const { return data_; }
 
-    // ---- 迭代器(裸指针即可)----
+    // ---- 迭代器(裸指针)----
     T* begin() { return data_; }
     T* end() { return data_ + size_; }
     const T* begin() const { return data_; }
@@ -198,25 +159,10 @@ private:
         reserve(new_cap);
     }
 
-    // placement new 构造(默认)
-    static void construct(T* p) {
-        new (static_cast<void*>(p)) T();
-    }
-    // placement new 构造(拷贝)
-    static void construct(T* p, const T& val) {
-        new (static_cast<void*>(p)) T(val);
-    }
-    // placement new 构造(移动)
-    static void construct(T* p, T&& val) {
-        new (static_cast<void*>(p)) T(mv::move(val));
-    }
-    // 析构
-    static void destroy(T* p) {
-        p->~T();
-    }
+    static void construct(T* p)               { new (static_cast<void*>(p)) T(); }
+    static void construct(T* p, const T& val)  { new (static_cast<void*>(p)) T(val); }
+    static void construct(T* p, T&& val)       { new (static_cast<void*>(p)) T(mv::move(val)); }
+    static void destroy(T* p)                  { p->~T(); }
 };
 
 } // namespace mv
-
-// placement new 声明(裸机下要自己给;cpp_runtime.cpp 里有定义)
-inline void* operator new(unsigned long, void* p) noexcept { return p; }
