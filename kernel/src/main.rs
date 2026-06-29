@@ -18,6 +18,7 @@ mod block;
 mod pci;
 mod math;
 mod shutdown;
+mod oscomp;
 
 #[macro_use]
 mod io;
@@ -131,6 +132,12 @@ fn primary_init() {
     let (ext4_dev, fat_dev) = block::discover_disks::discover_disks();
 
     timer::init();
+
+    #[cfg(feature = "oscomp")]
+    {
+        // 评测模式:在碰盘之前就打标记关机
+        crate::oscomp::run_oscomp_stub();
+    }
 
     // 挂载 ext4 rootfs(没找到就 ramdisk 兜底)
     let rootfs_device = ext4_dev.unwrap_or_else(|| {
