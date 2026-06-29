@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 #include "syscall.h"
@@ -44,3 +47,6 @@ static inline void mutex_lock(mutex_t *m) {
 static inline void mutex_unlock(mutex_t *m) {
     spin_unlock(m);
 }
+#ifdef __cplusplus
+}
+#endif

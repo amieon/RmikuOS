@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "mem.h"
 #include "lock.h"
@@ -187,3 +190,6 @@ static inline int thread_join(int tid, int *exit_code) {
 
     return ret;
 }
+#ifdef __cplusplus
+}
+#endif

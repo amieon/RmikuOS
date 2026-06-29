@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 #include "io.h"
@@ -90,3 +93,6 @@ static inline isize remove_recursive2(const char *path, usize len) {
 static inline isize remove_recursive(const char *path) {
     return remove_recursive2(path, strlen(path));
 }
+#ifdef __cplusplus
+}
+#endif

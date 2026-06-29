@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 #include "types.h"
@@ -14,3 +17,6 @@
 #include "string.h"
 #include "fmt.h"
 #include "shutdown.h"
+#ifdef __cplusplus
+}
+#endif

@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 #include "io.h"
@@ -63,3 +66,6 @@ static inline isize exec(const char *path) {
 
     return exec_with_args(path, &args);
 }
+#ifdef __cplusplus
+}
+#endif

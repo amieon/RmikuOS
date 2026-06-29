@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 #include "syscall.h"
@@ -52,3 +55,6 @@ static inline isize open_create(const char *path, usize flags) {
 static inline isize close(int fd) {
     return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
 }
+#ifdef __cplusplus
+}
+#endif

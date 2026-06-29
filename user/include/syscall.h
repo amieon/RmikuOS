@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "types.h"
 
@@ -49,3 +52,6 @@
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 
 isize syscall6(usize id, usize a0, usize a1, usize a2, usize a3, usize a4, usize a5);
+#ifdef __cplusplus
+}
+#endif

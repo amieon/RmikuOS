@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * string.h —— 字符串工具层。
@@ -80,3 +83,6 @@ void copy_str(char *dst, char *src, isize len){
     }
     dst[i] = '\0';  
 }
+#ifdef __cplusplus
+}
+#endif

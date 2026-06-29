@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 
@@ -72,3 +75,6 @@ static inline int reset_sched_stat(void) {
 static inline usize get_ticks(void) {
     return syscall3(SYS_GET_TICKS, 0, 0, 0);
 }
+#ifdef __cplusplus
+}
+#endif

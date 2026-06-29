@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 
@@ -11,3 +14,6 @@ static inline int pipe(int fd[2]) {
 static inline int dup2(int old_fd, int new_fd) {
     return syscall3(SYS_DUP2, (usize)old_fd, (usize)new_fd, 0);
 }
+#ifdef __cplusplus
+}
+#endif

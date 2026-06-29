@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "io.h"
 #include <stdarg.h>
@@ -348,3 +351,6 @@ static inline void uprintf(const char *fmt, ...) {
     uvprintf(fmt, ap);
     va_end(ap);
 }
+#ifdef __cplusplus
+}
+#endif
