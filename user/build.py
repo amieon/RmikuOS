@@ -25,6 +25,7 @@ GENERATED_RS = ROOT / "kernel" / "src" / "loader" / "generated.rs"
 ARCH_CONFIG = {
     "riscv64": {
         "gcc": "riscv64-unknown-elf-gcc",
+        "gxx": "riscv64-unknown-elf-g++",
         "objcopy": "riscv64-unknown-elf-objcopy",
         "objdump": "riscv64-unknown-elf-objdump",
         "linker": USER_DIR / "linker-riscv64.ld",
@@ -35,11 +36,16 @@ ARCH_CONFIG = {
         "rust_link_args": [],
         "cflags": [
             "-march=rv64gc",
-            "-mabi=lp64",
+            "-mabi=lp64d",
             "-mcmodel=medany",
             "-mno-relax",
             "-msmall-data-limit=0",
             "-DUSER_ARCH_RISCV64",
+        ],
+        "cxxflags": [                          
+            "-fno-exceptions",
+            "-fno-rtti",
+            "-std=c++17",
         ],
         "ldflags": [
             "-Wl,--no-relax",
@@ -47,6 +53,7 @@ ARCH_CONFIG = {
     },
     "loongarch64": {
         "gcc": "loongarch64-unknown-linux-gnu-gcc",
+        "gxx": "loongarch64-unknown-linux-gnu-g++",
         "objcopy": "loongarch64-unknown-linux-gnu-objcopy",
         "objdump": "loongarch64-unknown-linux-gnu-objdump",
         "linker": USER_DIR / "linker-loongarch64.ld",
@@ -60,6 +67,11 @@ ARCH_CONFIG = {
             "-DUSER_ARCH_LOONGARCH64",
             "-G0",
             "-mno-relax",
+        ],
+        "cxxflags": [
+            "-fno-exceptions",
+            "-fno-rtti",
+            "-std=c++17",
         ],
         "ldflags": [
             "-Wl,--no-relax",
@@ -103,7 +115,7 @@ def collect_sources():
     (user/rust/programs/*)统一构建,见 build_rust_workspace。
     """
     sources = []
-    for ext in ("*.S", "*.c", "*.rs"):
+    for ext in ("*.S", "*.c", "*.rs","*.cpp"):
         for p in SRC_DIR.glob(ext):
             sources.append((p, "system"))    # src → 系统程序
         for p in TESTS_DIR.glob(ext):
@@ -115,6 +127,8 @@ def collect_sources():
 def build_one(arch: str, source: Path, app_id: int, category):
     if source.suffix == ".rs":
         return build_rust(arch, source, app_id, category)
+    if source.suffix == ".cpp":
+        return build_cpp(arch, source, app_id, category)
 
     cfg = ARCH_CONFIG[arch]
 
@@ -222,6 +236,63 @@ def build_one(arch: str, source: Path, app_id: int, category):
         "data": data,
     }
 
+def build_cpp(arch: str, source: Path, app_id: int, category):
+    """编译单文件 C++(裸编,tests/src 里的 .cpp)。
+    复用 crt0 + syscall.S + 链接脚本,额外带 cpp_runtime(operator new/delete)。
+    """
+    cfg = ARCH_CONFIG[arch]
+    out_dir = BUILD_DIR / arch / ("bin" if category == "system" else "tests")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    stem = source.stem
+    obj         = out_dir / f"{app_id}_{stem}.o"
+    crt0_obj    = out_dir / f"{app_id}_{stem}_crt0.o"
+    runtime_obj = out_dir / f"{app_id}_{stem}_syscall.o"
+    cpprt_obj   = out_dir / f"{app_id}_{stem}_cpprt.o"
+    elf         = out_dir / f"{app_id}_{stem}.elf"
+    bin_path    = out_dir / f"{app_id}_{stem}.bin"
+
+    common_flags = [
+        "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
+        "-fno-pic", "-fno-pie", "-nostdlib", "-nostartfiles", "-static",
+        "-I", str(INCLUDE_DIR),
+    ]
+
+    # crt0(汇编,用 gcc 编)
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["crt0"]), "-o", str(crt0_obj)])
+    # syscall runtime(汇编)
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["runtime"]), "-o", str(runtime_obj)])
+    # cpp_runtime(operator new/delete + ABI 桩)
+    cpp_runtime_src = LIB_DIR / "cpp_runtime.cpp"
+    run([cfg["gxx"], *cfg["cflags"], *cfg["cxxflags"], *common_flags, "-c",
+         str(cpp_runtime_src), "-o", str(cpprt_obj)])
+    # 用户源
+    run([cfg["gxx"], *cfg["cflags"], *cfg["cxxflags"], *common_flags, "-c",
+         str(source), "-o", str(obj)])
+
+    # 链接:crt0 + 用户 + syscall + cpp_runtime
+    link_cmd = [
+        cfg["gxx"], *cfg["cflags"],
+        "-nostdlib", "-nostartfiles", "-static", "-no-pie",
+        "-Wl,--build-id=none", *cfg["ldflags"],
+        "-T", str(cfg["linker"]),
+        str(crt0_obj), str(obj), str(runtime_obj), str(cpprt_obj),
+        "-o", str(elf),
+    ]
+    run(link_cmd)
+
+    run([cfg["objcopy"], "-O", "binary", "-j", ".text",
+         str(elf), str(bin_path)])
+
+    data = bin_path.read_bytes()
+    print(f"[user] built cpp app{app_id}: {source.name}, {len(data)} bytes")
+    return {
+        "id": app_id, "source": source, "name": stem,
+        "symbol": sanitize_name(source), "bin": bin_path,
+        "data": data, "category": category,
+    }
 
 def build_rust(arch: str, source: Path, app_id: int, category):
     """编译「自包含单文件 Rust」(不依赖 ulib,自己写 syscall + _start)。

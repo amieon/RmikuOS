@@ -24,6 +24,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "float_test"
+version = "0.1.0"
+dependencies = [
+ "ulib",
+]
+
+[[package]]
 name = "library_system"
 version = "0.1.0"
 dependencies = [

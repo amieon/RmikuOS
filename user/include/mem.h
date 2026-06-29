@@ -1,5 +1,8 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "syscall.h"
 #include "lock.h"
@@ -211,3 +214,7 @@ static inline void *calloc(usize n, usize size) {
 
     return p;
 }
+
+#ifdef __cplusplus
+}
+#endif
