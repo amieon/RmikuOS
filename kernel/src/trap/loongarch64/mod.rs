@@ -59,6 +59,9 @@ pub fn init() {
     }
 
     enable_fpu();
+    let val: usize;
+    unsafe { core::arch::asm!("csrrd {}, 0x2", out(reg) val); }
+    log::info!("FPU Enabled? EUEN={:#x}", val); 
 
     let eentry = __alltraps as usize;
 

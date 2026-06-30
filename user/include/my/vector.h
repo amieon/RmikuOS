@@ -7,7 +7,7 @@ namespace mv {
 template <typename T>
 class Vector {
 public:
-    // ---- 构造 / 析构 ----
+
     Vector() : data_(nullptr), size_(0), cap_(0) {}
 
     explicit Vector(unsigned long n) : data_(nullptr), size_(0), cap_(0) {
@@ -18,7 +18,7 @@ public:
         assign(n, val);
     }
 
-    // 拷贝构造
+
     Vector(const Vector& other) : data_(nullptr), size_(0), cap_(0) {
         reserve(other.size_);
         for (unsigned long i = 0; i < other.size_; ++i)
@@ -26,14 +26,13 @@ public:
         size_ = other.size_;
     }
 
-    // 移动构造
+
     Vector(Vector&& other) : data_(other.data_), size_(other.size_), cap_(other.cap_) {
         other.data_ = nullptr;
         other.size_ = 0;
         other.cap_  = 0;
     }
 
-    // 范围构造:从 [first, last) 拷贝(transpose 里 cursor(begin, end-1) 要用)
     Vector(const T* first, const T* last) : data_(nullptr), size_(0), cap_(0) {
         unsigned long n = (unsigned long)(last - first);
         reserve(n);
@@ -46,7 +45,7 @@ public:
         if (data_) free(data_);
     }
 
-    // ---- 赋值 ----
+
     Vector& operator=(const Vector& other) {
         if (this == &other) return *this;
         clear();
@@ -70,7 +69,7 @@ public:
         return *this;
     }
 
-    // ---- 容量 ----
+
     unsigned long size() const { return size_; }
     bool empty() const { return size_ == 0; }
     unsigned long capacity() const { return cap_; }
@@ -108,7 +107,7 @@ public:
         size_ = n;
     }
 
-    // ---- 增删 ----
+
     void push_back(const T& val) {
         if (size_ >= cap_) grow();
         construct(data_ + size_, val);
@@ -130,7 +129,6 @@ public:
         size_ = 0;
     }
 
-    // ---- 访问 ----
     T& operator[](unsigned long i) { return data_[i]; }
     const T& operator[](unsigned long i) const { return data_[i]; }
 
@@ -143,7 +141,7 @@ public:
     T* data() { return data_; }
     const T* data() const { return data_; }
 
-    // ---- 迭代器(裸指针)----
+
     T* begin() { return data_; }
     T* end() { return data_ + size_; }
     const T* begin() const { return data_; }

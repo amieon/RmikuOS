@@ -1,34 +1,22 @@
-// my/cmath.h —— 裸机环境下替代 <cmath> 的数学函数。
-//
-// 提供 GCN(Func.h)和 RNG(random.h)需要的:
-//   sqrt   —— 硬件指令 fsqrt.d(riscv/loongarch 都有 D 扩展)
-//   exp    —— 区间归约 + 多项式(softmax 用)
-//   log    —— 区间归约 + 多项式(交叉熵用)
-//   cos/sin—— 区间归约 + 多项式(Box-Muller 高斯 RNG 用)
-//   fabs / max / min / pow
-//
-// 精度:double 下 exp/log 相对误差约 1e-15 量级,够 GCN 训练。
-// 实现参考 musl/cephes 的经典区间归约思路,不是粗糙泰勒。
-
 #pragma once
 
 namespace mymath {
 
-// ---- 常数 ----
+
 constexpr double PI      = 3.14159265358979323846;
 constexpr double LN2     = 0.69314718055994530942;
 constexpr double LOG2E   = 1.44269504088896340736;  // 1/ln2
 constexpr double SQRT2   = 1.41421356237309504880;
 
-// ---- fabs ----
+
 inline double fabs(double x) { return x < 0 ? -x : x; }
 inline float  fabs(float x)  { return x < 0 ? -x : x; }
 
-// ---- max / min(替代 std::max/min)----
+
 template <typename T> inline T max(T a, T b) { return a > b ? a : b; }
 template <typename T> inline T min(T a, T b) { return a < b ? a : b; }
 
-// ---- sqrt:硬件指令 ----
+
 inline double sqrt(double x) {
     double r;
 #if defined(__riscv)
@@ -45,14 +33,12 @@ inline double sqrt(double x) {
 }
 inline float sqrt(float x) { return (float)sqrt((double)x); }
 
-// ---- 把 double 拆成 frac * 2^exp(用位操作,不依赖 frexp)----
-// 用 union 访问 double 的位:符号1 + 指数11 + 尾数52
+
 union DoubleBits {
     double d;
     unsigned long u;
 };
 
-// ---- exp ----
 // 策略:exp(x) = 2^k * exp(r),  x = k*ln2 + r, |r| <= ln2/2
 //      exp(r) 用 7 阶多项式(r 很小,收敛快)
 inline double exp(double x) {
@@ -83,7 +69,7 @@ inline double exp(double x) {
 }
 inline float exp(float x) { return (float)exp((double)x); }
 
-// ---- log(自然对数)----
+
 // 策略:x = m * 2^e, m in [1,2);  log(x) = e*ln2 + log(m)
 //      log(m) 用 atanh 级数:令 s=(m-1)/(m+1), log(m)=2(s + s^3/3 + s^5/5 + ...)
 inline double log(double x) {
