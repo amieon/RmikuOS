@@ -1036,13 +1036,6 @@ virtio-mmio virtio-pci
 
 ## Project Goal
 
-RmikuOS 的目标不是追求一次性实现完整 Unix，而是逐步构建一个能真实运行、能调试、能扩展、能做实验的教学型操作系统。
-
-当前阶段已经做到：
-
-```text
-让用户程序(C 与 Rust)从真实 ext4 rootfs 中运行;
-在同一目录树中挂载只读 ext4、可写 tmpfs(内存)与可写 FAT(落盘);
-让 RISC-V 和 LoongArch64 都能通过 virtio 块设备读写 QEMU 磁盘;
-在教学内核中实现可解释、可观测、可实验、可自适应的调度器机制。
+为了好玩
+写RmikuOS的时候，挺开心的
 ```
