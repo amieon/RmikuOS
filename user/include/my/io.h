@@ -41,6 +41,7 @@ inline void put_double(double v, int prec = 6, bool newline = true) {
     char tmp[24]; int t = 0;
     long x = ip;
     if (x == 0) buf[n++] = '0';
+    
     else { while (x > 0) { tmp[t++] = char('0' + x % 10); x /= 10; } while (t > 0) buf[n++] = tmp[--t]; }
     // 小数
     buf[n++] = '.';
@@ -51,7 +52,7 @@ inline void put_double(double v, int prec = 6, bool newline = true) {
         frac -= digit;
     }
     if (newline) buf[n++] = '\n';
-    buf[n] = 0;
+    puts("a\n");
     puts(buf);
 }
 

@@ -44,7 +44,7 @@ fn trap_log(args: fmt::Arguments<'_>) -> fmt::Result {
 
 pub fn enable_fpu() {
     const CSR_EUEN: usize = 0x2;
-    const EUEN_FPE: usize = 1 << 0;
+    const EUEN_FPE: usize = 0x7;
     unsafe {
         let mut euen: usize;
         core::arch::asm!("csrrd {}, 0x2", out(reg) euen);

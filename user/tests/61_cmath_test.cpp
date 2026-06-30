@@ -1,40 +1,16 @@
 #include "mem.h"
 #include "my/cmath.h"
+#include "my/io.h"
 
-extern "C" {
-    long syscall3(unsigned long, unsigned long, unsigned long, unsigned long);
-}
 static void puts_raw(const char* s){unsigned long n=0;while(s[n])n++;syscall3(2,1,(unsigned long)s,n);}
-
-// 打印 double:整数部分 . 小数前6位(简易,够看精度)
-static void put_double(double v) {
-    if (v < 0) { puts_raw("-"); v = -v; }
-    long ip = (long)v;
-    double frac = v - (double)ip;
-    // 整数部分
-    char b[24]; int n=0;
-    if (ip==0) b[n++]='0';
-    char t[24]; int k=0; long x=ip;
-    while(x>0){t[k++]=char('0'+x%10);x/=10;}
-    while(k>0)b[n++]=t[--k];
-    b[n++]='.'; 
-    // 小数 6 位
-    for (int d=0; d<6; d++) {
-        frac *= 10;
-        int digit = (int)frac;
-        b[n++] = char('0' + digit);
-        frac -= digit;
-    }
-    b[n++]='\n'; b[n]=0;
-    puts_raw(b);
-}
+using namespace io;
 
 extern "C" int main() {
     using namespace mymath;
     puts_raw("== cmath test ==\n");
 
     // sqrt
-    puts_raw("sqrt(4)    = "); put_double(sqrt(4.0));      // 2.000000
+    puts_raw("sqrt(4)    = "); put_double(0.0);  puts_raw("flag") ;    // 2.000000
     puts_raw("sqrt(2)    = "); put_double(sqrt(2.0));      // 1.414213
     puts_raw("sqrt(100)  = "); put_double(sqrt(100.0));    // 10.000000
 

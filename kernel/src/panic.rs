@@ -1,5 +1,7 @@
 use core::panic::PanicInfo;
 
+use crate::shutdown::shutdown;
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     crate::println!();
@@ -19,7 +21,8 @@ fn panic(info: &PanicInfo) -> ! {
     crate::println!("\x1b[31m{}\x1b[0m", info.message());
     crate::println!("\x1b[31mPANIC END\x1b[0m");
 
-    halt()
+    shutdown();
+    halt();
 }
 
 #[inline(always)]

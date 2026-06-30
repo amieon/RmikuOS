@@ -21,8 +21,7 @@ inline double sqrt(double x) {
     double r;
 #if defined(__riscv)
     __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
-#elif defined(__loongarch__)
-    __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
+
 #else
     // 兜底:牛顿迭代(主机测试用,实际跑在 riscv/loongarch 走硬件)
     if (x <= 0) return 0;
