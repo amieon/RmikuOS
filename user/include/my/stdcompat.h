@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include "compat.h"
 #include "vector.h"
 #include "cmath.h"
@@ -9,7 +10,7 @@
 
 using usize = unsigned long;
 
-
+// ========== uprintf 实现 ==========
 #include <stdarg.h>
 
 #ifndef UPRINTF_BUF_SIZE
@@ -141,49 +142,9 @@ namespace std {
     template<> struct is_floating_point<double> : true_type {};
 }
 
-// ========== std::tuple 支持（结构化绑定） ==========
-namespace std {
-    template<typename T> struct tuple_size;
-    template<size_t I, typename T> struct tuple_element;
-
-    template<typename T1, typename T2, typename T3>
-    struct tuple_size<mv::Tuple3<T1, T2, T3>> : integral_constant<size_t, 3> {};
-
-    template<size_t I, typename T1, typename T2, typename T3>
-    struct tuple_element<I, mv::Tuple3<T1, T2, T3>> {
-        using type = typename conditional<I == 0, T1,
-                    typename conditional<I == 1, T2, T3>::type>::type;
-    };
-
-    // 非 const 引用版本
-    template<size_t I, typename T1, typename T2, typename T3>
-    typename tuple_element<I, mv::Tuple3<T1, T2, T3>>::type&
-    get(mv::Tuple3<T1, T2, T3>& t) {
-        if constexpr (I == 0) return t.first;
-        else if constexpr (I == 1) return t.second;
-        else return t.third;
-    }
-
-    // const 引用版本
-    template<size_t I, typename T1, typename T2, typename T3>
-    const typename tuple_element<I, mv::Tuple3<T1, T2, T3>>::type&
-    get(const mv::Tuple3<T1, T2, T3>& t) {
-        if constexpr (I == 0) return t.first;
-        else if constexpr (I == 1) return t.second;
-        else return t.third;
-    }
-
-    // 右值引用版本
-    template<size_t I, typename T1, typename T2, typename T3>
-    typename tuple_element<I, mv::Tuple3<T1, T2, T3>>::type&&
-    get(mv::Tuple3<T1, T2, T3>&& t) {
-        if constexpr (I == 0) return static_cast<T1&&>(t.first);
-        else if constexpr (I == 1) return static_cast<T2&&>(t.second);
-        else return static_cast<T3&&>(t.third);
-    }
-}
-
 // ========== std::vector / pair / tuple 别名 ==========
+// 注意：mv::Tuple3 有 3 个 public 成员(first, second, third)，
+// 编译器可以直接做结构化绑定，不需要 tuple_size/tuple_element/get
 namespace std {
     template<typename T> using vector = mv::Vector<T>;
 
@@ -291,7 +252,7 @@ namespace std {
     };
 }
 
-// ========== std::unordered_map（完整模板，通用实现） ==========
+// ========== std::unordered_map（完整模板） ==========
 namespace std {
     template<typename K, typename V>
     class unordered_map {
