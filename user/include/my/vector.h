@@ -1,5 +1,6 @@
 #pragma once
-#include "compat.h" 
+#include "compat.h"
+#include "io.h" 
 #include "../mem.h"      
 
 namespace mv {
@@ -50,7 +51,7 @@ public:
     void reserve(unsigned long new_cap) {
         if (new_cap <= cap_) return;
         T* new_data = static_cast<T*>(malloc(new_cap * sizeof(T)));
-        if (!new_data) { puts("Vector::reserve malloc failed\n"); exit(1); }
+        if (!new_data) { io::puts("Vector::reserve malloc failed\n"); io::exit(1); }
         for (unsigned long i = 0; i < size_; ++i) {
             construct(new_data + i, mv::move(data_[i]));
             destroy(data_ + i);
@@ -115,7 +116,7 @@ private:
     unsigned long cap_;
     void grow() {
         unsigned long new_cap = (cap_ == 0) ? 4 : cap_ * 2;
-        if (cap_ > (1ULL << 63)) { puts("Vector capacity overflow\n"); exit(1); }
+        if (cap_ > (1ULL << 63)) { io::puts("Vector capacity overflow\n"); io::exit(1); }
         reserve(new_cap);
     }
     static void construct(T* p)               { new (static_cast<void*>(p)) T(); }

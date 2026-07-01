@@ -1,6 +1,6 @@
 #pragma once
 
-
+// ========== 底层依赖 ==========
 #include "compat.h"
 #include "vector.h"
 #include "cmath.h"
@@ -8,10 +8,9 @@
 #include "string.h"
 #include "io.h"
 
-
 using usize = unsigned long;
 
-// ========== uprintf 实现（用户态缓冲 printf） ==========
+// ========== uprintf 实现 ==========
 #include <stdarg.h>
 
 #ifndef UPRINTF_BUF_SIZE
@@ -143,7 +142,7 @@ namespace std {
     template<> struct is_floating_point<double> : true_type {};
 }
 
-// ========== std::tuple 支持（结构化绑定需要） ==========
+// ========== std::tuple 支持（结构化绑定） ==========
 namespace std {
     template<typename T> struct tuple_size;
     template<size_t I, typename T> struct tuple_element;
@@ -157,17 +156,31 @@ namespace std {
                     typename conditional<I == 1, T2, T3>::type>::type;
     };
 
+    // 非 const 引用版本
     template<size_t I, typename T1, typename T2, typename T3>
-    auto& get(mv::Tuple3<T1, T2, T3>& t) {
+    typename tuple_element<I, mv::Tuple3<T1, T2, T3>>::type&
+    get(mv::Tuple3<T1, T2, T3>& t) {
         if constexpr (I == 0) return t.first;
         else if constexpr (I == 1) return t.second;
         else return t.third;
     }
+
+    // const 引用版本
     template<size_t I, typename T1, typename T2, typename T3>
-    const auto& get(const mv::Tuple3<T1, T2, T3>& t) {
+    const typename tuple_element<I, mv::Tuple3<T1, T2, T3>>::type&
+    get(const mv::Tuple3<T1, T2, T3>& t) {
         if constexpr (I == 0) return t.first;
         else if constexpr (I == 1) return t.second;
         else return t.third;
+    }
+
+    // 右值引用版本
+    template<size_t I, typename T1, typename T2, typename T3>
+    typename tuple_element<I, mv::Tuple3<T1, T2, T3>>::type&&
+    get(mv::Tuple3<T1, T2, T3>&& t) {
+        if constexpr (I == 0) return static_cast<T1&&>(t.first);
+        else if constexpr (I == 1) return static_cast<T2&&>(t.second);
+        else return static_cast<T3&&>(t.third);
     }
 }
 
@@ -279,11 +292,11 @@ namespace std {
     };
 }
 
-// ========== std::unordered_map<string, int> ==========
+// ========== std::unordered_map（完整模板，通用实现） ==========
 namespace std {
-    template<typename V>
-    class unordered_map<string, V> {
-        struct Entry { string first; V second; };
+    template<typename K, typename V>
+    class unordered_map {
+        struct Entry { K first; V second; };
         mv::Vector<Entry> entries;
     public:
         struct iterator {
@@ -293,12 +306,12 @@ namespace std {
             bool operator!=(const iterator& o) const { return p != o.p; }
         };
         iterator end() { return iterator(nullptr); }
-        iterator find(const string& key) {
+        iterator find(const K& key) {
             for (size_t i = 0; i < entries.size(); i++)
                 if (entries[i].first == key) return iterator(&entries[i]);
             return end();
         }
-        V& operator[](const string& key) {
+        V& operator[](const K& key) {
             for (size_t i = 0; i < entries.size(); i++)
                 if (entries[i].first == key) return entries[i].second;
             entries.push_back(Entry{key, V()});
@@ -360,7 +373,6 @@ namespace std {
         return 0;
     }
     inline int fprintf(int fd, const char* fmt, ...) {
-        // 简化：只支持 fd=stderr(2) 或 stdout(1)，直接走 uprintf
         (void)fd;
         va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
         return 0;

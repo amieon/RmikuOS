@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include "../mem.h"
 
 using size_t    = unsigned long;
 using ptrdiff_t = long;
