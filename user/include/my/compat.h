@@ -2,6 +2,7 @@
 #include "../include/syscall.h"
 
 using size_t    = unsigned long;
+using uint64_t  = unsigned long long;
 using ptrdiff_t = long;
 
 
