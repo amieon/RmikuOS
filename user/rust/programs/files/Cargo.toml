@@ -1,0 +1,18 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "editor"
+path = "src/main.rs"
+
+[dependencies]
+ulib = { path = "../../ulib" }
+
+[profile.release]
+panic = "abort"
+opt-level = "z"
+
+[profile.dev]
+panic = "abort"
