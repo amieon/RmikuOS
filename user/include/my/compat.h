@@ -1,5 +1,5 @@
 #pragma once
-
+#include "../include/syscall.h"
 
 using size_t    = unsigned long;
 using ptrdiff_t = long;
@@ -8,14 +8,11 @@ using ptrdiff_t = long;
 #ifdef NDEBUG
     #define assert(expr) ((void)0)
 #else
-    extern "C" {
-        long syscall3(unsigned long, unsigned long, unsigned long, unsigned long);
-    }
     // 简易 assert 失败处理:打印信息 + exit(SYS_EXIT=0)
     inline void __assert_fail_msg(const char* expr, const char* file, int line) {
         auto puts_ = [](const char* s) {
             unsigned long n = 0; while (s[n]) n++;
-            syscall3(2 , 1, (unsigned long)s, n);
+            syscall3(SYS_WRITE , 1, (unsigned long)s, n);
         };
         puts_("assertion failed: ");
         puts_(expr);
@@ -30,7 +27,7 @@ using ptrdiff_t = long;
         while (t > 0) buf[k++] = tmp[--t];
         buf[k++] = '\n'; buf[k] = 0;
         puts_(buf);
-        syscall3(0 , 1, 0, 0);
+        syscall3(SYS_EXIT , 1, 0, 0);
     }
     #define assert(expr) \
         do { if (!(expr)) __assert_fail_msg(#expr, __FILE__, __LINE__); } while (0)

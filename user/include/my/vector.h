@@ -69,6 +69,10 @@ public:
         return *this;
     }
 
+    explicit Vector(unsigned long n) : data_(nullptr), size_(0), cap_(0) {
+        resize(n);
+    }
+
 
     unsigned long size() const { return size_; }
     bool empty() const { return size_ == 0; }
@@ -154,6 +158,7 @@ private:
 
     void grow() {
         unsigned long new_cap = (cap_ == 0) ? 4 : cap_ * 2;
+        if (cap_ > (1ULL << 63)) { io::puts("Vector capacity overflow\n"); io::exit(1);}
         reserve(new_cap);
     }
 
@@ -163,4 +168,11 @@ private:
     static void destroy(T* p)                  { p->~T(); }
 };
 
-} // namespace mv
+
+}
+ // namespace mv
+
+inline void* operator new(unsigned long sz) { return malloc(sz); }
+inline void* operator new[](unsigned long sz) { return malloc(sz); }
+inline void operator delete(void* p) noexcept { free(p); }
+inline void operator delete[](void* p) noexcept { free(p); }
