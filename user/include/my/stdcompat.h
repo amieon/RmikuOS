@@ -264,6 +264,7 @@ namespace std {
             iterator(Entry* _p = nullptr) : p(_p) {}
             Entry* operator->() { return p; }
             bool operator!=(const iterator& o) const { return p != o.p; }
+            bool operator==(const iterator& o) const { return p == o.p; }  // ← 新增
         };
         iterator end() { return iterator(nullptr); }
         iterator find(const K& key) {
@@ -278,6 +279,7 @@ namespace std {
             return entries.back().second;
         }
         size_t size() const { return entries.size(); }
+        
     };
 }
 
