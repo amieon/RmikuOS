@@ -47,8 +47,7 @@ inline void put_double(double v, int prec = 6, bool newline = true) {
     buf[n++] = '.';
     for (int d = 0; d < prec; d++) {
         frac *= 10;
-        int digit = (int)(frac + 0.5);  // 四舍五入
-        if (digit > 9) digit = 9;       // 防止 frac=0.999999... 时 digit=10
+        int digit = (int)frac;
         buf[n++] = char('0' + digit);
         frac -= digit;
     }

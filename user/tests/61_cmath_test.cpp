@@ -39,6 +39,6 @@ extern "C" int main() {
     puts_raw("pow(2,10)  = "); put_double(pow(2.0, 10.0)); // 1024.000000
 
     puts_raw("== done ==\n");
-    syscall3(0,0,0,0);
+    
     return 0;
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "compat.h" 
+#include "io.h"
 #include "../mem.h"      
 
 namespace mv {
@@ -69,9 +70,6 @@ public:
         return *this;
     }
 
-    explicit Vector(unsigned long n) : data_(nullptr), size_(0), cap_(0) {
-        resize(n);
-    }
 
 
     unsigned long size() const { return size_; }
