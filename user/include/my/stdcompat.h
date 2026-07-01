@@ -1,6 +1,5 @@
 #pragma once
 
-// ========== 底层依赖 ==========
 #include "compat.h"
 #include "vector.h"
 #include "cmath.h"
@@ -10,7 +9,7 @@
 
 using usize = unsigned long;
 
-// ========== uprintf 实现 ==========
+
 #include <stdarg.h>
 
 #ifndef UPRINTF_BUF_SIZE
