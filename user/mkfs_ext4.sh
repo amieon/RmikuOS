@@ -13,7 +13,7 @@ rm -rf "$ROOT"
 
 echo "=== 构建 ext4 rootfs ($ARCH) ==="
 
-#先复制用户自定义 rootfs 模板
+# 先复制用户自定义 rootfs 模板
 if [ -d "$OVERLAY" ]; then
   echo "copy rootfs overlay: $OVERLAY -> $ROOT"
   mkdir -p "$ROOT"
@@ -23,9 +23,8 @@ else
   mkdir -p "$ROOT"
 fi
 
-
 # 确保基础目录存在
-mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/fat"
+mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/fat" "$ROOT/gcn"
 
 # 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then
@@ -35,7 +34,6 @@ EOF
 fi
 
 # 把编译出来的用户程序放进 /bin
-
 for f in user/build/${ARCH}/bin/*.elf; do
   [ -e "$f" ] || continue
   base="$(basename "$f" .elf)"
@@ -43,7 +41,7 @@ for f in user/build/${ARCH}/bin/*.elf; do
   cp "$f" "$ROOT/bin/$clean"
 done
 
-
+# 把编译出来的测试程序放进 /tests
 for f in user/build/${ARCH}/tests/*.elf; do
   [ -e "$f" ] || continue
   base="$(basename "$f" .elf)"          
@@ -51,22 +49,56 @@ for f in user/build/${ARCH}/tests/*.elf; do
   cp "$f" "$ROOT/tests/$clean"
 done
 
-
+# 把 Rust 单文件/工作空间编译出来的程序放进 /programs
 for f in user/build/${ARCH}/programs/*.elf; do
   [ -e "$f" ] || continue
   base="$(basename "$f" .elf)"
   cp "$f" "$ROOT/programs/$base"
 done
 
-# 5. 简单展示 rootfs 内容
+# 把 C 项目编译出来的程序放进 /programs/<project>/
+for proj_dir in user/build/${ARCH}/c/*; do
+  [ -d "$proj_dir" ] || continue
+  proj_name="$(basename "$proj_dir")"
+  mkdir -p "$ROOT/programs/$proj_name"
+  for f in "$proj_dir"/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/programs/$proj_name/$base"
+  done
+  echo "  [c project] $proj_name -> /programs/$proj_name/"
+done
+
+# 把 C++ 项目编译出来的程序放进 /programs/<project>/
+for proj_dir in user/build/${ARCH}/cpp/*; do
+  [ -d "$proj_dir" ] || continue
+  proj_name="$(basename "$proj_dir")"
+  mkdir -p "$ROOT/programs/$proj_name"
+  for f in "$proj_dir"/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/programs/$proj_name/$base"
+  done
+  echo "  [cpp project] $proj_name -> /programs/$proj_name/"
+done
+
+# 把 GCN 编译出来的程序放进 /gcn/
+if [ -d "user/build/${ARCH}/gcn" ]; then
+  for f in user/build/${ARCH}/gcn/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/gcn/$base"
+  done
+  echo "  [gcn] -> /gcn/"
+fi
+
+# 简单展示 rootfs 内容
 echo "rootfs content:"
 find "$ROOT" -maxdepth 3 -print | sort
 
-# 6.fs content:"
-find "$ROOT" -maxdepth 3 -print | sort
+# 构建镜像
 rm -f "$IMG"
 truncate -s 32M "$IMG"
-
 
 mkfs.ext4 -q -F -d "$ROOT" "$IMG"
 echo "created $IMG"
@@ -75,7 +107,7 @@ if [ ! -f "$FAT_IMG" ]; then
   echo "=== 构建 FAT 镜像 ($ARCH) ==="
   truncate -s 32M "$FAT_IMG"
   mkfs.fat -F 16 "$FAT_IMG"
-  echo "created $FAT_IMG (fresh FAT32)"
+  echo "created $FAT_IMG (fresh FAT16)"
 else
   echo "FAT image exists, reuse: $FAT_IMG"
 fi

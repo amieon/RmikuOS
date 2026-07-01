@@ -389,6 +389,132 @@ def build_rust_workspace(arch: str):
     print(f"[user] rust workspace: {count} program(s) built")
 
 
+
+def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = False):
+    """编译一个项目目录内的所有源文件（C 或 C++）。
+
+    src_dir: 项目源目录（如 user/cpp/bank_system 或 user/gcn）
+    out_dir: 构建输出目录（如 build/riscv64/cpp/bank_system 或 build/riscv64/gcn）
+    is_cpp: 是否 C++ 项目（用 g++ 编译，链接 cpp_runtime）
+    """
+    cfg = ARCH_CONFIG[arch]
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 收集源文件
+    if is_cpp:
+        sources = sorted(src_dir.glob("*.cpp"))
+    else:
+        sources = sorted(src_dir.glob("*.c"))
+
+    if not sources:
+        print(f"[user] {src_dir}: no {'*.cpp' if is_cpp else '*.c'} files, skip")
+        return
+
+    # 公共编译标志
+    # 包含：内核头文件 + C++运行时 + 项目自身目录（找头文件）
+    common_flags = [
+        "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
+        "-fno-pic", "-fno-pie", "-nostdlib", "-nostartfiles", "-static",
+        "-I", str(INCLUDE_DIR),
+        "-I", str(USER_DIR / "cpp_runtime"),
+        "-I", str(src_dir),
+    ]
+
+    # 预编译公共对象（crt0 + syscall）
+    crt0_obj    = out_dir / "_crt0.o"
+    runtime_obj = out_dir / "_syscall.o"
+
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["crt0"]), "-o", str(crt0_obj)])
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["runtime"]), "-o", str(runtime_obj)])
+
+    # C++ 项目需要 cpp_runtime（operator new/delete + ABI 桩）
+    cpprt_obj = None
+    if is_cpp:
+        cpp_runtime_src = LIB_DIR / "cpp_runtime.cpp"
+        if cpp_runtime_src.exists():
+            cpprt_obj = out_dir / "_cpprt.o"
+            run([cfg["gxx"], *cfg["cflags"], *cfg["cxxflags"], *common_flags, "-c",
+                 str(cpp_runtime_src), "-o", str(cpprt_obj)])
+
+    # 逐个编译每个源文件（每个 .cpp/.c 都是独立入口）
+    for source in sources:
+        stem = source.stem
+        obj      = out_dir / f"{stem}.o"
+        elf      = out_dir / f"{stem}.elf"
+        bin_path = out_dir / f"{stem}.bin"
+
+        compiler = cfg["gxx"] if is_cpp else cfg["gcc"]
+        cxx_flags = cfg["cxxflags"] if is_cpp else []
+
+        run([compiler, *cfg["cflags"], *cxx_flags, *common_flags, "-c",
+             str(source), "-o", str(obj)])
+
+        link_objs = [str(crt0_obj), str(obj), str(runtime_obj)]
+        if cpprt_obj and cpprt_obj.exists():
+            link_objs.append(str(cpprt_obj))
+
+        linker = cfg["gxx"] if is_cpp else cfg["gcc"]
+        run([linker, *cfg["cflags"],
+             "-nostdlib", "-nostartfiles", "-static", "-no-pie",
+             "-Wl,--build-id=none", *cfg["ldflags"],
+             "-T", str(cfg["linker"]),
+             *link_objs,
+             "-o", str(elf)])
+
+        run([cfg["objcopy"], "-O", "binary", "-j", ".text",
+             str(elf), str(bin_path)])
+
+        data = bin_path.read_bytes()
+        print(f"[user] {src_dir.name}/{stem}: {len(data)} bytes")
+
+
+def build_cpp_projects(arch: str):
+    """编译 user/cpp/ 下的所有 C++ 项目。
+    每个子目录是一个项目，产物放入 build/<arch>/cpp/<project>/。
+    """
+    cpp_root = USER_DIR / "cpp"
+    if not cpp_root.exists():
+        print(f"[user] no cpp projects dir at {cpp_root}, skip")
+        return
+
+    for project_dir in sorted(cpp_root.iterdir()):
+        if not project_dir.is_dir():
+            continue
+        out_dir = BUILD_DIR / arch / "cpp" / project_dir.name
+        build_project_dir(arch, project_dir, out_dir, is_cpp=True)
+
+
+def build_c_projects(arch: str):
+    """编译 user/c/ 下的所有 C 项目。
+    每个子目录是一个项目，产物放入 build/<arch>/c/<project>/。
+    """
+    c_root = USER_DIR / "c"
+    if not c_root.exists():
+        print(f"[user] no c projects dir at {c_root}, skip")
+        return
+
+    for project_dir in sorted(c_root.iterdir()):
+        if not project_dir.is_dir():
+            continue
+        out_dir = BUILD_DIR / arch / "c" / project_dir.name
+        build_project_dir(arch, project_dir, out_dir, is_cpp=False)
+
+
+def build_gcn(arch: str):
+    """编译 user/gcn/ 下的 GCN 项目（特殊处理，产物单独放）。
+    产物放入 build/<arch>/gcn/，运行时拷贝到 /gcn/。
+    """
+    gcn_dir = USER_DIR / "gcn"
+    if not gcn_dir.exists():
+        print(f"[user] no gcn dir at {gcn_dir}, skip")
+        return
+
+    out_dir = BUILD_DIR / arch / "gcn"
+    build_project_dir(arch, gcn_dir, out_dir, is_cpp=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("arch", choices=ARCH_CONFIG.keys())
@@ -415,8 +541,11 @@ def main():
         app["category"] = category
         apps.append(app)
 
-    # 单文件源编完后,构建 cargo workspace(大工程 Rust)
+    # 单文件源编完后,构建大工
     build_rust_workspace(args.arch)
+    build_cpp_projects(args.arch)
+    build_c_projects(args.arch)
+    build_gcn(args.arch)
 
     if args.objdump:
         cfg = ARCH_CONFIG[args.arch]
