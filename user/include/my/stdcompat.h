@@ -1,6 +1,4 @@
 #pragma once
-
-
 #include "compat.h"
 #include "vector.h"
 #include "cmath.h"
@@ -63,6 +61,27 @@ static inline void uprintf_u64_hex(struct uprintf_buf *b, unsigned long long v) 
     while (n > 0) uprintf_putc(b, tmp[--n]);
 }
 
+// 辅助：打印 double，prec 位小数
+static inline void uprintf_float(struct uprintf_buf *b, double v, int prec) {
+    if (v < 0) { uprintf_putc(b, '-'); v = -v; }
+    unsigned long long ip = (unsigned long long)v;
+    double frac = v - (double)ip;
+    if (ip == 0) uprintf_putc(b, '0');
+    else {
+        char tmp[32]; int n = 0;
+        while (ip > 0) { tmp[n++] = '0' + (ip % 10); ip /= 10; }
+        while (n > 0) uprintf_putc(b, tmp[--n]);
+    }
+    uprintf_putc(b, '.');
+    for (int i = 0; i < prec; i++) {
+        frac *= 10;
+        int digit = (int)frac;
+        if (digit > 9) digit = 9;
+        uprintf_putc(b, '0' + digit);
+        frac -= digit;
+    }
+}
+
 static inline void uvprintf(const char *fmt, va_list ap) {
     struct uprintf_buf b; b.len = 0;
     while (*fmt) {
@@ -97,6 +116,16 @@ static inline void uvprintf(const char *fmt, va_list ap) {
             }
             case 'c': { int v = va_arg(ap, int); uprintf_putc(&b, (char)v); break; }
             case 's': { const char *v = va_arg(ap, const char *); uprintf_puts_raw(&b, v); break; }
+            case 'f': {
+                double v = va_arg(ap, double);
+                uprintf_float(&b, v, 6);
+                break;
+            }
+            case 'g': {
+                double v = va_arg(ap, double);
+                uprintf_float(&b, v, 6);
+                break;
+            }
             case '%': { uprintf_putc(&b, '%'); break; }
             default: {
                 uprintf_putc(&b, '%'); if (is_long) uprintf_putc(&b, 'l'); uprintf_putc(&b, spec);
@@ -143,8 +172,6 @@ namespace std {
 }
 
 // ========== std::vector / pair / tuple 别名 ==========
-// 注意：mv::Tuple3 有 3 个 public 成员(first, second, third)，
-// 编译器可以直接做结构化绑定，不需要 tuple_size/tuple_element/get
 namespace std {
     template<typename T> using vector = mv::Vector<T>;
 
@@ -264,7 +291,7 @@ namespace std {
             iterator(Entry* _p = nullptr) : p(_p) {}
             Entry* operator->() { return p; }
             bool operator!=(const iterator& o) const { return p != o.p; }
-            bool operator==(const iterator& o) const { return p == o.p; }  // ← 新增
+            bool operator==(const iterator& o) const { return p == o.p; }  // 新增！
         };
         iterator end() { return iterator(nullptr); }
         iterator find(const K& key) {
@@ -279,7 +306,6 @@ namespace std {
             return entries.back().second;
         }
         size_t size() const { return entries.size(); }
-        
     };
 }
 
