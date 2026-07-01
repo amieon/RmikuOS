@@ -12,6 +12,7 @@ static void puts_raw(const char* s) {
     syscall3(SYS_WRITE, 1, (unsigned long)s, n);
 }
 
+
 static void print_result(const char* name, double val, const char* expect) {
     puts_raw("  ");
     puts_raw(name);
