@@ -18,9 +18,9 @@ extern "C" int main() {
     uprintf("  ulong: %lu\n", 9876543210UL);
     uprintf("  lhex: %lx\n", 0xDEADBEEFUL);
 
-    // std::printf 桥接
-    std::printf("TEST: std::printf bridge\n");
-    std::printf("  value=%d\n", 100);
+    // printf 桥接
+    printf("TEST: printf bridge\n");
+    printf("  value=%d\n", 100);
 
     // C printf 桥接
     printf("TEST: C printf bridge\n");

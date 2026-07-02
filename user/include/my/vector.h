@@ -1,6 +1,6 @@
 #pragma once
-#include "compat.h"
-#include "io.h" 
+#include "compat.h" 
+#include "io.h"
 #include "../mem.h"      
 
 namespace mv {
@@ -93,6 +93,17 @@ public:
     void pop_back() {
         if (size_ > 0) { --size_; destroy(data_ + size_); }
     }
+    void erase(T* first, T* last) {
+        for (T* p = first; p < last; ++p) destroy(p);
+        T* dst = first;
+        for (T* src = last; src < data_ + size_; ++src) {
+            construct(dst, mv::move(*src));
+            destroy(src);
+            ++dst;
+        }
+        size_ = (unsigned long)(dst - data_);
+    }
+
     void clear() {
         for (unsigned long i = 0; i < size_; ++i) destroy(data_ + i);
         size_ = 0;

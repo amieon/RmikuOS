@@ -1,4 +1,5 @@
 #pragma once
+
 #include "compat.h"
 #include "vector.h"
 #include "cmath.h"
@@ -354,20 +355,7 @@ namespace std {
     template<typename T> using uniform_int_distribution = mymath::uniform_int_distribution<T>;
 }
 
-// ========== std::cstdio (printf → uprintf) ==========
-namespace std {
-    inline int printf(const char* fmt, ...) {
-        va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
-        return 0;
-    }
-    inline int fprintf(int fd, const char* fmt, ...) {
-        (void)fd;
-        va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
-        return 0;
-    }
-}
-
-// C 风格 printf 也桥接
+// C 风格 printf 桥接
 inline int printf(const char* fmt, ...) {
     va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
     return 0;

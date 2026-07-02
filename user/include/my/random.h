@@ -13,6 +13,8 @@ public:
         state_ = state_ * 6364136223846793005ULL + 1;
         return state_;
     }
+    
+    void seed(uint64_t s) { state_ = s; }
 
     double uniform01() {
         return (next() >> 11) * (1.0 / (1ULL << 53));
@@ -31,14 +33,11 @@ public:
     }
 
     double normal(double mean = 0.0, double std = 1.0) {
-        double u1, u2, s;
-        do {
-            u1 = uniform01() * 2.0 - 1.0;
-            u2 = uniform01() * 2.0 - 1.0;
-            s = u1 * u1 + u2 * u2;
-        } while (s >= 1.0 || s == 0.0);
-        double scale = sqrt(-2.0 * log(s) / s);
-        return mean + std * u1 * scale;
+        double u1 = uniform01();
+        double u2 = uniform01();
+        double r = sqrt(-2.0 * log(u1));
+        double theta = 2.0 * 3.14159265358979323846 * u2;
+        return mean + std * r * cos(theta);
     }
 };
 
@@ -47,7 +46,7 @@ inline RNG& global_rng() {
     return g;
 }
 
-inline void seed_rng(uint64_t s) {
+inline void seed_rng(unsigned s) {
     global_rng() = RNG(s);
 }
 
