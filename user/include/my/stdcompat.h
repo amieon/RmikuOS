@@ -254,6 +254,32 @@ namespace std {
             if ((size_t)(cur_ - buf_) < sz_ && *cur_ == '\n') cur_++;
             return true;
         }
+
+        // operator>> for string
+        ifstream& operator>>(string& out) {
+            out = string();
+            if (!ok_ || !cur_ || (size_t)(cur_ - buf_) >= sz_) return *this;
+            while ((size_t)(cur_ - buf_) < sz_ && (*cur_ == ' ' || *cur_ == '\t' || *cur_ == '\r' || *cur_ == '\n')) cur_++;
+            if ((size_t)(cur_ - buf_) >= sz_) return *this;
+            while ((size_t)(cur_ - buf_) < sz_ && *cur_ != ' ' && *cur_ != '\t' && *cur_ != '\r' && *cur_ != '\n') {
+                out += *cur_++;
+            }
+            return *this;
+        }
+
+        // operator>> for int
+        ifstream& operator>>(int& out) {
+            string s; *this >> s;
+            out = mystr::str_to_int(s.c_str());
+            return *this;
+        }
+
+        // operator>> for double
+        ifstream& operator>>(double& out) {
+            string s; *this >> s;
+            out = mystr::str_to_double(s.c_str());
+            return *this;
+        }
     };
     inline bool getline(ifstream& f, string& out) { return f.getline(out); }
 

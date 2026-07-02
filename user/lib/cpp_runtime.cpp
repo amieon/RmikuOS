@@ -39,4 +39,4 @@ extern "C" void* memset(void* dst, int c, unsigned long n) {
     char* d = (char*)dst;
     for (unsigned long i = 0; i < n; i++) d[i] = (char)c;
     return dst;
-}s
+}
