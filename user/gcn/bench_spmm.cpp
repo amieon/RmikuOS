@@ -1,9 +1,6 @@
-#include "Matrix.h"   // 旧实现（自动切换 + set/get 累加）
-#include "Tensor.h"   // 新实现（扁平缓冲 + 真正的 CSR-SpMM）
-#include <chrono>
-#include <random>
-#include <cstdio>
-#include <functional>
+#include "Matrix.h"  
+#include "Tensor.h"  
+#include "my/stdcompat.h"
 
 using Clock = std::chrono::high_resolution_clock;
 

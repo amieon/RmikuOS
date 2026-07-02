@@ -1,7 +1,5 @@
 #pragma once
-#include <iostream>
-#include <vector>
-#include <cassert>
+#include "my/stdcompat.h"
 
 // CSR Matrix Definition
 template<typename T>

@@ -1,10 +1,5 @@
 #pragma once
-#include <vector>
-#include <cassert>
-#include <cstddef>
-#include <utility>
-#include <cstdlib>
-#include <immintrin.h>
+#include "my/stdcompat.h"
 
 
 

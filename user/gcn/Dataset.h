@@ -1,13 +1,7 @@
 #pragma once
 #include "Tensor.h"
 #include "Func.h"
-#include <vector>
-#include <string>
-#include <fstream>
-#include <sstream>
-#include <unordered_map>
-#include <numeric>
-#include <algorithm>
+#include "my/stdcompat.h"
 
 template<typename T>
 struct Graph {

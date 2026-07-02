@@ -1,10 +1,5 @@
 #include "Tensor.h"
-#include <omp.h>
-#include <chrono>
-#include <random>
-#include <cstdio>
-#include <cmath>
-#include <vector>
+#include "my/stdcompat.h"
 
 using Clock = std::chrono::high_resolution_clock;
 

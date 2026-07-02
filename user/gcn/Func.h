@@ -1,11 +1,6 @@
 #pragma once
 #include "Tensor.h"
-#include <random>
-#include <cmath>
-#include <cassert>
-#include <vector>
-#include <algorithm>
-#include <tuple>
+#include "my/stdcompat.h"
 
 // 全局可复现 RNG
 inline std::mt19937& global_rng() { static std::mt19937 gen(42); return gen; }

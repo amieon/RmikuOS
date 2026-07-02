@@ -2,9 +2,7 @@
 #include "Func.h"
 #include "Dataset.h"
 #include "Optim.h"
-#include <cstdio>
-#include <string>
-#include <vector>
+#include "my/stdcompat.h"
 
 using T = float;
 
