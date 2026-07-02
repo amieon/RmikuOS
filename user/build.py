@@ -393,9 +393,10 @@ def build_rust_workspace(arch: str):
 def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = False):
     """编译一个项目目录内的所有源文件（C 或 C++）。
 
-    src_dir: 项目源目录（如 user/cpp/bank_system 或 user/gcn）
-    out_dir: 构建输出目录（如 build/riscv64/cpp/bank_system 或 build/riscv64/gcn）
-    is_cpp: 是否 C++ 项目（用 g++ 编译，链接 cpp_runtime）
+    每个含 main 的源文件作为独立入口，链接项目内所有不含 main 的辅助 .o。
+    这样支持：
+      - 单入口 + 多辅助文件（如 container_demo: main.cpp + container_demo.cpp）
+      - 多入口 + 无辅助文件（如 gcn: train_cora.cpp + gradcheck.cpp + ...）
     """
     cfg = ARCH_CONFIG[arch]
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -411,7 +412,6 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
         return
 
     # 公共编译标志
-    # 包含：内核头文件 + C++运行时 + 项目自身目录（找头文件）
     common_flags = [
         "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
         "-fno-pic", "-fno-pie", "-nostdlib", "-nostartfiles", "-static",
@@ -438,12 +438,13 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
             run([cfg["gxx"], *cfg["cflags"], *cfg["cxxflags"], *common_flags, "-c",
                  str(cpp_runtime_src), "-o", str(cpprt_obj)])
 
-    # 逐个编译每个源文件（每个 .cpp/.c 都是独立入口）
+    # 编译所有源文件为 .o，并识别入口文件（含 main 的）
+    objs = []           # 所有 .o 文件
+    entry_sources = []  # 含 main 的源文件
+
     for source in sources:
         stem = source.stem
-        obj      = out_dir / f"{stem}.o"
-        elf      = out_dir / f"{stem}.elf"
-        bin_path = out_dir / f"{stem}.bin"
+        obj = out_dir / f"{stem}.o"
 
         compiler = cfg["gxx"] if is_cpp else cfg["gcc"]
         cxx_flags = cfg["cxxflags"] if is_cpp else []
@@ -451,7 +452,38 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
         run([compiler, *cfg["cflags"], *cxx_flags, *common_flags, "-c",
              str(source), "-o", str(obj)])
 
-        link_objs = [str(crt0_obj), str(obj), str(runtime_obj)]
+        objs.append(obj)
+
+        # 检查是否含 main（简单文本检查）
+        content = source.read_text()
+        if "int main(" in content or "extern \"C\" int main(" in content:
+            entry_sources.append(source)
+
+    if not entry_sources:
+        print(f"[user] {src_dir}: no entry point (main) found, skip linking")
+        return
+
+    # 对每个入口文件，链接成独立 ELF
+    for entry_src in entry_sources:
+        entry_stem = entry_src.stem
+        entry_obj = out_dir / f"{entry_stem}.o"
+
+        # 收集辅助 .o（不含 main 的其他 .o）
+        other_objs = []
+        for o in objs:
+            if o == entry_obj:
+                continue
+            # 检查对应的源文件是否含 main
+            other_src = src_dir / (o.stem + (".cpp" if is_cpp else ".c"))
+            if other_src.exists():
+                other_content = other_src.read_text()
+                if "int main(" not in other_content and "extern \"C\" int main(" not in other_content:
+                    other_objs.append(str(o))
+
+        elf = out_dir / f"{entry_stem}.elf"
+        bin_path = out_dir / f"{entry_stem}.bin"
+
+        link_objs = [str(crt0_obj), str(entry_obj), str(runtime_obj)] + other_objs
         if cpprt_obj and cpprt_obj.exists():
             link_objs.append(str(cpprt_obj))
 
@@ -467,7 +499,7 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
              str(elf), str(bin_path)])
 
         data = bin_path.read_bytes()
-        print(f"[user] {src_dir.name}/{stem}: {len(data)} bytes")
+        print(f"[user] {src_dir.name}/{entry_stem}: {len(data)} bytes")
 
 
 def build_cpp_projects(arch: str):

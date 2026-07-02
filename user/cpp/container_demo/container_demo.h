@@ -1,5 +1,5 @@
 #pragma once
-#include "stdcompat.h"
+#include "my/stdcompat.h"
 
 // 测试 std::vector / std::string / std::pair / std::tuple
 void test_vector();

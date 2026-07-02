@@ -1,10 +1,10 @@
 [package]
-name = "editor"
+name = "files"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "editor"
+name = "files"
 path = "src/main.rs"
 
 [dependencies]

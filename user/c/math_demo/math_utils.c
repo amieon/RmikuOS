@@ -1,5 +1,5 @@
 #include "math_utils.h"
-#include "my/io.h"
+#include "fmt.h"
 
 long factorial(int n) {
     if (n <= 1) return 1;
@@ -21,9 +21,9 @@ long fibonacci(int n) {
 }
 
 void print_result(const char* name, int n, long result) {
-    io::puts(name);
-    io::puts("(");
-    put_int(n, false);
-    io::puts(") = ");
+    uprintf(name);
+    uprintf("(");
+    put_int(n);
+    uprintf(") = ");
     put_int(result);
 }

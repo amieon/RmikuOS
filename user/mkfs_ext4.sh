@@ -56,33 +56,49 @@ for f in user/build/${ARCH}/programs/*.elf; do
   cp "$f" "$ROOT/programs/$base"
 done
 
-# 把 C 项目编译出来的程序放进 /programs/<project>/
+#C 项目（单入口扁平化，多入口建子目录）
 for proj_dir in user/build/${ARCH}/c/*; do
   [ -d "$proj_dir" ] || continue
   proj_name="$(basename "$proj_dir")"
-  mkdir -p "$ROOT/programs/$proj_name"
-  for f in "$proj_dir"/*.elf; do
-    [ -e "$f" ] || continue
-    base="$(basename "$f" .elf)"
-    cp "$f" "$ROOT/programs/$proj_name/$base"
-  done
-  echo "  [c project] $proj_name -> /programs/$proj_name/"
+  elf_count=$(ls "$proj_dir"/*.elf 2>/dev/null | wc -l)
+  if [ "$elf_count" -eq 1 ]; then
+    # 单入口：直接放 /programs/，和 Rust 一致
+    cp "$proj_dir"/*.elf "$ROOT/programs/$proj_name"
+    echo "  [c] $proj_name -> /programs/$proj_name"
+  else
+    # 多入口：放子目录
+    mkdir -p "$ROOT/programs/$proj_name"
+    for f in "$proj_dir"/*.elf; do
+      [ -e "$f" ] || continue
+      base="$(basename "$f" .elf)"
+      cp "$f" "$ROOT/programs/$proj_name/$base"
+    done
+    echo "  [c multi] $proj_name -> /programs/$proj_name/"
+  fi
 done
 
-# 把 C++ 项目编译出来的程序放进 /programs/<project>/
+# C++ 项目（单入口扁平化，多入口建子目录）
 for proj_dir in user/build/${ARCH}/cpp/*; do
   [ -d "$proj_dir" ] || continue
   proj_name="$(basename "$proj_dir")"
-  mkdir -p "$ROOT/programs/$proj_name"
-  for f in "$proj_dir"/*.elf; do
-    [ -e "$f" ] || continue
-    base="$(basename "$f" .elf)"
-    cp "$f" "$ROOT/programs/$proj_name/$base"
-  done
-  echo "  [cpp project] $proj_name -> /programs/$proj_name/"
+  elf_count=$(ls "$proj_dir"/*.elf 2>/dev/null | wc -l)
+  if [ "$elf_count" -eq 1 ]; then
+    # 单入口：直接放 /programs/，和 Rust 一致
+    cp "$proj_dir"/*.elf "$ROOT/programs/$proj_name"
+    echo "  [cpp] $proj_name -> /programs/$proj_name"
+  else
+    # 多入口：放子目录
+    mkdir -p "$ROOT/programs/$proj_name"
+    for f in "$proj_dir"/*.elf; do
+      [ -e "$f" ] || continue
+      base="$(basename "$f" .elf)"
+      cp "$f" "$ROOT/programs/$proj_name/$base"
+    done
+    echo "  [cpp multi] $proj_name -> /programs/$proj_name/"
+  fi
 done
 
-# 把 GCN 编译出来的程序放进 /gcn/
+# 新增：GCN（特殊目录 /gcn/）
 if [ -d "user/build/${ARCH}/gcn" ]; then
   for f in user/build/${ARCH}/gcn/*.elf; do
     [ -e "$f" ] || continue
