@@ -57,7 +57,7 @@ template<typename T>
 Graph<T> load_cora(const std::string& content_path, const std::string& cites_path) {
     std::ifstream fc(content_path);
     if (!fc) { fprintf(stderr, "无法打开 %s\n", content_path.c_str()); return {}; }
-
+    
     std::vector<std::vector<T>> feats;
     std::vector<std::string> raw_labels;
     std::unordered_map<std::string, int> id2idx;
@@ -95,7 +95,7 @@ Graph<T> load_cora(const std::string& content_path, const std::string& cites_pat
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < F; ++j) g.X(i, j) = feats[i][j];
     row_normalize(g.X);
-
+    
     std::ifstream fe(cites_path);
     std::vector<std::pair<int,int>> edges;
     std::string a, b;

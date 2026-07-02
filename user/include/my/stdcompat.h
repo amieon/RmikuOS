@@ -356,7 +356,7 @@ namespace std {
         }
         void open(const string& path) { open(path.c_str()); }
         bool is_open() const { return ok_; }
-        operator bool() const { return ok_; }
+        operator bool() const {  return ok_ && cur_ && (size_t)(cur_ - buf_) < sz_;  }
         bool operator!() const { return !ok_; }
         void close() { if (buf_) { free(buf_); buf_ = nullptr; } ok_ = false; }
         ~ifstream() { close(); }
@@ -372,9 +372,17 @@ namespace std {
         // operator>> for string
         ifstream& operator>>(string& out) {
             out = string();
-            if (!ok_ || !cur_ || (size_t)(cur_ - buf_) >= sz_) return *this;
+            if (!ok_ || !cur_ || (size_t)(cur_ - buf_) >= sz_) {
+                ok_ = false;  // ← 到达 EOF，标记失败
+                return *this;
+            }
+            // 跳过空白
             while ((size_t)(cur_ - buf_) < sz_ && (*cur_ == ' ' || *cur_ == '\t' || *cur_ == '\r' || *cur_ == '\n')) cur_++;
-            if ((size_t)(cur_ - buf_) >= sz_) return *this;
+            if ((size_t)(cur_ - buf_) >= sz_) {
+                ok_ = false;  // ← 只有空白，没有实质内容
+                return *this;
+            }
+            // 读取 token
             while ((size_t)(cur_ - buf_) < sz_ && *cur_ != ' ' && *cur_ != '\t' && *cur_ != '\r' && *cur_ != '\n') {
                 out += *cur_++;
             }
@@ -400,23 +408,35 @@ namespace std {
     class istringstream {
         char* ptr_;
         char* end_;
+        bool ok_;  
     public:
-        istringstream() : ptr_(nullptr), end_(nullptr) {}
+        istringstream() : ptr_(nullptr), end_(nullptr), ok_(false) {}
         istringstream(const char* s) { str(s); }
         istringstream(const string& s) { str(s.c_str()); }
-        void str(const char* s) { ptr_ = (char*)s; end_ = ptr_ + (s ? mystr::strlen(s) : 0); }
+        void str(const char* s) { 
+            ptr_ = (char*)s; 
+            end_ = ptr_ + (s ? mystr::strlen(s) : 0); 
+            ok_ = (s != nullptr); 
+        }
         void str(const string& s) { str(s.c_str()); }
 
         istringstream& operator>>(string& out) {
             out = string();
+            if (!ok_ || ptr_ >= end_) {
+                ok_ = false;
+                return *this;
+            }
             while (ptr_ < end_ && (*ptr_ == ' ' || *ptr_ == '\t' || *ptr_ == '\r' || *ptr_ == '\n')) ptr_++;
-            if (ptr_ >= end_) return *this;
+            if (ptr_ >= end_) {
+                ok_ = false;
+                return *this;
+            }
             while (ptr_ < end_ && *ptr_ != ' ' && *ptr_ != '\t' && *ptr_ != '\r' && *ptr_ != '\n') {
                 out += *ptr_++;
             }
             return *this;
         }
-        operator bool() const { return ptr_ < end_; }
+        operator bool() const { return ok_ && ptr_ < end_; }  // ← 检查 ok_
     };
 }
 

@@ -1,0 +1,3 @@
+cd gcn
+train_cora cora/cora.content cora/cora.cites
+train_cora_GTA cora/cora.content cora/cora.cites

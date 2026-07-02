@@ -1,7 +1,9 @@
 #pragma once
 #include "compat.h"
+#include "../io.h"  
+#include "flag.h"  
 
-extern "C" long syscall3(unsigned long, unsigned long, unsigned long, unsigned long);
+
 
 namespace mystr {
 
@@ -53,17 +55,17 @@ inline double str_to_double(const char* s) {
 
 // 读取文件到 malloc 的 buffer（假设文件 < max_size，Cora 约 1MB，设 4MB 足够）
 inline char* read_file(const char* path, size_t& out_size, size_t max_size = 4194304) {
-    int fd = (int)syscall3(3, (unsigned long)path, 0, 0);  // SYS_OPEN
+    isize fd = open(path, O_RDONLY);
     if (fd < 0) { out_size = 0; return nullptr; }
     char* buf = (char*)malloc(max_size);
-    if (!buf) { syscall3(4, (unsigned long)fd, 0, 0); out_size = 0; return nullptr; }  // SYS_CLOSE
+    if (!buf) { close((int)fd); out_size = 0; return nullptr; }
     size_t total = 0;
     while (total < max_size) {
-        long n = syscall3(5, (unsigned long)fd, (unsigned long)(buf + total), max_size - total);  // SYS_READ
+        isize n = read((int)fd, buf + total, max_size - total);
         if (n <= 0) break;
-        total += n;
+        total += (size_t)n;
     }
-    syscall3(4, (unsigned long)fd, 0, 0);  // SYS_CLOSE
+    close((int)fd);
     out_size = total;
     return buf;
 }
