@@ -82,6 +82,35 @@ static inline void uprintf_float(struct uprintf_buf *b, double v, int prec) {
         frac -= digit;
     }
 }
+static inline void uprintf_scientific(struct uprintf_buf *b, double v, int prec) {
+    if (v < 0) { uprintf_putc(b, '-'); v = -v; }
+    if (v == 0.0) {
+        uprintf_putc(b, '0'); uprintf_putc(b, '.');
+        for (int i = 0; i < prec; i++) uprintf_putc(b, '0');
+        uprintf_putc(b, 'e'); uprintf_putc(b, '+'); uprintf_putc(b, '0'); uprintf_putc(b, '0');
+        return;
+    }
+    int exp10 = 0;
+    double m = v;
+    while (m >= 10.0) { m /= 10.0; exp10++; }
+    while (m < 1.0)   { m *= 10.0; exp10--; }
+    int d = (int)m;
+    uprintf_putc(b, '0' + d);
+    uprintf_putc(b, '.');
+    double frac = m - d;
+    for (int i = 0; i < prec; i++) {
+        frac *= 10;
+        int digit = (int)frac;
+        if (digit > 9) digit = 9;
+        uprintf_putc(b, '0' + digit);
+        frac -= digit;
+    }
+    uprintf_putc(b, 'e');
+    if (exp10 >= 0) uprintf_putc(b, '+');
+    else { uprintf_putc(b, '-'); exp10 = -exp10; }
+    if (exp10 < 10) uprintf_putc(b, '0');
+    uprintf_u64_dec(b, (unsigned long long)exp10);
+}
 
 static inline void uprintf_pad(struct uprintf_buf *b, int width, int len, char pad_char) {
     for (int i = len; i < width; i++) uprintf_putc(b, pad_char);
@@ -136,6 +165,19 @@ static inline void uvprintf(const char *fmt, va_list ap) {
         // length
         if (*fmt == 'l') { is_long = 1; fmt++; }
 
+
+        // 解析 .N 精度
+        prec = 6;
+        if (*fmt == '.') {
+            fmt++;
+            prec = 0;
+            while (*fmt >= '0' && *fmt <= '9') {
+                prec = prec * 10 + (*fmt - '0');
+                fmt++;
+            }
+        }
+
+
         char spec = *fmt;
         if (spec == 0) { uprintf_putc(&b, '%'); break; }
         fmt++;
@@ -176,18 +218,25 @@ static inline void uvprintf(const char *fmt, va_list ap) {
                 uprintf_puts_raw(&b, v); 
                 break; 
             }
-            case 'f': 
-            case 'g': {
+            case 'f': {
                 double v = va_arg(ap, double);
-                int fprec = (prec >= 0) ? prec : 6;
-                uprintf_float(&b, v, fprec);
+                uprintf_float(&b, v, prec);
                 break;
             }
             case 'e': {
-                // 简易 %e：用 %f 替代（精度可能不够，但至少不原样输出）
                 double v = va_arg(ap, double);
-                int fprec = (prec >= 0) ? prec : 6;
-                uprintf_float(&b, v, fprec);
+                uprintf_scientific(&b, v, prec);
+                break;
+            }
+            case 'g': {
+                double v = va_arg(ap, double);
+                double av = v < 0 ? -v : v;
+                // %g 规则：指数 < -4 或 >= prec 时用 %e，否则 %f
+                if (av == 0.0 || (av >= 1e-4 && av < 1e6)) {
+                    uprintf_float(&b, v, prec);
+                } else {
+                    uprintf_scientific(&b, v, prec);
+                }
                 break;
             }
             case '%': { uprintf_putc(&b, '%'); break; }
