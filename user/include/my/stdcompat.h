@@ -83,30 +83,83 @@ static inline void uprintf_float(struct uprintf_buf *b, double v, int prec) {
     }
 }
 
+static inline void uprintf_pad(struct uprintf_buf *b, int width, int len, char pad_char) {
+    for (int i = len; i < width; i++) uprintf_putc(b, pad_char);
+}
+
+static inline void uprintf_int(struct uprintf_buf *b, long long v, int width, int prec, char pad_char) {
+    char tmp[32]; int n = 0;
+    int neg = v < 0;
+    unsigned long long uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v;
+    if (uv == 0) tmp[n++] = '0';
+    while (uv > 0) { tmp[n++] = '0' + (uv % 10); uv /= 10; }
+    int total = n + (neg ? 1 : 0);
+    int pad_len = width > total ? width - total : 0;
+    // 右对齐：先补空格
+    for (int i = 0; i < pad_len && pad_char == ' '; i++) uprintf_putc(b, ' ');
+    if (neg) uprintf_putc(b, '-');
+    while (n > 0) uprintf_putc(b, tmp[--n]);
+}
+
 static inline void uvprintf(const char *fmt, va_list ap) {
     struct uprintf_buf b; b.len = 0;
     while (*fmt) {
         char ch = *fmt++;
         if (ch != '%') { uprintf_putc(&b, ch); continue; }
+
+        // 解析格式：%[flags][width][.precision][length]specifier
+        int width = 0;
+        int prec = -1;  // -1 表示未指定
         int is_long = 0;
+        char pad_char = ' ';
+
+        // flags
+        if (*fmt == '0') { pad_char = '0'; fmt++; }
+        else if (*fmt == '-') { fmt++; }  // 左对齐，暂不实现
+
+        // width
+        while (*fmt >= '0' && *fmt <= '9') {
+            width = width * 10 + (*fmt - '0');
+            fmt++;
+        }
+
+        // precision
+        if (*fmt == '.') {
+            fmt++;
+            prec = 0;
+            while (*fmt >= '0' && *fmt <= '9') {
+                prec = prec * 10 + (*fmt - '0');
+                fmt++;
+            }
+        }
+
+        // length
         if (*fmt == 'l') { is_long = 1; fmt++; }
+
         char spec = *fmt;
         if (spec == 0) { uprintf_putc(&b, '%'); break; }
         fmt++;
+
         switch (spec) {
             case 'd': {
-                if (is_long) { long v = va_arg(ap, long); uprintf_i64_dec(&b, (long long)v); }
-                else { int v = va_arg(ap, int); uprintf_i64_dec(&b, (long long)v); }
+                long long v;
+                if (is_long) v = va_arg(ap, long);
+                else v = va_arg(ap, int);
+                uprintf_int(&b, v, width, prec, pad_char);
                 break;
             }
             case 'u': {
-                if (is_long) { unsigned long v = va_arg(ap, unsigned long); uprintf_u64_dec(&b, (unsigned long long)v); }
-                else { unsigned int v = va_arg(ap, unsigned int); uprintf_u64_dec(&b, (unsigned long long)v); }
+                unsigned long long v;
+                if (is_long) v = va_arg(ap, unsigned long);
+                else v = va_arg(ap, unsigned int);
+                uprintf_u64_dec(&b, v);  // 暂不支持宽度
                 break;
             }
             case 'x': {
-                if (is_long) { unsigned long v = va_arg(ap, unsigned long); uprintf_u64_hex(&b, (unsigned long long)v); }
-                else { unsigned int v = va_arg(ap, unsigned int); uprintf_u64_hex(&b, (unsigned long long)v); }
+                unsigned long long v;
+                if (is_long) v = va_arg(ap, unsigned long);
+                else v = va_arg(ap, unsigned int);
+                uprintf_u64_hex(&b, v);
                 break;
             }
             case 'p': {
@@ -116,20 +169,32 @@ static inline void uvprintf(const char *fmt, va_list ap) {
                 break;
             }
             case 'c': { int v = va_arg(ap, int); uprintf_putc(&b, (char)v); break; }
-            case 's': { const char *v = va_arg(ap, const char *); uprintf_puts_raw(&b, v); break; }
-            case 'f': {
-                double v = va_arg(ap, double);
-                uprintf_float(&b, v, 6);
-                break;
+            case 's': { 
+                const char *v = va_arg(ap, const char *); 
+                int len = 0; while (v[len]) len++;
+                uprintf_pad(&b, width, len, ' ');
+                uprintf_puts_raw(&b, v); 
+                break; 
             }
+            case 'f': 
             case 'g': {
                 double v = va_arg(ap, double);
-                uprintf_float(&b, v, 6);
+                int fprec = (prec >= 0) ? prec : 6;
+                uprintf_float(&b, v, fprec);
+                break;
+            }
+            case 'e': {
+                // 简易 %e：用 %f 替代（精度可能不够，但至少不原样输出）
+                double v = va_arg(ap, double);
+                int fprec = (prec >= 0) ? prec : 6;
+                uprintf_float(&b, v, fprec);
                 break;
             }
             case '%': { uprintf_putc(&b, '%'); break; }
             default: {
-                uprintf_putc(&b, '%'); if (is_long) uprintf_putc(&b, 'l'); uprintf_putc(&b, spec);
+                uprintf_putc(&b, '%'); 
+                if (is_long) uprintf_putc(&b, 'l'); 
+                uprintf_putc(&b, spec);
                 break;
             }
         }
@@ -318,7 +383,7 @@ namespace std {
             iterator(Entry* _p = nullptr) : p(_p) {}
             Entry* operator->() { return p; }
             bool operator!=(const iterator& o) const { return p != o.p; }
-            bool operator==(const iterator& o) const { return p == o.p; }  // 新增！
+            bool operator==(const iterator& o) const { return p == o.p; }
         };
         iterator end() { return iterator(nullptr); }
         iterator find(const K& key) {

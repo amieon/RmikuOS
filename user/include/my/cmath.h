@@ -93,6 +93,8 @@ inline double exp(double x) {
     } else {
         k = 0;
         c = x;
+        hi = c;   
+        lo = 0.0; 
     }
 
     // 计算 exp(c)，|c| < 0.5*ln2
@@ -170,9 +172,41 @@ inline double log(double x) {
 
 
 inline double pow(double base, double e) {
-    if (base == 0.0) return 0.0;
-    if (e == 0.0)    return 1.0;
-    if (base < 0.0)  return (base - base) / (base - base);  // NaN
+    // ---- 特殊值短路 ----
+    if (base != base || e != e) return (base - base) / (base - base); // NaN
+    if (e == 0.0)  return 1.0;                    // x^0 = 1 (包括 0^0)
+    if (base == 0.0) {
+        if (e > 0.0) return 0.0;
+        return 1.0 / 0.0;                         // 0^neg = +inf
+    }
+    if (base == 1.0) return 1.0;
+    if (e == 1.0)  return base;
+    if (e == 2.0)  return base * base;            // 平方短路
+    if (e == -1.0) return 1.0 / base;
+    if (e == -2.0) return 1.0 / (base * base);
+    if (e == 0.5)  return sqrt(base);             // sqrt 短路
+    if (e == -0.5) return 1.0 / sqrt(base);
+    
+    // ---- 整数指数：快速幂（O(log n) 乘法，比 exp/log 快且更准）----
+    if (e == (double)(long long)e) {
+        long long n = (long long)e;
+        bool neg = n < 0;
+        if (neg) n = -n;
+        double result = 1.0;
+        double cur = base;
+        while (n > 0) {
+            if (n & 1) result *= cur;
+            cur *= cur;
+            n >>= 1;
+        }
+        return neg ? 1.0 / result : result;
+    }
+    
+    // ---- 负底数非整数指数 -> NaN ----
+    if (base < 0.0) return (base - base) / (base - base);
+    
+    // ---- 一般情况：exp(e * log(base)) ----
+    // double 下这条路径的相对误差 < 1e-14，对 AdamW 完全够用
     return exp(e * log(base));
 }
 
