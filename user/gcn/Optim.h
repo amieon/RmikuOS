@@ -11,18 +11,20 @@
 template<typename T>
 struct Adam {
     DenseMatrix<T> m, v;
-    T lr, wd, b1, b2, eps;
+    T lr, wd, b1, b2, b1t, b2t, eps;
     long t = 0;
 
-    Adam() : lr(0), wd(0), b1(0), b2(0), eps(0) {}
+    Adam() : lr(0), wd(0), b1(0), b2(0), eps(0), b1t(1.0), b2t(1.0) {}
     Adam(int r, int c, T lr_, T wd_ = T(0),
-         T b1_ = T(0.9), T b2_ = T(0.999), T eps_ = T(1e-8))
-        : m(r, c), v(r, c), lr(lr_), wd(wd_), b1(b1_), b2(b2_), eps(eps_) {}
+         T b1_ = T(0.9), T b2_ = T(0.999), T b1t_ = T(1.0), T b2t_ = T(1.0), T eps_ = T(1e-8))
+        : m(r, c), v(r, c), lr(lr_), wd(wd_), b1(b1_), b2(b2_),  b1t(b1t_), b2t(b2t_), eps(eps_) {}
 
     void step(DenseMatrix<T>& w, const DenseMatrix<T>& g) {
         ++t;
-        T bc1 = T(1) - std::pow(b1, (T)t);
-        T bc2 = T(1) - std::pow(b2, (T)t);
+        b1t *= b1;   // b1^t
+        b2t *= b2;   // b2^t
+        T bc1 = T(1) - b1t;
+        T bc2 = T(1) - b2t;
         for (size_t i = 0; i < w.data.size(); ++i) {
             T gi = g.data[i];
             m.data[i] = b1 * m.data[i] + (T(1) - b1) * gi;
@@ -33,3 +35,4 @@ struct Adam {
         }
     }
 };
+
