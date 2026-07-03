@@ -7,7 +7,11 @@ RmikuOS 是一个从零实现的教学型操作系统内核，主要用于学习
 * `riscv64`
 * `loongarch64`
 
-系统可以在 QEMU 上启动用户态 shell，并从真实的 virtio 块设备中加载 ext4 rootfs。当前系统已经支持用户程序加载、系统调用、进程与线程、VFS、多文件系统挂载（只读 ext4 + 可写 tmpfs + 可落盘的 FAT）、带读写双向访问的 virtio 块设备驱动、Unix 风格的 open flags 与文件权限、多级管道与重定向、功能完整的 shell，以及一套用于调度器实验的用户态 workload 与自适应调度控制器。用户程序可以用 **C、C++ 或 Rust** 编写，三者共享同一套系统调用 ABI。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust** 三种语言的用户程序。
+
+当前系统支持：进程与线程、VFS、多文件系统挂载（只读 ext4 + 可写 tmpfs + 落盘 FAT）、virtio 块设备驱动、Unix 风格 open flags、多级管道与重定向、功能完整的 shell、**最小通用信号机制**、以及一套用于调度器实验的 workload 与自适应调度控制器。
+
+作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN)（图神经网络）已通过 `stdcompat.h` 桥接层**零改动**移植到 RmikuOS 上运行，真实 Cora 数据集准确率达 **78.3%**。
 
 RmikuOS 不是一个只会打印 `Hello, world` 的玩具内核。它的目标是逐步构建一个小而完整、能运行真实用户程序、能做系统实验的教学型 OS。
 
@@ -114,6 +118,35 @@ RmikuOS 当前支持基础进程管理：
 线程机制使得 RmikuOS 可以构造多线程 workload，并进一步研究进程级公平、线程级并行度和 deadline workload 之间的调度关系。
 
 ---
+
+### Minimal General-Purpose Signal Delivery
+
+RmikuOS 进一步实现了**进程级信号投递机制**，使内核具备向用户态进程发送异步通知的能力。这不是一个特化的"快捷键处理"（如硬编码检测 Ctrl+C 直接杀进程），而是一套**通用的 sig_pending 位图 + 延迟投递 + 默认行为**的完整框架：
+
+```text
+内核侧：
+    sig_pending: u64 位图（64 个标准信号槽位）
+    sys_kill(pid, sig) -> 设置目标进程位图 -> 唤醒所有线程 -> 调度器重新入队
+    
+投递点（返回用户态边界）：
+    syscall_exit 前检查 -> do_signal()
+    trap_return 前检查 -> do_signal()
+    
+默认行为：
+    致命信号（SIGINT/SIGKILL/SIGTERM/SIGABRT/SIGFPE/SIGILL）-> 进程终止
+    其他信号 -> 清掉位图，忽略（框架已留好，可扩展 sig_handler）
+```
+
+**关键设计：信号在"返回用户态边界"处理，绝不异步中断用户态执行。** 这与 Linux 的 `sigreturn` 语义一致，但实现更极简——没有用户态信号栈、没有 `sa_mask` 嵌套、没有 `sigaltstack`，只保留最核心的"投递 + 默认终止"。
+
+**异常隔离**：用户态程序触发非法指令（`ECODE_INE` / `CAUSE_ILLEGAL_INSTRUCTION`）或浮点异常时，内核不再 panic，而是向该进程投递 `SIGILL` / `SIGFPE`，随后调度器杀死它。这实现了**"用户态错误不炸内核"**的基本隔离，是操作系统与裸机程序的分水岭。
+
+**Shell 交互**：通过 `fcntl(fd, F_SETFL, O_NONBLOCK)` 将 stdin 设为非阻塞，shell 在 `waitpid(WNOHANG)` 轮询期间可检测键盘输入。检测到 `Ctrl+C`（ASCII 0x03）时，shell 通过 `kill(front_pid, SIGINT)` 发送信号，实现前台进程中断。子进程退出后，shell 恢复 stdin 阻塞状态，不影响后续交互。
+
+**与教学 OS 的对比**：多数教学型操作系统（包括 rCore/uCore）仅实现进程管理，不实现信号机制；部分实现也只是硬编码的"Ctrl+C 杀进程"特化逻辑。RmikuOS 的信号机制是**通用框架**——新增信号只需改 `FATAL_SIG_MASK` 常量，无需改动投递路径。
+
+
+
 
 ### VFS and File Descriptors
 
