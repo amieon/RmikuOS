@@ -395,7 +395,7 @@ static void run_external(int argc, char *argv[]) {
             int n = read(0, &ch, 1);
             if (n == 1 && ch == 3) {  // Ctrl+C
                 kill(pid, SIGINT);   // SIGINT
-                printf("\n");
+                uprintf("\n");
                 // 等子进程被信号杀死后退出循环
                 while (waitpid(pid, &status, 0) < 0) yield();
                 break;
