@@ -42,6 +42,7 @@ pub const SYSCALL_UNLINK: usize = 36;
 pub const SYSCALL_RMDIR: usize = 37;
 pub const SYSCALL_REMOVE_RECURSIVE: usize = 38;
 pub const SYSCALL_SHUTDOWN: usize = 39;
+pub const SYSCALL_KILL: usize = 40;
 
 
 
@@ -52,7 +53,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_WRITE => fs::sys_write(args[0], args[1], args[2]),
         SYSCALL_GETPID => process::sys_getpid(),
         SYSCALL_FORK => process::sys_fork(),
-        SYSCALL_WAITPID => process::sys_waitpid(args[0] as isize, args[1]),
+        SYSCALL_WAITPID => process::sys_waitpid(args[0] as isize, args[1], args[2]),
         SYSCALL_SLEEP => process::sys_sleep(args[0]),
         SYSCALL_EXEC => process::sys_exec(args[0], args[1], args[2]),
         SYSCALL_READ => fs::sys_read(args[0], args[1], args[2]),
@@ -87,6 +88,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_RMDIR => fs::sys_rmdir(args[0],args[1]),
         SYSCALL_REMOVE_RECURSIVE => fs::sys_remove_recursive(args[0],args[1]),
         SYSCALL_SHUTDOWN => crate::shutdown::shutdown(),
+        SYSCALL_KILL => process::sys_kill(args[0],args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

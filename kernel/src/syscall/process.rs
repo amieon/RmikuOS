@@ -71,3 +71,7 @@ pub fn sys_get_ticks() -> isize {
     crate::timer::ticks().try_into().unwrap()
 }
 
+pub fn sys_kill(pid: usize, sig : usize) -> isize {
+    crate::task::kill(pid, sig)
+}
+

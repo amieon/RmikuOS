@@ -1432,3 +1432,31 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
 
     new_fd as isize
 }
+
+pub fn kill(pid: usize, sig: usize) -> isize {
+    if sig >= 64 {
+        return -1;
+    }
+
+    let mut manager = TASK_MANAGER.lock();
+
+    if manager.try_process(pid).is_none() {
+        return -1;
+    }
+
+    {
+        let process = manager.process_mut(pid);
+        process.sig_pending |= 1u64 << sig;
+    }
+
+    let tids: Vec<Tid> = {
+        let process = manager.process(pid);
+        process.threads.clone()
+    };
+
+    for tid in tids {
+        manager.mark_thread_ready(tid);
+    }
+
+    0
+}

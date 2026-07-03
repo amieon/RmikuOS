@@ -46,6 +46,7 @@ extern "C" {
 #define SYS_RMDIR                    37
 #define SYS_REMOVE_RECURSIVE         38
 #define SYS_SHUTDOWN                 39
+#define SYS_KILL                     40
 
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
