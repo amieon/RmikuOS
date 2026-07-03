@@ -1460,3 +1460,70 @@ pub fn kill(pid: usize, sig: usize) -> isize {
 
     0
 }
+
+pub fn do_signal() {
+    let current_tid = processor::current_tid();
+    let current_pid = current_pid();
+
+    let mut manager = TASK_MANAGER.lock();
+    let process = manager.process_mut(current_pid);
+    let pending = process.sig_pending;
+
+    if pending == 0 { return; }
+
+    let fatal_bits = pending & super::signal::FATAL_SIG_MASK;
+    if fatal_bits != 0 {
+        // 取最低位的致命信号号，不再硬编码 if-else
+        let sig = fatal_bits.trailing_zeros() as usize;
+
+        process.sig_pending = 0;
+        process.exit_code = 128 + sig as i32;
+
+        let tids: Vec<Tid> = process.threads.clone();
+        for tid in tids {
+            if let Some(thread) = manager.try_thread_mut(tid) {
+                thread.status = ThreadStatus::Zombie;
+                thread.exit_code = 128 + sig as i32;
+            }
+        }
+
+        manager.wake_parent_waiting_for(current_pid);
+
+        // fd 释放...
+        let files: Vec<_> = {
+            let process = manager.process_mut(current_pid);
+            let mut v = Vec::new();
+            for slot in process.fd_table.iter_mut() {
+                if let Some(file) = slot.take() {
+                    v.push(file);
+                }
+            }
+            v
+        };
+        for file in &files {
+            manager.release_file(file);
+        }
+
+        drop(manager);
+
+        let task_cx_ptr = {
+            let mut manager = TASK_MANAGER.lock();
+            manager.thread_cx_ptr(current_tid)
+        };
+        let idle_cx_ptr = processor::idle_task_cx_ptr();
+        unsafe { __switch(task_cx_ptr, idle_cx_ptr); }
+        panic!("should not reach here after signal termination");
+    }
+
+    // 非致命信号：清掉，忽略
+    process.sig_pending = 0;
+}
+
+pub fn set_current_sig_pending(sig : usize){
+    let pid = current_pid();
+    if sig >= 64 { return; }
+    let mut manager = TASK_MANAGER.lock();
+    if let Some(process) = manager.try_process_mut(pid) {
+        process.sig_pending |= 1u64 << sig;
+    }
+}

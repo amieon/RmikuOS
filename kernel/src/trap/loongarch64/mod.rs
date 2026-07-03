@@ -96,12 +96,29 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
             let syscall_id = cx.r[11]; // a7
             let args = [cx.r[4], cx.r[5], cx.r[6], cx.r[7], cx.r[8], cx.r[9]]; // a0, a1, a2
             cx.r[4] = handle_syscall(syscall_id, args) as usize; // return in a0
+            crate::task::do_signal();
         }
         ECODE_BRK => {
             trap_println!("[trap] breakpoint at era={:#x}", cx.era);
             cx.era += 4;
         }
-    
+        ECODE_INE | ECODE_IPE => {
+            if cx.is_from_user() {
+                crate::task::set_current_sig_pending(crate::task::SIGILL);
+                crate::task::do_signal();
+                panic!("SIGILL not fatal");
+            } else {
+                trap_println!(
+                    "[trap] fatal exception: ecode={:#x}, esubcode={:#x}, era={:#x}, badv={:#x}, estat={:#x}",
+                    cx.ecode(),
+                    cx.esubcode(),
+                    cx.era,
+                    cx.badv,
+                    cx.estat
+                );
+                panic!("fatal LoongArch exception");
+            }
+        }
         ECODE_PIL
         | ECODE_PIS
         | ECODE_PIF
@@ -110,9 +127,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
         | ECODE_PNX
         | ECODE_PPI
         | ECODE_ADEF_ADEM
-        | ECODE_ALE
-        | ECODE_INE
-        | ECODE_IPE => {
+        | ECODE_ALE => {
             trap_println!(
                 "[trap] fatal exception: ecode={:#x}, esubcode={:#x}, era={:#x}, badv={:#x}, estat={:#x}",
                 cx.ecode(),

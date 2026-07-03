@@ -89,6 +89,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             let syscall_id = cx.x[17];
             let args = [cx.x[10], cx.x[11], cx.x[12],cx.x[13], cx.x[14], cx.x[15]];
             cx.x[10] = handle_syscall(syscall_id, args) as usize;
+            crate::task::do_signal();
         }
 
         CAUSE_S_ECALL => {
@@ -101,8 +102,24 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             // enable and use compressed c.ebreak, decode instruction length here.
             cx.sepc += 4;
         }
-        CAUSE_ILLEGAL_INSTRUCTION
-        | CAUSE_LOAD_FAULT
+        CAUSE_ILLEGAL_INSTRUCTION => {
+            
+            if cx.is_from_user() {
+                crate::task::set_current_sig_pending(crate::task::SIGILL);
+                panic!("SIGILL not fatal");  // 不应该到达
+            } else {
+                trap_println!(
+                    "[trap] fatal exception: code={}, sepc={:#x}, stval={:#x}, scause={:#x}",
+                    code,
+                    cx.sepc,
+                    cx.stval,
+                    cx.scause
+                );
+                panic!("fatal RISC-V exception");
+            }
+            
+        }
+        CAUSE_LOAD_FAULT
         | CAUSE_STORE_FAULT
         | CAUSE_INST_PAGE_FAULT
         | CAUSE_LOAD_PAGE_FAULT
