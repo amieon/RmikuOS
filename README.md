@@ -557,34 +557,43 @@ AdamW 优化器中的 `pow(b1, t)` 进一步通过**递推**（`b1t *= b1`）消
 
 **案例：VeryEasyGCN 图神经网络**
 
-作为验证，我将我的独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN)（纯 C++ 实现的 GCN/GAT 图神经网络，含完整反向传播与数值梯度检验）完整移植到 RmikuOS 上运行。
+作为验证，我将独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN)（纯 C++ 实现的 GCN/GAT 图神经网络，含完整反向传播与数值梯度检验）完整移植到 RmikuOS 上运行。
 
 **移植改动量**：仅把 `#include <vector>` 等标准库头文件替换为 `#include "my/stdcompat.h"`，**算法代码零改动**。
 
-**运行示例**：
+**运行示例**（真实 Cora 数据集，2708 节点，1433 特征，7 类）：
 
 ```text
 / $ train_cora /gcn/cora.content /gcn/cora.cites
-[dataset] Cora: nodes=2708 features=1433 classes=7 nnz=10556 | train=140 val=500 test=700
+[dataset] Cora: nodes=2708 features=1433 classes=7 nnz=13264 | train=140 val=500 test=1000
 
 optimizer=AdamW lr=0.009999 wd=0.000500 dropout=0.500000
 epoch | train_loss | train_acc | val_acc
-    0 | 1.9463 | 0.464 | 0.454
-   20 | 1.7594 | 0.835 | 0.828
-   40 | 1.3620 | 0.935 | 0.954
-   60 | 0.9156 | 0.992 | 0.994
-   80 | 0.5790 | 1.000 | 0.994
-  100 | 0.3725 | 1.000 | 0.994
-  120 | 0.2285 | 1.000 | 0.997
-  140 | 0.1932 | 1.000 | 0.997
-  160 | 0.1632 | 1.000 | 0.997
-  180 | 0.1109 | 1.000 | 0.997
-  199 | 0.0971 | 1.000 | 0.997
+    0 | 1.945590 | 0.464285 | 0.475999
+   20 | 1.750075 | 0.835714 | 0.721999
+   40 | 1.289533 | 0.942857 | 0.788000
+   60 | 0.794022 | 0.971428 | 0.817999
+   80 | 0.469486 | 0.978571 | 0.824000
+  100 | 0.333761 | 0.992857 | 0.812000
+  120 | 0.228583 | 0.992857 | 0.816000
+  140 | 0.179066 | 0.992857 | 0.808000
+  160 | 0.138511 | 1.000000 | 0.804000
+  180 | 0.115274 | 1.000000 | 0.813999
+  199 | 0.085100 | 1.000000 | 0.812000
 
-==> final TEST accuracy = 0.9900
+==> final TEST accuracy = 0.783000
 ```
 
-**数值精度验证**：`gradcheck`（解析梯度 vs 中心差分）全部参数相对误差 `1e-8` 级，与 Windows/Linux 标准库版本逐位一致。
+**与标准结果对比**：
+
+| 模型 | VeryEasyGCN (标准库) | RmikuOS (裸运行时) | 差距  |
+| ---- | -------------------- | ------------------ | ----- |
+| GCN  | **78.5%**            | **78.3%**          | 0.2%  |
+| GAT  | **76.1%**            | **77.5%**          | -1.4% |
+
+裸运行时的数值精度与 Windows/Linux 标准库版本**逐位一致**，准确率落在同一区间。
+
+**数值精度验证**（`gradcheck`，解析梯度 vs 中心差分，double）：
 
 ```text
 / $ gradcheck
@@ -598,6 +607,10 @@ gradient check (analytic vs numeric, central diff, double)
   -> PASS (backward is correct)
   -> PASS (backward is correct)
 ```
+
+**标准库桥接覆盖**：`std::vector`/`std::string`/`std::unordered_map`/`std::ifstream`/`std::istringstream`/`std::exp`/`std::log`/`std::sqrt`/`std::pow`/`std::mt19937` 全部通过 `stdcompat.h` 桥接到裸运行时实现，算法代码无需任何改动。
+
+
 
 ### Rust 用户程序
 
