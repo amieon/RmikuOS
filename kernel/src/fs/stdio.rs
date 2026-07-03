@@ -39,6 +39,17 @@ impl File for Stdin {
         count as isize
     }
 
+    fn read_nonblock(&self, buf: &mut [u8]) -> isize {
+        if buf.is_empty() { return 0; }
+        match crate::io::uart::try_getchar_raw() {
+            Some(ch) => {
+                buf[0] = ch;
+                1
+            }
+            None => 0,
+        }
+    }
+
     fn write(&self, _buf: &[u8]) -> isize {
         -1
     }

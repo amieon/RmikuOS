@@ -75,3 +75,6 @@ pub fn sys_kill(pid: usize, sig : usize) -> isize {
     crate::task::kill(pid, sig)
 }
 
+pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
+    crate::task::set_fcntl(fd, cmd, arg)
+}

@@ -93,6 +93,11 @@ static inline isize remove_recursive2(const char *path, usize len) {
 static inline isize remove_recursive(const char *path) {
     return remove_recursive2(path, strlen(path));
 }
+
+static inline isize fcntl(isize fd, isize cmd, isize arg) {
+    return syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg);
+}
+
 #ifdef __cplusplus
 }
 #endif

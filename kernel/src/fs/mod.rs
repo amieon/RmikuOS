@@ -22,6 +22,11 @@ pub use flag::*;
 pub const EOF : isize = 0;
 pub const EPIPE : isize = -1;
 
+pub const F_GETFL: usize = 3;
+pub const F_SETFL: usize = 4;
+pub const O_NONBLOCK: usize = 2048;
+
+
 
 pub fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {
     path::normalize_path(cwd, path)

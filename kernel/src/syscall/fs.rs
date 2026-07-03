@@ -16,9 +16,18 @@ pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
         return -1;
     }
 
+
+
+    let flags = crate::task::get_fd_flags_current(fd);
+    let nonblock = (flags & crate::fs::O_NONBLOCK) != 0;
+    
     let mut kbuf = vec![0u8; len];
 
-    let n = file.read(&mut kbuf);
+    let n = if nonblock {
+        file.read_nonblock(&mut kbuf)
+    } else {
+        file.read(&mut kbuf)
+    };
 
     if n <= 0 {
         return n;

@@ -25,6 +25,7 @@ pub struct ProcessControlBlock {
     pub user_space: MemorySet,
 
     pub fd_table: Vec<Option<FileRef>>,
+    pub fd_flags: Vec<usize>,
     pub free_fds: Vec<usize>,
     pub cwd: String,
 
@@ -64,6 +65,7 @@ impl ProcessControlBlock {
 
             fd_table: Self::new_fd_table(),
             free_fds: Vec::new(),
+            fd_flags: Vec::new(),
             cwd,
 
             threads: Vec::new(),
@@ -83,6 +85,7 @@ impl ProcessControlBlock {
 
             sig_pending: 0,
 
+
             exit_code: 0,
         }
     }
@@ -92,6 +95,7 @@ impl ProcessControlBlock {
         parent: Pid,
         user_space: MemorySet,
         fd_table: Vec<Option<FileRef>>,
+        fd_flags: Vec<usize>,
         free_fds: Vec<usize>,
         cwd: String,
         parent_tickets: usize,
@@ -112,6 +116,7 @@ impl ProcessControlBlock {
             user_space,
 
             fd_table,
+            fd_flags,
             free_fds,
             cwd,
 

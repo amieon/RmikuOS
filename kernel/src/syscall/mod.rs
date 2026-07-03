@@ -43,6 +43,7 @@ pub const SYSCALL_RMDIR: usize = 37;
 pub const SYSCALL_REMOVE_RECURSIVE: usize = 38;
 pub const SYSCALL_SHUTDOWN: usize = 39;
 pub const SYSCALL_KILL: usize = 40;
+pub const SYSCALL_FCNTL: usize = 41;
 
 
 
@@ -89,6 +90,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_REMOVE_RECURSIVE => fs::sys_remove_recursive(args[0],args[1]),
         SYSCALL_SHUTDOWN => crate::shutdown::shutdown(),
         SYSCALL_KILL => process::sys_kill(args[0],args[1]),
+        SYSCALL_FCNTL => process::sys_fcntl(args[0], args[1], args[2]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

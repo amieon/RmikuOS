@@ -307,6 +307,7 @@ pub fn fork_current() -> isize {
         child_trap_cx.set_syscall_ret(0);
 
         let child_fd_table = manager.process(parent_pid).fd_table.clone();
+        let child_fd_flags = manager.process(parent_pid).fd_flags.clone();
         let child_free_fds = manager.process(parent_pid).free_fds.clone();
         for slot in child_fd_table.iter() {
         if let Some(file) = slot {
@@ -328,6 +329,7 @@ pub fn fork_current() -> isize {
             parent_pid,
             child_user_space,
             child_fd_table,
+            child_fd_flags,
             child_free_fds,
             child_cwd,
             parent_tickets,
@@ -710,6 +712,37 @@ pub fn close_fd_current(fd: usize) -> isize {
     let mut manager = TASK_MANAGER.lock();
     manager.close_fd(pid, fd)
 }
+
+pub fn get_fd_flags_current(fd: usize) -> usize{
+    let current_pid = current_pid();
+    let mut manager = TASK_MANAGER.lock();
+    let process = manager.process_mut(current_pid);
+    process.fd_flags.get(fd).copied().unwrap_or(0)
+}
+
+
+pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
+    let pid = current_pid();
+    let mut manager = TASK_MANAGER.lock();
+    let process = manager.process_mut(pid);
+    
+    if fd >= process.fd_table.len() || process.fd_table[fd].is_none() {
+        return -1;
+    }
+    
+    match cmd {
+        crate::fs::F_GETFL => process.fd_flags.get(fd).copied().unwrap_or(0) as isize,
+        crate::fs::F_SETFL => {
+            if fd >= process.fd_flags.len() {
+                process.fd_flags.resize(fd + 1, 0);
+            }
+            process.fd_flags[fd] = arg;
+            0
+        }
+        _ => -1,
+    }
+}
+
 
 pub fn current_cwd() -> String {
     let pid = current_pid();
@@ -1462,63 +1495,21 @@ pub fn kill(pid: usize, sig: usize) -> isize {
 }
 
 pub fn do_signal() {
-    let current_tid = processor::current_tid();
     let current_pid = current_pid();
-
     let mut manager = TASK_MANAGER.lock();
     let process = manager.process_mut(current_pid);
     let pending = process.sig_pending;
-
     if pending == 0 { return; }
-
-    let fatal_bits = pending & super::signal::FATAL_SIG_MASK;
+    
+    let fatal_bits = pending & super::FATAL_SIG_MASK;
     if fatal_bits != 0 {
-        // 取最低位的致命信号号，不再硬编码 if-else
         let sig = fatal_bits.trailing_zeros() as usize;
-
         process.sig_pending = 0;
-        process.exit_code = 128 + sig as i32;
-
-        let tids: Vec<Tid> = process.threads.clone();
-        for tid in tids {
-            if let Some(thread) = manager.try_thread_mut(tid) {
-                thread.status = ThreadStatus::Zombie;
-                thread.exit_code = 128 + sig as i32;
-            }
-        }
-
-        manager.wake_parent_waiting_for(current_pid);
-
-        // fd 释放...
-        let files: Vec<_> = {
-            let process = manager.process_mut(current_pid);
-            let mut v = Vec::new();
-            for slot in process.fd_table.iter_mut() {
-                if let Some(file) = slot.take() {
-                    v.push(file);
-                }
-            }
-            v
-        };
-        for file in &files {
-            manager.release_file(file);
-        }
-
         drop(manager);
-
-        let task_cx_ptr = {
-            let mut manager = TASK_MANAGER.lock();
-            manager.thread_cx_ptr(current_tid)
-        };
-        let idle_cx_ptr = processor::idle_task_cx_ptr();
-        unsafe { __switch(task_cx_ptr, idle_cx_ptr); }
-        panic!("should not reach here after signal termination");
+        crate::task::exit_current_and_run_next(128 + sig as i32);
     }
-
-    // 非致命信号：清掉，忽略
     process.sig_pending = 0;
 }
-
 pub fn set_current_sig_pending(sig : usize){
     let pid = current_pid();
     if sig >= 64 { return; }

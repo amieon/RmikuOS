@@ -379,6 +379,7 @@ static void run_exec(int argc, char *argv[]){
 }
 
 static void run_external(int argc, char *argv[]) {
+    fcntl(0, F_SETFL, O_NONBLOCK);
     isize pid = fork();
 
     if (pid == 0) {
@@ -403,6 +404,7 @@ static void run_external(int argc, char *argv[]) {
             
             yield();  // 让出 CPU，避免忙等 100%
         }
+        fcntl(0, F_SETFL, 0);
     } else {
         puts("fork failed\n");
     }

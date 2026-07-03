@@ -21,6 +21,10 @@ pub trait File: Send + Sync {
     fn stat(&self) -> Stat;
 
     fn read(&self, buf: &mut [u8]) -> isize;
+    fn read_nonblock(&self, buf: &mut [u8]) -> isize {
+        self.read(buf)
+    }
+
     fn write(&self, buf: &[u8]) -> isize;
 
     fn getdents(&self, _buf: &mut [u8]) -> isize {
