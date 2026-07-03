@@ -9,7 +9,7 @@ RmikuOS 是一个从零实现的教学型操作系统内核，主要用于学习
 
 RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust** 三种语言的用户程序。
 
-当前系统支持：进程与线程、VFS、多文件系统挂载（只读 ext4 + 可写 tmpfs + 落盘 FAT）、virtio 块设备驱动、Unix 风格 open flags、多级管道与重定向、功能完整的 shell、**最小通用信号机制**、以及一套用于调度器实验的 workload 与自适应调度控制器。
+当前系统支持：进程与线程、VFS、多文件系统挂载（只读 ext4 + 可写 tmpfs + 落盘 FAT）、virtio 块设备驱动、Unix 风格 open flags、多级管道与重定向、功能完整的 shell、最小通用信号机制、以及一套用于调度器实验的 workload 与自适应调度控制器。
 
 作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN)（图神经网络）已通过 `stdcompat.h` 桥接层**零改动**移植到 RmikuOS 上运行，真实 Cora 数据集准确率达 **78.3%**。
 
