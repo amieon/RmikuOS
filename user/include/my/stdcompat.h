@@ -323,6 +323,7 @@ namespace std {
         char operator[](size_t i) const { return buf[i]; }
         char& front() { return buf[0]; }
         char& back() { return buf[size()]; }
+        char pop_back() {char ret = buf.back(); buf.pop_back(); return ret;}
         string& operator+=(const string& o) {
             buf.pop_back(); for (size_t i = 0; i < o.size(); i++) buf.push_back(o[i]); buf.push_back('\0'); return *this;
         }
@@ -360,12 +361,16 @@ namespace std {
         bool operator!() const { return !ok_; }
         void close() { if (buf_) { free(buf_); buf_ = nullptr; } ok_ = false; }
         ~ifstream() { close(); }
+        size_t size() {return ok_ ? sz_ : 0;}
 
         bool getline(string& out) {
             out = string();
             if (!ok_ || !cur_ || (size_t)(cur_ - buf_) >= sz_) return false;
             while ((size_t)(cur_ - buf_) < sz_ && *cur_ != '\n') { out += *cur_++; }
-            if ((size_t)(cur_ - buf_) < sz_ && *cur_ == '\n') cur_++;
+            if ((size_t)(cur_ - buf_) < sz_ && *cur_ == '\n') cur_++;   
+            if (out.size() > 0 && out[out.size() - 1] == '\r') {
+                out[out.size() - 1] = '\0';
+            }
             return true;
         }
 
@@ -406,37 +411,32 @@ namespace std {
     inline bool getline(ifstream& f, string& out) { return f.getline(out); }
 
     class istringstream {
-        char* ptr_;
-        char* end_;
-        bool ok_;  
+        char* ptr_; char* end_; bool ok_; bool last_success_;
     public:
-        istringstream() : ptr_(nullptr), end_(nullptr), ok_(false) {}
+        istringstream() : ptr_(nullptr), end_(nullptr), ok_(false), last_success_(false) {}
         istringstream(const char* s) { str(s); }
         istringstream(const string& s) { str(s.c_str()); }
         void str(const char* s) { 
             ptr_ = (char*)s; 
             end_ = ptr_ + (s ? mystr::strlen(s) : 0); 
             ok_ = (s != nullptr); 
+            last_success_ = false;
         }
         void str(const string& s) { str(s.c_str()); }
 
         istringstream& operator>>(string& out) {
             out = string();
-            if (!ok_ || ptr_ >= end_) {
-                ok_ = false;
-                return *this;
-            }
+            last_success_ = false;
+            if (!ok_ || ptr_ >= end_) { ok_ = false; return *this; }
             while (ptr_ < end_ && (*ptr_ == ' ' || *ptr_ == '\t' || *ptr_ == '\r' || *ptr_ == '\n')) ptr_++;
-            if (ptr_ >= end_) {
-                ok_ = false;
-                return *this;
-            }
+            if (ptr_ >= end_) { ok_ = false; return *this; }
             while (ptr_ < end_ && *ptr_ != ' ' && *ptr_ != '\t' && *ptr_ != '\r' && *ptr_ != '\n') {
                 out += *ptr_++;
+                last_success_ = true;
             }
             return *this;
         }
-        operator bool() const { return ok_ && ptr_ < end_; }  // ← 检查 ok_
+        operator bool() const { return last_success_; }
     };
 }
 

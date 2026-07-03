@@ -53,18 +53,32 @@ inline double str_to_double(const char* s) {
     return sign * val;
 }
 
-// 读取文件到 malloc 的 buffer（假设文件 < max_size，Cora 约 1MB，设 4MB 足够）
-inline char* read_file(const char* path, size_t& out_size, size_t max_size = 4194304) {
+
+inline char* read_file(const char* path, size_t& out_size, size_t init_size = 4194304) {
     isize fd = open(path, O_RDONLY);
     if (fd < 0) { out_size = 0; return nullptr; }
-    char* buf = (char*)malloc(max_size);
+    
+    size_t cap = init_size;
+    char* buf = (char*)malloc(cap);
     if (!buf) { close((int)fd); out_size = 0; return nullptr; }
+    
     size_t total = 0;
-    while (total < max_size) {
-        isize n = read((int)fd, buf + total, max_size - total);
+    while (1) {
+        if (total >= cap) {
+            // 缓冲区满了，扩容一倍
+            size_t new_cap = cap * 2;
+            char* new_buf = (char*)malloc(new_cap);
+            if (!new_buf) break;  // 扩容失败，返回已读部分
+            for (size_t i = 0; i < total; i++) new_buf[i] = buf[i];
+            free(buf);
+            buf = new_buf;
+            cap = new_cap;
+        }
+        isize n = read((int)fd, buf + total, cap - total);
         if (n <= 0) break;
         total += (size_t)n;
     }
+    
     close((int)fd);
     out_size = total;
     return buf;
