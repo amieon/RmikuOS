@@ -87,7 +87,7 @@ case "$ARCH" in
     QEMU_ARGS=(
       -machine virt
       -cpu rv64
-      -m 128M
+      -m 512M
       -nographic
       -kernel "$KERNEL_ELF"
       -drive "file=target/fs-riscv64.img,format=raw,if=none,id=blk0"
