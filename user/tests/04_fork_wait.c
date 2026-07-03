@@ -23,7 +23,7 @@ int main(void) {
         puts("\n");
 
         int code = -1;
-        isize ret = waitpid(child, &code);
+        isize ret = waitpid(child, &code, 0);
 
         puts("[fork_wait] parent waitpid ret=");
         put_int(ret);

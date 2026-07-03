@@ -17,6 +17,9 @@ extern "C" {
 #include "string.h"
 #include "fmt.h"
 #include "shutdown.h"
+#include "signal.h"
+
+
 #ifdef __cplusplus
 }
 #endif

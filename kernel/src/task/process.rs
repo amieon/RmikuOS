@@ -43,6 +43,8 @@ pub struct ProcessControlBlock {
     pub mmap_free_ranges: Vec<MmapFreeRange>,
     pub mmap_next: usize,
 
+    pub sig_pending: u64,
+
     pub exit_code: i32,
 }
 
@@ -78,6 +80,8 @@ impl ProcessControlBlock {
             mmap_areas: Vec::new(),
             mmap_free_ranges: Vec::new(),
             mmap_next: USER_MMAP_BASE,
+
+            sig_pending: 0,
 
             exit_code: 0,
         }
@@ -125,6 +129,8 @@ impl ProcessControlBlock {
             mmap_areas,
             mmap_free_ranges,
             mmap_next,
+
+            sig_pending: 0,
 
             exit_code: 0,
         }

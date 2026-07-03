@@ -148,7 +148,7 @@ int main() {
     int total_points = 0;
     for (int i = 0; i < child_count; i++) {
         int exit_code;
-        isize ret = waitpid(child_pids[i], &exit_code);
+        isize ret = waitpid(child_pids[i], &exit_code, 0);
         if (ret < 0) {
             puts("waitpid 失败\n");
         } else {

@@ -151,8 +151,8 @@ int main(void) {
     int code_many = -1;
     int code_one = -1;
 
-    int ret_many = waitpid(pid_many, &code_many);
-    int ret_one = waitpid(pid_one, &code_one);
+    int ret_many = waitpid(pid_many, &code_many, 0);
+    int ret_one = waitpid(pid_one, &code_one, 0);
 
     if (ret_many != pid_many || code_many != 0) {
         puts("FAIL: many child failed\n");

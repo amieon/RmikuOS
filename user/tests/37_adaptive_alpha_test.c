@@ -956,8 +956,8 @@ static int run_one_adaptive_case(
     int code_ai = -1;
     int code_logger = -1;
 
-    int ret_ai = waitpid(pid_ai, &code_ai);
-    int ret_logger = waitpid(pid_logger, &code_logger);
+    int ret_ai = waitpid(pid_ai, &code_ai, 0);
+    int ret_logger = waitpid(pid_logger, &code_logger, 0);
 
     if (ret_ai != pid_ai || code_ai != 0) {
         puts("[adaptive_alpha] FAIL: ai child failed\n");

@@ -14,8 +14,8 @@ pub fn sys_sleep(ticks: usize) -> isize {
     crate::task::sleep_current_and_run_next(ticks)
 }
 
-pub fn sys_waitpid(pid: isize, exit_code_ptr: usize) -> isize {
-    crate::task::waitpid_current(pid, exit_code_ptr)
+pub fn sys_waitpid(pid: isize, exit_code_ptr: usize, option : usize) -> isize {
+    crate::task::waitpid_current(pid, exit_code_ptr, option)
 }
 
 pub fn sys_fork() -> isize {

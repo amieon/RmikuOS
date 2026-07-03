@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     worker("parent", rounds, burn);
 
     int exit_code = -1;
-    int waited = waitpid(child, &exit_code);
+    int waited = waitpid(child, &exit_code, 0);
 
     puts("[parent] waitpid returned pid=");
     put_int(waited);

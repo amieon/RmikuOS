@@ -245,7 +245,7 @@ static int run_one_case(int proc_count, int *tickets) {
 
     for (int i = 0; i < proc_count; i++) {
         int code = -1;
-        int ret = waitpid(pids[i], &code);
+        int ret = waitpid(pids[i], &code, 0);
 
         if (ret != pids[i] || code != 0) {
             puts("[stride_ticket] FAIL: child failed\n");

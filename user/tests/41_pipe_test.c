@@ -25,7 +25,7 @@ static void test2(){
         exit(0);
     } else {
         write(fd[1], "hi", 2);         
-        waitpid(pid, 0);
+        waitpid(pid, 0, 0);
     }
 }
 static void test3(){
@@ -46,7 +46,7 @@ static void test3(){
         close(fd[0]);                   
         write(fd[1], "data", 4);
         close(fd[1]);                   
-        waitpid(pid, 0);
+        waitpid(pid, 0, 0);
     }
 }
 int main(int argc, char **argv) {

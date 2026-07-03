@@ -238,8 +238,9 @@ pub fn preempt_current_and_run_next() {
     }
 }
 
-pub fn waitpid_current(pid: isize, exit_code_ptr: usize) -> isize {
+pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isize {
     let current_tid = processor::current_tid();
+    let nohang = (options & super::WNOHANG) != 0;
 
     loop {
         let action = {
@@ -251,6 +252,9 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize) -> isize {
         match action {
             WaitPidAction::Return(ret) => return ret,
             WaitPidAction::Block => {
+                if nohang {
+                    return 0;  // WNOHANG：子进程未退出，直接返回 0
+                }
                 let task_cx_ptr = {
                     let mut manager = TASK_MANAGER.lock();
 

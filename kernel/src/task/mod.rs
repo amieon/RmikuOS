@@ -11,7 +11,7 @@ pub use context::TaskContext;
 pub use kernel_stack::KernelStack;
 pub use thread::{ThreadControlBlock, ThreadStatus};
 
-
+pub const WNOHANG: usize = 1; 
 
 pub type Pid = usize;
 pub type Tid = usize;

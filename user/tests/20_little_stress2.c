@@ -366,7 +366,7 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < CHILDREN; i++) {
         int code = -1;
-        int ret = waitpid(children[i], &code);
+        int ret = waitpid(children[i], &code, 0);
 
         if (ret != children[i]) {
             log4("[parent wait bad pid]", i, ret, children[i], code);

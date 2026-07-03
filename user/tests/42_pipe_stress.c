@@ -25,7 +25,7 @@ static void test0(){
         }
         uprintf("parent total written = %d\n", total);  // 应该 = 4096
         close(fd[1]);
-        waitpid(pid, 0);
+        waitpid(pid, 0, 0);
     }
 }
 static void test1(){
@@ -60,7 +60,7 @@ static void test1(){
         }
         uprintf("parent total written = %d\n", total);  // 应该 = 4096
         close(fd[1]);
-        waitpid(pid, 0);
+        waitpid(pid, 0, 0);
     }
 }
 static void test2(){
@@ -93,7 +93,7 @@ static void test3(){
         char buf[16];
         int n = read(fd[0], buf, 16); 
         uprintf("parent read n=%d (expect 0 = EOF)\n", n);
-        waitpid(pid, 0);
+        waitpid(pid, 0, 0);
     }
 }
 static void test4(){
@@ -111,7 +111,7 @@ static void test4(){
             close(fd[0]);
             write(fd[1], "x", 1);
             close(fd[1]);
-            waitpid(pid, 0);
+            waitpid(pid, 0, 0);
         }
         uprintf("cycle %d done.\n",i);
     }

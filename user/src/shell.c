@@ -385,12 +385,24 @@ static void run_external(int argc, char *argv[]) {
         run_exec(argc,argv);
         exit(1);
     } else if (pid > 0) {
-        int code = -1;
-        waitpid(pid, &code);
-
-        //puts("[shell] child exit code ");
-        //put_int(code);
-        //puts("\n");
+        while (1) {
+            int status;
+            isize ret = waitpid(pid, &status, WNOHANG);  // ← 非阻塞
+            if (ret == pid) break;  // 子进程已退出
+            
+            // 非阻塞读 stdin
+            char ch;
+            int n = read(0, &ch, 1);
+            if (n == 1 && ch == 3) {  // Ctrl+C
+                kill(pid, SIGINT);   // SIGINT
+                printf("\n");
+                // 等子进程被信号杀死后退出循环
+                while (waitpid(pid, &status, 0) < 0) yield();
+                break;
+            }
+            
+            yield();  // 让出 CPU，避免忙等 100%
+        }
     } else {
         puts("fork failed\n");
     }
@@ -621,7 +633,7 @@ seg_strs[nseg++] = line;
     if (prev_read >= 0) close(prev_read);
 
     for (int i = 0; i < npid; i++) {
-        waitpid(pids[i], 0);
+        waitpid(pids[i], 0, 0);
     }
 }
 

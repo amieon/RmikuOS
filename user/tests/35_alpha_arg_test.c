@@ -282,7 +282,7 @@ static int run_one_case(int alpha, int proc_count, int threads[]) {
 
     for (int i = 0; i < proc_count; i++) {
         int code = -1;
-        int ret = waitpid(pids[i], &code);
+        int ret = waitpid(pids[i], &code, 0);
 
         if (ret != pids[i] || code != 0) {
             puts("[alpha_arg] FAIL: child failed role=");
