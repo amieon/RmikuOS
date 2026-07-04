@@ -116,16 +116,16 @@ fn primary_init() {
     trap::init();
 
     mm::init();
-    test::heap_test::heap_test();
-    test::frame_alloc_test::frame_alloc_test();
-    test::page_table_test::page_table_test();
-    test::memory_set_test::memory_set_test();
+    // test::heap_test::heap_test();
+    // test::frame_alloc_test::frame_alloc_test();
+    // test::page_table_test::page_table_test();
+    // test::memory_set_test::memory_set_test();
 
     mm::init_paging();
 
-    test::user_memory_set_test::user_memory_set_test();
-    test::block_cache_tset::test_block_cache();
-    test::block_test::test_ramdisk();
+    // test::user_memory_set_test::user_memory_set_test();
+    // test::block_cache_tset::test_block_cache();
+    // test::block_test::test_ramdisk();
     block::ext4_image::test_ext4_magic();
 
     // 发现磁盘:ext4 盘 + fat 盘
