@@ -1,0 +1,162 @@
+digraph RmikuOS {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=9];
+    edge [arrowhead=vee, color="#666666", fontname="Helvetica", fontsize=8];
+
+    // ========== 用户态 ==========
+    subgraph cluster_user {
+        label="User Space";
+        style=rounded;
+        color="#D4EDDA";
+        fillcolor="#D4EDDA";
+        penwidth=2;
+
+        U_C [label="C: init shell / ls / cat / 调度实验(AIMD)", fillcolor="#D4EDDA"];
+        U_CPP [label="C++: GCN / GAT", fillcolor="#D4EDDA"];
+        U_RUST [label="Rust: editor / 图书馆 / 银行", fillcolor="#D4EDDA"];
+
+        Bridge [label="stdcompat.h\n桥接层", fillcolor="#C3E6CB", shape=note, width=1.2];
+        MyLayer [label="my层\n(mymath / compat)", fillcolor="#C3E6CB"];
+        UserLib [label="user_lib", fillcolor="#C3E6CB"];
+        Ulib [label="ulib", fillcolor="#D4EDDA"];
+
+        {rank=same; U_C; U_CPP; U_RUST}
+    }
+
+    // ========== 系统调用层 ==========
+    Sy [label="Syscall ABI\necall", fillcolor="#FFF3CD", width=1.5];
+
+    // ========== 宏内核 ==========
+    subgraph cluster_kernel {
+        label="Kernel Space (Monolithic)";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        // --- Trap Handler：内核入口 ---
+        Trap [label="Trap Handler\necall / 中断 / 异常", fillcolor="#FFE4B5", shape=trapezium, width=2.5];
+
+        // --- 进程 / 线程 / 调度 / 信号 ---
+        subgraph cluster_proc {
+            label="Process & Thread & Scheduler";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            
+            P [label="Process\nfd table + cwd + MemorySet", fillcolor="#E8F4F8"];
+            T [label="Thread\ntrap context + kstack\n(指向父进程)", fillcolor="#E8F4F8"];
+            Sch [label="Scheduler\nstride + alpha-scaled\n(effective_tickets)", fillcolor="#E8F4F8"];
+            Sig [label="Signal\nsig_pending + do_signal", fillcolor="#E8F4F8"];
+            
+            Timer [label="时钟中断\nTimer Interrupt", fillcolor="#FFE4B5", shape=diamond];
+            
+            P -> Timer [style=invis];
+            T -> Timer [style=invis];
+            Sch -> Timer [style=invis];
+            Sig -> Timer [style=invis];
+            Timer -> Sch [style=dashed, color="#FF8C00", label="触发调度"];
+        }
+
+        // --- 内存管理 ---
+        subgraph cluster_mm {
+            label="Memory Management";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            
+            MS [label="MemorySet\n页表 + APP(from_elf)", fillcolor="#E8F4F8"];
+            MA [label="MapArea", fillcolor="#E8F4F8"];
+            FT [label="FrameTracker", fillcolor="#E8F4F8"];
+            SFA [label="StackFrameAllocator\nalloc_frame", fillcolor="#F5F5F5"];
+        }
+
+        // --- IPC ---
+        IPC [label="IPC\npipe / dup2 / fcntl", fillcolor="#E8F4F8"];
+
+        // --- VFS & Block I/O ---
+        subgraph cluster_vfs {
+            label="VFS & Block I/O";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            
+            V [label="VFS trait\nInode / File", fillcolor="#E8F4F8"];
+            MT [label="Mount Table\n最长前缀匹配", fillcolor="#E8F4F8"];
+            E4 [label="ext4", fillcolor="#E8F4F8"];
+            Tf [label="tmpfs", fillcolor="#E8F4F8"];
+            Fa [label="FAT", fillcolor="#E8F4F8"];
+            E4V [label="ext4_view\n(第三方库)", fillcolor="#FFF3CD", shape=note, width=1.0, height=0.4];
+            Fatfs [label="fatfs\n(第三方库)", fillcolor="#FFF3CD", shape=note, width=1.0, height=0.4];
+            Bio [label="BlockIo\n字节流↔扇区", fillcolor="#E8F4F8"];
+            BC [label="BlockCache", fillcolor="#E8F4F8"];
+            BD [label="BlockDevice trait", fillcolor="#E8F4F8"];
+            VM [label="virtio-mmio\nRISC-V", fillcolor="#E8F4F8", shape=ellipse, width=1.2];
+            VP [label="virtio-pci\nLoongArch", fillcolor="#E8F4F8", shape=ellipse, width=1.2];
+
+            {rank=same; E4; Tf; Fa}
+            {rank=same; VM; VP}
+        }
+    }
+
+    // ========== 硬件 ==========
+    subgraph cluster_hw {
+        label="Hardware (QEMU)";
+        style=rounded;
+        color="#F5F5F5";
+        penwidth=2;
+        
+        HW0 [label="virtio-blk\ndisk0 (ext4)", fillcolor="#F5F5F5", shape=ellipse];
+        HW1 [label="virtio-blk\ndisk1 (FAT)", fillcolor="#F5F5F5", shape=ellipse];
+    }
+
+    // ========== 用户态连接 ==========
+    U_CPP -> Bridge [label="桥接"];
+    Bridge -> MyLayer;
+    MyLayer -> UserLib;
+    U_C -> UserLib;
+    U_RUST -> Ulib;
+    UserLib -> Sy [label="ecall"];
+    Ulib -> Sy [label="ecall"];
+
+    // ========== Syscall -> Trap -> 内核 ==========
+    Sy -> Trap;
+    Trap -> P [label="fork/exec/exit"];
+    Trap -> Sch [label="yield/sleep\nset_tickets/alpha"];
+    Trap -> IPC [label="pipe/dup2"];
+    Trap -> MS [label="mmap/munmap"];
+    Trap -> V [label="open/read/write"];
+    Trap -> Sig [label="kill / 异常投递"];
+
+    // ========== 内核内部连接 ==========
+    P -> T [label="threads[]\n共享 fd/地址空间", color="#333333"];
+    Sch -> P [color="#999999", label="根据 effective_tickets\n进行 stride 调度"];
+    Sig -> P [style=dashed, color="#CC0000", label="投递 do_signal()"];
+
+    P -> MS [style=dashed, color="#999999", label="地址空间"];
+    MS -> MA [label="insert_area"];
+    MA -> FT [label="map_one"];
+    FT -> SFA [label="alloc_frame"];
+
+    V -> MT [label="lookup_abs_path"];
+    MT -> E4 [label="挂载 /"];
+    MT -> Tf [label="挂载 /tmp"];
+    MT -> Fa [label="挂载 /fat"];
+
+    E4 -> E4V [style=dashed, color="#999999"];
+    E4V -> BC [label="read"];
+    Fa -> Fatfs [style=dashed, color="#999999"];
+    Fatfs -> Bio [label="字节流"];
+    Bio -> BC [label="扇区读写"];
+
+    BC -> BD;
+    BD -> VM;
+    BD -> VP;
+
+    VM -> HW0;
+    VM -> HW1;
+    VP -> HW0;
+    VP -> HW1;
+
+    {rank=same; HW0; HW1}
+}
