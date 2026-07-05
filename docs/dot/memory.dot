@@ -1,0 +1,220 @@
+digraph MemoryManagement {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=9];
+    edge [arrowhead=vee, color="#666666", fontname="Helvetica", fontsize=8];
+
+    // ========== 构造入口 ==========
+    ELF [label="ELF 文件\nPT_LOAD segments", fillcolor="#FFF3CD"];
+    SYSCALL [label="Syscall\nmmap / fork", fillcolor="#FFF3CD"];
+
+    // ========== MemorySet ==========
+    subgraph cluster_ms {
+        label="MemorySet";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+        
+        PT [label="PageTable\nroot_ppn + frames[]", fillcolor="#E8F4F8"];
+        AREAS [label="areas: Vec<MapArea>", fillcolor="#E8F4F8"];
+    }
+
+    // ========== MapArea ==========
+    subgraph cluster_ma {
+        label="MapArea";
+        style=rounded;
+        color="#B8D4E3";
+        fillcolor="#F0F8FF";
+        penwidth=1;
+        
+        VRANGE [label="VPNRange\n[start_vpn, end_vpn)", fillcolor="#E8F4F8"];
+        MTYPE [label="MapType", fillcolor="#E8F4F8"];
+        MPERM [label="MapPermission\nR | W | X | U", fillcolor="#E8F4F8"];
+        DFRAMES [label="data_frames\nVec<FrameTracker>\n(仅 Framed)", fillcolor="#E8F4F8"];
+    }
+
+    // ========== MapType 三种变体 ==========
+    subgraph cluster_mt {
+        label="MapType Variants";
+        style=rounded;
+        color="#C3E6CB";
+        fillcolor="#F0F8FF";
+        penwidth=1;
+        
+        Identical [label="Identical\nppn = vpn\n(内核/早期)", fillcolor="#C3E6CB"];
+        Linear [label="Linear\nppn = (va - offset) / PAGE_SIZE\n(内核直接映射)", fillcolor="#C3E6CB"];
+        Framed [label="Framed\n动态分配物理页\n(用户/堆/栈)", fillcolor="#C3E6CB"];
+    }
+
+    // ========== 页表（双架构） ==========
+    subgraph cluster_pt {
+        label="PageTable (Architecture Specific)";
+        style=rounded;
+        color="#B8D4E3";
+        fillcolor="#F0F8FF";
+        penwidth=1;
+        
+        subgraph cluster_riscv {
+            label="RISC-V Sv39";
+            style=dashed;
+            color="#B8D4E3";
+            
+            RISCV_ROOT [label="root_ppn\n512-entry", fillcolor="#E8F4F8"];
+            RISCV_WALK [label="3-level walk\nvpn[2]→vpn[1]→vpn[0]", fillcolor="#E8F4F8"];
+            RISCV_PTE [label="PageTableEntry\nppn << 10 | flags", fillcolor="#E8F4F8"];
+            RISCV_FLAGS [label="PteFlags\nV|R|W|X|U|G|A|D", fillcolor="#E8F4F8"];
+        }
+        
+        subgraph cluster_la {
+            label="LoongArch64";
+            style=dashed;
+            color="#B8D4E3";
+            
+            LA_ROOT [label="root_ppn\nPGDL / PGDH", fillcolor="#E8F4F8"];
+            LA_WALK [label="4-level walk\nvpn[3]→vpn[2]→vpn[1]→vpn[0]", fillcolor="#E8F4F8"];
+            LA_PTE [label="PageTableEntry\nppn << 12 | flags", fillcolor="#E8F4F8"];
+            LA_FLAGS [label="PteFlags\nV|D|PLV|MAT|G|P|W|NR|NX", fillcolor="#E8F4F8"];
+        }
+    }
+
+    // ========== 物理帧管理 ==========
+    subgraph cluster_frame {
+        label="Physical Frame (RAII)";
+        style=rounded;
+        color="#B8D4E3";
+        fillcolor="#F0F8FF";
+        penwidth=1;
+        
+        FT [label="FrameTracker\nDrop → dealloc_frame()\n自动清零页内容", fillcolor="#E8F4F8"];
+        PPN [label="PhysPageNum\n→ PhysAddr", fillcolor="#E8F4F8"];
+    }
+
+    // ========== 帧分配器 ==========
+    subgraph cluster_alloc {
+        label="StackFrameAllocator";
+        style=rounded;
+        color="#B8D4E3";
+        fillcolor="#F0F8FF";
+        penwidth=1;
+        
+        SFA [label="[start, current, end]\nrecycled: Vec<usize>", fillcolor="#E8F4F8"];
+        ALLOC [label="alloc()\n优先 recycled\n否则 current++", fillcolor="#E8F4F8"];
+        CONTIG [label="alloc_contiguous()\nrecycled 找连续\n否则 current 切", fillcolor="#E8F4F8"];
+    }
+
+    // ========== 内核堆 ==========
+    subgraph cluster_heap {
+        label="Kernel Heap";
+        style=rounded;
+        color="#B8D4E3";
+        fillcolor="#F0F8FF";
+        penwidth=1;
+        
+        HEAP [label="LockedHeap<32>\nBuddy Allocator\n16 MiB", fillcolor="#E8F4F8"];
+        HEAP_RANGE [label="[heap_start,\nheap_end)", fillcolor="#F5F5F5"];
+    }
+
+    // ========== Boot 阶段页表（汇编） ==========
+    subgraph cluster_boot {
+        label="Boot Stage (Assembly)";
+        style=rounded;
+        color="#FFE4B5";
+        fillcolor="#F5F5F5";
+        penwidth=1;
+        
+        BOOT_RV [label="RISC-V boot_page_table\nEntry 2: identity map\nEntry 258: high direct map\nEntry 256: MMIO", fillcolor="#FFE4B5"];
+        BOOT_LA [label="LoongArch boot_pgd/dir2/dir1\n+ boot_pt_pool + DMW0\n低地址直接窗口", fillcolor="#FFE4B5"];
+    }
+
+    // ========== 用户空间布局 ==========
+    subgraph cluster_user {
+        label="User Space Layout";
+        style=rounded;
+        color="#D4EDDA";
+        fillcolor="#D4EDDA";
+        penwidth=1;
+        
+        U_TEXT [label="USER_TEXT_BASE\n0x10000", fillcolor="#D4EDDA"];
+        U_HEAP [label="USER_HEAP_BASE\n0x200000", fillcolor="#D4EDDA"];
+        U_MMAP [label="USER_MMAP_BASE\n0x800000", fillcolor="#D4EDDA"];
+        U_STACK [label="USER_STACK\n[bottom, top]", fillcolor="#D4EDDA"];
+        U_TRAP [label="TRAP_CONTEXT\nTRAMPOLINE", fillcolor="#D4EDDA"];
+    }
+
+    // ========== 初始化流程 ==========
+    INIT [label="mm::init()\nheap::init → frame_allocator::init", fillcolor="#FFF3CD", shape=ellipse];
+    INIT_PT [label="mm::init_paging()\nnew_kernel() → activate_page_table", fillcolor="#FFF3CD", shape=ellipse];
+
+    // ========== 边 ==========
+    // 构造路径
+    ELF -> AREAS [label="from_elf()\n解析段 + 建 MapArea", color="#333333"];
+    SYSCALL -> AREAS [label="insert_framed_area()\n(mmap)", color="#333333"];
+    
+    // MemorySet 内部
+    AREAS -> PT [style=invis];
+    
+    // MapArea 结构
+    AREAS -> VRANGE [label="包含"];
+    AREAS -> MTYPE [label="map_type"];
+    AREAS -> MPERM [label="permission"];
+    AREAS -> DFRAMES [label="Framed 时"];
+    
+    // MapType 分发
+    MTYPE -> Identical [label="内核"];
+    MTYPE -> Linear [label="内核直接映射\noffset=KERNEL_OFFSET"];
+    MTYPE -> Framed [label="用户/动态"];
+    
+    // Framed 路径：分配物理帧
+    Framed -> FT [label="map_one()\nalloc_frame()"];
+    DFRAMES -> FT [label="持有"];
+    FT -> PPN [label="ppn"];
+    FT -> SFA [style=dashed, color="#CC0000", label="Drop 时\ndealloc_frame()"];
+    
+    // 页表连接
+    PT -> RISCV_ROOT [label="riscv64"];
+    PT -> LA_ROOT [label="loongarch64"];
+    
+    RISCV_ROOT -> RISCV_WALK -> RISCV_PTE;
+    RISCV_PTE -> RISCV_FLAGS [label="flags"];
+    RISCV_PTE -> PPN [label="ppn"];
+    
+    LA_ROOT -> LA_WALK -> LA_PTE;
+    LA_PTE -> LA_FLAGS [label="flags"];
+    LA_PTE -> PPN [label="ppn"];
+    
+    // 页表创建时也需要分配帧
+    RISCV_WALK -> FT [style=dashed, color="#999999", label="中间级缺失\nalloc_frame"];
+    LA_WALK -> FT [style=dashed, color="#999999", label="中间级缺失\nalloc_frame"];
+    
+    // 分配器
+    SFA -> ALLOC;
+    SFA -> CONTIG;
+    ALLOC -> PPN;
+    CONTIG -> PPN;
+    
+    // 内核堆与帧分配器的关系
+    HEAP -> HEAP_RANGE;
+    HEAP_RANGE -> SFA [style=dashed, color="#999999", label="init 时跳过\nheap 范围"];
+    
+    // 初始化流程
+    INIT -> HEAP [label="heap::init"];
+    INIT -> SFA [label="frame_allocator::init"];
+    INIT_PT -> PT [label="new_kernel()"];
+    
+    // Boot 过渡
+    BOOT_RV -> RISCV_ROOT [style=dashed, color="#999999", label="boot 临时页表"];
+    BOOT_LA -> LA_ROOT [style=dashed, color="#999999", label="boot 临时页表"];
+    
+    // 用户空间布局指向
+    U_TEXT -> AREAS [style=dashed, color="#999999", label="from_elf 加载"];
+    U_STACK -> AREAS [style=dashed, color="#999999", label="new_user_test\n插入 stack"];
+    U_TRAP -> AREAS [style=dashed, color="#999999", label="trap context\n映射"];
+    
+    // 克隆路径
+    SYSCALL -> AREAS [label="from_existed_user()\nclone_framed_area_data", color="#333333"];
+    
+    // 对齐
+    {rank=same; Identical; Linear; Framed}
+    {rank=same; RISCV_ROOT; LA_ROOT}
+    {rank=same; U_TEXT; U_HEAP; U_MMAP; U_STACK; U_TRAP}
+}

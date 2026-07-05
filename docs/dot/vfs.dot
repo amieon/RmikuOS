@@ -1,0 +1,232 @@
+digraph Filesystem {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=9];
+    edge [arrowhead=vee, color="#666666", fontname="Helvetica", fontsize=8];
+
+    // ========== 用户态入口 ==========
+    Sy [label="Syscall
+open | read | write | getdents", fillcolor="#FFF3CD", width=1.5];
+
+    // ========== VFS 层 ==========
+    subgraph cluster_vfs {
+        label="VFS Layer";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+    // ========== 特殊文件 ==========
+    subgraph cluster_special {
+        label="Special Files";
+        style=rounded;
+        color="#D4EDDA";
+        fillcolor="#D4EDDA";
+        penwidth=1;
+        Pipe [label="Pipe
+环形缓冲区 512B
+reader/writer 计数", fillcolor="#D4EDDA"];
+        Stdin [label="Stdin
+UART getchar", fillcolor="#D4EDDA"];
+        Stdout [label="Stdout
+UART putchar", fillcolor="#D4EDDA"];
+    }
+        VFS [label="VFS 入口
+open_at | lookup", fillcolor="#E8F4F8"];
+        Path [label="Path Resolver
+normalize_path
+lookup_abs_path", fillcolor="#E8F4F8", group="mid"];
+        MT [label="Mount Table
+最长前缀匹配
+resolve_mount", fillcolor="#E8F4F8"];
+
+        Inode [label="Inode trait
+lookup | open | create | mkdir
+unlink | rmdir | truncate", fillcolor="#E8F4F8", width=2.2];
+        File [label="File trait
+read | write | getdents
+readable | writable", fillcolor="#E8F4F8", width=2.2];
+        Flag [label="Open Flags
+O_RDONLY | O_WRONLY | O_RDWR
+O_CREAT | O_TRUNC | O_APPEND", fillcolor="#FFF3CD", shape=note, width=1.5, height=0.4];
+
+
+    }
+
+    // ========== 具体文件系统 ==========
+    subgraph cluster_fs {
+        label="File Systems";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        subgraph cluster_ext4 {
+            label="ext4 (只读 rootfs)";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            E4 [label="Ext4Inode
+(path 式 inode)", fillcolor="#E8F4F8"];
+            E4V [label="ext4_view
+(第三方库)", fillcolor="#FFF3CD", shape=note, width=1.0, height=0.4];
+            CBR [label="CachedBlockReader
+Ext4Read::read", fillcolor="#E8F4F8"];
+        }
+
+        subgraph cluster_tmpfs {
+            label="tmpfs (内存可写)";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            Tf [label="TmpfsInode
+BTreeMap | Arc<Mutex<Vec<u8>>>", fillcolor="#E8F4F8", group="mid"];
+            TfData [label="纯内存数据结构
+零磁盘交互", fillcolor="#F5F5F5"];
+        }
+
+        subgraph cluster_fat {
+            label="FAT16 (落盘可写)";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            Fa [label="FatInode
+(path 式 inode)", fillcolor="#E8F4F8"];
+            Fatfs [label="fatfs 0.4
+(第三方库)", fillcolor="#FFF3CD", shape=note, width=1.0, height=0.4];
+            Bio [label="BlockIo
+字节流 ↔ 扇区
+read-modify-write", fillcolor="#E8F4F8"];
+        }
+    }
+
+    // ========== 块缓存与设备抽象 ==========
+    subgraph cluster_block {
+        label="Block Layer";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        BC [label="BlockCache
+512B 缓存页
+modified 标记", fillcolor="#E8F4F8"];
+        BCM [label="BlockCacheManager
+LRU 淘汰 (VecDeque)
+强引用保护", fillcolor="#E8F4F8"];
+        BD [label="BlockDevice trait
+read_block | write_block", fillcolor="#E8F4F8"];
+        Ram [label="RamDisk
+(只读, initrd)", fillcolor="#F5F5F5"];
+        DD [label="discover_disks
+按 ext4 magic 区分
+rootfs / FAT 盘", fillcolor="#FFF3CD", shape=note, width=1.5, height=0.4];
+    }
+
+    // ========== 双架构驱动 ==========
+    subgraph cluster_driver {
+        label="Virtio Block Drivers";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        subgraph cluster_mmio {
+            label="RISC-V virtio-mmio";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            MmioProbe [label="probe_virtio_blk_mmio
+扫描 0x10001000+", fillcolor="#E8F4F8"];
+            MmioHdr [label="VirtioMmioHeader
+legacy + modern", fillcolor="#E8F4F8"];
+            MmioBlk [label="VirtioBlkDevice
+split virtqueue", fillcolor="#E8F4F8"];
+        }
+
+        subgraph cluster_pci {
+            label="LoongArch virtio-pci";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            PciScan [label="scan_pci_bus
+ECAM 枚举", fillcolor="#E8F4F8"];
+            PciProbe [label="find_all_virtio_blk_pci
+vendor=0x1af4", fillcolor="#E8F4F8"];
+            Bar [label="BAR 分配
+ensure_mem_bar", fillcolor="#E8F4F8"];
+            PciCap [label="parse_virtio_pci_caps
+COMMON | NOTIFY | ISR | DEVICE", fillcolor="#E8F4F8"];
+            PciTrans [label="VirtioPciTransport
+modern 配置", fillcolor="#E8F4F8"];
+            PciBlk [label="VirtioPciBlkDevice
+split virtqueue", fillcolor="#E8F4F8"];
+        }
+    }
+
+    // ========== 硬件层 ==========
+    subgraph cluster_hw {
+        label="Hardware (QEMU)";
+        style=rounded;
+        color="#F5F5F5";
+        penwidth=2;
+        HW0 [label="virtio-blk
+disk0 (ext4 rootfs)", fillcolor="#F5F5F5", shape=ellipse];
+        HW1 [label="virtio-blk
+disk1 (FAT data)", fillcolor="#F5F5F5", shape=ellipse];
+    }
+
+
+
+    // ========== 边 ==========
+    Sy -> VFS;
+    VFS -> Path [label="路径解析"];
+    Path -> MT [label="最长前缀匹配"];
+
+    MT -> E4 [label="挂载 /"];
+    MT -> Tf [label="挂载 /tmp"];
+    MT -> Fa [label="挂载 /fat"];
+
+    E4 -> E4V [style=dashed, color="#999999"];
+    E4V -> CBR [label="read"];
+    CBR -> BC [label="get_block_cache"];
+
+    Tf -> TfData [label="内存操作"];
+
+    Fa -> Fatfs [style=dashed, color="#999999"];
+    Fatfs -> Bio [label="字节流 IO"];
+    Bio -> BC [label="扇区读写"];
+
+    BC -> BCM [style=dashed, color="#999999", label="LRU 管理"];
+    BC -> BD [label="read_block
+write_block"];
+    BD -> Ram [style=dashed, color="#999999", label="initrd"];
+    BD -> DD [style=dashed, color="#999999", label="真实磁盘"];
+
+    DD -> MmioProbe [label="RISC-V"];
+    DD -> PciScan [label="LoongArch"];
+
+    MmioProbe -> MmioHdr [label="MMIO 寄存器"];
+    MmioHdr -> MmioBlk [label="virtqueue 配置"];
+    MmioBlk -> HW0;
+    MmioBlk -> HW1;
+
+    PciScan -> PciProbe [label="PCI 枚举"];
+    PciProbe -> Bar [label="BAR 基址分配"];
+    Bar -> PciCap [label="capability 解析"];
+    PciCap -> PciTrans [label="transport 初始化"];
+    PciTrans -> PciBlk [label="virtqueue 配置"];
+    PciBlk -> HW0;
+    PciBlk -> HW1;
+
+    VFS -> Pipe [label="pipe()"];
+    VFS -> Stdin [label="fd 0"];
+    VFS -> Stdout [label="fd 1"];
+
+    Inode -> File [style=dashed, color="#999999", label="open() 返回"];
+    VFS -> Inode [style=dashed, color="#999999"];
+    VFS -> File [style=dashed, color="#999999"];
+    VFS -> Flag [style=dashed, color="#999999", label="flags 检查"];
+
+    {rank=same; E4; Tf; Fa}
+    {rank=same; MmioBlk; PciBlk}
+    {rank=same; HW0; HW1}
+}

@@ -1,96 +1,322 @@
-digraph ProcThreadSched {
+digraph TaskScheduler {
     rankdir=TB;
+    nodesep=0.3;
+    ranksep=0.8;
     node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=9];
     edge [arrowhead=vee, color="#666666", fontname="Helvetica", fontsize=8];
 
-    Sy [label="Syscall ABI\necall", fillcolor="#FFF3CD", width=1.5];
-    Trap [label="Trap Handler\necall | 中断 | 异常", fillcolor="#FFE4B5", shape=trapezium, width=2.5];
-    Proc [label="Processor\ncurrent_tid | idle_task_cx", fillcolor="#E8F4F8"];
-    Switch [label="__switch (asm)\nsave ra,sp,s -> restore ra,sp,s\nret", fillcolor="#FFE4B5", shape=trapezium, width=2.2];
+    // ========== Layer 1: API 入口 (manager_wrapper) ==========
+    subgraph cluster_api {
+        label="API (manager_wrapper)";
+        style=rounded;
+        color="#D4EDDA";
+        fillcolor="#D4EDDA";
+        penwidth=1;
 
-    subgraph cluster_tm {
-        label="TaskManager (Mutex)";
-        labelloc=t;
+        API_PROC [label="进程 API
+fork_current()
+exec_current()
+exit_current_and_run_next()
+waitpid_current()", fillcolor="#D4EDDA", width=1.8];
+        API_THR [label="线程 API
+thread_create_current()
+thread_exit_current()
+thread_join_current()", fillcolor="#D4EDDA", width=1.8];
+        API_BLK [label="阻塞 API
+sleep_current_and_run_next()
+block_current_on_pipe_read()
+block_current_on_pipe_write()
+suspend_current_and_run_next()", fillcolor="#D4EDDA", width=1.8];
+        API_SIG [label="信号 API
+kill()
+do_signal()
+set_current_sig_pending()", fillcolor="#D4EDDA", width=1.8];
+        API_SCHED [label="调度 API
+set_sched_alpha_current()
+set_my_tickets_current()
+account_current_tick()
+get_process_sched_stat()", fillcolor="#D4EDDA", width=1.8];
+    }
+
+    // ========== Layer 2: 全局管理器 (TaskManager) ==========
+    subgraph cluster_manager {
+        label="TaskManager (Mutex 全局单例)";
         style=rounded;
         color="#333333";
         fillcolor="#F0F8FF";
         penwidth=2;
-        margin=24;
 
-        TM [label="TaskManager\nprocesses[] | threads[]\nfree_pids | free_tids\nscale_cache | sched_alpha", fillcolor="#FFF3CD", width=2.5];
+        TM [label="TaskManager
 
-        subgraph cluster_proc {
-            label="Process";
-            labelloc=b;
-            style=dashed;
-            color="#B8D4E3";
-            margin=12;
-            P [label="ProcessControlBlock\npid | parent | children | cwd\nfd_table | mmap_areas | sig_pending\nbase_tickets | stride | pass | effective_tickets", fillcolor="#E8F4F8", width=3.0];
-        }
+processes: Vec<Option<PCB>>
+threads: Vec<Option<TCB>>
+free_pids: Vec<Pid>
+free_tids: Vec<Tid>
 
-        subgraph cluster_thread {
-            label="Thread";
-            labelloc=b;
-            style=dashed;
-            color="#B8D4E3";
-            margin=12;
-            T [label="ThreadControlBlock\ntid | pid | status | block_reason\nrun_ticks | tickets | stride | pass", fillcolor="#E8F4F8", width=3.0];
-            KS [label="KernelStack\n128KB contiguous + guard magic", fillcolor="#E8F4F8", width=2.0];
-            TCX [label="TaskContext\nra | sp | callee-saved", fillcolor="#E8F4F8", width=2.0];
-            TRX [label="TrapContext\n(on kstack top)\nuser registers + sepc | era", fillcolor="#E8F4F8", width=2.0];
-            Status [label="ThreadStatus\nReady | Running | Blocking\nZombie | Dead", fillcolor="#FFE4B5", shape=diamond, width=1.8];
-            BlockR [label="BlockReason\nSleep{tick} | WaitPid{pid}\nJoin{tid} | PipeRead | PipeWrite", fillcolor="#FFF3CD", shape=note, width=2.0, height=0.6];
-            
-            {rank=same; KS; TCX; TRX}
-            {rank=same; Status; BlockR}
-        }
-
-        subgraph cluster_sched {
-            label="Scheduler";
-            labelloc=b;
-            style=dashed;
-            color="#B8D4E3";
-            margin=12;
-            Sch [label="stride + alpha-scaled\npick_ready_process -> pick_ready_thread", fillcolor="#E8F4F8", width=3.0];
-        }
+sched_alpha: isize
+scale_cache: Vec<usize>
+cache_alpha: isize", fillcolor="#E8F4F8", width=2.8];
     }
 
-    Sy -> Trap;
-    Trap -> TM [label="fork | exec | exit | yield | sleep | timer"];
+    // ========== Layer 3: 两级 Stride 调度器 ==========
+    subgraph cluster_sched {
+        label="两级 Stride 调度器";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
 
-    TM -> P [label="管理", color="#333333"];
-    TM -> T [label="管理", color="#333333"];
-    P -> T [label="threads[]", color="#333333"];
+        PSched [label="进程级调度
+pick_ready_process_by_stride()
 
-    T -> KS [label="持有"];
-    KS -> TRX [label="push_context"];
-    T -> TCX [label="task_cx"];
-    T -> Status [style=dashed, color="#999999", label="status"];
-    T -> BlockR [style=dashed, color="#999999", label="block_reason"];
+遍历所有进程
+update_process_stride_by_alpha(pid)
+选出 pass 最小的进程
+process.pass += process.stride", fillcolor="#FFF3CD", width=2.6];
+        TSched [label="线程级调度
+pick_ready_thread_in_process(pid)
 
-    TM -> Sch [style=dashed, color="#999999", label="调度逻辑"];
-    Sch -> P [style=dashed, color="#999999", label="effective_tickets"];
-    Sch -> T [style=dashed, color="#999999", label="min pass"];
+遍历 ready_threads
+选出 pass 最小的线程
+thread.pass += thread.stride
+从 ready_threads 移除", fillcolor="#FFF3CD", width=2.6];
+        Scale [label="scale_factor_cached(n)
 
-    TM -> Proc [style=dashed, color="#999999", label="set_current_tid"];
-    TCX -> Switch [label="task_cx_ptr", color="#333333"];
-    Proc -> Switch [label="idle_task_cx_ptr"];
+sched_thread_scale(n, α) = n^(α/100)
+纯整数定点 + 连续开方
+按需扩容缓存
+alpha 变则整表重算", fillcolor="#E8F4F8", width=2.4];
+    }
 
-    Status -> Status [label="yield | preempt\nRunning -> Ready", color="#FF8C00"];
-    Status -> BlockR [label="sleep | wait | join | pipe\nRunning -> Blocking", color="#CC0000"];
-    BlockR -> Status [label="wake\nBlocking -> Ready", color="#228B22"];
+    // ========== Layer 4: 数据结构 (PCB / TCB) ==========
+    subgraph cluster_pcb {
+        label="ProcessControlBlock";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
 
-    Trap -> TM [label="timer", color="#FF8C00"];
-    TM -> Status [label="Running -> Ready", color="#FF8C00"];
-    TM -> Switch [label="__switch(idle, next)", color="#333333"];
+        PCB [label="PCB
 
-    Trap -> TM [label="exit", color="#CC0000"];
-    TM -> Status [label="当前线程->Zombie\n同进程其他->Dead", color="#CC0000"];
-    TM -> P [label="wake_parent_waiting_for", color="#228B22", style=dashed];
-    TM -> Switch [label="__switch 到 idle", color="#333333"];
+pid: Pid
+parent: Option<Pid>
+children: Vec<Pid>
 
-    Trap -> TM [label="kill | 异常投递", color="#CC0000"];
-    TM -> P [label="sig_pending |= bit", color="#CC0000"];
-    Trap -> TM [label="do_signal()", style=dashed, color="#CC0000"];
-    TM -> Status [label="致命信号->Zombie->exit", color="#CC0000"];
+user_space: MemorySet
+fd_table / fd_flags / free_fds
+cwd: String
+
+threads: Vec<Tid>
+ready_threads: Vec<Tid>
+
+tickets / stride / pass / run_ticks
+effective_tickets / ready_thread_count_snapshot
+
+mmap_areas / mmap_free_ranges / mmap_next
+sig_pending: u64
+exit_code: i32", fillcolor="#E8F4F8", width=2.6];
+    }
+
+    subgraph cluster_tcb {
+        label="ThreadControlBlock";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        TCB [label="TCB
+
+tid: Tid    pid: Pid
+
+kernel_stack: KernelStack
+trap_cx_addr: usize
+task_cx: TaskContext
+
+status:
+  Ready | Running | Blocking | Zombie | Dead
+
+block_reason:
+  Sleep { wake_tick }
+  WaitPid { pid }
+  Join { tid }
+  PipeRead | PipeWrite
+
+tickets / stride / pass / run_ticks
+exit_code: i32", fillcolor="#E8F4F8", width=2.6];
+    }
+
+    // ========== Layer 5: 执行上下文 ==========
+    subgraph cluster_ctx {
+        label="执行上下文";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        KS [label="KernelStack
+
+base_ppn: PhysPageNum
+pages: 32 (128KB)
+
+guard: 0xdead_beef_cafe_babe
+check_guard()
+push_context(TrapContext)
+bottom() | top()", fillcolor="#E8F4F8", width=1.8];
+        CX [label="TaskContext
+
+ra: usize
+sp: usize
+s: [usize; 12] (RISC-V)
+s: [usize; 10] (LoongArch)
+
+goto_task_entry(sp)
+  -> ra = __task_entry", fillcolor="#E8F4F8", width=1.8];
+        Proc [label="Processor
+
+current_tid: Option<Tid>
+idle_task_cx: TaskContext
+
+current_tid()
+set_current_tid()
+idle_task_cx_ptr()", fillcolor="#E8F4F8", width=1.8];
+    }
+
+    // ========== Layer 6: 汇编切换 ==========
+    subgraph cluster_switch {
+        label="Context Switch (__switch)";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        SW [label="__switch(current_cx, next_cx)
+
+保存 callee-saved regs + ra + sp
+恢复 next 的 callee-saved regs + ra + sp
+ret / jirl 跳转到 next.ra
+
+RISC-V: sd/ld s0-s11, ra, sp
+LoongArch: st.d/ld.d r22-r31, r1, r3", fillcolor="#D4EDDA", width=3.2];
+    }
+
+    // ========== Layer 7: 主调度循环 (run_tasks) ==========
+    subgraph cluster_loop {
+        label="主调度循环 (run_tasks)";
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+
+        Loop [label="run_tasks() -> !
+
+loop {
+  wake_sleeping_threads(now)
+  find_next_ready_thread()
+    -> pick_ready_process_by_stride()
+    -> pick_ready_thread_in_process()
+  prepare_thread(tid)
+    -> (pid, root, kstack_top, trap_cx, task_cx_ptr)
+  set_current_tid(tid)
+  activate_page_table(root)
+  __switch(idle_cx, task_cx)
+  set_current_tid(None)
+  (无就绪 -> WFI)
+}", fillcolor="#FFF3CD", width=3.5];
+    }
+
+    // ========== 状态转换子图 ==========
+    subgraph cluster_fsm {
+        label="线程状态机";
+        style=rounded;
+        color="#B8D4E3";
+        fillcolor="#F0F8FF";
+        penwidth=1;
+
+        StReady [label="Ready", fillcolor="#D4EDDA"];
+        StRun [label="Running", fillcolor="#FFF3CD"];
+        StBlock [label="Blocking", fillcolor="#E8F4F8"];
+        StZombie [label="Zombie", fillcolor="#F5F5F5"];
+        StDead [label="Dead", fillcolor="#F5F5F5"];
+
+        StReady -> StRun [label="schedule"];
+        StRun -> StReady [label="preempt / suspend"];
+        StRun -> StBlock [label="block_thread()
+Sleep/WaitPid/Join/Pipe"];
+        StBlock -> StReady [label="wake
+(wake_tick / child_exit / pipe)"];
+        StRun -> StZombie [label="thread_exit()"];
+        StZombie -> StDead [label="thread_join()
+reap_thread()"];
+    }
+
+    // ========== 右侧隐形通道（引导 Loop->TM 走右边） ==========
+    R_TM  [shape=point, width=0, height=0, style=invis];
+    R_MID [shape=point, width=0, height=0, style=invis];
+    R_LOOP [shape=point, width=0, height=0, style=invis];
+
+    // ========== 不可见边（纵向层级控制） ==========
+    API_PROC -> TM [style=invis];
+    TM -> PSched [style=invis];
+    PSched -> TSched [style=invis];
+    TSched -> Scale [style=invis];
+
+    PSched -> PCB [style=invis];
+    PCB -> TCB [style=invis];
+
+    TCB -> KS [style=invis];
+    KS -> CX [style=invis];
+    CX -> Proc [style=invis];
+    KS -> SW [style=invis];
+    SW -> Loop [style=invis];
+
+    // 状态机锚定到 TCB 同一层
+    TCB -> StReady [style=invis];
+
+    // 右侧通道：把最右边空间撑开，形成一条垂直的隐形脊柱
+    TM -> R_TM [style=invis];
+    TCB -> R_MID [style=invis];
+    Loop -> R_LOOP [style=invis];
+    R_TM -> R_MID [style=invis];
+    R_MID -> R_LOOP [style=invis];
+
+    // ========== 语义边 ==========
+    API_PROC -> TM [label="fork/exec/exit/waitpid", constraint=false];
+    API_THR -> TM [label="create/exit/join", constraint=false];
+    API_BLK -> TM [label="sleep/block", constraint=false];
+    API_SIG -> TM [label="kill/do_signal", constraint=false];
+    API_SCHED -> TM [label="set_alpha/tickets", constraint=false];
+
+    TM -> PCB [label="管理", style=dashed, color="#999999", constraint=false];
+    TM -> TCB [label="管理", style=dashed, color="#999999", constraint=false];
+    TM -> PSched [style=dashed, color="#999999", constraint=false];
+
+    PSched -> TSched [label="选出进程后", constraint=false];
+    PSched -> Scale [label="scale(n,α)", constraint=false];
+    Scale -> PCB [label="effective_tickets = tickets * factor", constraint=false];
+
+    PCB -> TCB [label="1:N
+threads / ready_threads", constraint=false];
+    TCB -> KS [label="拥有", style=dashed, color="#999999", constraint=false];
+    TCB -> CX [label="task_cx", style=dashed, color="#999999", constraint=false];
+
+    Proc -> TCB [label="current_tid", style=dashed, color="#999999", constraint=false];
+    Proc -> CX [label="idle_task_cx", style=dashed, color="#999999", constraint=false];
+
+    SW -> CX [label="读写", style=dashed, color="#999999", constraint=false];
+    SW -> Proc [label="切换后
+set_current_tid(None)", style=dashed, color="#999999", constraint=false];
+    KS -> CX [label="push_context()
+TrapContext", style=dashed, color="#999999", constraint=false];
+
+    // Loop->TM 走右侧通道：从东边出，从东边进，贴着右侧脊柱走
+    Loop -> TM [label="find_next_ready_thread()", constraint=false, tailport=e, headport=e];
+
+    Loop -> Proc [label="set_current_tid()", constraint=false];
+    Loop -> SW [label="__switch()", constraint=false];
+
+    // 对齐
+    {rank=same; API_PROC; API_THR; API_BLK; API_SIG; API_SCHED}
+    {rank=same; PSched; TSched; Scale}
+    {rank=same; KS; CX; Proc}
+    {rank=same; TCB; StReady; StRun; StBlock; StZombie; StDead}
 }

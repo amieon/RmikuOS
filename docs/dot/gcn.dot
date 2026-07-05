@@ -1,0 +1,15 @@
+digraph GCN {
+    rankdir=LR;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];
+    
+    Win [label="VeryEasyGCN\nWindows/Linux", fillcolor="#D4EDDA"];
+    Rm [label="RmikuOS\n裸运行时", fillcolor="#E8F4F8"];
+    Algo [label="算法代码\n零改动", fillcolor="#FFF3CD"];
+    G1 [label="gradcheck\n1e-8 PASS", fillcolor="#F8D7DA"];
+    G2 [label="Cora\n78.3%", fillcolor="#F8D7DA"];
+    
+    Win -> Algo [label="std::vector / std::exp"];
+    Algo -> Rm [label="mv::Vector / mymath::exp"];
+    Rm -> G1;
+    Rm -> G2;
+}

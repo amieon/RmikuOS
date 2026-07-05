@@ -1,0 +1,19 @@
+digraph Signal {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];
+    
+    Kill [label="sys_kill(pid, sig)", fillcolor="#D4EDDA"];
+    SP [label="sig_pending: u64 位图", fillcolor="#E8F4F8"];
+    SE [label="syscall_exit\ncheck do_signal()", fillcolor="#FFF3CD"];
+    TR [label="trap_return\ncheck do_signal()", fillcolor="#FFF3CD"];
+    Fatal [label="致命信号\n终止进程", fillcolor="#F8D7DA"];
+    Ignore [label="其他信号\n忽略", fillcolor="#F5F5F5"];
+    
+    Kill -> SP;
+    SP -> SE;
+    SP -> TR;
+    SE -> Fatal;
+    TR -> Fatal;
+    SE -> Ignore;
+    TR -> Ignore;
+}
