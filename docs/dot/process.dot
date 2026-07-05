@@ -1,0 +1,96 @@
+digraph ProcThreadSched {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=9];
+    edge [arrowhead=vee, color="#666666", fontname="Helvetica", fontsize=8];
+
+    Sy [label="Syscall ABI\necall", fillcolor="#FFF3CD", width=1.5];
+    Trap [label="Trap Handler\necall | 中断 | 异常", fillcolor="#FFE4B5", shape=trapezium, width=2.5];
+    Proc [label="Processor\ncurrent_tid | idle_task_cx", fillcolor="#E8F4F8"];
+    Switch [label="__switch (asm)\nsave ra,sp,s -> restore ra,sp,s\nret", fillcolor="#FFE4B5", shape=trapezium, width=2.2];
+
+    subgraph cluster_tm {
+        label="TaskManager (Mutex)";
+        labelloc=t;
+        style=rounded;
+        color="#333333";
+        fillcolor="#F0F8FF";
+        penwidth=2;
+        margin=24;
+
+        TM [label="TaskManager\nprocesses[] | threads[]\nfree_pids | free_tids\nscale_cache | sched_alpha", fillcolor="#FFF3CD", width=2.5];
+
+        subgraph cluster_proc {
+            label="Process";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            margin=12;
+            P [label="ProcessControlBlock\npid | parent | children | cwd\nfd_table | mmap_areas | sig_pending\nbase_tickets | stride | pass | effective_tickets", fillcolor="#E8F4F8", width=3.0];
+        }
+
+        subgraph cluster_thread {
+            label="Thread";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            margin=12;
+            T [label="ThreadControlBlock\ntid | pid | status | block_reason\nrun_ticks | tickets | stride | pass", fillcolor="#E8F4F8", width=3.0];
+            KS [label="KernelStack\n128KB contiguous + guard magic", fillcolor="#E8F4F8", width=2.0];
+            TCX [label="TaskContext\nra | sp | callee-saved", fillcolor="#E8F4F8", width=2.0];
+            TRX [label="TrapContext\n(on kstack top)\nuser registers + sepc | era", fillcolor="#E8F4F8", width=2.0];
+            Status [label="ThreadStatus\nReady | Running | Blocking\nZombie | Dead", fillcolor="#FFE4B5", shape=diamond, width=1.8];
+            BlockR [label="BlockReason\nSleep{tick} | WaitPid{pid}\nJoin{tid} | PipeRead | PipeWrite", fillcolor="#FFF3CD", shape=note, width=2.0, height=0.6];
+            
+            {rank=same; KS; TCX; TRX}
+            {rank=same; Status; BlockR}
+        }
+
+        subgraph cluster_sched {
+            label="Scheduler";
+            labelloc=b;
+            style=dashed;
+            color="#B8D4E3";
+            margin=12;
+            Sch [label="stride + alpha-scaled\npick_ready_process -> pick_ready_thread", fillcolor="#E8F4F8", width=3.0];
+        }
+    }
+
+    Sy -> Trap;
+    Trap -> TM [label="fork | exec | exit | yield | sleep | timer"];
+
+    TM -> P [label="管理", color="#333333"];
+    TM -> T [label="管理", color="#333333"];
+    P -> T [label="threads[]", color="#333333"];
+
+    T -> KS [label="持有"];
+    KS -> TRX [label="push_context"];
+    T -> TCX [label="task_cx"];
+    T -> Status [style=dashed, color="#999999", label="status"];
+    T -> BlockR [style=dashed, color="#999999", label="block_reason"];
+
+    TM -> Sch [style=dashed, color="#999999", label="调度逻辑"];
+    Sch -> P [style=dashed, color="#999999", label="effective_tickets"];
+    Sch -> T [style=dashed, color="#999999", label="min pass"];
+
+    TM -> Proc [style=dashed, color="#999999", label="set_current_tid"];
+    TCX -> Switch [label="task_cx_ptr", color="#333333"];
+    Proc -> Switch [label="idle_task_cx_ptr"];
+
+    Status -> Status [label="yield | preempt\nRunning -> Ready", color="#FF8C00"];
+    Status -> BlockR [label="sleep | wait | join | pipe\nRunning -> Blocking", color="#CC0000"];
+    BlockR -> Status [label="wake\nBlocking -> Ready", color="#228B22"];
+
+    Trap -> TM [label="timer", color="#FF8C00"];
+    TM -> Status [label="Running -> Ready", color="#FF8C00"];
+    TM -> Switch [label="__switch(idle, next)", color="#333333"];
+
+    Trap -> TM [label="exit", color="#CC0000"];
+    TM -> Status [label="当前线程->Zombie\n同进程其他->Dead", color="#CC0000"];
+    TM -> P [label="wake_parent_waiting_for", color="#228B22", style=dashed];
+    TM -> Switch [label="__switch 到 idle", color="#333333"];
+
+    Trap -> TM [label="kill | 异常投递", color="#CC0000"];
+    TM -> P [label="sig_pending |= bit", color="#CC0000"];
+    Trap -> TM [label="do_signal()", style=dashed, color="#CC0000"];
+    TM -> Status [label="致命信号->Zombie->exit", color="#CC0000"];
+}
