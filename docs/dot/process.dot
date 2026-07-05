@@ -89,12 +89,7 @@ alpha 变则整表重算", fillcolor="#E8F4F8", width=2.4];
     }
 
     // ========== Layer 4: 数据结构 (PCB / TCB) ==========
-    subgraph cluster_pcb {
-        label="ProcessControlBlock";
-        style=rounded;
-        color="#333333";
-        fillcolor="#F0F8FF";
-        penwidth=2;
+
 
         PCB [label="PCB
 
@@ -115,14 +110,15 @@ effective_tickets / ready_thread_count_snapshot
 mmap_areas / mmap_free_ranges / mmap_next
 sig_pending: u64
 exit_code: i32", fillcolor="#E8F4F8", width=2.6];
-    }
+    
 
+    // 只改了这里：style 拆开写，fillcolor 用强对比色，边框加粗到 5px
     subgraph cluster_tcb {
         label="ThreadControlBlock";
-        style=rounded;
-        color="#333333";
-        fillcolor="#F0F8FF";
-        penwidth=2;
+        style="rounded,filled";
+        color="#000000";
+        fillcolor="#E8F5E9";
+        penwidth=5;
 
         TCB [label="TCB
 
@@ -143,6 +139,12 @@ block_reason:
 
 tickets / stride / pass / run_ticks
 exit_code: i32", fillcolor="#E8F4F8", width=2.6];
+
+        StReady [label="Ready", fillcolor="#D4EDDA"];
+        StRun [label="Running", fillcolor="#FFF3CD"];
+        StBlock [label="Blocking", fillcolor="#E8F4F8"];
+        StZombie [label="Zombie", fillcolor="#F5F5F5"];
+        StDead [label="Dead", fillcolor="#F5F5F5"];
     }
 
     // ========== Layer 5: 执行上下文 ==========
@@ -224,31 +226,6 @@ loop {
 }", fillcolor="#FFF3CD", width=3.5];
     }
 
-    // ========== 状态转换子图 ==========
-    subgraph cluster_fsm {
-        label="线程状态机";
-        style=rounded;
-        color="#B8D4E3";
-        fillcolor="#F0F8FF";
-        penwidth=1;
-
-        StReady [label="Ready", fillcolor="#D4EDDA"];
-        StRun [label="Running", fillcolor="#FFF3CD"];
-        StBlock [label="Blocking", fillcolor="#E8F4F8"];
-        StZombie [label="Zombie", fillcolor="#F5F5F5"];
-        StDead [label="Dead", fillcolor="#F5F5F5"];
-
-        StReady -> StRun [label="schedule"];
-        StRun -> StReady [label="preempt / suspend"];
-        StRun -> StBlock [label="block_thread()
-Sleep/WaitPid/Join/Pipe"];
-        StBlock -> StReady [label="wake
-(wake_tick / child_exit / pipe)"];
-        StRun -> StZombie [label="thread_exit()"];
-        StZombie -> StDead [label="thread_join()
-reap_thread()"];
-    }
-
     // ========== 右侧隐形通道（引导 Loop->TM 走右边） ==========
     R_TM  [shape=point, width=0, height=0, style=invis];
     R_MID [shape=point, width=0, height=0, style=invis];
@@ -313,6 +290,17 @@ TrapContext", style=dashed, color="#999999", constraint=false];
 
     Loop -> Proc [label="set_current_tid()", constraint=false];
     Loop -> SW [label="__switch()", constraint=false];
+
+    // 状态机内部边
+    StReady -> StRun [label="schedule"];
+    StRun -> StReady [label="preempt / suspend"];
+    StRun -> StBlock [label="block_thread()
+Sleep/WaitPid/Join/Pipe"];
+    StBlock -> StReady [label="wake
+(wake_tick / child_exit / pipe)"];
+    StRun -> StZombie [label="thread_exit()"];
+    StZombie -> StDead [label="thread_join()
+reap_thread()"];
 
     // 对齐
     {rank=same; API_PROC; API_THR; API_BLK; API_SIG; API_SCHED}
