@@ -1,15 +1,11 @@
-OUTPUT_ARCH(loongarch64)
+OUTPUT_ARCH("loongarch64")
 ENTRY(_start)
 
-EXTERN(rust_main)
-EXTERN(__tlb_refill)
+
 
 KERNEL_PHYS_BASE = 0x01000000;
 KERNEL_OFFSET    = 0xffff800000000000;
 
-/*
- * Must match boot.S.
- */
 BOOT_MAP_SIZE  = 0x20000000;
 BOOT_PT_PAGES  = BOOT_MAP_SIZE / 0x200000;
 STACK_SIZE     = 65536;
@@ -17,10 +13,10 @@ MAX_HARTS      = 8;
 
 PHDRS
 {
-    boot   PT_LOAD FLAGS(5);  /* R-X */
-    text   PT_LOAD FLAGS(5);  /* R-X */
-    rodata PT_LOAD FLAGS(4);  /* R-- */
-    data   PT_LOAD FLAGS(6);  /* RW- */
+    boot   PT_LOAD FLAGS(5);
+    text   PT_LOAD FLAGS(5);
+    rodata PT_LOAD FLAGS(4);
+    data   PT_LOAD FLAGS(6);
 }
 
 SECTIONS
@@ -36,84 +32,73 @@ SECTIONS
 
     . = ALIGN(4K);
 
-    /*
-     * Linker-owned boot scratch.
-     *
-     * Do not rely on .space in boot.S for this.  These symbols are used
-     * directly by boot.S with la.local.
-     */
-    _boot_scratch_start = .;
+    /* 关键修复：.bss.boot 不指定 PHDR，避免生成 PT_LOAD segment */
+    .bss.boot (NOLOAD) : {
+        boot_pg_start = .;
+        boot_pgd = .; . += 4096;
+        boot_dir2 = .; . += 4096;
+        boot_dir1 = .; . += 4096;
+        boot_pt_pool = .; . += 4096 * BOOT_PT_PAGES;
+        boot_uart_pt = .; . += 4096;
+        boot_pg_end = .;
+        . = ALIGN(4K);
+        boot_stack = .; . += STACK_SIZE * MAX_HARTS;
+    }
 
-
-
-    . = ALIGN(4K);
-
-    _boot_scratch_end = .;
     _boot_end = .;
 
-    /*
-     * High-half kernel.
-     */
     _kernel_load_start = .;
     . += KERNEL_OFFSET;
 
     _kernel_start = .;
 
-    .text : AT(ADDR(.text) - KERNEL_OFFSET) {
+    /* 关键修复：.text 从 _kernel_load_start 开始，其他 section 自动连续 */
+    .text : AT(_kernel_load_start) {
         _stext = .;
-
         KEEP(*(.text.highboot))
         KEEP(*(.text.highboot.*))
-
         KEEP(*(.text.rust_main_real))
         KEEP(*(.text.rust_main_real.*))
-
         KEEP(*(.text))
         KEEP(*(.text.*))
-
         _etext = .;
     } :text
 
     . = ALIGN(4K);
 
-    .rodata : AT(ADDR(.rodata) - KERNEL_OFFSET) {
+    .rodata : {
         _srodata = .;
-
         KEEP(*(.rodata))
         KEEP(*(.rodata.*))
         KEEP(*(.srodata))
         KEEP(*(.srodata.*))
-
         _erodata = .;
     } :rodata
 
     . = ALIGN(4K);
 
-    .data : AT(ADDR(.data) - KERNEL_OFFSET) {
+    .data : {
         _sdata = .;
-
         KEEP(*(.data))
         KEEP(*(.data.*))
         KEEP(*(.sdata))
         KEEP(*(.sdata.*))
-
+        KEEP(*(.got))
+        KEEP(*(.got.*))
         _edata = .;
     } :data
 
     . = ALIGN(4K);
 
-    .bss (NOLOAD) : AT(ADDR(.bss) - KERNEL_OFFSET) {
+    .bss (NOLOAD) : {
         _sbss = .;
-
         KEEP(*(.bss))
         KEEP(*(.bss.*))
         KEEP(*(.sbss))
         KEEP(*(.sbss.*))
         KEEP(*(COMMON))
-
         _ebss = .;
     } :data
-
 
     . = ALIGN(4K);
 
@@ -121,38 +106,10 @@ SECTIONS
 
     _kernel_start_phys = _kernel_start - KERNEL_OFFSET;
     _kernel_end_phys   = _kernel_end   - KERNEL_OFFSET;
-
     _rust_main_phys    = rust_main     - KERNEL_OFFSET;
     _tlb_refill_phys   = __tlb_refill  - KERNEL_OFFSET;
-
     _sbss_phys = _sbss - KERNEL_OFFSET;
     _ebss_phys = _ebss - KERNEL_OFFSET;
-
-
-
-    boot_pg_start = .;
-
-    boot_pgd = .;
-    . += 4096;
-
-    boot_dir2 = .;
-    . += 4096;
-
-    boot_dir1 = .;
-    . += 4096;
-
-    boot_pt_pool = .;
-    . += 4096 * BOOT_PT_PAGES;
-
-    boot_uart_pt = .;
-    . += 4096;
-
-    boot_pg_end = .;
-
-    . = ALIGN(4K);
-
-    boot_stack = .;
-    . += STACK_SIZE * MAX_HARTS;
 
     /DISCARD/ : {
         *(.eh_frame)

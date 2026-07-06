@@ -99,18 +99,13 @@ case "$ARCH" in
     ;;
 
   loongarch64)
-    KERNEL_BIN="${KERNEL_ELF}.bin"
-    "$LA_OBJCOPY" -O binary "$KERNEL_ELF" "$KERNEL_BIN"
-
     QEMU_ARGS=(
       -machine virt
       -cpu la464
       -m 2G
       -smp 4
       -nographic
-      -kernel  "$KERNEL_ELF" 
-      -device "loader,file=$KERNEL_BIN,addr=0x1000000"
-
+      -kernel "$KERNEL_ELF"
       -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"
       -device "virtio-blk-pci,drive=blk0,disable-legacy=on"
       -drive "file=target/fat-loongarch64.img,format=raw,if=none,id=blk1"

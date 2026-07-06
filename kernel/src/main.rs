@@ -23,22 +23,15 @@ mod oscomp;
 #[macro_use]
 mod io;
 
-
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::{io::uart::puts_raw, sync::*};
 
-
-
-
 static MASTER_READY: AtomicBool = AtomicBool::new(false);
 
 struct HartLocal {
-    /// 我是几号核
     id: AtomicUsize,
-    /// 我执行了多少轮工作循环
     tick: AtomicUsize,
-    /// 我是否已经初始化完毕
     ready: AtomicBool,
 }
 
@@ -52,17 +45,9 @@ impl HartLocal {
     }
 }
 
-// 工牌墙，一共 MAX_HARTS 个格子。
-// 注意：这里用原子字段，避免多核同时读写 tick/ready 时形成 Rust 数据竞争。
 static HART_LOCALS: [HartLocal; arch::MAX_HARTS] = [
-    HartLocal::new(),
-    HartLocal::new(),
-    HartLocal::new(),
-    HartLocal::new(),
-    HartLocal::new(),
-    HartLocal::new(),
-    HartLocal::new(),
-    HartLocal::new(),
+    HartLocal::new(), HartLocal::new(), HartLocal::new(), HartLocal::new(),
+    HartLocal::new(), HartLocal::new(), HartLocal::new(), HartLocal::new(),
 ];
 
 unsafe extern "C" {
@@ -78,27 +63,45 @@ unsafe extern "C" {
     static _ebss: u8;
 }
 
+// === RISC-V: boot.S 里定义的全局变量，存储 _start 地址 ===
+#[cfg(target_arch = "riscv64")]
+extern "C" {
+    static boot_entry_addr: usize;
+}
 
-
+// === RISC-V: SBI HSM 唤醒其他 hart ===
+#[cfg(target_arch = "riscv64")]
+fn sbi_hart_start(hartid: usize, start_addr: usize) -> bool {
+    let mut error: isize;
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            inlateout("a0") hartid => error,
+            inlateout("a1") start_addr => _,
+            in("a2") 0,
+            in("a7") 0x48534D,
+            in("a6") 0,
+        );
+    }
+    error == 0
+}
 
 #[no_mangle]
 pub extern "C" fn rust_main(id: usize) -> ! {
-    puts_raw("abcdefg\n");
+    //puts_raw("abcdefg\n");
     if id >= arch::MAX_HARTS {
         park_forever();
     }
-    
+
     HART_LOCALS[id].id.store(id, Ordering::Relaxed);
 
     if id == 0 {
         log::info!("rust_main at high half");
         log::info!("kernel va: {:#x}..{:#x}", { core::ptr::addr_of!(_kernel_start) as usize } as usize, { core::ptr::addr_of!(_kernel_end) as usize } as usize);
-        // 主核路径
         primary_init();
 
 
     } else {
-        // 从核路径：Acquire 保证看到 true 时，主核初始化也都可见。
         while !MASTER_READY.load(Ordering::Acquire) {
             core::hint::spin_loop();
         }
@@ -114,40 +117,26 @@ fn primary_init() {
     trap::init();
 
     mm::init();
-    // test::heap_test::heap_test();
-    // test::frame_alloc_test::frame_alloc_test();
-    // test::page_table_test::page_table_test();
-    // test::memory_set_test::memory_set_test();
-
     mm::init_paging();
 
-    // test::user_memory_set_test::user_memory_set_test();
-    // test::block_cache_tset::test_block_cache();
-    // test::block_test::test_ramdisk();
     block::ext4_image::test_ext4_magic();
 
-    // 发现磁盘:ext4 盘 + fat 盘
     let (ext4_dev, fat_dev) = block::discover_disks::discover_disks();
 
     timer::init();
 
     #[cfg(feature = "oscomp")]
     {
-        // 评测模式:在碰盘之前就打标记关机
         crate::oscomp::run_oscomp_stub();
     }
 
-    // 挂载 ext4 rootfs(没找到就 ramdisk 兜底)
     let rootfs_device = ext4_dev.unwrap_or_else(|| {
         log::warn!("[disk] no ext4 disk, fallback to ramdisk");
         crate::block::ext4_image::rootfs_ramdisk()
     });
     fs::ext4fs::init(rootfs_device);
-
-    // 挂载 tmpfs
     fs::tmpfs::init();
 
-    // 挂载 FAT(如果有 fat 盘)
     if let Some(fdev) = fat_dev {
         fs::fatfs::init(fdev);
     } else {
@@ -174,6 +163,15 @@ fn primary_init() {
     println!("{}", BOOT_BANNER);
 
     task::init();
+        // === RISC-V: 唤醒其他 hart ===
+    #[cfg(target_arch = "riscv64")]
+    {
+        let entry = unsafe { boot_entry_addr };
+        for i in 1..arch::MAX_HARTS {
+            let _ = sbi_hart_start(i, entry);
+        }
+    }
+
     MASTER_READY.store(true, Ordering::Release);
     println!("主核初始化完成，从核可以进入了。");
     task::run_first_task();
@@ -193,25 +191,21 @@ fn kernel_loop(id: usize) -> ! {
             .fetch_add(1, Ordering::Relaxed)
             .wrapping_add(1);
 
-        // 每个核的工作，模拟做一些事情。
         do_work(id, tick);
 
-        // 主动让出 CPU：未来改成调度器，现在用忙等模拟。
         for _ in 0..1_000_000 {
             core::hint::spin_loop();
         }
     }
 }
 
-/// 模拟每个核的工作。
 fn do_work(id: usize, tick: usize) {
     if tick % 100 == 0 {
-        println!("核 {} 工作中... (第 {} 轮)", id, tick);
+        //println!("核 {} 工作中... (第 {} 轮)", id, tick);
     }
 
     match id {
         0 => {
-            // 主核检查其他核的状态。
             if tick % 500 == 0 {
                 print_heartbeat();
             }
@@ -222,7 +216,6 @@ fn do_work(id: usize, tick: usize) {
     }
 }
 
-/// 打印所有核的心跳状态。
 fn print_heartbeat() {
     println!("──── 心跳检查 ────");
 

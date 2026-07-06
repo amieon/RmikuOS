@@ -6,10 +6,6 @@ KERNEL_OFFSET    = 0xffffffc000000000;
 
 SECTIONS
 {
-    /*
-     * Low boot area.
-     * OpenSBI jumps here before paging is enabled.
-     */
     . = KERNEL_PHYS_BASE;
 
     .text.boot : {
@@ -26,12 +22,6 @@ SECTIONS
 
     . = ALIGN(4K);
 
-    /*
-     * Real kernel:
-     *
-     * VMA = high virtual address
-     * LMA = low physical address
-     */
     _kernel_load_start = .;
     . += KERNEL_OFFSET;
 
@@ -59,6 +49,11 @@ SECTIONS
         _sdata = .;
         *(.data)
         *(.data.*)
+        /* 存储 _start 的物理地址，供 SBI HSM 使用 */
+        boot_entry_addr = .;
+        QUAD(_start);
+        *(.data.boot)
+        *(.data.boot.*)
         _edata = .;
     }
 
