@@ -1,3 +1,8 @@
+为了实现多核启动，我们需要在汇编阶段区分主核（Hart 0）和从核（其他 Hart）。主核负责初始化早期页表并开启分页，然后通过一个内存标志位通知从核；从核在此期间轮询等待，直到主核完成后，再各自开启分页并跳转到高地址的 `rust_main`。由于你的 Rust 代码中已经实现了主从核在 `rust_main` 里的同步（`MASTER_READY`），汇编层面只需保证多核能同时进入高地址即可。
+
+以下是修改后的多核启动汇编代码：
+
+```assembly
     .section .text.boot, "ax"
     .globl _start
     .type _start, @function
@@ -39,8 +44,6 @@ _start:
 
     /*
      * Set a temporary physical stack before paging.
-     *
-     * boot_stack is in low .bss.boot, so its address is usable before paging.
      * One stack per hart.
      */
     la      sp, boot_stack
@@ -49,6 +52,10 @@ _start:
     mul     t0, t0, t1
     add     sp, sp, t0
 
+    /* 判断当前核是否为主核 (hartid == 0) */
+    bnez    tp, .Lsecondary_harts
+
+.Lprimary_hart:
     /*
      * Clear early root page table.
      */
@@ -60,22 +67,12 @@ _start:
     addi    t1, t1, -1
     bnez    t1, 1b
 
-    /*
-     * Root page table physical address.
-     */
     la      t0, boot_page_table
 
     /*
      * ------------------------------------------------------------------
      * Entry 2:
-     *
-     * Low temporary identity map:
-     *
-     *   VA 0x80000000..0xbfffffff
-     *     -> PA 0x80000000..0xbfffffff
-     *
-     * This is only for the transition. Without this, after csrw satp,
-     * the very next instruction fetch at low PC would fault.
+     * Low temporary identity map: VA 0x80000000..0xbfffffff -> PA 0x80000000..0xbfffffff
      * ------------------------------------------------------------------
      */
     li      t1, DRAM_BASE
@@ -91,13 +88,7 @@ _start:
     /*
      * ------------------------------------------------------------------
      * Entry 258:
-     *
-     * High direct map for DRAM:
-     *
-     *   VA KERNEL_OFFSET + 0x80000000
-     *     -> PA 0x80000000
-     *
-     * 0xffff_ffc0_8000_0000 has VPN2 index 258.
+     * High direct map for DRAM: VA KERNEL_OFFSET + 0x80000000 -> PA 0x80000000
      * ------------------------------------------------------------------
      */
     li      t1, DRAM_BASE
@@ -113,18 +104,7 @@ _start:
     /*
      * ------------------------------------------------------------------
      * Entry 256:
-     *
-     * High direct map for low MMIO area:
-     *
-     *   VA KERNEL_OFFSET + 0x00000000
-     *     -> PA 0x00000000
-     *
-     * This covers UART at PA 0x10000000 as:
-     *
-     *   VA 0xffff_ffc0_1000_0000
-     *     -> PA 0x1000_0000
-     *
-     * Later you can replace this coarse 1GiB mapping with page-level MMIO.
+     * High direct map for low MMIO area: VA KERNEL_OFFSET + 0x00000000 -> PA 0x00000000
      * ------------------------------------------------------------------
      */
     li      t1, 0
@@ -138,7 +118,7 @@ _start:
     sd      t1, 0(t4)
 
     /*
-     * Enable Sv39.
+     * Enable Sv39 for primary hart.
      */
     la      t0, boot_page_table
     srli    t0, t0, 12
@@ -148,6 +128,30 @@ _start:
     csrw    satp, t0
     sfence.vma
 
+    /* 通知从核：页表已初始化完毕，可以开启分页了 */
+    la      t0, boot_page_table_ready
+    li      t1, 1
+    sd      t1, 0(t0)
+
+    j       .Lswitch_to_high_half
+
+.Lsecondary_harts:
+    /* 从核等待主核将早期页表初始化完毕 */
+    la      t0, boot_page_table_ready
+2:
+    ld      t1, 0(t0)
+    beqz    t1, 2b
+
+    /* 使用主核准备好的页表开启分页 */
+    la      t0, boot_page_table
+    srli    t0, t0, 12
+    li      t1, SATP_MODE_SV39
+    or      t0, t0, t1
+
+    csrw    satp, t0
+    sfence.vma
+
+.Lswitch_to_high_half:
     /*
      * We are still executing through the temporary low identity map.
      * Now switch stack to its high virtual alias.
@@ -179,7 +183,12 @@ _start:
 boot_page_table:
     .space 4096
 
+    .align 3
+boot_page_table_ready:
+    .space 8
+
     .align 12
 boot_stack:
     .space 65536 * 8
 boot_stack_top:
+```

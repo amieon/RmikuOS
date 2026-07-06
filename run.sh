@@ -87,6 +87,7 @@ case "$ARCH" in
     QEMU_ARGS=(
       -machine virt
       -cpu rv64
+      -smp 4
       -m 512M
       -nographic
       -kernel "$KERNEL_ELF"
@@ -105,7 +106,7 @@ case "$ARCH" in
       -machine virt
       -cpu la464
       -m 2G
-      -smp 1
+      -smp 4
       -nographic
       -kernel  "$KERNEL_ELF" 
       -device "loader,file=$KERNEL_BIN,addr=0x1000000"

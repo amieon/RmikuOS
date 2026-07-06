@@ -26,7 +26,7 @@ mod io;
 
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use crate::sync::*;
+use crate::{io::uart::puts_raw, sync::*};
 
 
 
@@ -83,6 +83,7 @@ unsafe extern "C" {
 
 #[no_mangle]
 pub extern "C" fn rust_main(id: usize) -> ! {
+    puts_raw("abcdefg\n");
     if id >= arch::MAX_HARTS {
         park_forever();
     }
@@ -95,10 +96,7 @@ pub extern "C" fn rust_main(id: usize) -> ! {
         // 主核路径
         primary_init();
 
-        // 点亮信号灯：从核们，可以进来了！
-        // Release 保证上面的所有初始化对从核可见。
-        MASTER_READY.store(true, Ordering::Release);
-        println!("主核初始化完成，从核可以进入了。");
+
     } else {
         // 从核路径：Acquire 保证看到 true 时，主核初始化也都可见。
         while !MASTER_READY.load(Ordering::Acquire) {
@@ -176,6 +174,8 @@ fn primary_init() {
     println!("{}", BOOT_BANNER);
 
     task::init();
+    MASTER_READY.store(true, Ordering::Release);
+    println!("主核初始化完成，从核可以进入了。");
     task::run_first_task();
 }
 
