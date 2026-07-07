@@ -20,6 +20,7 @@
 _start:
     mv      tp, a0
 
+
     la      sp, boot_stack
     li      t0, 65536
     addi    t1, tp, 1

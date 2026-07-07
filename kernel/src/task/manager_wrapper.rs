@@ -2,9 +2,11 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use log::logger;
 
+use crate::lock_detect;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
 use crate::sync::spin::Mutex;
+use crate::task::manager;
 use crate::trap::TrapContext;
 
 use super::context::TaskContext;
@@ -28,7 +30,7 @@ impl TaskManager {
         let current_tid = processor::current_tid();
 
         let task_cx_ptr = {
-            let mut manager = TASK_MANAGER.lock();
+            let mut manager = lock_detect!(TASK_MANAGER);
 
             let pid = manager.pid_of_tid(current_tid);
 
@@ -62,6 +64,12 @@ impl TaskManager {
 }
 
 pub fn init() {
+    // {
+    //     let mut manager = lock_detect!(TASK_MANAGER);
+    // manager.processes.resize_with(64, || None);
+    // manager.threads.resize_with(64, || None);
+    // }
+
     let init_path = "/bin/shell";
 
     let app = crate::fs::read_all(init_path)
@@ -88,7 +96,7 @@ pub fn init() {
     process.threads.push(0);
     process.ready_threads.push(0);
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.insert_process(process);
     manager.insert_thread(thread);
 
@@ -104,27 +112,15 @@ pub fn run_first_task() -> ! {
 
 
 
+
 pub fn run_tasks() -> ! {
     loop {
         let next = {
-            let mut manager = TASK_MANAGER.lock();
+            let mut manager = lock_detect!(TASK_MANAGER);
             let now = crate::timer::ticks();
-
             manager.wake_sleeping_threads(now);
-
             if let Some(tid) = manager.find_next_ready_thread() {
-                let (pid, root, kstack_top, trap_cx_addr, task_cx_ptr) =
-                    manager.prepare_thread(tid);
-
-                log::info!(
-                    "[task] schedule pid={} tid={}: root={:?}, kstack_top={:#x}, trap_cx={:#x}",
-                    pid,
-                    tid,
-                    root,
-                    kstack_top,
-                    trap_cx_addr,
-                );
-
+                let (pid, root, _, _, task_cx_ptr) = manager.prepare_thread(tid);
                 Some((tid, root, task_cx_ptr))
             } else {
                 None
@@ -133,18 +129,15 @@ pub fn run_tasks() -> ! {
 
         if let Some((tid, root, task_cx_ptr)) = next {
             processor::set_current_tid(Some(tid));
-
             crate::mm::activate_page_table(root);
-
             let idle_cx_ptr = processor::idle_task_cx_ptr();
-       
+            
             unsafe {
                 __switch(idle_cx_ptr, task_cx_ptr);
             }
-
-            processor::set_current_tid(None);
-            
+        
         } else {
+
             crate::arch::enable_interrupt();
             crate::arch::wait_for_interrupt();
             crate::arch::disable_interrupt();
@@ -154,12 +147,13 @@ pub fn run_tasks() -> ! {
 
 
 
+
 #[no_mangle]
 pub extern "C" fn __task_entry() -> ! {
     let current_tid = processor::current_tid();
 
     let trap_cx_addr = {
-        let manager = TASK_MANAGER.lock();
+        let manager = lock_detect!(TASK_MANAGER);
         manager.thread(current_tid).trap_cx_addr
     };
 
@@ -177,7 +171,7 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
     let wake_tick = crate::timer::ticks() + ticks;
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         log::info!(
             "[task] thread {} sleep until tick {}",
@@ -208,7 +202,7 @@ pub fn suspend_current_and_run_next() -> isize {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
         manager.mark_thread_ready(current_tid);
         manager.thread_cx_ptr(current_tid)
     };
@@ -223,10 +217,16 @@ pub fn suspend_current_and_run_next() -> isize {
 }
 
 pub fn preempt_current_and_run_next() {
-    let current_tid = processor::current_tid();
+    let current_tid = match processor::current_tid_opt() {
+        Some(tid) => tid,
+        None => return,
+    };
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = match TASK_MANAGER.try_lock() {
+            Some(guard) => guard,
+            None => return, 
+        };
         manager.mark_thread_ready(current_tid);
         manager.thread_cx_ptr(current_tid)
     };
@@ -244,7 +244,7 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
 
     loop {
         let action = {
-            let mut manager = TASK_MANAGER.lock();
+            let mut manager = lock_detect!(TASK_MANAGER);
             let current_pid = manager.pid_of_tid(current_tid);
             manager.try_waitpid(current_pid, pid, exit_code_ptr)
         };
@@ -256,7 +256,7 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
                     return 0;  // WNOHANG：子进程未退出，直接返回 0
                 }
                 let task_cx_ptr = {
-                    let mut manager = TASK_MANAGER.lock();
+                    let mut manager = lock_detect!(TASK_MANAGER);
 
                     log::info!(
                         "[task] tid {} waitpid(pid={}) blocking",
@@ -288,7 +288,7 @@ pub fn fork_current() -> isize {
     let parent_tid = processor::current_tid();
 
     let child_pid = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         let parent_pid = manager.pid_of_tid(parent_tid);
 
@@ -373,7 +373,7 @@ pub fn fork_current() -> isize {
 //     let current_tid = processor::current_tid();
 
 //     let task_cx_ptr = {
-//         let mut manager = TASK_MANAGER.lock();
+//         let mut manager = lock_detect!(TASK_MANAGER);
 
 //         let current_pid = manager.pid_of_tid(current_tid);
 
@@ -405,7 +405,7 @@ pub fn current_tid() -> Tid {
 
 pub fn current_pid() -> Pid {
     let tid = processor::current_tid();
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.pid_of_tid(tid)
 }
 
@@ -414,19 +414,19 @@ pub fn current_task_id() -> usize {
 }
 
 pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.read_current_user_bytes(user_buf, len)
 }
 
 pub fn write_current_user_bytes(user_buf: usize, data: &[u8]) -> Option<usize> {
     let pid = current_pid();
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.write_user_bytes_by_pid(pid, user_buf, data)
 }
 
 pub fn wake_sleeping_tasks() {
     let now = crate::timer::ticks();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.wake_sleeping_threads(now);
 }
 
@@ -547,7 +547,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     let current_tid = processor::current_tid();
 
     let new_root = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
         let current_pid = manager.pid_of_tid(current_tid);
 
         if manager.process(current_pid).threads.len() != 1 {
@@ -697,25 +697,25 @@ fn build_user_stack_with_args(
 
 pub fn current_file(fd: usize) -> Option<crate::fs::FileRef> {
     let pid = current_pid();
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.get_file(pid, fd)
 }
 
 pub fn alloc_fd_current(file: crate::fs::FileRef) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.alloc_fd(pid, file)
 }
 
 pub fn close_fd_current(fd: usize) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.close_fd(pid, fd)
 }
 
 pub fn get_fd_flags_current(fd: usize) -> usize{
     let current_pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(current_pid);
     process.fd_flags.get(fd).copied().unwrap_or(0)
 }
@@ -723,7 +723,7 @@ pub fn get_fd_flags_current(fd: usize) -> usize{
 
 pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(pid);
     
     if fd >= process.fd_table.len() || process.fd_table[fd].is_none() {
@@ -746,14 +746,14 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
 
 pub fn current_cwd() -> String {
     let pid = current_pid();
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
 
     manager.process(pid).cwd.clone()
 }
 
 pub fn set_current_cwd(new_cwd: String) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
 
     manager.process_mut(pid).cwd = new_cwd;
 
@@ -767,7 +767,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         let current_pid = manager.pid_of_tid(current_tid);
         let tids = manager.process(current_pid).threads.clone();
@@ -829,7 +829,7 @@ pub fn thread_create_current(
     arg1: usize,
     user_stack_top: usize,
 ) -> isize {
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
 
     manager.create_thread_current(
         entry,
@@ -843,7 +843,7 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         let pid = manager.pid_of_tid(current_tid);
 
@@ -884,7 +884,7 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
 
     loop {
         let task_cx_ptr = {
-            let mut manager = TASK_MANAGER.lock();
+            let mut manager = lock_detect!(TASK_MANAGER);
 
             let current_pid = manager.pid_of_tid(current_tid);
 
@@ -983,7 +983,7 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
         None => return -1,
     };
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let pid = manager.current_pid();
 
     let (start, end) = {
@@ -1057,7 +1057,7 @@ pub fn munmap_current(addr: usize, len: usize) -> isize {
         None => return -1,
     };
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let pid = manager.current_pid();
 
     {
@@ -1101,7 +1101,7 @@ pub fn set_thread_tickets_current(tid: usize, tickets: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let current_tid = processor::current_tid();
     let current_pid = manager.pid_of_tid(current_tid);
 
@@ -1125,7 +1125,7 @@ pub fn set_process_tickets_current(pid: usize, tickets: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
 
     if manager.try_process(pid).is_none() {
         return -1;
@@ -1144,7 +1144,7 @@ pub fn set_my_tickets_current(tickets: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let tid = processor::current_tid();
     let pid = manager.pid_of_tid(tid);
 
@@ -1165,7 +1165,7 @@ pub fn set_my_tickets_current(tickets: usize) -> isize {
 pub fn get_thread_tickets_current(tid: usize) -> isize {
 
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let current_tid = processor::current_tid();
     let current_pid = manager.pid_of_tid(current_tid);
 
@@ -1186,7 +1186,7 @@ pub fn get_thread_tickets_current(tid: usize) -> isize {
 pub fn get_process_tickets_current(pid: usize) -> isize {
 
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
 
     if manager.try_process(pid).is_none() {
         return -1;
@@ -1198,7 +1198,7 @@ pub fn get_process_tickets_current(pid: usize) -> isize {
 
 pub fn get_my_tickets_current() -> isize {
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let tid = processor::current_tid();
     let pid = manager.pid_of_tid(tid);
 
@@ -1216,33 +1216,21 @@ pub fn set_sched_alpha_current(alpha: isize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.set_sched_alpha(alpha)  
 }
 
 pub fn get_sched_alpha_current() -> isize {
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.get_sched_alpha() as isize
 }
-
 pub fn account_current_tick() {
-    let tid = processor::current_tid();
-
-    let mut manager = TASK_MANAGER.lock();
-
+    let Some(tid) = processor::current_tid_opt() else { return };
+    let mut manager = lock_detect!(TASK_MANAGER);
     let pid = manager.pid_of_tid(tid);
-
-    {
-        let thread = manager.thread_mut(tid);
-        thread.run_ticks = thread.run_ticks.saturating_add(1);
-    }
-
-    {
-        let process = manager.process_mut(pid);
-        process.run_ticks = process.run_ticks.saturating_add(1);
-    }
+    manager.thread_mut(tid).run_ticks = manager.thread_mut(tid).run_ticks.saturating_add(1);
+    manager.process_mut(pid).run_ticks = manager.process_mut(pid).run_ticks.saturating_add(1);
 }
-
 
 fn write_value_to_user<T: Copy>(user_ptr: usize, value: &T) -> isize {
     if user_ptr == 0 {
@@ -1283,7 +1271,7 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
     }
 
     let stat = {
-        let manager = TASK_MANAGER.lock();
+        let manager = lock_detect!(TASK_MANAGER);
 
         if manager.try_process(pid).is_none() {
             return -1;
@@ -1324,7 +1312,7 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
 }
 
 pub fn reset_sched_stat() -> isize {
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.reset_sched_stat()
 }
 
@@ -1355,7 +1343,7 @@ pub fn block_current_on_pipe_read() -> isize {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         log::info!(
             "[task] thread {} is blocked in pipe read",
@@ -1387,7 +1375,7 @@ pub fn block_current_on_pipe_write() -> isize {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         log::info!(
             "[task] thread {} is blocked in pipe write",
@@ -1412,19 +1400,19 @@ pub fn block_current_on_pipe_write() -> isize {
 }
 
 pub fn wake_pipe_readers() {
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.wake_threads_by_reason(BlockReason::PipeRead);
 }
 
 
 pub fn wake_pipe_writers() {
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.wake_threads_by_reason(BlockReason::PipeWrite);
 }
 
 
 pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let current_tid = processor::current_tid();
     let current_pid = manager.pid_of_tid(current_tid);
     
@@ -1471,7 +1459,7 @@ pub fn kill(pid: usize, sig: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
 
     if manager.try_process(pid).is_none() {
         return -1;
@@ -1496,7 +1484,7 @@ pub fn kill(pid: usize, sig: usize) -> isize {
 
 pub fn do_signal() {
     let current_pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(current_pid);
     let pending = process.sig_pending;
     if pending == 0 { return; }
@@ -1513,7 +1501,7 @@ pub fn do_signal() {
 pub fn set_current_sig_pending(sig : usize){
     let pid = current_pid();
     if sig >= 64 { return; }
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     if let Some(process) = manager.try_process_mut(pid) {
         process.sig_pending |= 1u64 << sig;
     }

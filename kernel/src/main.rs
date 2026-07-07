@@ -86,32 +86,40 @@ fn sbi_hart_start(hartid: usize, start_addr: usize) -> bool {
     error == 0
 }
 
+
+static PRIMARY_HART: AtomicUsize = AtomicUsize::new(!0); // !0 = 未初始化
+
 #[no_mangle]
 pub extern "C" fn rust_main(id: usize) -> ! {
-    //puts_raw("abcdefg\n");
+
     if id >= arch::MAX_HARTS {
         park_forever();
     }
 
     HART_LOCALS[id].id.store(id, Ordering::Relaxed);
 
-    if id == 0 {
-        log::info!("rust_main at high half");
-        log::info!("kernel va: {:#x}..{:#x}", { core::ptr::addr_of!(_kernel_start) as usize } as usize, { core::ptr::addr_of!(_kernel_end) as usize } as usize);
-        primary_init();
+    // 第一个到达的核成为主核（无论 id 是多少）
+    let is_primary = PRIMARY_HART.compare_exchange(
+        !0,
+        id,
+        Ordering::SeqCst,
+        Ordering::Relaxed,
+    ).is_ok();
 
-
+    if is_primary {
+        primary_init(id);
+        task::run_first_task();
     } else {
         while !MASTER_READY.load(Ordering::Acquire) {
             core::hint::spin_loop();
         }
         secondary_init(id);
+        loop{}
     }
-
-    kernel_loop(id);
 }
 
-fn primary_init() {
+fn primary_init(id: usize) {
+
     io::uart::init();
     io::logger::init();
     trap::init();
@@ -172,12 +180,18 @@ fn primary_init() {
         }
     }
 
+
     MASTER_READY.store(true, Ordering::Release);
     println!("主核初始化完成，从核可以进入了。");
     task::run_first_task();
 }
 
 fn secondary_init(id: usize) {
+
+    trap::init();
+    timer::init();
+    
+
     HART_LOCALS[id].ready.store(true, Ordering::Release);
     println!("从核 {} 就绪！", id);
 }

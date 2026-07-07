@@ -11,6 +11,7 @@ mod signal;
 pub use context::TaskContext;
 pub use kernel_stack::KernelStack;
 pub use thread::{ThreadControlBlock, ThreadStatus};
+pub use processor::{current_hart_id};
 pub use signal::*;
 
 pub const WNOHANG: usize = 1; 
@@ -76,4 +77,5 @@ pub use manager_wrapper::{
     kill,
     do_signal,
     set_current_sig_pending,
+    
 };
