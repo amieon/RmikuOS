@@ -25,7 +25,7 @@ mod io;
 
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use crate::{io::uart::puts_raw, sync::*};
+use crate::{io::uart::puts_raw, sync::*, task::run_tasks};
 
 static MASTER_READY: AtomicBool = AtomicBool::new(false);
 
@@ -183,7 +183,7 @@ fn primary_init(id: usize) {
 
     MASTER_READY.store(true, Ordering::Release);
     println!("主核初始化完成，从核可以进入了。");
-    task::run_first_task();
+    run_tasks();
 }
 
 fn secondary_init(id: usize) {
@@ -194,6 +194,7 @@ fn secondary_init(id: usize) {
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);
     println!("从核 {} 就绪！", id);
+    //run_tasks();
 }
 
 fn kernel_loop(id: usize) -> ! {

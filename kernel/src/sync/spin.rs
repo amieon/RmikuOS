@@ -6,8 +6,8 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 /// 带死锁检测的自旋锁
 pub struct Mutex<T> {
     locked: AtomicBool,
-    owner: AtomicUsize,      // !0 = 无持有者
-    line: AtomicUsize,       // 持有者是在哪一行代码拿的锁
+    owner: AtomicUsize,
+    line: AtomicUsize,
     data: UnsafeCell<T>,
 }
 
@@ -24,22 +24,19 @@ impl<T> Mutex<T> {
         }
     }
 
-    /// 普通 lock（不带行号，死锁只报 hart id）
     pub fn lock(&self) -> MutexGuard<'_, T> {
         self.lock_at(0)
     }
 
-    /// 带代码行号的 lock，死锁时精确定位
     pub fn lock_at(&self, line: u32) -> MutexGuard<'_, T> {
-        let hart =crate::task::current_hart_id();  // ← 确保这个函数可用
+        let hart = crate::task::current_hart_id();
 
         while self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
-            // === 死锁检测：同核重入 ===
-            if self.owner.load(Ordering::Relaxed) == hart {
+            if self.owner.load(Ordering::Acquire) == hart {
                 let prev_line = self.line.load(Ordering::Relaxed);
                 panic!(
                     "DEADLOCK: hart {} re-entering lock! previous lock at line {} (current line {})",
@@ -71,7 +68,8 @@ impl<T> Mutex<T> {
     }
 
     fn unlock(&self) {
-        self.owner.store(!0, Ordering::Relaxed);
+        // === 关键修复：Release 确保 owner 写入在 locked 释放前可见 ===
+        self.owner.store(!0, Ordering::Release);
         self.line.store(0, Ordering::Relaxed);
         self.locked.store(false, Ordering::Release);
     }
@@ -100,7 +98,6 @@ impl<'a, T> Drop for MutexGuard<'a, T> {
     }
 }
 
-/// 宏：自动传入当前代码行号
 #[macro_export]
 macro_rules! lock_detect {
     ($mutex:expr) => {

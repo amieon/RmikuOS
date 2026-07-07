@@ -1,6 +1,12 @@
-use crate::{sync::spin::Mutex, task::thread::Tid};
-
+use crate::arch::MAX_HARTS;
+use crate::task::thread::Tid;
 use super::context::TaskContext;
+
+// ============== per-cpu 数组 ==============
+static mut PROCESSORS: [Processor; MAX_HARTS] = [
+    Processor::new(), Processor::new(), Processor::new(), Processor::new(),
+    Processor::new(), Processor::new(), Processor::new(), Processor::new(),
+];
 
 pub struct Processor {
     pub current_tid: Option<Tid>,
@@ -14,29 +20,43 @@ impl Processor {
             idle_task_cx: TaskContext::zero(),
         }
     }
-
-    pub fn current_tid(&self) -> Option<usize> {
-        self.current_tid
-    }
-
-    pub fn idle_task_cx_ptr(&mut self) -> *mut TaskContext {
-        &mut self.idle_task_cx as *mut TaskContext
-    }
 }
 
-static PROCESSOR: Mutex<Processor> = Mutex::new(Processor::new());
+// ============== hart id ==============
+#[cfg(target_arch = "riscv64")]
+#[inline]
+pub fn current_hart_id() -> usize {
+    let hartid: usize;
+    unsafe { core::arch::asm!("mv {}, tp", out(reg) hartid, options(nostack)) };
+    hartid
+}
+
+#[cfg(target_arch = "loongarch64")]
+#[inline]
+pub fn current_hart_id() -> usize {
+    let hartid: usize;
+    unsafe { core::arch::asm!("move {}, $r21", out(reg) hartid, options(nostack)) };
+    hartid
+}
+
+// ============== 无锁访问 ==============
+fn processor() -> &'static mut Processor {
+    let hart = current_hart_id();
+    unsafe { &mut PROCESSORS[hart] }
+}
 
 pub fn current_tid() -> Tid {
-    PROCESSOR
-        .lock()
-        .current_tid()
-        .expect("no current task")
+    processor().current_tid.expect("no current task")
+}
+
+pub fn current_tid_opt() -> Option<Tid> {
+    processor().current_tid
 }
 
 pub fn set_current_tid(id: Option<Tid>) {
-    PROCESSOR.lock().current_tid = id;
+    processor().current_tid = id;
 }
 
 pub fn idle_task_cx_ptr() -> *mut TaskContext {
-    PROCESSOR.lock().idle_task_cx_ptr()
+    &mut processor().idle_task_cx as *mut TaskContext
 }
