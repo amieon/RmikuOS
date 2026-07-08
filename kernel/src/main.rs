@@ -194,7 +194,7 @@ fn secondary_init(id: usize) {
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);
     println!("从核 {} 就绪！", id);
-    //run_tasks();
+    run_tasks();
 }
 
 fn kernel_loop(id: usize) -> ! {

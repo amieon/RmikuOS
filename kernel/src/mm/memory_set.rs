@@ -7,10 +7,11 @@ use crate::mm::{
 use crate::arch::{MEMORY_END, MEMORY_START};
 use crate::mm::page_table::{PageTable, PteFlags};
 use crate::mm::map_area::{MapArea,MapPermission,MapType};
+use crate::sync::spin::Mutex;
 
 
 pub struct MemorySet {
-    page_table: PageTable,
+    page_table: Mutex<PageTable>,
     areas: Vec<MapArea>,
 }
 
@@ -37,17 +38,17 @@ impl MemorySet {
 impl MemorySet {
     pub fn new_bare() -> Self {
         Self {
-            page_table: PageTable::new(),
+            page_table: Mutex::new(PageTable::new()),
             areas: Vec::new(),
         }
     }
 
     pub fn root_ppn(&self) -> PhysPageNum {
-        self.page_table.root_ppn()
+        self.page_table.lock().root_ppn()
     }
 
     pub fn insert_area(&mut self, mut area: MapArea) {
-        area.map(&mut self.page_table);
+        area.map(&mut self.page_table.lock());
         self.areas.push(area);
     }
     
@@ -62,13 +63,13 @@ impl MemorySet {
         };
 
         let mut area = self.areas.remove(index);
-        area.unmap(&mut self.page_table);
+        area.unmap(&mut self.page_table.lock());
 
         true
     }
 
     pub fn translate(&self, vpn: VirtPageNum) -> Option<crate::mm::page_table::PageTableEntry> {
-        self.page_table.translate(vpn)
+        self.page_table.lock().translate(vpn)
     }
 }
 
@@ -237,6 +238,7 @@ impl MemorySet {
 
             let pte = self
                 .page_table
+                .lock()
                 .translate(vpn)
                 .expect("copy_data: target page is not mapped");
 
@@ -328,8 +330,8 @@ impl MemorySet {
             );
 
             let new_area = area.clone_framed_area_data(
-                &user_space.page_table,
-                &mut memory_set.page_table,
+                &user_space.page_table.lock(),
+                &mut memory_set.page_table.lock(),
             );
 
             memory_set.areas.push(new_area);

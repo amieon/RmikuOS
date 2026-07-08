@@ -1,3 +1,4 @@
+
 mod fs;
 mod process;
 mod thread;
@@ -45,9 +46,39 @@ pub const SYSCALL_SHUTDOWN: usize = 39;
 pub const SYSCALL_KILL: usize = 40;
 pub const SYSCALL_FCNTL: usize = 41;
 
+use core::sync::atomic::{AtomicBool, Ordering};
 
+/// 系统调用 BKL（验证多核并发用）
+/// 会 __switch 的 syscall 必须在切走前手动调用 bkl_unlock()
+pub static SYSCALL_BKL: AtomicBool = AtomicBool::new(false);
+
+#[inline]
+pub fn bkl_lock() {
+    while SYSCALL_BKL
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        core::hint::spin_loop();
+    }
+}
+
+/// 幂等释放：重复调用无害
+#[inline]
+pub fn bkl_unlock() {
+    SYSCALL_BKL.store(false, Ordering::Release);
+}
 
 pub fn syscall(id: usize, args: [usize; 6]) -> isize {
+    bkl_lock();
+    let ret = inner_syscall(id, args);
+    // 正常返回的 syscall 在这里释放
+    // __switch 前已手动释放过的，幂等再释放一次也无害
+    bkl_unlock();
+    ret
+}
+
+
+pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
     match id {
         SYSCALL_EXIT => process::sys_exit(args[0] as i32),
         SYSCALL_YIELD => process::sys_yield(),

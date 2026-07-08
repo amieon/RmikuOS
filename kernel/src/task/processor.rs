@@ -1,4 +1,5 @@
 use crate::arch::MAX_HARTS;
+use crate::print;
 use crate::task::thread::Tid;
 use super::context::TaskContext;
 
@@ -35,13 +36,15 @@ pub fn current_hart_id() -> usize {
 #[inline]
 pub fn current_hart_id() -> usize {
     let hartid: usize;
-    unsafe { core::arch::asm!("move {}, $r21", out(reg) hartid, options(nostack)) };
-    hartid
+    unsafe {
+        core::arch::asm!("csrrd {}, 0x20", out(reg) hartid, options(nostack));
+    }
+    hartid & 0x1FF  // 取 CoreID 低 9 位
 }
-
 // ============== 无锁访问 ==============
 fn processor() -> &'static mut Processor {
     let hart = current_hart_id();
+    // crate::io::uart::print_i32(hart as i32);
     unsafe { &mut PROCESSORS[hart] }
 }
 

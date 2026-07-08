@@ -54,7 +54,7 @@ impl TaskManager {
         };
 
         let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
         unsafe {
             __switch(task_cx_ptr, idle_cx_ptr);
         }
@@ -107,12 +107,6 @@ pub fn run_first_task() -> ! {
     run_tasks()
 }
 
-
-
-
-
-
-
 pub fn run_tasks() -> ! {
     loop {
         let next = {
@@ -137,7 +131,6 @@ pub fn run_tasks() -> ! {
             }
         
         } else {
-
             crate::arch::enable_interrupt();
             crate::arch::wait_for_interrupt();
             crate::arch::disable_interrupt();
@@ -190,7 +183,7 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -208,7 +201,7 @@ pub fn suspend_current_and_run_next() -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -232,7 +225,7 @@ pub fn preempt_current_and_run_next() {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -275,7 +268,7 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
                 };
 
                 let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
                 unsafe {
                     __switch(task_cx_ptr, idle_cx_ptr);
                 }
@@ -367,37 +360,6 @@ pub fn fork_current() -> isize {
 
 }
 
-
-
-// pub fn exit_current_and_run_next(exit_code: i32) -> ! {
-//     let current_tid = processor::current_tid();
-
-//     let task_cx_ptr = {
-//         let mut manager = TASK_MANAGER.lock();
-
-//         let current_pid = manager.pid_of_tid(current_tid);
-
-//         log::info!(
-//             "[task] pid={} tid={} exited with code {}",
-//             current_pid,
-//             current_tid,
-//             exit_code,
-//         );
-
-//         manager.mark_thread_zombie(current_tid, exit_code);
-//         manager.wake_parent_waiting_for(current_pid);
-
-//         manager.thread_cx_ptr(current_tid)
-//     };
-
-//     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
-//     unsafe {
-//         __switch(task_cx_ptr, idle_cx_ptr);
-//     }
-
-//     panic!("zombie thread returned after exit");
-// }
 
 pub fn current_tid() -> Tid {
     processor::current_tid()
@@ -815,7 +777,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+    crate::syscall::bkl_unlock();
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -867,7 +829,7 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -932,7 +894,7 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
         };
 
         let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
         unsafe {
             __switch(task_cx_ptr, idle_cx_ptr);
         }
@@ -1364,7 +1326,7 @@ pub fn block_current_on_pipe_read() -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -1396,7 +1358,7 @@ pub fn block_current_on_pipe_write() -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-
+crate::syscall::bkl_unlock();
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
