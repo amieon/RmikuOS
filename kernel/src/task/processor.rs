@@ -12,6 +12,9 @@ static mut PROCESSORS: [Processor; MAX_HARTS] = [
 pub struct Processor {
     pub current_tid: Option<Tid>,
     pub idle_task_cx: TaskContext,
+    pub force_exit: bool,
+    pub need_resched: bool,
+    pub preempt_count: usize,  
 }
 
 impl Processor {
@@ -19,6 +22,9 @@ impl Processor {
         Self {
             current_tid: None,
             idle_task_cx: TaskContext::zero(),
+            force_exit: false,
+            need_resched: false,
+            preempt_count: 0,
         }
     }
 }
@@ -62,4 +68,43 @@ pub fn set_current_tid(id: Option<Tid>) {
 
 pub fn idle_task_cx_ptr() -> *mut TaskContext {
     &mut processor().idle_task_cx as *mut TaskContext
+}
+
+pub fn set_current_force_exit(val: bool) {
+    processor().force_exit = val;
+}
+
+pub fn check_and_clear_force_exit() -> bool {
+    let proc = processor();
+    let old = proc.force_exit;
+    proc.force_exit = false;
+    old
+}
+
+pub fn set_current_need_resched(val: bool) {
+    processor().need_resched = val;
+}
+
+pub fn check_and_clear_need_resched() -> bool {
+    let proc = processor();
+    let old = proc.need_resched;
+    proc.need_resched = false;
+    old
+}
+
+pub fn preempt_disable() {
+    processor().preempt_count += 1;
+    // 可选：内存屏障防止乱序
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn preempt_enable() {
+    let p = processor();
+    if p.preempt_count > 0 {
+        p.preempt_count -= 1;
+    }
+}
+
+pub fn can_preempt() -> bool {
+    processor().preempt_count == 0
 }

@@ -114,7 +114,7 @@ pub extern "C" fn rust_main(id: usize) -> ! {
             core::hint::spin_loop();
         }
         secondary_init(id);
-        loop{}
+        run_tasks();
     }
 }
 

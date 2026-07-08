@@ -3,7 +3,6 @@ use core::ops::{Deref, DerefMut};
 use core::hint::spin_loop;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-/// 带死锁检测的自旋锁
 pub struct Mutex<T> {
     locked: AtomicBool,
     owner: AtomicUsize,
@@ -31,46 +30,63 @@ impl<T> Mutex<T> {
     pub fn lock_at(&self, line: u32) -> MutexGuard<'_, T> {
         let hart = crate::task::current_hart_id();
 
+        if self.owner.load(Ordering::Relaxed) == hart {
+            let prev_line = self.line.load(Ordering::Relaxed);
+            panic!(
+                "DEADLOCK: hart {} re-entering lock {:p}! prev line {} (current line {})",
+                hart, self as *const Self, prev_line, line
+            );
+        }
+        // ========== 死锁检测：CAS 之前 ==========
+        // 只有本核能把 owner 设成自己的 hart id，
+        // 所以 Relaxed 足够——本核一定看到自己之前的值。
+        if self.owner.load(Ordering::Relaxed) == hart {
+            let prev_line = self.line.load(Ordering::Relaxed);
+            panic!(
+                "DEADLOCK: hart {} re-entering lock! previous lock at line {} (current line {})",
+                hart, prev_line, line
+            );
+        }
+
+        // 自旋抢锁
         while self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
-            if self.owner.load(Ordering::Acquire) == hart {
-                let prev_line = self.line.load(Ordering::Relaxed);
-                panic!(
-                    "DEADLOCK: hart {} re-entering lock! previous lock at line {} (current line {})",
-                    hart, prev_line, line
-                );
+            while self.locked.load(Ordering::Acquire) {
+                spin_loop();
             }
-            spin_loop();
         }
 
-        self.owner.store(hart, Ordering::Relaxed);
-        self.line.store(line as usize, Ordering::Relaxed);
+        // 抢到了，标 owner
+        self.owner.store(hart, Ordering::Release);
+        self.line.store(line as usize, Ordering::Release);
+        crate::task::preempt_disable();
         MutexGuard { mutex: self }
     }
 
     pub fn try_lock(&self) -> Option<MutexGuard<'_, T>> {
-        match self.locked.compare_exchange(
-            false,
-            true,
-            Ordering::Acquire,
-            Ordering::Relaxed,
-        ) {
-            Ok(_) => {
-                self.owner.store(crate::task::current_hart_id(), Ordering::Relaxed);
-                self.line.store(0, Ordering::Relaxed);
-                Some(MutexGuard { mutex: self })
-            }
-            Err(_) => None,
+        let hart = crate::task::current_hart_id();
+        if self.owner.load(Ordering::Relaxed) == hart {
+            // 之前死锁检测保留
+        }
+        if self.locked.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_ok() {
+            self.owner.store(hart, Ordering::Release);
+            self.line.store(0, Ordering::Release);
+            // 临时调试：打印谁拿走了 try_lock
+            //crate::println!("[try_lock] hart {} got TASK_MANAGER, caller line not available", hart);
+            crate::task::preempt_disable();
+            Some(MutexGuard { mutex: self })
+        } else {
+            None
         }
     }
 
     fn unlock(&self) {
-        // === 关键修复：Release 确保 owner 写入在 locked 释放前可见 ===
+        crate::task::preempt_enable();
         self.owner.store(!0, Ordering::Release);
-        self.line.store(0, Ordering::Relaxed);
+        self.line.store(0, Ordering::Release);
         self.locked.store(false, Ordering::Release);
     }
 }

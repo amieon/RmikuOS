@@ -25,6 +25,7 @@ const CAUSE_LOAD_PAGE_FAULT: usize = 13;
 const CAUSE_STORE_PAGE_FAULT: usize = 15;
 
 const INTERRUPT_SUPERVISOR_TIMER: usize = 5;
+const INTERRUPT_SUPERVISOR_SOFT: usize = 1; 
 
 
 macro_rules! trap_println {
@@ -57,18 +58,33 @@ pub fn init() {
 #[no_mangle]
 pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     let code = cx.cause_code();
-
     if cx.is_interrupt() {
         match code {
             INTERRUPT_SUPERVISOR_TIMER => {
                 let should_schedule = crate::timer::tick();
-
                 if should_schedule && cx.is_from_user() {
-                    crate::task::preempt_current_and_run_next();
+                    // ★ 只有可抢占时才切
+                    if crate::task::can_preempt() {
+                        crate::task::preempt_current_and_run_next();
+                    } else {
+                        crate::task::set_current_need_resched(true);
+                    }
                 }
                 if cx.is_from_user() {
                     crate::task::account_current_tick();
                 }
+            }
+            INTERRUPT_SUPERVISOR_SOFT => {
+                let need_resched = crate::arch::ipi::handle_ipi();
+                if need_resched && cx.is_from_user() {
+                    // ★ 只有可抢占时才切
+                    if crate::task::can_preempt() {
+                        crate::task::preempt_current_and_run_next();
+                    } else {
+                        crate::task::set_current_need_resched(true);
+                    }
+                }
+                // 内核态下不再需要额外处理（标志已经设置）
             }
             _ => {
                 trap_println!(
@@ -82,7 +98,6 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         }
         return cx;
     }
-
     match code {
         CAUSE_U_ECALL => {
             cx.sepc += 4;

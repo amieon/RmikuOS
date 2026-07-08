@@ -30,6 +30,7 @@ const ECODE_INE: usize = 0x0d;
 const ECODE_IPE: usize = 0x0e;
 
 const ESTAT_IS_TIMER: usize = 1 << 11;
+const ESTAT_IS_IPI: usize = 1 << 12;   
 
 macro_rules! trap_println {
     ($($arg:tt)*) => {{
@@ -83,6 +84,7 @@ pub fn init() {
 
     log::info!("LoongArch trap initialized: eentry={:#x}", eentry);
 }
+
 
 
 
@@ -154,22 +156,46 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
     cx
 }
 
+
+
+
 fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
-
+    // ─────────── IPI ───────────
+    if pending & ESTAT_IS_IPI != 0 {
+        unsafe { core::arch::asm!("csrwr $zero, 0x49"); }
+        let need_resched = crate::arch::ipi::handle_ipi();
+        if need_resched {
+            if cx.is_from_user() {
+                // ★ 新增：只有可抢占时才切
+                if crate::task::can_preempt() {
+                    crate::task::preempt_current_and_run_next();
+                } else {
+                    crate::task::set_current_need_resched(true);
+                }
+            } else {
+                crate::task::set_current_need_resched(true);
+            }
+        }
+        return;
+    }
+    // ─────────── 定时器 ───────────
     if pending & ESTAT_IS_TIMER != 0 {
+        clear_timer_interrupt();
         let should_schedule = crate::timer::tick();
-
         if should_schedule && cx.is_from_user() {
-            crate::task::preempt_current_and_run_next();
+        
+            if crate::task::can_preempt() {
+                crate::task::preempt_current_and_run_next();
+            } else {
+                crate::task::set_current_need_resched(true);
+            }
         }
         if cx.is_from_user() {
             crate::task::account_current_tick();
         }
-
         return;
     }
-    
 
     trap_println!(
         "[trap] unsupported interrupt: pending={:#x}, era={:#x}, estat={:#x}",

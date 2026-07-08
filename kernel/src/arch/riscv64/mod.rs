@@ -24,6 +24,9 @@ pub const VIRTIO_MMIO_SIZE: usize = VIRTIO_MMIO_STRIDE * VIRTIO_MMIO_COUNT;
 //和loongarch那边统一一下变量，不然会爆红，看着难受
 pub const PCI_ECAM_BASE:usize = 0x7f7f7f7f;
 
+pub mod ipi;      
+pub use ipi::tlb_shootdown_broadcast;
+pub use ipi::tlb_shootdown_sync;
 
 /// 读取当前核的 hartid
 /// 在 boot.S 里已经把 hartid 存到了 tp 寄存器
@@ -72,4 +75,10 @@ pub fn flush_tlb() {
             options(nostack)
         );
     }
+}
+
+pub fn current_hart_id() -> usize {
+    let hartid: usize;
+    unsafe { core::arch::asm!("mv {}, tp", out(reg) hartid, options(nostack)) };
+    hartid
 }

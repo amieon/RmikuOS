@@ -2,11 +2,13 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use log::logger;
 
+use crate::arch::ipi;                    // 新增：IPI 发送接口
 use crate::lock_detect;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
 use crate::sync::spin::Mutex;
 use crate::task::manager;
+use crate::task::switch::switch_unlock_and_switch;
 use crate::trap::TrapContext;
 
 use super::context::TaskContext;
@@ -30,7 +32,7 @@ impl TaskManager {
         let current_tid = processor::current_tid();
 
         let task_cx_ptr = {
-            let mut manager = TASK_MANAGER.lock();
+            let mut manager = lock_detect!(TASK_MANAGER);
 
             let pid = manager.pid_of_tid(current_tid);
 
@@ -54,7 +56,11 @@ impl TaskManager {
         };
 
         let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+        crate::syscall::bkl_unlock();
+
+        // 新增：当前线程退出并唤醒 joins，通知其他核
+        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+
         unsafe {
             __switch(task_cx_ptr, idle_cx_ptr);
         }
@@ -64,12 +70,6 @@ crate::syscall::bkl_unlock();
 }
 
 pub fn init() {
-    // {
-    //     let mut manager = TASK_MANAGER.lock();
-    // manager.processes.resize_with(64, || None);
-    // manager.threads.resize_with(64, || None);
-    // }
-
     let init_path = "/bin/shell";
 
     let app = crate::fs::read_all(init_path)
@@ -96,7 +96,7 @@ pub fn init() {
     process.threads.push(0);
     process.ready_threads.push(0);
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.insert_process(process);
     manager.insert_thread(thread);
 
@@ -108,45 +108,58 @@ pub fn run_first_task() -> ! {
 }
 
 pub fn run_tasks() -> ! {
+    let hart = processor::current_hart_id();
     loop {
-        let next = {
-            let mut manager = TASK_MANAGER.lock();
-            let now = crate::timer::ticks();
-            manager.wake_sleeping_threads(now);
-            if let Some(tid) = manager.find_next_ready_thread() {
-                let (pid, root, _, _, task_cx_ptr) = manager.prepare_thread(tid);
-                Some((tid, root, task_cx_ptr))
-            } else {
-                None
-            }
+        // ★ 只有可抢占时才处理 need_resched
+        let need_resched = if crate::task::processor::can_preempt() {
+            crate::task::processor::check_and_clear_need_resched()
+        } else {
+            false  // 不可抢占，保留 need_resched 标志，下次再处理
         };
 
-        if let Some((tid, root, task_cx_ptr)) = next {
-            processor::set_current_tid(Some(tid));
-            crate::mm::activate_page_table(root);
-            let idle_cx_ptr = processor::idle_task_cx_ptr();
-            
+        let next_tid = {
+            let mut manager = lock_detect!(TASK_MANAGER);  // lock 内部已 preempt_disable
+            let now = crate::timer::ticks();
+            manager.wake_sleeping_threads(now);
+            manager.find_next_ready_thread()
+        };  // 此处 drop guard → unlock → preempt_enable
+
+        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+
+        if let Some(tid) = next_tid {
+            let (pid, root_ppn, kernel_stack_top, trap_cx_addr, task_cx_ptr) = {
+                let mut manager = lock_detect!(TASK_MANAGER);
+                manager.prepare_thread(tid)
+            };  // unlock → preempt_enable
+            crate::task::processor::set_current_tid(Some(tid));
+            crate::mm::activate_page_table(root_ppn);
             unsafe {
-                __switch(idle_cx_ptr, task_cx_ptr);
+                switch_unlock_and_switch(task_cx_ptr);
             }
-        
-        } else {
             crate::arch::enable_interrupt();
-            crate::arch::wait_for_interrupt();
+        } else {
             crate::arch::disable_interrupt();
+            let still_empty = {
+                let mut manager = lock_detect!(TASK_MANAGER);
+                let now = crate::timer::ticks();
+                manager.wake_sleeping_threads(now);
+                manager.find_next_ready_thread().is_none()
+            };
+            if still_empty {
+                crate::arch::enable_interrupt();
+                unsafe { crate::arch::wait_for_interrupt(); }
+                crate::arch::disable_interrupt();
+            }
+            crate::arch::enable_interrupt();
         }
     }
 }
-
-
-
-
 #[no_mangle]
 pub extern "C" fn __task_entry() -> ! {
     let current_tid = processor::current_tid();
 
     let trap_cx_addr = {
-        let manager = TASK_MANAGER.lock();
+        let manager = lock_detect!(TASK_MANAGER);
         manager.thread(current_tid).trap_cx_addr
     };
 
@@ -164,7 +177,7 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
     let wake_tick = crate::timer::ticks() + ticks;
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         log::info!(
             "[task] thread {} sleep until tick {}",
@@ -183,7 +196,8 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+    crate::syscall::bkl_unlock();
+    // sleep 不会使其他线程就绪，无需 IPI
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -195,13 +209,17 @@ pub fn suspend_current_and_run_next() -> isize {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
         manager.mark_thread_ready(current_tid);
         manager.thread_cx_ptr(current_tid)
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+    crate::syscall::bkl_unlock();
+
+    // 新增：刚刚把当前线程放回就绪队列
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -218,14 +236,17 @@ pub fn preempt_current_and_run_next() {
     let task_cx_ptr = {
         let mut manager = match TASK_MANAGER.try_lock() {
             Some(guard) => guard,
-            None => return, 
+            None => return,
         };
         manager.mark_thread_ready(current_tid);
         manager.thread_cx_ptr(current_tid)
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+    crate::syscall::bkl_unlock();
+
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -237,7 +258,7 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
 
     loop {
         let action = {
-            let mut manager = TASK_MANAGER.lock();
+            let mut manager = lock_detect!(TASK_MANAGER);
             let current_pid = manager.pid_of_tid(current_tid);
             manager.try_waitpid(current_pid, pid, exit_code_ptr)
         };
@@ -246,10 +267,10 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
             WaitPidAction::Return(ret) => return ret,
             WaitPidAction::Block => {
                 if nohang {
-                    return 0;  // WNOHANG：子进程未退出，直接返回 0
+                    return 0;
                 }
                 let task_cx_ptr = {
-                    let mut manager = TASK_MANAGER.lock();
+                    let mut manager = lock_detect!(TASK_MANAGER);
 
                     log::info!(
                         "[task] tid {} waitpid(pid={}) blocking",
@@ -268,7 +289,8 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
                 };
 
                 let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+                crate::syscall::bkl_unlock();
+                // 阻塞自己，不需要 IPI（父进程退出时会发）
                 unsafe {
                     __switch(task_cx_ptr, idle_cx_ptr);
                 }
@@ -281,7 +303,7 @@ pub fn fork_current() -> isize {
     let parent_tid = processor::current_tid();
 
     let child_pid = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         let parent_pid = manager.pid_of_tid(parent_tid);
 
@@ -294,17 +316,14 @@ pub fn fork_current() -> isize {
         let mut child_trap_cx =
             *manager.thread(parent_tid).trap_cx();
 
-        /*
-         * fork 在子进程返回 0。
-         */
         child_trap_cx.set_syscall_ret(0);
 
         let child_fd_table = manager.process(parent_pid).fd_table.clone();
         let child_fd_flags = manager.process(parent_pid).fd_flags.clone();
         let child_free_fds = manager.process(parent_pid).free_fds.clone();
         for slot in child_fd_table.iter() {
-        if let Some(file) = slot {
-                file.on_fork();  
+            if let Some(file) = slot {
+                file.on_fork();
             }
         }
         let child_cwd = manager.process(parent_pid).cwd.clone();
@@ -356,8 +375,10 @@ pub fn fork_current() -> isize {
         child_pid
     };
 
-    child_pid as isize
+    // 新增：fork 产生了新的就绪线程，通知其他核
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
+    child_pid as isize
 }
 
 
@@ -367,7 +388,7 @@ pub fn current_tid() -> Tid {
 
 pub fn current_pid() -> Pid {
     let tid = processor::current_tid();
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.pid_of_tid(tid)
 }
 
@@ -376,20 +397,24 @@ pub fn current_task_id() -> usize {
 }
 
 pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.read_current_user_bytes(user_buf, len)
 }
 
 pub fn write_current_user_bytes(user_buf: usize, data: &[u8]) -> Option<usize> {
     let pid = current_pid();
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.write_user_bytes_by_pid(pid, user_buf, data)
 }
 
 pub fn wake_sleeping_tasks() {
     let now = crate::timer::ticks();
-    let mut manager = TASK_MANAGER.lock();
-    manager.wake_sleeping_threads(now);
+    {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        manager.wake_sleeping_threads(now);
+    }
+    // 新增：被动唤醒超时线程，通知其他核
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 }
 
 const EXEC_MAX_ARGS: usize = 8;
@@ -509,7 +534,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     let current_tid = processor::current_tid();
 
     let new_root = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
         let current_pid = manager.pid_of_tid(current_tid);
 
         if manager.process(current_pid).threads.len() != 1 {
@@ -522,7 +547,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 
         let (old_space, closed_files) = {
             let process = manager.process_mut(current_pid);
-            let closed = process.close_non_standard_fds_on_exec();  
+            let closed = process.close_non_standard_fds_on_exec();
             let old = core::mem::replace(&mut process.user_space, new_user_space);
             (old, closed)
         }; 
@@ -659,39 +684,36 @@ fn build_user_stack_with_args(
 
 pub fn current_file(fd: usize) -> Option<crate::fs::FileRef> {
     let pid = current_pid();
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.get_file(pid, fd)
 }
 
 pub fn alloc_fd_current(file: crate::fs::FileRef) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.alloc_fd(pid, file)
 }
 
 pub fn close_fd_current(fd: usize) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.close_fd(pid, fd)
 }
 
 pub fn get_fd_flags_current(fd: usize) -> usize{
     let current_pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(current_pid);
     process.fd_flags.get(fd).copied().unwrap_or(0)
 }
 
-
 pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(pid);
-    
     if fd >= process.fd_table.len() || process.fd_table[fd].is_none() {
         return -1;
     }
-    
     match cmd {
         crate::fs::F_GETFL => process.fd_flags.get(fd).copied().unwrap_or(0) as isize,
         crate::fs::F_SETFL => {
@@ -705,31 +727,24 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     }
 }
 
-
 pub fn current_cwd() -> String {
     let pid = current_pid();
-    let manager = TASK_MANAGER.lock();
-
+    let manager = lock_detect!(TASK_MANAGER);
     manager.process(pid).cwd.clone()
 }
 
 pub fn set_current_cwd(new_cwd: String) -> isize {
     let pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
-
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.process_mut(pid).cwd = new_cwd;
-
     0
 }
-
-
-
 
 pub fn exit_current_and_run_next(exit_code: i32) -> ! {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         let current_pid = manager.pid_of_tid(current_tid);
         let tids = manager.process(current_pid).threads.clone();
@@ -760,7 +775,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
             let process = manager.process_mut(current_pid);
             let mut v = Vec::new();
             for slot in process.fd_table.iter_mut() {
-                if let Some(file) = slot.take() {   // take 出来,原地留 None
+                if let Some(file) = slot.take() {
                     v.push(file);
                 }
             }
@@ -778,6 +793,10 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
     crate::syscall::bkl_unlock();
+
+    // 新增：进程退出可能唤醒父进程的 waitpid
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -791,21 +810,20 @@ pub fn thread_create_current(
     arg1: usize,
     user_stack_top: usize,
 ) -> isize {
-    let mut manager = TASK_MANAGER.lock();
-
-    manager.create_thread_current(
-        entry,
-        arg0,
-        arg1,
-        user_stack_top,
-    )
+    let ret = {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        manager.create_thread_current(entry, arg0, arg1, user_stack_top)
+    };
+    // 新增：新线程就绪
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    ret
 }
 
 pub fn thread_exit_current(exit_code: i32) -> ! {
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         let pid = manager.pid_of_tid(current_tid);
 
@@ -829,7 +847,11 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+    crate::syscall::bkl_unlock();
+
+    // 新增：退出并唤醒 joiners
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -846,7 +868,7 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
 
     loop {
         let task_cx_ptr = {
-            let mut manager = TASK_MANAGER.lock();
+            let mut manager = lock_detect!(TASK_MANAGER);
 
             let current_pid = manager.pid_of_tid(current_tid);
 
@@ -871,6 +893,7 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
 
                     manager.reap_thread(target_tid);
 
+                    // 这里不会产生新的就绪线程，但为了安全，统一在外部没有发 IPI（join 本身不增加就绪）
                     return target_tid as isize;
                 }
 
@@ -894,17 +917,13 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
         };
 
         let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+        crate::syscall::bkl_unlock();
+        // join 阻塞自己，被唤醒时由目标线程的退出负责发 IPI，此处无需
         unsafe {
             __switch(task_cx_ptr, idle_cx_ptr);
         }
-
-        /*
-         * 被目标线程 thread_exit 唤醒后，回到这里重新检查。
-         */
     }
 }
-
 
 
 fn mmap_prot_to_perm(prot: usize) -> Option<crate::mm::MapPermission> {
@@ -945,7 +964,7 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
         None => return -1,
     };
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let pid = manager.current_pid();
 
     let (start, end) = {
@@ -992,7 +1011,7 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
         });
     }
 
-    crate::arch::flush_tlb();
+    crate::arch::tlb_shootdown_sync();
 
     log::info!(
         "[mmap] pid={} len={} prot={:#x} => {:#x}..{:#x}",
@@ -1019,7 +1038,7 @@ pub fn munmap_current(addr: usize, len: usize) -> isize {
         None => return -1,
     };
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let pid = manager.current_pid();
 
     {
@@ -1044,8 +1063,7 @@ pub fn munmap_current(addr: usize, len: usize) -> isize {
         process.dealloc_mmap_range(start, end);
     }
 
-
-    crate::arch::flush_tlb();
+    crate::arch::tlb_shootdown_sync();
 
     log::info!(
         "[munmap] pid={} {:#x}..{:#x}",
@@ -1063,7 +1081,7 @@ pub fn set_thread_tickets_current(tid: usize, tickets: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let current_tid = processor::current_tid();
     let current_pid = manager.pid_of_tid(current_tid);
 
@@ -1087,7 +1105,7 @@ pub fn set_process_tickets_current(pid: usize, tickets: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
 
     if manager.try_process(pid).is_none() {
         return -1;
@@ -1106,7 +1124,7 @@ pub fn set_my_tickets_current(tickets: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let tid = processor::current_tid();
     let pid = manager.pid_of_tid(tid);
 
@@ -1125,9 +1143,7 @@ pub fn set_my_tickets_current(tickets: usize) -> isize {
 
 
 pub fn get_thread_tickets_current(tid: usize) -> isize {
-
-
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let current_tid = processor::current_tid();
     let current_pid = manager.pid_of_tid(current_tid);
 
@@ -1140,15 +1156,11 @@ pub fn get_thread_tickets_current(tid: usize) -> isize {
     }
 
     let thread = manager.thread_mut(tid);
-
     thread.tickets as isize
-     
 }
 
 pub fn get_process_tickets_current(pid: usize) -> isize {
-
-
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
 
     if manager.try_process(pid).is_none() {
         return -1;
@@ -1159,11 +1171,9 @@ pub fn get_process_tickets_current(pid: usize) -> isize {
 }
 
 pub fn get_my_tickets_current() -> isize {
-
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let tid = processor::current_tid();
     let pid = manager.pid_of_tid(tid);
-
 
     if manager.try_process(pid).is_none() {
         return -1;
@@ -1178,18 +1188,18 @@ pub fn set_sched_alpha_current(alpha: isize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
-    manager.set_sched_alpha(alpha)  
+    let mut manager = lock_detect!(TASK_MANAGER);
+    manager.set_sched_alpha(alpha)
 }
 
 pub fn get_sched_alpha_current() -> isize {
-    let manager = TASK_MANAGER.lock();
+    let manager = lock_detect!(TASK_MANAGER);
     manager.get_sched_alpha() as isize
 }
+
 pub fn account_current_tick() {
     let Some(tid) = processor::current_tid_opt() else { return };
     
-    // 中断里 try_lock，拿不到就放弃
     let mut manager = match TASK_MANAGER.try_lock() {
         Some(g) => g,
         None => return,
@@ -1199,6 +1209,7 @@ pub fn account_current_tick() {
     manager.thread_mut(tid).run_ticks += 1;
     manager.process_mut(pid).run_ticks += 1;
 }
+
 fn write_value_to_user<T: Copy>(user_ptr: usize, value: &T) -> isize {
     if user_ptr == 0 {
         return -1;
@@ -1238,7 +1249,7 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
     }
 
     let stat = {
-        let manager = TASK_MANAGER.lock();
+        let manager = lock_detect!(TASK_MANAGER);
 
         if manager.try_process(pid).is_none() {
             return -1;
@@ -1279,7 +1290,7 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
 }
 
 pub fn reset_sched_stat() -> isize {
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     manager.reset_sched_stat()
 }
 
@@ -1303,14 +1314,11 @@ pub fn new_pipe(fd : usize) -> isize {
     }
 }
 
-
-
 pub fn block_current_on_pipe_read() -> isize {
-
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         log::info!(
             "[task] thread {} is blocked in pipe read",
@@ -1326,7 +1334,8 @@ pub fn block_current_on_pipe_read() -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+    crate::syscall::bkl_unlock();
+    // 阻塞自己，不需要 IPI
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -1334,15 +1343,11 @@ crate::syscall::bkl_unlock();
     0
 }
 
-
-
-
 pub fn block_current_on_pipe_write() -> isize {
-
     let current_tid = processor::current_tid();
 
     let task_cx_ptr = {
-        let mut manager = TASK_MANAGER.lock();
+        let mut manager = lock_detect!(TASK_MANAGER);
 
         log::info!(
             "[task] thread {} is blocked in pipe write",
@@ -1358,7 +1363,8 @@ pub fn block_current_on_pipe_write() -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-crate::syscall::bkl_unlock();
+    crate::syscall::bkl_unlock();
+    // 阻塞自己
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
@@ -1367,19 +1373,25 @@ crate::syscall::bkl_unlock();
 }
 
 pub fn wake_pipe_readers() {
-    let mut manager = TASK_MANAGER.lock();
-    manager.wake_threads_by_reason(BlockReason::PipeRead);
+    {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        manager.wake_threads_by_reason(BlockReason::PipeRead);
+    }
+    // 新增：唤醒了一组 pipe 读者
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 }
-
 
 pub fn wake_pipe_writers() {
-    let mut manager = TASK_MANAGER.lock();
-    manager.wake_threads_by_reason(BlockReason::PipeWrite);
+    {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        manager.wake_threads_by_reason(BlockReason::PipeWrite);
+    }
+    // 新增
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 }
 
-
 pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let current_tid = processor::current_tid();
     let current_pid = manager.pid_of_tid(current_tid);
     
@@ -1411,7 +1423,6 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
         manager.release_file(f);
     }
 
-
     old_file.on_fork(); 
     {
         let process = manager.process_mut(current_pid);
@@ -1426,32 +1437,37 @@ pub fn kill(pid: usize, sig: usize) -> isize {
         return -1;
     }
 
-    let mut manager = TASK_MANAGER.lock();
-
-    if manager.try_process(pid).is_none() {
-        return -1;
-    }
-
     {
-        let process = manager.process_mut(pid);
-        process.sig_pending |= 1u64 << sig;
+        let mut manager = lock_detect!(TASK_MANAGER);
+
+        if manager.try_process(pid).is_none() {
+            return -1;
+        }
+
+        {
+            let process = manager.process_mut(pid);
+            process.sig_pending |= 1u64 << sig;
+        }
+
+        let tids: Vec<Tid> = {
+            let process = manager.process(pid);
+            process.threads.clone()
+        };
+
+        for tid in tids {
+            manager.mark_thread_ready(tid);
+        }
     }
 
-    let tids: Vec<Tid> = {
-        let process = manager.process(pid);
-        process.threads.clone()
-    };
-
-    for tid in tids {
-        manager.mark_thread_ready(tid);
-    }
+    // 新增：kill 将目标线程设为就绪，通知其他核
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
     0
 }
 
 pub fn do_signal() {
     let current_pid = current_pid();
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(current_pid);
     let pending = process.sig_pending;
     if pending == 0 { return; }
@@ -1465,10 +1481,11 @@ pub fn do_signal() {
     }
     process.sig_pending = 0;
 }
+
 pub fn set_current_sig_pending(sig : usize){
     let pid = current_pid();
     if sig >= 64 { return; }
-    let mut manager = TASK_MANAGER.lock();
+    let mut manager = lock_detect!(TASK_MANAGER);
     if let Some(process) = manager.try_process_mut(pid) {
         process.sig_pending |= 1u64 << sig;
     }

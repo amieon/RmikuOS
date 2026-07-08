@@ -1,5 +1,6 @@
 use alloc::vec::Vec;
 
+use crate::lock_detect;
 use crate::mm::{
     alloc_frame, phys_to_virt, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum,
     FrameTracker, KERNEL_OFFSET, PAGE_SIZE,
@@ -44,11 +45,11 @@ impl MemorySet {
     }
 
     pub fn root_ppn(&self) -> PhysPageNum {
-        self.page_table.lock().root_ppn()
+        lock_detect!(self.page_table).root_ppn()
     }
 
     pub fn insert_area(&mut self, mut area: MapArea) {
-        area.map(&mut self.page_table.lock());
+        area.map(&mut lock_detect!(self.page_table));
         self.areas.push(area);
     }
     
@@ -63,13 +64,13 @@ impl MemorySet {
         };
 
         let mut area = self.areas.remove(index);
-        area.unmap(&mut self.page_table.lock());
+        area.unmap(&mut lock_detect!(self.page_table));
 
         true
     }
 
     pub fn translate(&self, vpn: VirtPageNum) -> Option<crate::mm::page_table::PageTableEntry> {
-        self.page_table.lock().translate(vpn)
+        lock_detect!(self.page_table).translate(vpn)
     }
 }
 
@@ -236,9 +237,7 @@ impl MemorySet {
             let vpn = VirtAddr(va).floor();
             let page_offset = va & (PAGE_SIZE - 1);
 
-            let pte = self
-                .page_table
-                .lock()
+            let pte = lock_detect!(self.page_table)
                 .translate(vpn)
                 .expect("copy_data: target page is not mapped");
 
@@ -330,8 +329,8 @@ impl MemorySet {
             );
 
             let new_area = area.clone_framed_area_data(
-                &user_space.page_table.lock(),
-                &mut memory_set.page_table.lock(),
+                &lock_detect!(user_space.page_table),
+                &mut lock_detect!(memory_set.page_table),
             );
 
             memory_set.areas.push(new_area);

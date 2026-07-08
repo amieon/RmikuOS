@@ -353,13 +353,13 @@ impl TaskManager {
     pub fn mark_thread_ready(&mut self, tid: Tid) {
         {
             let thread = self.thread_mut(tid);
-
             if thread.status == ThreadStatus::Running {
                 thread.status = ThreadStatus::Ready;
             }
         }
-
         self.enqueue_ready_thread(tid);
+        // 发送 IPI 通知其他核可能有新线程可运行
+        crate::arch::ipi::send_ipi_to_others(crate::arch::ipi::IpiKind::Reschedule, 0);
     }
 
     pub fn mark_thread_zombie(&mut self, tid: Tid, exit_code: i32) {
@@ -948,4 +948,6 @@ impl TaskManager {
             crate::fs::file::PipeCloseKind::Nothing => {}
         }
     }
+
+
 }

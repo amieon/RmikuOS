@@ -26,6 +26,10 @@ pub const PCI_IO_BASE: usize = 0x1804_0000;
 pub const PCI_IO_SIZE: usize = 0x0001_0000;
 
 
+pub mod ipi;           
+pub use ipi::tlb_shootdown_broadcast;
+pub use ipi::tlb_shootdown_sync;
+
 /// 读取当前核的 CPUID
 #[inline]
 pub fn hartid() -> usize {
@@ -91,4 +95,12 @@ pub fn flush_tlb() {
             options(nostack)
         );
     }
+}
+
+pub fn current_hart_id() -> usize {
+    let hartid: usize;
+    unsafe {
+        core::arch::asm!("csrrd {}, 0x20", out(reg) hartid, options(nostack));
+    }
+    hartid & 0x1FF  // 取 CoreID 低 9 位
 }
