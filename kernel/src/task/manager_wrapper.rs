@@ -124,7 +124,7 @@ pub fn run_tasks() -> ! {
             manager.find_next_ready_thread()
         };  // 此处 drop guard → unlock → preempt_enable
 
-        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+        //ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
         if let Some(tid) = next_tid {
             let (pid, root_ppn, kernel_stack_top, trap_cx_addr, task_cx_ptr) = {
@@ -136,6 +136,7 @@ pub fn run_tasks() -> ! {
             unsafe {
                 switch_unlock_and_switch(task_cx_ptr);
             }
+            crate::task::processor::set_current_tid(None);
             crate::arch::enable_interrupt();
         } else {
             crate::arch::disable_interrupt();
@@ -210,7 +211,12 @@ pub fn suspend_current_and_run_next() -> isize {
 
     let task_cx_ptr = {
         let mut manager = lock_detect!(TASK_MANAGER);
-        manager.mark_thread_ready(current_tid);
+        let need_ipi =  manager.mark_thread_ready(current_tid);
+        
+
+        if need_ipi {
+            ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+        }
         manager.thread_cx_ptr(current_tid)
     };
 
@@ -238,14 +244,16 @@ pub fn preempt_current_and_run_next() {
             Some(guard) => guard,
             None => return,
         };
+
         manager.mark_thread_ready(current_tid);
         manager.thread_cx_ptr(current_tid)
     };
 
+    // 锁已经释放后再做外部动作
+    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+
     let idle_cx_ptr = processor::idle_task_cx_ptr();
     crate::syscall::bkl_unlock();
-
-    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
@@ -1455,7 +1463,12 @@ pub fn kill(pid: usize, sig: usize) -> isize {
         };
 
         for tid in tids {
-            manager.mark_thread_ready(tid);
+            let need_ipi =  manager.mark_thread_ready(tid);
+            
+
+            if need_ipi {
+                ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+            }
         }
     }
 

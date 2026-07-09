@@ -55,7 +55,22 @@ fn processor() -> &'static mut Processor {
 }
 
 pub fn current_tid() -> Tid {
-    processor().current_tid.expect("no current task")
+    match processor().current_tid {
+        Some(tid) => tid,
+        None => {
+            let hart = current_hart_id();
+            let sepc: usize;
+            let sstatus: usize;
+            unsafe {
+                core::arch::asm!("csrr {}, sepc", out(reg) sepc);
+                core::arch::asm!("csrr {}, sstatus", out(reg) sstatus);
+            }
+            panic!(
+                "no current task: hart={}, sepc={:#x}, sstatus={:#x}",
+                hart, sepc, sstatus
+            );
+        }
+    }
 }
 
 pub fn current_tid_opt() -> Option<Tid> {

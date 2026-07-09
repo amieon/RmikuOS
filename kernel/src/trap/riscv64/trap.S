@@ -29,6 +29,7 @@
      *   1 => return to supervisor mode
      */
     .equ SSTATUS_SPP, 0x100
+    .equ SSTATUS_FS_DIRTY, 0x6000
 
 
 /*
@@ -37,6 +38,9 @@
  * 必须在整数寄存器(尤其 x5)已保存之后调用。
  */
 .macro SAVE_FP_REGS
+    li      x5, SSTATUS_FS_DIRTY
+    csrs    sstatus, x5
+
     fsd  f0,  288(sp)
     fsd  f1,  296(sp)
     fsd  f2,  304(sp)
@@ -79,6 +83,9 @@
  * 必须在恢复整数寄存器(尤其会覆盖 x5)之前调用。
  */
 .macro RESTORE_FP_REGS
+    li      x5, SSTATUS_FS_DIRTY
+    csrs    sstatus, x5
+
     ld   x5, 544(sp)
     fscsr x5
     fld  f0,  288(sp)
@@ -342,7 +349,7 @@ __restore:
 
     ld      x1,   8(sp)
     ld      x3,  24(sp)
-    ld      x4,  32(sp)
+    //ld      x4,  32(sp)
     ld      x5,  40(sp)
     ld      x6,  48(sp)
     ld      x7,  56(sp)

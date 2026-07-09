@@ -62,29 +62,38 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         match code {
             INTERRUPT_SUPERVISOR_TIMER => {
                 let should_schedule = crate::timer::tick();
-                if should_schedule && cx.is_from_user() {
-                    // ★ 只有可抢占时才切
-                    if crate::task::can_preempt() {
-                        crate::task::preempt_current_and_run_next();
-                    } else {
-                        crate::task::set_current_need_resched(true);
-                    }
-                }
+
                 if cx.is_from_user() {
                     crate::task::account_current_tick();
+
+                    if should_schedule {
+                        if crate::task::can_preempt() {
+                            crate::task::preempt_current_and_run_next();
+                        } else {
+                            crate::task::set_current_need_resched(true);
+                        }
+                    }
                 }
+
+                // 内核态 timer：只更新时间，不抢占、不 current_tid
             }
             INTERRUPT_SUPERVISOR_SOFT => {
+                crate::arch::ipi::clear_soft_interrupt();
+
                 let need_resched = crate::arch::ipi::handle_ipi();
-                if need_resched && cx.is_from_user() {
-                    // ★ 只有可抢占时才切
-                    if crate::task::can_preempt() {
-                        crate::task::preempt_current_and_run_next();
+
+                if need_resched {
+                    if cx.is_from_user() {
+                        if crate::task::can_preempt() {
+                            crate::task::preempt_current_and_run_next();
+                        } else {
+                            crate::task::set_current_need_resched(true);
+                        }
                     } else {
+                        // scheduler/idle/kernel context：不要直接切任务
                         crate::task::set_current_need_resched(true);
                     }
                 }
-                // 内核态下不再需要额外处理（标志已经设置）
             }
             _ => {
                 trap_println!(

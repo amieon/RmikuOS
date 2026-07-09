@@ -32,18 +32,20 @@ const SBI_SEND_IPI_FID: usize = 0;
 
 /// 向一组 hart 发送软件中断
 fn sbi_send_ipi(hart_mask: usize, hart_mask_base: usize) -> isize {
-    let (error, _): (isize, usize);
+    let error: isize;
+    let _value: usize;
+
     unsafe {
         core::arch::asm!(
             "ecall",
-            inlateout("a0") 0isize => error,
-            in("a1") hart_mask,       // 实际上参数顺序: a0=hart_mask, a1=hart_mask_base
-            in("a2") 0usize,          // 未使用
+            inlateout("a0") hart_mask => error,
+            inlateout("a1") hart_mask_base => _value,
             in("a6") SBI_SEND_IPI_FID,
             in("a7") SBI_EXT_IPI,
             options(nostack),
         );
     }
+
     error
 }
 
@@ -54,17 +56,22 @@ const SBI_REMOTE_SFENCE_VMA_FID: usize = 0;
 
 /// 远程 sfence.vma
 fn sbi_remote_sfence_vma(hart_mask: usize, hart_mask_base: usize) -> isize {
-    let (error, _): (isize, usize);
+    let error: isize;
+    let _value: usize;
+
     unsafe {
         core::arch::asm!(
             "ecall",
-            inlateout("a0") 0isize => error,
-            in("a1") hart_mask,
+            inlateout("a0") hart_mask => error,
+            inlateout("a1") hart_mask_base => _value,
+            in("a2") 0usize,          // start_addr
+            in("a3") usize::MAX,      // size，或者传精确范围
             in("a6") SBI_REMOTE_SFENCE_VMA_FID,
             in("a7") SBI_EXT_RFENCE,
             options(nostack),
         );
     }
+
     error
 }
 
@@ -121,11 +128,15 @@ pub fn handle_ipi() -> bool {
 }
 
 /// 开机时清空当前核信箱
-pub fn clear_current_ipi() {
-    let hart = crate::arch::hartid();
-    IPI_MAILBOX[hart].store(0, Ordering::Release);
+pub fn clear_soft_interrupt() {
+    unsafe {
+        core::arch::asm!(
+            "csrc sip, {mask}",
+            mask = in(reg) (1usize << 1),
+            options(nostack)
+        );
+    }
 }
-
 // ---------------------------------------------------------------------------
 // TLB shootdown 接口（直接调用 SBI 远程 fence）
 // ---------------------------------------------------------------------------

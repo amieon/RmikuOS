@@ -151,7 +151,7 @@ fn primary_init(id: usize) {
         log::warn!("[disk] no FAT disk found, /fat not mounted");
     }
 
-    HART_LOCALS[0].ready.store(true, Ordering::Release);
+    HART_LOCALS[id].ready.store(true, Ordering::Release);
 
     log::info!("logger initialized");
     log::info!("==== RmikuOS 多核启动 ====");
@@ -175,8 +175,14 @@ fn primary_init(id: usize) {
     #[cfg(target_arch = "riscv64")]
     {
         let entry = unsafe { boot_entry_addr };
-        for i in 1..arch::MAX_HARTS {
-            let _ = sbi_hart_start(i, entry);
+        for i in 0..arch::MAX_HARTS {
+            if i == id {
+                continue;
+            }
+            let ok = sbi_hart_start(i, entry);
+            if !ok {
+                log::warn!("[smp] failed to start hart {}", i);
+            }
         }
     }
 

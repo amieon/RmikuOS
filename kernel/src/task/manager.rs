@@ -350,16 +350,26 @@ impl TaskManager {
         Some(tid)
     }
 
-    pub fn mark_thread_ready(&mut self, tid: Tid) {
-        {
+    pub fn mark_thread_ready(&mut self, tid: Tid) -> bool {
+        let changed = {
             let thread = self.thread_mut(tid);
-            if thread.status == ThreadStatus::Running {
-                thread.status = ThreadStatus::Ready;
+
+            match thread.status {
+                ThreadStatus::Running | ThreadStatus::Blocking => {
+                    thread.status = ThreadStatus::Ready;
+                    thread.block_reason = BlockReason::None;
+                    true
+                }
+                ThreadStatus::Ready => false,
+                _ => false,
             }
+        };
+
+        if changed {
+            self.enqueue_ready_thread(tid);
         }
-        self.enqueue_ready_thread(tid);
-        // 发送 IPI 通知其他核可能有新线程可运行
-        crate::arch::ipi::send_ipi_to_others(crate::arch::ipi::IpiKind::Reschedule, 0);
+
+        changed
     }
 
     pub fn mark_thread_zombie(&mut self, tid: Tid, exit_code: i32) {
@@ -890,19 +900,18 @@ impl TaskManager {
             }
         }
 
-        let current_tid = crate::task::processor::current_tid();
+        if let Some(current_tid) = crate::task::processor::current_tid_opt() {
+            if self.pid_of_tid(current_tid) == pid {
+                let thread = self.thread(current_tid);
 
-        if self.pid_of_tid(current_tid) == pid {
-            let thread = self.thread(current_tid);
-
-            if thread.status == ThreadStatus::Running {
-                count += 1;
+                if thread.status == ThreadStatus::Running {
+                    count += 1;
+                }
             }
         }
 
         count
     }
-
 
 
     pub fn reset_sched_stat(&mut self) -> isize {
