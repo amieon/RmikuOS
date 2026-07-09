@@ -626,6 +626,11 @@ pub fn process_is_zombie(&self, pid: Pid) -> bool {
 }
 
 pub fn reap_process(&mut self, pid: Pid) {
+    log::warn!(
+        "[reap] pid={} root_ppn={:?}",
+        pid,
+        self.process(pid).user_space.root_ppn(),
+    );
     // 先做防御检查
     {
         let Some(process) = self.try_process(pid) else {
@@ -937,16 +942,41 @@ pub fn wake_threads_joining(&mut self, target_tid: Tid) -> bool {
             if self.wake_blocked_thread(tid) {
                 need_ipi = true;
             }
-
-            log::info!(
-                "[thread] wake tid={} joining tid={}",
-                tid,
-                target_tid,
-            );
         }
     }
 
     need_ipi
+}
+
+pub fn dump_tasks(&self) {
+    log::warn!("===== TASK DUMP =====");
+
+    for pid in 0..self.processes.len() {
+        let Some(process) = self.processes[pid].as_ref() else {
+            continue;
+        };
+
+        log::warn!(
+            "pid={} children={:?} ready_threads={:?}",
+            pid,
+            process.children,
+            process.ready_threads,
+        );
+
+        for &tid in process.threads.iter() {
+            if let Some(thread) = self.try_thread(tid) {
+                log::warn!(
+                    "  tid={} status={:?} block={:?} running_on={:?}",
+                    tid,
+                    thread.status,
+                    thread.block_reason,
+                    thread.running_on,
+                );
+            }
+        }
+    }
+
+    log::warn!("=====================");
 }
 
 
@@ -1104,6 +1134,16 @@ impl TaskManager {
         for pid in 0..self.processes.len() {
             if self.process_has_ready_thread(pid) {
                 return true;
+            }
+        }
+        false
+    }
+    pub fn has_running_thread(&self) -> bool {
+        for slot in self.threads.iter() {
+            if let Some(thread) = slot {
+                if thread.status == ThreadStatus::Running {
+                    return true;
+                }
             }
         }
         false

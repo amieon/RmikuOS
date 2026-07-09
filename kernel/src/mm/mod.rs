@@ -32,7 +32,10 @@ use crate::arch::{MEMORY_END, MEMORY_START};
 
 use alloc::boxed::Box;
 use self::page_table::{map_range_identity, PageTable, PteFlags};
-use self::{activate_kernel_page_table};
+use core::sync::atomic::{AtomicUsize, Ordering};
+
+static KERNEL_ROOT_PPN: AtomicUsize = AtomicUsize::new(0);
+
 
 unsafe extern "C" {
     static _kernel_start: u8;
@@ -86,20 +89,26 @@ pub fn init() {
 
 
 pub fn init_paging() {
-    use alloc::boxed::Box;
-
     let kernel_space = MemorySet::new_kernel();
     let root = kernel_space.root_ppn();
+
+    KERNEL_ROOT_PPN.store(root.0, Ordering::Release);
+
     let _kernel_space = Box::leak(Box::new(kernel_space));
 
-    //crate::io::uart::puts_raw("[raw] before activate\n");
-    activate_kernel_page_table(root);
-    
-    //crate::io::uart::puts_raw("[raw] after activate\n");
+    activate_page_table(root);
 
     log::info!("[mm] kernel MemorySet activated");
+}
 
+pub fn kernel_root_ppn() -> PhysPageNum {
+    let ppn = KERNEL_ROOT_PPN.load(Ordering::Acquire);
+    assert!(ppn != 0, "kernel root page table not initialized");
+    PhysPageNum(ppn)
+}
 
+pub fn activate_kernel_page_table() {
+    activate_page_table(kernel_root_ppn());
 }
 
 

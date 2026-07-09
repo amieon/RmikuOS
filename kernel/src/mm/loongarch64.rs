@@ -18,7 +18,7 @@ pub fn early_putc(ch: u8) {
     }
 }
 
-pub fn activate_kernel_page_table(root_ppn: PhysPageNum) {
+pub fn activate_kernel_page_table_by_root(root_ppn: PhysPageNum) {
     let root_pa = root_ppn.0 << PAGE_SIZE_BITS;
 
     let pwcl =

@@ -96,7 +96,20 @@ pub fn run_tasks() -> ! {
 
             unsafe {
                 switch_unlock_and_switch(task_cx_ptr);
+            }   
+            let satp: usize;
+            unsafe {
+                core::arch::asm!("csrr {}, satp", out(reg) satp);
             }
+            log::info!(
+                "[sched-back] hart={} back from tid={} satp={:#x}",
+                hart,
+                tid,
+                satp,
+            );
+
+            crate::mm::activate_kernel_page_table();
+            crate::arch::flush_tlb();
 
             let pending_tid = crate::task::processor::take_pending_ready_tid();
             let mut need_ipi = false;
@@ -116,7 +129,7 @@ pub fn run_tasks() -> ! {
                         thread.running_on = None;
                     } else {
                         log::error!(
-                            "[sched] hart {} back from tid {}, running_on={:?}",
+                            "[sched] hart {} back from tid {}, but running_on={:?}",
                             hart,
                             tid,
                             thread.running_on,
@@ -134,13 +147,21 @@ pub fn run_tasks() -> ! {
 
                 if let Some(pending_tid) = pending_tid {
                     if manager.mark_thread_ready(pending_tid) {
-                        need_ipi = true;
+                        //need_ipi = true;
                     }
                 } else if returned_status == Some(ThreadStatus::Ready) {
-                    // 当前线程在 __switch 前被其他 CPU 唤醒了：
-                    // status 已经是 Ready，但因为 running_on 之前不是 None，没有入队。
+                    // 关键补丁：
+                    // 当前线程在真正切回 scheduler 前已经被别的 CPU 唤醒。
+                    // 当时 running_on != None，所以 wake_blocked_thread 没有入队。
+                    // 现在 running_on 已经清掉，必须补入队。
                     manager.enqueue_ready_thread(tid);
-                    need_ipi = true;
+                    //need_ipi = true;
+
+                    log::warn!(
+                        "[sched] hart {} enqueue tid {} after early wake",
+                        hart,
+                        tid,
+                    );
                 }
 
                 if let Some(pid) = exited_pid {
@@ -174,6 +195,13 @@ pub fn run_tasks() -> ! {
             };
 
             if still_empty {
+                {
+                    let manager = lock_detect!(TASK_MANAGER);
+                    if !manager.has_ready_thread() && !manager.has_running_thread() {
+                    manager.dump_tasks();
+                    }
+                }
+
                 crate::arch::enable_interrupt();
                 unsafe {
                     crate::arch::wait_for_interrupt();
