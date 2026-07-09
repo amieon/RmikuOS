@@ -195,7 +195,7 @@ fn primary_init(id: usize) {
 fn secondary_init(id: usize) {
 
     trap::init();
-   // timer::init();
+   timer::init();
     
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);

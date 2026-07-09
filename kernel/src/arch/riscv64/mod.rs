@@ -94,18 +94,20 @@ pub fn intr_get() -> bool {
     sstatus & (1 << 1) != 0  // SIE 是 bit 1
 }
 
-/// 关闭 S-mode 中断
-#[inline]
-pub fn intr_disable() {
-    unsafe {
-        core::arch::asm!("csrci sstatus, {}", in(reg) 1 << 1);
-    }
-}
-
-/// 打开 S-mode 中断
+/// 开启 S-mode 中断（设置 SIE 位）
 #[inline]
 pub fn intr_enable() {
     unsafe {
-        core::arch::asm!("csrsi sstatus, {}", in(reg) 1 << 1);
+        // csrs: CSR Set (用寄存器指定要设置的位)
+        core::arch::asm!("csrs sstatus, {}", in(reg) 1 << 1);
+    }
+}
+
+/// 关闭 S-mode 中断（清除 SIE 位）
+#[inline]
+pub fn intr_disable() {
+    unsafe {
+        // csrc: CSR Clear (用寄存器指定要清除的位)
+        core::arch::asm!("csrc sstatus, {}", in(reg) 1 << 1);
     }
 }

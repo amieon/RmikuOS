@@ -27,47 +27,6 @@ unsafe extern "C" {
 static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
 
-impl TaskManager {
-    pub fn thread_exit_current(exit_code: i32) -> ! {
-        let current_tid = processor::current_tid();
-
-        let task_cx_ptr = {
-            let mut manager = lock_detect!(TASK_MANAGER);
-
-            let pid = manager.pid_of_tid(current_tid);
-
-            log::info!(
-                "[thread] exit: pid={} tid={} code={}",
-                pid,
-                current_tid,
-                exit_code,
-            );
-
-            {
-                let thread = manager.thread_mut(current_tid);
-                thread.status = ThreadStatus::Zombie;
-                thread.block_reason = BlockReason::None;
-                thread.exit_code = exit_code;
-            }
-
-            manager.wake_threads_joining(current_tid);
-
-            manager.thread_cx_ptr(current_tid)
-        };
-
-        let idle_cx_ptr = processor::idle_task_cx_ptr();
-        crate::syscall::bkl_unlock();
-
-        // 新增：当前线程退出并唤醒 joins，通知其他核
-        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
-
-        unsafe {
-            __switch(task_cx_ptr, idle_cx_ptr);
-        }
-
-        panic!("zombie thread returned after thread_exit");
-    }
-}
 
 pub fn init() {
     let init_path = "/bin/shell";
@@ -130,28 +89,98 @@ pub fn run_tasks() -> ! {
             let (pid, root_ppn, kernel_stack_top, trap_cx_addr, task_cx_ptr) = {
                 let mut manager = lock_detect!(TASK_MANAGER);
                 manager.prepare_thread(tid)
-            };  // unlock → preempt_enable
+            };
+
             crate::task::processor::set_current_tid(Some(tid));
             crate::mm::activate_page_table(root_ppn);
+
             unsafe {
                 switch_unlock_and_switch(task_cx_ptr);
             }
+
+            let pending_tid = crate::task::processor::take_pending_ready_tid();
+            let mut need_ipi = false;
+
+            {
+                let mut manager = lock_detect!(TASK_MANAGER);
+
+                let mut returned_status = None;
+                let mut exited_pid = None;
+                let mut exited_tid = None;
+
+                if let Some(thread) = manager.try_thread_mut(tid) {
+                    let pid = thread.pid;
+                    let status = thread.status;
+
+                    if thread.running_on == Some(hart) {
+                        thread.running_on = None;
+                    } else {
+                        log::error!(
+                            "[sched] hart {} back from tid {}, running_on={:?}",
+                            hart,
+                            tid,
+                            thread.running_on,
+                        );
+                        thread.running_on = None;
+                    }
+
+                    returned_status = Some(status);
+
+                    if matches!(status, ThreadStatus::Zombie | ThreadStatus::Dead) {
+                        exited_pid = Some(pid);
+                        exited_tid = Some(tid);
+                    }
+                }
+
+                if let Some(pending_tid) = pending_tid {
+                    if manager.mark_thread_ready(pending_tid) {
+                        need_ipi = true;
+                    }
+                } else if returned_status == Some(ThreadStatus::Ready) {
+                    // 当前线程在 __switch 前被其他 CPU 唤醒了：
+                    // status 已经是 Ready，但因为 running_on 之前不是 None，没有入队。
+                    manager.enqueue_ready_thread(tid);
+                    need_ipi = true;
+                }
+
+                if let Some(pid) = exited_pid {
+                    if manager.wake_parent_waiting_for(pid) {
+                        need_ipi = true;
+                    }
+                }
+
+                if let Some(tid) = exited_tid {
+                    if manager.wake_threads_joining(tid) {
+                        need_ipi = true;
+                    }
+                }
+            }
+
             crate::task::processor::set_current_tid(None);
             crate::arch::enable_interrupt();
-        } else {
+
+            if need_ipi {
+                ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+            }
+        }  else {
             crate::arch::disable_interrupt();
+
             let still_empty = {
                 let mut manager = lock_detect!(TASK_MANAGER);
                 let now = crate::timer::ticks();
                 manager.wake_sleeping_threads(now);
-                manager.find_next_ready_thread().is_none()
+
+                !manager.has_ready_thread()
             };
+
             if still_empty {
                 crate::arch::enable_interrupt();
-                unsafe { crate::arch::wait_for_interrupt(); }
-                crate::arch::disable_interrupt();
+                unsafe {
+                    crate::arch::wait_for_interrupt();
+                }
+            } else {
+                crate::arch::enable_interrupt();
             }
-            crate::arch::enable_interrupt();
         }
     }
 }
@@ -209,20 +238,20 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
 pub fn suspend_current_and_run_next() -> isize {
     let current_tid = processor::current_tid();
 
-    let mut need_ipi = false;
-
     let task_cx_ptr = {
         let mut manager = lock_detect!(TASK_MANAGER);
-        need_ipi = manager.mark_thread_ready(current_tid);
-        manager.thread_cx_ptr(current_tid)
-    }; 
 
-    if need_ipi {
-        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
-    }
+        // 这里只记录，不入 ready queue。
+        // 真正 Ready 放到 run_tasks() 切回 scheduler 后做。
+        processor::set_pending_ready_tid(current_tid);
+
+        manager.thread_cx_ptr(current_tid)
+    };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
+
     crate::syscall::bkl_unlock();
+    crate::arch::disable_interrupt();
 
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
@@ -243,40 +272,39 @@ pub fn preempt_current_and_run_next() {
             None => return,
         };
 
-        manager.mark_thread_ready(current_tid);
+        // 注意：只有拿到锁后才设置 pending。
+        processor::set_pending_ready_tid(current_tid);
+
         manager.thread_cx_ptr(current_tid)
     };
 
-    // 锁已经释放后再做外部动作
-    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
-
     let idle_cx_ptr = processor::idle_task_cx_ptr();
+
     crate::syscall::bkl_unlock();
+    crate::arch::disable_interrupt();
 
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
 }
-
 pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isize {
     let current_tid = processor::current_tid();
     let nohang = (options & super::WNOHANG) != 0;
 
     loop {
-        let action = {
+        let task_cx_ptr = {
             let mut manager = lock_detect!(TASK_MANAGER);
             let current_pid = manager.pid_of_tid(current_tid);
-            manager.try_waitpid(current_pid, pid, exit_code_ptr)
-        };
 
-        match action {
-            WaitPidAction::Return(ret) => return ret,
-            WaitPidAction::Block => {
-                if nohang {
-                    return 0;
+            match manager.try_waitpid(current_pid, pid, exit_code_ptr) {
+                WaitPidAction::Return(ret) => {
+                    return ret;
                 }
-                let task_cx_ptr = {
-                    let mut manager = lock_detect!(TASK_MANAGER);
+
+                WaitPidAction::Block => {
+                    if nohang {
+                        return 0;
+                    }
 
                     log::info!(
                         "[task] tid {} waitpid(pid={}) blocking",
@@ -286,21 +314,20 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
 
                     manager.block_thread(
                         current_tid,
-                        BlockReason::WaitPid {
-                            pid,
-                        },
+                        BlockReason::WaitPid { pid },
                     );
 
                     manager.thread_cx_ptr(current_tid)
-                };
-
-                let idle_cx_ptr = processor::idle_task_cx_ptr();
-                crate::syscall::bkl_unlock();
-                // 阻塞自己，不需要 IPI（父进程退出时会发）
-                unsafe {
-                    __switch(task_cx_ptr, idle_cx_ptr);
                 }
             }
+        };
+
+        let idle_cx_ptr = processor::idle_task_cx_ptr();
+        crate::syscall::bkl_unlock();
+        crate::arch::disable_interrupt();
+
+        unsafe {
+            __switch(task_cx_ptr, idle_cx_ptr);
         }
     }
 }
@@ -792,7 +819,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
             manager.release_file(file);
         }
 
-        manager.wake_parent_waiting_for(current_pid);
+        //manager.wake_parent_waiting_for(current_pid);
 
         manager.thread_cx_ptr(current_tid)
     };
@@ -801,7 +828,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
     crate::syscall::bkl_unlock();
 
     // 新增：进程退出可能唤醒父进程的 waitpid
-    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    //ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
@@ -847,7 +874,7 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
             thread.exit_code = exit_code;
         }
 
-        manager.wake_threads_joining(current_tid);
+        //manager.wake_threads_joining(current_tid);
 
         manager.thread_cx_ptr(current_tid)
     };
@@ -856,7 +883,7 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
     crate::syscall::bkl_unlock();
 
     // 新增：退出并唤醒 joiners
-    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    //ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
@@ -878,45 +905,41 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
 
             let current_pid = manager.pid_of_tid(current_tid);
 
-            let Some(target) = manager.try_thread(target_tid) else {
-                return -1;
+            let target_state = {
+                let Some(target) = manager.try_thread(target_tid) else {
+                    return -1;
+                };
+
+                if target.pid != current_pid {
+                    return -1;
+                }
+
+                (target.status, target.exit_code, target.running_on)
             };
 
-            if target.pid != current_pid {
-                return -1;
-            }
+            match target_state {
+                (ThreadStatus::Zombie | ThreadStatus::Dead, code, running_on) => {
+                    if running_on.is_some() {
+                        manager.block_thread(
+                            current_tid,
+                            BlockReason::Join { tid: target_tid },
+                        );
+                        manager.thread_cx_ptr(current_tid)
+                    } else {
+                        if manager.write_user_i32(current_pid, exit_code_ptr, code).is_none() {
+                            return -1;
+                        }
 
-            match target.status {
-                ThreadStatus::Zombie | ThreadStatus::Dead => {
-                    let code = target.exit_code;
-
-                    if manager
-                        .write_user_i32(current_pid, exit_code_ptr, code)
-                        .is_none()
-                    {
-                        return -1;
+                        manager.reap_thread(target_tid);
+                        return target_tid as isize;
                     }
-
-                    manager.reap_thread(target_tid);
-
-                    // 这里不会产生新的就绪线程，但为了安全，统一在外部没有发 IPI（join 本身不增加就绪）
-                    return target_tid as isize;
                 }
 
                 _ => {
-                    log::info!(
-                        "[thread] tid={} join tid={} blocking",
-                        current_tid,
-                        target_tid,
-                    );
-
                     manager.block_thread(
                         current_tid,
-                        BlockReason::Join {
-                            tid: target_tid,
-                        },
+                        BlockReason::Join { tid: target_tid },
                     );
-
                     manager.thread_cx_ptr(current_tid)
                 }
             }
@@ -1443,6 +1466,8 @@ pub fn kill(pid: usize, sig: usize) -> isize {
         return -1;
     }
 
+    let mut need_ipi = false;
+
     {
         let mut manager = lock_detect!(TASK_MANAGER);
 
@@ -1450,28 +1475,20 @@ pub fn kill(pid: usize, sig: usize) -> isize {
             return -1;
         }
 
-        {
-            let process = manager.process_mut(pid);
-            process.sig_pending |= 1u64 << sig;
-        }
+        manager.process_mut(pid).sig_pending |= 1u64 << sig;
 
-        let tids: Vec<Tid> = {
-            let process = manager.process(pid);
-            process.threads.clone()
-        };
+        let tids = manager.process(pid).threads.clone();
 
         for tid in tids {
-            let need_ipi =  manager.mark_thread_ready(tid);
-            
-
-            if need_ipi {
-                ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+            if manager.mark_thread_ready(tid) {
+                need_ipi = true;
             }
         }
     }
 
-    // 新增：kill 将目标线程设为就绪，通知其他核
-    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    if need_ipi {
+        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    }
 
     0
 }

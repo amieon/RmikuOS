@@ -39,6 +39,7 @@ pub const DEFAULT_THREAD_TICKETS: usize = 100;
 pub struct ThreadControlBlock {
     
     pub tid: Tid,
+    pub running_on: Option<usize>,
     pub pid: Pid,
 
     pub kernel_stack: KernelStack,
@@ -70,9 +71,9 @@ impl ThreadControlBlock {
         };
 
         let task_cx = TaskContext::goto_task_entry(trap_cx_ptr as usize);
-
         Self {
             tid,
+            running_on: None,
             pid,
 
             kernel_stack,
@@ -115,6 +116,7 @@ impl ThreadControlBlock {
 
         Self {
             tid,
+            running_on: None,
             pid,
 
             kernel_stack,

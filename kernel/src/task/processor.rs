@@ -14,9 +14,10 @@ pub struct Processor {
     pub idle_task_cx: TaskContext,
     pub force_exit: bool,
     pub need_resched: bool,
-    pub preempt_count: usize,  
-}
+    pub preempt_count: usize,
 
+    pub pending_ready_tid: Option<Tid>,
+}
 impl Processor {
     pub const fn new() -> Self {
         Self {
@@ -25,6 +26,7 @@ impl Processor {
             force_exit: false,
             need_resched: false,
             preempt_count: 0,
+            pending_ready_tid: None,
         }
     }
 }
@@ -122,4 +124,15 @@ pub fn preempt_enable() {
 
 pub fn can_preempt() -> bool {
     processor().preempt_count == 0
+}
+
+pub fn set_pending_ready_tid(tid: Tid) {
+    processor().pending_ready_tid = Some(tid);
+}
+
+pub fn take_pending_ready_tid() -> Option<Tid> {
+    let p = processor();
+    let old = p.pending_ready_tid;
+    p.pending_ready_tid = None;
+    old
 }
