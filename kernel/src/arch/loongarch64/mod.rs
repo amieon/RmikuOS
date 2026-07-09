@@ -104,3 +104,52 @@ pub fn current_hart_id() -> usize {
     }
     hartid & 0x1FF  // 取 CoreID 低 9 位
 }
+
+
+/// 读取 CRMD.IE 位，判断中断当前是否开启
+///
+/// LoongArch 中，CRMD（Control Register for Mode）寄存器（CSR 0x0）：
+///   bit 0: PG   (页表映射使能)
+///   bit 1: DA   (直接地址翻译使能)
+///   bit 2: IE   (全局中断使能)
+#[inline]
+pub fn intr_get() -> bool {
+    let crmd: usize;
+    unsafe {
+        // csrrd: 读 CSR 寄存器到通用寄存器
+        // 0x0 是 CRMD 的 CSR 编号
+        core::arch::asm!("csrrd {}, 0x0", out(reg) crmd);
+    }
+    crmd & 0x4 != 0          // IE = bit 2，掩码 0x4
+}
+
+/// 关闭全局中断（清除 CRMD.IE 位）
+///
+/// 使用 bstrins.d 指令将 $zero（恒为 0）的 bit 0 插入到 CRMD 的 bit 2，
+/// 即清零 bit 2，其余位保持不变。
+#[inline]
+pub fn intr_disable() {
+    unsafe {
+        core::arch::asm!(
+            "csrrd    {tmp}, 0x0",       // tmp = CRMD
+            "bstrins.d {tmp}, $zero, 2, 2", // tmp[2:2] = 0   (清零 IE)
+            "csrwr    {tmp}, 0x0",       // CRMD = tmp
+            tmp = out(reg) _,
+        );
+    }
+}
+
+/// 打开全局中断（置位 CRMD.IE 位）
+///
+/// 用 ori 指令将 bit 2 置 1，0x4 在 12 位立即数范围内，一条指令搞定。
+#[inline]
+pub fn intr_enable() {
+    unsafe {
+        core::arch::asm!(
+            "csrrd    {tmp}, 0x0",       // tmp = CRMD
+            "ori      {tmp}, {tmp}, 0x4", // tmp |= 0x4   (置位 IE)
+            "csrwr    {tmp}, 0x0",       // CRMD = tmp
+            tmp = out(reg) _,
+        );
+    }
+}

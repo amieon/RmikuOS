@@ -82,3 +82,30 @@ pub fn current_hart_id() -> usize {
     unsafe { core::arch::asm!("mv {}, tp", out(reg) hartid, options(nostack)) };
     hartid
 }
+
+
+/// 读取 sstatus.SIE 位
+#[inline]
+pub fn intr_get() -> bool {
+    let sstatus: usize;
+    unsafe {
+        core::arch::asm!("csrr {}, sstatus", out(reg) sstatus);
+    }
+    sstatus & (1 << 1) != 0  // SIE 是 bit 1
+}
+
+/// 关闭 S-mode 中断
+#[inline]
+pub fn intr_disable() {
+    unsafe {
+        core::arch::asm!("csrci sstatus, {}", in(reg) 1 << 1);
+    }
+}
+
+/// 打开 S-mode 中断
+#[inline]
+pub fn intr_enable() {
+    unsafe {
+        core::arch::asm!("csrsi sstatus, {}", in(reg) 1 << 1);
+    }
+}

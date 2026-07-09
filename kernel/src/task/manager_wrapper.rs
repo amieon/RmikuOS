@@ -209,22 +209,20 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
 pub fn suspend_current_and_run_next() -> isize {
     let current_tid = processor::current_tid();
 
+    let mut need_ipi = false;
+
     let task_cx_ptr = {
         let mut manager = lock_detect!(TASK_MANAGER);
-        let need_ipi =  manager.mark_thread_ready(current_tid);
-        
-
-        if need_ipi {
-            ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
-        }
+        need_ipi = manager.mark_thread_ready(current_tid);
         manager.thread_cx_ptr(current_tid)
-    };
+    }; 
+
+    if need_ipi {
+        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    }
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
     crate::syscall::bkl_unlock();
-
-    // 新增：刚刚把当前线程放回就绪队列
-    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);

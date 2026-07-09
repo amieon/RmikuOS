@@ -307,7 +307,7 @@ __restore:
 
     ld      x1,   8(sp)
     ld      x3,  24(sp)
-    ld      x4,  32(sp)
+   // ld      x4,  32(sp)
     ld      x5,  40(sp)
     ld      x6,  48(sp)
     ld      x7,  56(sp)

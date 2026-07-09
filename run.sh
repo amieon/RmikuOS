@@ -87,7 +87,7 @@ case "$ARCH" in
     QEMU_ARGS=(
       -machine virt
       -cpu rv64
-      -smp 2
+      -smp 8
       -m 512M
       -nographic
       -kernel "$KERNEL_ELF"
