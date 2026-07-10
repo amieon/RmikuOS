@@ -626,7 +626,7 @@ pub fn process_is_zombie(&self, pid: Pid) -> bool {
 }
 
 pub fn reap_process(&mut self, pid: Pid) {
-    log::warn!(
+    log::info!(
         "[reap] pid={} root_ppn={:?}",
         pid,
         self.process(pid).user_space.root_ppn(),

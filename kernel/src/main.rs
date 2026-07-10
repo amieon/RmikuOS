@@ -172,7 +172,7 @@ fn primary_init(id: usize) {
 
     task::init();
 
-    timer::init();
+    
         // === RISC-V: 唤醒其他 hart ===
     #[cfg(target_arch = "riscv64")]
     {
@@ -188,6 +188,7 @@ fn primary_init(id: usize) {
         }
     }
 
+    timer::init();
 
     MASTER_READY.store(true, Ordering::Release);
     println!("主核初始化完成，从核可以进入了。");

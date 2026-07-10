@@ -103,7 +103,7 @@ case "$ARCH" in
       -machine virt
       -cpu la464
       -m 2G
-      -smp 1
+      -smp 8
       -nographic
       -kernel "$KERNEL_ELF"
       -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"

@@ -69,7 +69,7 @@ pub fn run_first_task() -> ! {
 pub fn run_tasks() -> ! {
     let hart = processor::current_hart_id();
     loop {
-        // ★ 只有可抢占时才处理 need_resched
+        // 只有可抢占时才处理 need_resched
         let need_resched = if crate::task::processor::can_preempt() {
             crate::task::processor::check_and_clear_need_resched()
         } else {
@@ -97,19 +97,12 @@ pub fn run_tasks() -> ! {
             unsafe {
                 switch_unlock_and_switch(task_cx_ptr);
             }   
-            let satp: usize;
-            unsafe {
-                core::arch::asm!("csrr {}, satp", out(reg) satp);
-            }
-            log::info!(
-                "[sched-back] hart={} back from tid={} satp={:#x}",
-                hart,
-                tid,
-                satp,
-            );
+            
 
             crate::mm::activate_kernel_page_table();
             crate::arch::flush_tlb();
+
+
 
             let pending_tid = crate::task::processor::take_pending_ready_tid();
             let mut need_ipi = false;

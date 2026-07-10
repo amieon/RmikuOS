@@ -3,11 +3,9 @@ use crate::print;
 use crate::task::thread::Tid;
 use super::context::TaskContext;
 
-// ============== per-cpu 数组 ==============
-static mut PROCESSORS: [Processor; MAX_HARTS] = [
-    Processor::new(), Processor::new(), Processor::new(), Processor::new(),
-    Processor::new(), Processor::new(), Processor::new(), Processor::new(),
-];
+
+static mut PROCESSORS: [Processor; MAX_HARTS] =
+    [const { Processor::new() }; MAX_HARTS];
 
 pub struct Processor {
     pub current_tid: Option<Tid>,
@@ -61,16 +59,52 @@ pub fn current_tid() -> Tid {
         Some(tid) => tid,
         None => {
             let hart = current_hart_id();
-            let sepc: usize;
-            let sstatus: usize;
-            unsafe {
-                core::arch::asm!("csrr {}, sepc", out(reg) sepc);
-                core::arch::asm!("csrr {}, sstatus", out(reg) sstatus);
+
+            #[cfg(target_arch = "riscv64")]
+            {
+                let sepc: usize;
+                let sstatus: usize;
+
+                unsafe {
+                    core::arch::asm!("csrr {}, sepc", out(reg) sepc, options(nostack));
+                    core::arch::asm!("csrr {}, sstatus", out(reg) sstatus, options(nostack));
+                }
+
+                panic!(
+                    "no current task: hart={}, sepc={:#x}, sstatus={:#x}",
+                    hart,
+                    sepc,
+                    sstatus,
+                );
             }
-            panic!(
-                "no current task: hart={}, sepc={:#x}, sstatus={:#x}",
-                hart, sepc, sstatus
-            );
+
+            #[cfg(target_arch = "loongarch64")]
+            {
+                let era: usize;
+                let prmd: usize;
+                let crmd: usize;
+                let estat: usize;
+
+                unsafe {
+                    // ERA  = CSR 0x6，异常返回地址
+                    // PRMD = CSR 0x1，保存异常前的特权级/中断状态
+                    // CRMD = CSR 0x0，当前模式
+                    // ESTAT = CSR 0x5，异常/中断状态
+                    core::arch::asm!("csrrd {}, 0x6", out(reg) era, options(nostack));
+                    core::arch::asm!("csrrd {}, 0x1", out(reg) prmd, options(nostack));
+                    core::arch::asm!("csrrd {}, 0x0", out(reg) crmd, options(nostack));
+                    core::arch::asm!("csrrd {}, 0x5", out(reg) estat, options(nostack));
+                }
+
+                panic!(
+                    "no current task: hart={}, era={:#x}, prmd={:#x}, crmd={:#x}, estat={:#x}",
+                    hart,
+                    era,
+                    prmd,
+                    crmd,
+                    estat,
+                );
+            }
         }
     }
 }
