@@ -167,7 +167,6 @@ fn handle_interrupt(cx: &mut TrapContext) {
         let need_resched = crate::arch::ipi::handle_ipi();
         if need_resched {
             if cx.is_from_user() {
-                // ★ 新增：只有可抢占时才切
                 if crate::task::can_preempt() {
                     crate::task::preempt_current_and_run_next();
                 } else {
@@ -181,19 +180,23 @@ fn handle_interrupt(cx: &mut TrapContext) {
     }
     // ─────────── 定时器 ───────────
     if pending & ESTAT_IS_TIMER != 0 {
-        clear_timer_interrupt();
         let should_schedule = crate::timer::tick();
-        if should_schedule && cx.is_from_user() {
-        
-            if crate::task::can_preempt() {
-                crate::task::preempt_current_and_run_next();
-            } else {
-                crate::task::set_current_need_resched(true);
-            }
-        }
+
         if cx.is_from_user() {
             crate::task::account_current_tick();
+
+            // CPU-bound 用户程序的信号靠 timer trap 处理
+            crate::task::do_signal();
+
+            if should_schedule {
+                if crate::task::can_preempt() {
+                    crate::task::preempt_current_and_run_next();
+                } else {
+                    crate::task::set_current_need_resched(true);
+                }
+            }
         }
+
         return;
     }
 

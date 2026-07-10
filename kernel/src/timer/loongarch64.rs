@@ -1,18 +1,38 @@
 use core::arch::asm;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-static TICKS: AtomicUsize = AtomicUsize::new(0);
+use crate::arch::MAX_HARTS;
 
-/*
- * 先调小一点，方便验证抢占。
- * 如果日志太多或者切太快，再调大。
- */
+const NO_HART: usize = usize::MAX;
+
+static GLOBAL_TICKS: AtomicUsize = AtomicUsize::new(0);
+static TIMEKEEPER_HART: AtomicUsize = AtomicUsize::new(NO_HART);
+
+static LOCAL_TICKS: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+    
 const TIMER_INITVAL: usize = 500_000;
-
-const TICKS_PER_SLICE: usize = 1;
+const TICKS_PER_SLICE: usize = 3;
 
 pub fn init() {
+    let hart = crate::arch::hartid();
+
+    if hart >= MAX_HARTS {
+        return;
+    }
+
+    let _ = TIMEKEEPER_HART.compare_exchange(
+        NO_HART,
+        hart,
+        Ordering::AcqRel,
+        Ordering::Acquire,
+    );
+
+    LOCAL_TICKS[hart].store(0, Ordering::Relaxed);
+
     unsafe {
+        clear_timer_interrupt();
+
         /*
          * enable local timer interrupt: ECFG.LIE[11]
          */
@@ -44,19 +64,37 @@ pub fn init() {
     }
 }
 
-
+/*
+ * 返回 true 表示当前 hart 这次 tick 应该触发抢占调度。
+ */
 pub fn tick() -> bool {
-
     clear_timer_interrupt();
 
-    let n = TICKS.fetch_add(1, Ordering::Relaxed) + 1;
+    let hart = crate::arch::hartid();
 
-    
+    if hart >= MAX_HARTS {
+        return false;
+    }
 
-    n % TICKS_PER_SLICE == 0
+    let local = LOCAL_TICKS[hart].fetch_add(1, Ordering::Relaxed) + 1;
+
+    if TIMEKEEPER_HART.load(Ordering::Acquire) == hart {
+        GLOBAL_TICKS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    local % TICKS_PER_SLICE == 0
 }
+
 pub fn ticks() -> usize {
-    TICKS.load(Ordering::Relaxed)
+    GLOBAL_TICKS.load(Ordering::Relaxed)
+}
+
+pub fn local_ticks(hart: usize) -> usize {
+    if hart >= MAX_HARTS {
+        return 0;
+    }
+
+    LOCAL_TICKS[hart].load(Ordering::Relaxed)
 }
 
 fn clear_timer_interrupt() {
