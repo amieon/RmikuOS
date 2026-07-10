@@ -131,7 +131,7 @@ fn primary_init(id: usize) {
 
     let (ext4_dev, fat_dev) = block::discover_disks::discover_disks();
 
-    timer::init();
+
 
     #[cfg(feature = "oscomp")]
     {
@@ -171,6 +171,8 @@ fn primary_init(id: usize) {
     println!("{}", BOOT_BANNER);
 
     task::init();
+
+    timer::init();
         // === RISC-V: 唤醒其他 hart ===
     #[cfg(target_arch = "riscv64")]
     {
@@ -196,7 +198,7 @@ fn secondary_init(id: usize) {
     crate::mm::activate_kernel_page_table();
     crate::arch::flush_tlb();
     trap::init();
-    //timer::init();
+    timer::init();
     
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);

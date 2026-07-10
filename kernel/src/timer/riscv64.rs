@@ -31,16 +31,13 @@ pub fn init() {
  * 返回 true 表示这次 tick 应该触发任务调度。
  */
 pub fn tick() -> bool {
-    let n = TICKS.fetch_add(1, Ordering::Relaxed) + 1;
-
-    /*
-     * RISC-V timer 是一次性的，所以每次中断都要设置下一次。
-     */
+    // RISC-V timer 是一次性的，第一时间设置下一次
     set_next_timer();
+
+    let n = TICKS.fetch_add(1, Ordering::Relaxed) + 1;
 
     n % TICKS_PER_SLICE == 0
 }
-
 fn read_time() -> usize {
     let time: usize;
     unsafe {
@@ -54,14 +51,17 @@ fn set_next_timer() {
 }
 
 fn sbi_set_timer(stime_value: usize) {
+    let _error: isize;
+    let _value: usize;
+
     unsafe {
         asm!(
             "ecall",
-            in("a0") stime_value,
+            inlateout("a0") stime_value as isize => _error,
+            lateout("a1") _value,
             in("a6") 0usize,          // FID: set_timer
             in("a7") 0x54494D45usize, // EID: TIME
-            lateout("a0") _,
-            lateout("a1") _,
+            options(nostack),
         );
     }
 }

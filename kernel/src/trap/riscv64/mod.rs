@@ -65,6 +65,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
 
                 if cx.is_from_user() {
                     crate::task::account_current_tick();
+                    crate::task::do_signal();
 
                     if should_schedule {
                         if crate::task::can_preempt() {
@@ -74,8 +75,6 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                         }
                     }
                 }
-
-                // 内核态 timer：只更新时间，不抢占、不 current_tid
             }
             INTERRUPT_SUPERVISOR_SOFT => {
                 crate::arch::ipi::clear_soft_interrupt();

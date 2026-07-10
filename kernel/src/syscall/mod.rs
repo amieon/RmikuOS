@@ -46,37 +46,64 @@ pub const SYSCALL_SHUTDOWN: usize = 39;
 pub const SYSCALL_KILL: usize = 40;
 pub const SYSCALL_FCNTL: usize = 41;
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// 系统调用 BKL（验证多核并发用）
-/// 会 __switch 的 syscall 必须在切走前手动调用 bkl_unlock()
-pub static SYSCALL_BKL: AtomicBool = AtomicBool::new(false);
+const NO_HART: usize = usize::MAX;
+
+static BKL_OWNER: AtomicUsize = AtomicUsize::new(NO_HART);
+
+#[inline]
+fn hartid() -> usize {
+    crate::task::current_hart_id()
+}
 
 #[inline]
 pub fn bkl_lock() {
-    while SYSCALL_BKL
-        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+    let hart = hartid();
+
+    // 如果你确认不会递归进 syscall，这里可以直接 panic。
+    // 调试阶段建议 panic，能抓重入。
+    if BKL_OWNER.load(Ordering::Acquire) == hart {
+        panic!("[bkl] recursive lock on hart {}", hart);
+    }
+
+    while BKL_OWNER
+        .compare_exchange(NO_HART, hart, Ordering::Acquire, Ordering::Relaxed)
         .is_err()
     {
         core::hint::spin_loop();
     }
 }
 
-/// 幂等释放：重复调用无害
+#[inline]
+pub fn bkl_unlock_if_held_by_current() {
+    let hart = hartid();
+
+    if BKL_OWNER.load(Ordering::Acquire) == hart {
+        BKL_OWNER.store(NO_HART, Ordering::Release);
+    }
+}
+
 #[inline]
 pub fn bkl_unlock() {
-    SYSCALL_BKL.store(false, Ordering::Release);
+    bkl_unlock_if_held_by_current();
+}
+
+#[inline]
+pub fn bkl_is_held_by_current() -> bool {
+    BKL_OWNER.load(Ordering::Acquire) == hartid()
 }
 
 pub fn syscall(id: usize, args: [usize; 6]) -> isize {
     bkl_lock();
+
     let ret = inner_syscall(id, args);
-    // 正常返回的 syscall 在这里释放
-    // __switch 前已手动释放过的，幂等再释放一次也无害
-    bkl_unlock();
+
+    // 正常返回释放；如果中途 sleep/waitpid/exit 前已经释放过，这里 no-op
+    bkl_unlock_if_held_by_current();
+
     ret
 }
-
 
 pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
     match id {
