@@ -8,13 +8,42 @@ static GLOBAL_TICKS: AtomicUsize = AtomicUsize::new(0);
 static LOCAL_TICKS: [AtomicUsize; MAX_HARTS] =
     [const { AtomicUsize::new(0) }; MAX_HARTS];
 
-// 调试 mask：不要在 timer 中断里持续 log，只记录 bit
+// ===== timer mask debug =====
+
 static TIMER_INIT_MASK: AtomicUsize = AtomicUsize::new(0);
 static TIMER_IRQ_MASK: AtomicUsize = AtomicUsize::new(0);
 static TIMER_USER_IRQ_MASK: AtomicUsize = AtomicUsize::new(0);
 static TIMER_USER_SHOULD_MASK: AtomicUsize = AtomicUsize::new(0);
+static TIMER_KERNEL_IRQ_MASK: AtomicUsize = AtomicUsize::new(0);
 
-// LoongArch 调试阶段先保守一点
+// ===== per-hart counters =====
+
+static USER_IRQ_COUNT: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+
+static USER_SHOULD_COUNT: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+
+static KERNEL_IRQ_COUNT: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+
+static LAST_KERNEL_ERA: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+
+static LAST_KERNEL_TID: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(usize::MAX) }; MAX_HARTS];
+
+static LAST_KSAVE0: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+
+static LAST_CRMD: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+
+static LAST_PRMD: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
+
+// LoongArch 调试阶段先保守一点。
+// 稳定后再调小 TIMER_INITVAL 或 TICKS_PER_SLICE。
 const TIMER_INITVAL: usize = 1_000_000;
 const TICKS_PER_SLICE: usize = 5;
 
@@ -54,25 +83,7 @@ pub fn init() {
 
 /// 返回 true 表示当前 hart 这次 tick 应该触发抢占调度。
 pub fn tick() -> bool {
-    clear_timer_interrupt();
-
-    let hart = crate::arch::hartid();
-
-    if hart >= MAX_HARTS {
-        return false;
-    }
-
-    TIMER_IRQ_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
-
-    let local = LOCAL_TICKS[hart].fetch_add(1, Ordering::Relaxed) + 1;
-
-    // 固定 hart0 做全局 timekeeper。
-    // 这样 GLOBAL_TICKS 不会因为 8 核 timer 而涨 8 倍。
-    if hart == 0 {
-        GLOBAL_TICKS.fetch_add(1, Ordering::Relaxed);
-    }
-
-    local % TICKS_PER_SLICE == 0
+    tick_with_context(false, 0, 0)
 }
 
 pub fn ticks() -> usize {
@@ -91,11 +102,14 @@ pub fn is_timekeeper_hart() -> bool {
     crate::arch::hartid() == 0
 }
 
+// ===== mark functions called by trap handler =====
+
 pub fn mark_user_timer_irq() {
     let hart = crate::arch::hartid();
 
     if hart < MAX_HARTS {
         TIMER_USER_IRQ_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+        USER_IRQ_COUNT[hart].fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -104,7 +118,85 @@ pub fn mark_user_should_schedule() {
 
     if hart < MAX_HARTS {
         TIMER_USER_SHOULD_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+        USER_SHOULD_COUNT[hart].fetch_add(1, Ordering::Relaxed);
     }
+}
+
+pub fn mark_kernel_timer_irq(era: usize, prmd: usize) {
+    let hart = crate::arch::hartid();
+
+    if hart >= MAX_HARTS {
+        return;
+    }
+
+    let current_tid = crate::task::current_tid_opt()
+        .unwrap_or(usize::MAX);
+
+    let ksave0 = read_ksave0();
+    let crmd = read_crmd();
+
+    TIMER_KERNEL_IRQ_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+    KERNEL_IRQ_COUNT[hart].fetch_add(1, Ordering::Relaxed);
+
+    LAST_KERNEL_ERA[hart].store(era, Ordering::Relaxed);
+    LAST_KERNEL_TID[hart].store(current_tid, Ordering::Relaxed);
+    LAST_KSAVE0[hart].store(ksave0, Ordering::Relaxed);
+    LAST_CRMD[hart].store(crmd, Ordering::Relaxed);
+    LAST_PRMD[hart].store(prmd, Ordering::Relaxed);
+}
+
+// ===== dump =====
+
+
+pub fn tick_with_context(from_user: bool, era: usize, prmd: usize) -> bool {
+    clear_timer_interrupt();
+
+    let hart = crate::arch::hartid();
+
+    if hart >= MAX_HARTS {
+        return false;
+    }
+
+    TIMER_IRQ_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+
+    let local = LOCAL_TICKS[hart].fetch_add(1, Ordering::Relaxed) + 1;
+
+    let mut global_now = GLOBAL_TICKS.load(Ordering::Relaxed);
+
+    if hart == 0 {
+        global_now = GLOBAL_TICKS.fetch_add(1, Ordering::Relaxed) + 1;
+        watchdog_after_tick(global_now);
+    }
+    
+
+    let should_schedule = local % TICKS_PER_SLICE == 0;
+
+    if from_user {
+        TIMER_USER_IRQ_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+        USER_IRQ_COUNT[hart].fetch_add(1, Ordering::Relaxed);
+
+        if should_schedule {
+            TIMER_USER_SHOULD_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+            USER_SHOULD_COUNT[hart].fetch_add(1, Ordering::Relaxed);
+        }
+    } else {
+        let current_tid = crate::task::current_tid_opt()
+            .unwrap_or(usize::MAX);
+
+        let ksave0 = read_ksave0();
+        let crmd = read_crmd();
+
+        TIMER_KERNEL_IRQ_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+        KERNEL_IRQ_COUNT[hart].fetch_add(1, Ordering::Relaxed);
+
+        LAST_KERNEL_ERA[hart].store(era, Ordering::Relaxed);
+        LAST_KERNEL_TID[hart].store(current_tid, Ordering::Relaxed);
+        LAST_KSAVE0[hart].store(ksave0, Ordering::Relaxed);
+        LAST_CRMD[hart].store(crmd, Ordering::Relaxed);
+        LAST_PRMD[hart].store(prmd, Ordering::Relaxed);
+    }
+
+    should_schedule
 }
 
 pub fn dump_timer_masks() {
@@ -119,48 +211,82 @@ pub fn dump_timer_masks() {
     );
 
     for hart in 0..MAX_HARTS {
-        let kc = KERNEL_TIMER_COUNT[hart].load(Ordering::Relaxed);
-        if kc != 0 {
-            log::warn!(
-                "[timer-kernel] hart={} count={} last_era={:#x} last_tid={}",
-                hart,
-                kc,
-                LAST_KERNEL_ERA[hart].load(Ordering::Relaxed),
-                LAST_KERNEL_TID[hart].load(Ordering::Relaxed),
-            );
-        }
+        log::warn!(
+            "[timer-hart] hart={} local={} user_irq={} user_should={} kernel_irq={} last_era={:#x} last_tid={} ksave0={:#x} crmd={:#x} prmd={:#x}",
+            hart,
+            LOCAL_TICKS[hart].load(Ordering::Relaxed),
+            USER_IRQ_COUNT[hart].load(Ordering::Relaxed),
+            USER_SHOULD_COUNT[hart].load(Ordering::Relaxed),
+            KERNEL_IRQ_COUNT[hart].load(Ordering::Relaxed),
+            LAST_KERNEL_ERA[hart].load(Ordering::Relaxed),
+            LAST_KERNEL_TID[hart].load(Ordering::Relaxed),
+            LAST_KSAVE0[hart].load(Ordering::Relaxed),
+            LAST_CRMD[hart].load(Ordering::Relaxed),
+            LAST_PRMD[hart].load(Ordering::Relaxed),
+        );
     }
 }
 
+// ===== CSR helpers =====
+
 fn clear_timer_interrupt() {
     unsafe {
-        // CSR.TICLR = 0x44, bit 0 clears timer interrupt pending bit.
+        // CSR.TICLR = 0x44, bit0 clears timer interrupt pending bit.
         asm!("csrwr {}, 0x44", in(reg) 1usize, options(nostack));
     }
 }
 
-static TIMER_KERNEL_IRQ_MASK: AtomicUsize = AtomicUsize::new(0);
+fn read_ksave0() -> usize {
+    let value: usize;
 
-static KERNEL_TIMER_COUNT: [AtomicUsize; MAX_HARTS] =
-    [const { AtomicUsize::new(0) }; MAX_HARTS];
+    unsafe {
+        asm!("csrrd {}, 0x30", out(reg) value, options(nostack));
+    }
 
-static LAST_KERNEL_ERA: [AtomicUsize; MAX_HARTS] =
-    [const { AtomicUsize::new(0) }; MAX_HARTS];
+    value
+}
 
-static LAST_KERNEL_TID: [AtomicUsize; MAX_HARTS] =
-    [const { AtomicUsize::new(usize::MAX) }; MAX_HARTS];
+fn read_crmd() -> usize {
+    let value: usize;
 
-    pub fn mark_kernel_timer_irq(era: usize) {
-    let hart = crate::arch::hartid();
+    unsafe {
+        asm!("csrrd {}, 0x0", out(reg) value, options(nostack));
+    }
 
-    if hart >= MAX_HARTS {
+    value
+}
+
+static LAST_WATCHDOG_TICK: AtomicUsize = AtomicUsize::new(0);
+
+fn watchdog_after_tick(global: usize) {
+    let last_switch = crate::task::last_switch_back_tick();
+
+    // 超过 2000 global ticks 没有任何 switch-back，认为 scheduler 可能卡住。
+    if global.wrapping_sub(last_switch) < 2000 {
         return;
     }
 
-    TIMER_KERNEL_IRQ_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
-    KERNEL_TIMER_COUNT[hart].fetch_add(1, Ordering::Relaxed);
-    LAST_KERNEL_ERA[hart].store(era, Ordering::Relaxed);
+    let last_dump = LAST_WATCHDOG_TICK.load(Ordering::Relaxed);
 
-    let tid = crate::task::current_tid_opt().unwrap_or(usize::MAX);
-    LAST_KERNEL_TID[hart].store(tid, Ordering::Relaxed);
+    // 每 2000 ticks 最多打印一次，避免刷屏。
+    if global.wrapping_sub(last_dump) < 2000 {
+        return;
+    }
+
+    if LAST_WATCHDOG_TICK
+        .compare_exchange(last_dump, global, Ordering::AcqRel, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    log::warn!(
+        "[watchdog] global={} last_switch_back={}",
+        global,
+        last_switch,
+    );
+
+    dump_timer_masks();
+    crate::task::dump_preempt_masks();
+    crate::task::dump_task_manager_lock_state();
 }

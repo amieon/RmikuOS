@@ -16,6 +16,7 @@ pub struct TrapContext {
 
     pub f: [u64; 32],      
     pub fcsr: usize, 
+    pub _pad: usize, // 552 -> 560
 }
 
 impl TrapContext {
@@ -28,6 +29,7 @@ impl TrapContext {
             estat: 0,
             f :[0; 32],
             fcsr: 0,
+            _pad: 0,
         }
     }
 

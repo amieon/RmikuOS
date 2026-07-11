@@ -90,58 +90,18 @@ pub fn activate_kernel_page_table_by_root(root_ppn: PhysPageNum) {
 
 
 
-
 pub fn activate_page_table(root_ppn: PhysPageNum) {
-    use core::arch::asm;
-
     let root_pa = root_ppn.0 << crate::mm::PAGE_SIZE_BITS;
 
-    let old_pgdl: usize;
-    let old_pgdh: usize;
-    let new_pgdl: usize;
-    let new_pgdh: usize;
-
     unsafe {
-        asm!("csrrd {}, 0x19", out(reg) old_pgdl, options(nostack));
-        asm!("csrrd {}, 0x1a", out(reg) old_pgdh, options(nostack));
+        asm!("csrwr {}, 0x19", in(reg) root_pa, options(nostack)); // PGDL
+        asm!("csrwr {}, 0x1a", in(reg) root_pa, options(nostack)); // PGDH
 
-        let mut pgdl = root_pa;
-        asm!(
-            "csrwr {0}, 0x19",
-            inout(reg) pgdl => _,
-            options(nostack),
-        );
-
-        let mut pgdh = root_pa;
-        asm!(
-            "csrwr {0}, 0x1a",
-            inout(reg) pgdh => _,
-            options(nostack),
-        );
-
-        /*
-         * 强制全局 TLB 失效。
-         * 如果 tlbflush 在 QEMU/当前环境下没有清掉普通用户 TLB，
-         * invtlb all 会更直接。
-         */
         asm!(
             "dbar 0",
             "invtlb 0x0, $r0, $r0",
             "ibar 0",
             options(nostack),
         );
-
-        asm!("csrrd {}, 0x19", out(reg) new_pgdl, options(nostack));
-        asm!("csrrd {}, 0x1a", out(reg) new_pgdh, options(nostack));
     }
-
-    log::info!(
-        "[mm] activate_page_table: root={:?}, root_pa={:#x}, PGDL {:#x}->{:#x}, PGDH {:#x}->{:#x}",
-        root_ppn,
-        root_pa,
-        old_pgdl,
-        new_pgdl,
-        old_pgdh,
-        new_pgdh,
-    );
 }

@@ -106,7 +106,9 @@ pub fn run_tasks() -> ! {
 
             crate::mm::activate_kernel_page_table();
             crate::arch::flush_tlb();
-            mark_switch_back();
+mark_switch_back();
+mark_switch_back_tick();
+
 maybe_dump_smp_debug("switch-back");
 
             let pending_tid = crate::task::processor::take_pending_ready_tid();
@@ -196,7 +198,7 @@ maybe_dump_smp_debug("switch-back");
 
             if still_empty {
 
-
+                maybe_dump_smp_debug("idle-empty");
                 crate::arch::enable_interrupt();
 
                 unsafe {
@@ -1018,54 +1020,70 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
         None => return -1,
     };
 
-    let mut manager = lock_detect!(TASK_MANAGER);
-    let pid = manager.current_pid();
+    let (pid, start, end) = {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        let pid = manager.current_pid();
 
-    let (start, end) = {
-        let process = manager.process_mut(pid);
+        let (start, end) = {
+            let process = manager.process_mut(pid);
 
-        match process.alloc_mmap_range(len) {
-            Some(range) => range,
-            None => return -1,
-        }
-    };
-
-    {
-        let process = manager.process_mut(pid);
-
-        process.user_space.insert_area(crate::mm::MapArea::new(
-            crate::mm::VirtAddr(start),
-            crate::mm::VirtAddr(end),
-            crate::mm::MapType::Framed,
-            perm,
-        ));
-
-        let start_vpn = crate::mm::VirtAddr(start).floor();
-        let end_vpn = crate::mm::VirtAddr(end).ceil();
-
-        for vpn_id in start_vpn.0..end_vpn.0 {
-            let vpn = crate::mm::VirtPageNum(vpn_id);
-
-            if process.user_space.translate(vpn).is_none() {
-                log::error!(
-                    "[mmap] verify failed: pid={} start={:#x} end={:#x} missing vpn={:?}",
-                    pid,
-                    start,
-                    end,
-                    vpn,
-                );
-                return -1;
+            match process.alloc_mmap_range(len) {
+                Some(range) => range,
+                None => return -1,
             }
+        };
+
+        {
+            let process = manager.process_mut(pid);
+
+            process.user_space.insert_area(crate::mm::MapArea::new(
+                crate::mm::VirtAddr(start),
+                crate::mm::VirtAddr(end),
+                crate::mm::MapType::Framed,
+                perm,
+            ));
+
+            let start_vpn = crate::mm::VirtAddr(start).floor();
+            let end_vpn = crate::mm::VirtAddr(end).ceil();
+
+            for vpn_id in start_vpn.0..end_vpn.0 {
+                let vpn = crate::mm::VirtPageNum(vpn_id);
+
+                if process.user_space.translate(vpn).is_none() {
+                    log::error!(
+                        "[mmap] verify failed: pid={} start={:#x} end={:#x} missing vpn={:?}",
+                        pid,
+                        start,
+                        end,
+                        vpn,
+                    );
+
+                    return -1;
+                }
+            }
+
+            process.mmap_areas.push(crate::task::process::MmapArea {
+                start,
+                end,
+                prot,
+            });
         }
 
-        process.mmap_areas.push(crate::task::process::MmapArea {
-            start,
-            end,
-            prot,
-        });
-    }
+        (pid, start, end)
+    }; // 关键：这里释放 TASK_MANAGER
 
-    crate::arch::tlb_shootdown_sync();
+    /*
+     * mmap 是新增映射，先不要在持 TASK_MANAGER 时等远程 ACK。
+     * 调试阶段可以只做本核 flush，确认是否解决卡死。
+     */
+    crate::arch::flush_tlb();
+
+    /*
+     * 如果本核 flush 后稳定，再考虑换成异步广播：
+     * crate::arch::tlb_shootdown_broadcast();
+     *
+     * 暂时不要在这里用 tlb_shootdown_sync()，先验证是否就是 ACK 等待卡死。
+     */
 
     log::info!(
         "[mmap] pid={} len={} prot={:#x} => {:#x}..{:#x}",
@@ -1549,10 +1567,11 @@ static SWITCH_BACK_MASK: AtomicUsize = AtomicUsize::new(0);
 static LAST_SMP_DEBUG_TICK: AtomicUsize = AtomicUsize::new(0);
 
 fn maybe_dump_smp_debug(tag: &str) {
+    static LAST_SMP_DEBUG_TICK: AtomicUsize = AtomicUsize::new(0);
+
     let now = crate::timer::ticks();
     let last = LAST_SMP_DEBUG_TICK.load(Ordering::Relaxed);
 
-    // 不要太频繁；LoongArch 先 500 tick 打一次
     if now.wrapping_sub(last) < 500 {
         return;
     }
@@ -1566,7 +1585,7 @@ fn maybe_dump_smp_debug(tag: &str) {
 
     log::warn!("[smp-debug] tag={} tick={}", tag, now);
 
-    //crate::timer::dump_timer_masks();
+    crate::timer::dump_timer_masks();
     dump_preempt_masks();
 
     match TASK_MANAGER.try_lock() {
@@ -1582,6 +1601,7 @@ fn maybe_dump_smp_debug(tag: &str) {
         }
     }
 }
+
 
 fn mark_preempt_enter() {
     let hart = crate::arch::hartid();
@@ -1604,5 +1624,24 @@ pub fn dump_preempt_masks() {
         "[preempt-mask] enter={:#x} back={:#x}",
         PREEMPT_ENTER_MASK.load(Ordering::Relaxed),
         SWITCH_BACK_MASK.load(Ordering::Relaxed),
+    );
+}
+
+static LAST_SWITCH_BACK_TICK: AtomicUsize = AtomicUsize::new(0);
+
+pub fn mark_switch_back_tick() {
+    LAST_SWITCH_BACK_TICK.store(crate::timer::ticks(), Ordering::Release);
+}
+
+pub fn last_switch_back_tick() -> usize {
+    LAST_SWITCH_BACK_TICK.load(Ordering::Acquire)
+}
+
+pub fn dump_task_manager_lock_state() {
+    log::warn!(
+        "[task-lock] locked={} owner={} line={}",
+        TASK_MANAGER.debug_is_locked(),
+        TASK_MANAGER.debug_owner(),
+        TASK_MANAGER.debug_line(),
     );
 }

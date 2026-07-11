@@ -21,7 +21,7 @@
      * 浮点上下文:每次 trap 全保存 f0-f31 + fcsr0,
      * 保证多个浮点用户任务并发时各自浮点状态互不覆盖。
      */
-    .equ TRAP_CONTEXT_SIZE, 552
+    .equ TRAP_CONTEXT_SIZE, 560
 
     /*
      * CSR numbers.
@@ -229,8 +229,7 @@ __alltraps:
 
     csrwr   $zero, CSR_KSAVE0
 
-    addi.d  $r4, $r3, 0          
-    addi.d  $r3, $r3, -8     
+    addi.d  $r4, $r3, 0             
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
 
@@ -300,7 +299,6 @@ __alltraps:
     csrwr   $zero, CSR_KSAVE0
 
     addi.d  $r4, $r3, 0    
-    addi.d  $r3, $r3, -8     
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
 

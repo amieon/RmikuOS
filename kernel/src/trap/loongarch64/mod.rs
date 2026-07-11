@@ -7,6 +7,7 @@ mod context;
 
 use core::arch::{asm, global_asm};
 use core::fmt::{self, Write};
+use core::sync::atomic::{AtomicUsize,Ordering};
 
 pub use context::TrapContext;
 
@@ -155,14 +156,42 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
 
     cx
 }
+use crate::arch::MAX_HARTS;
+static LAST_KERNEL_ERA: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
 
+static LAST_KERNEL_TID: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(usize::MAX) }; MAX_HARTS];
 
+static USER_TIMER_COUNT: [AtomicUsize; MAX_HARTS] =
+    [const { AtomicUsize::new(0) }; MAX_HARTS];
 
 
 fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
 
-    // ─────────── IPI ───────────
+    if pending & ESTAT_IS_TIMER != 0 {
+        let from_user = cx.is_from_user();
+
+        let should_schedule =
+            crate::timer::tick_with_context(from_user, cx.era, cx.prmd);
+
+        if from_user {
+            crate::task::account_current_tick();
+            crate::task::do_signal();
+
+            if should_schedule {
+                if crate::task::can_preempt() {
+                    crate::task::preempt_current_and_run_next();
+                } else {
+                    crate::task::set_current_need_resched(true);
+                }
+            }
+        }
+
+        return;
+    }
+
     if pending & ESTAT_IS_IPI != 0 {
         unsafe {
             core::arch::asm!("csrwr $zero, 0x49");
@@ -180,32 +209,6 @@ fn handle_interrupt(cx: &mut TrapContext) {
             } else {
                 crate::task::set_current_need_resched(true);
             }
-        }
-
-        return;
-    }
-
-    // ─────────── Timer ───────────
-    if pending & ESTAT_IS_TIMER != 0 {
-        let should_schedule = crate::timer::tick();
-
-        if cx.is_from_user() {
-            crate::timer::mark_user_timer_irq();
-
-            crate::task::account_current_tick();
-            crate::task::do_signal();
-
-            if should_schedule {
-                crate::timer::mark_user_should_schedule();
-
-                if crate::task::can_preempt() {
-                    crate::task::preempt_current_and_run_next();
-                } else {
-                    crate::task::set_current_need_resched(true);
-                }
-            }
-        } else {
-            crate::timer::mark_kernel_timer_irq(cx.era);
         }
 
         return;
