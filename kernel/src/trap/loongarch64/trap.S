@@ -229,7 +229,8 @@ __alltraps:
 
     csrwr   $zero, CSR_KSAVE0
 
-    addi.d  $r4, $r3, 0
+    addi.d  $r4, $r3, 0          
+    addi.d  $r3, $r3, -8     
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
 
@@ -298,7 +299,8 @@ __alltraps:
 
     csrwr   $zero, CSR_KSAVE0
 
-    addi.d  $r4, $r3, 0
+    addi.d  $r4, $r3, 0    
+    addi.d  $r3, $r3, -8     
     la.global $r12, loongarch_trap_handler
     jirl    $r1, $r12, 0
 

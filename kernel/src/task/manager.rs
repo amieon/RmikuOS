@@ -966,11 +966,12 @@ pub fn dump_tasks(&self) {
         for &tid in process.threads.iter() {
             if let Some(thread) = self.try_thread(tid) {
                 log::warn!(
-                    "  tid={} status={:?} block={:?} running_on={:?}",
+                    "  tid={} status={:?} block={:?} running_on={:?} run_ticks={}",
                     tid,
                     thread.status,
                     thread.block_reason,
                     thread.running_on,
+                    thread.run_ticks,
                 );
             }
         }
@@ -978,7 +979,6 @@ pub fn dump_tasks(&self) {
 
     log::warn!("=====================");
 }
-
 
 pub fn reap_thread(&mut self, tid: Tid) {
     {

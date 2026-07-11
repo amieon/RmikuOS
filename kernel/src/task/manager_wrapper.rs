@@ -1,3 +1,5 @@
+use core::sync::atomic::{AtomicUsize,Ordering};
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use log::logger;
@@ -26,7 +28,10 @@ unsafe extern "C" {
 
 static TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
 
-
+static PREEMPT_ENTER: AtomicUsize = AtomicUsize::new(0);
+static PREEMPT_SWITCH_BACK: AtomicUsize = AtomicUsize::new(0);
+static PREEMPT_ENTER_MASK: AtomicUsize = AtomicUsize::new(0);
+static PREEMPT_BACK_MASK: AtomicUsize = AtomicUsize::new(0);
 
 pub fn init() {
     let init_path = "/bin/shell";
@@ -97,12 +102,12 @@ pub fn run_tasks() -> ! {
             unsafe {
                 switch_unlock_and_switch(task_cx_ptr);
             }   
-            
+            let hart = crate::arch::hartid();
 
             crate::mm::activate_kernel_page_table();
             crate::arch::flush_tlb();
-
-
+            mark_switch_back();
+maybe_dump_smp_debug("switch-back");
 
             let pending_tid = crate::task::processor::take_pending_ready_tid();
             let mut need_ipi = false;
@@ -176,26 +181,24 @@ pub fn run_tasks() -> ! {
             if need_ipi {
                 ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
             }
-        }  else {
+        } else {
             crate::arch::disable_interrupt();
 
             let still_empty = {
                 let mut manager = lock_detect!(TASK_MANAGER);
                 let now = crate::timer::ticks();
+
+                // 如果你想减少多核抢 TASK_MANAGER，可以后面改成只 timekeeper 扫 sleep。
                 manager.wake_sleeping_threads(now);
 
                 !manager.has_ready_thread()
             };
 
             if still_empty {
-                {
-                    let manager = lock_detect!(TASK_MANAGER);
-                    if !manager.has_ready_thread() && !manager.has_running_thread() {
-                    manager.dump_tasks();
-                    }
-                }
+
 
                 crate::arch::enable_interrupt();
+
                 unsafe {
                     crate::arch::wait_for_interrupt();
                 }
@@ -287,15 +290,15 @@ pub fn preempt_current_and_run_next() {
         None => return,
     };
 
+    mark_preempt_enter();
+
     let task_cx_ptr = {
         let mut manager = match TASK_MANAGER.try_lock() {
             Some(guard) => guard,
             None => return,
         };
 
-        // 注意：只有拿到锁后才设置 pending。
         processor::set_pending_ready_tid(current_tid);
-
         manager.thread_cx_ptr(current_tid)
     };
 
@@ -307,6 +310,8 @@ pub fn preempt_current_and_run_next() {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
 }
+
+
 pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isize {
     let current_tid = processor::current_tid();
     let nohang = (options & super::WNOHANG) != 0;
@@ -1537,4 +1542,67 @@ pub fn set_current_sig_pending(sig : usize){
     if let Some(process) = manager.try_process_mut(pid) {
         process.sig_pending |= 1u64 << sig;
     }
+}
+
+
+static SWITCH_BACK_MASK: AtomicUsize = AtomicUsize::new(0);
+static LAST_SMP_DEBUG_TICK: AtomicUsize = AtomicUsize::new(0);
+
+fn maybe_dump_smp_debug(tag: &str) {
+    let now = crate::timer::ticks();
+    let last = LAST_SMP_DEBUG_TICK.load(Ordering::Relaxed);
+
+    // 不要太频繁；LoongArch 先 500 tick 打一次
+    if now.wrapping_sub(last) < 500 {
+        return;
+    }
+
+    if LAST_SMP_DEBUG_TICK
+        .compare_exchange(last, now, Ordering::AcqRel, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    log::warn!("[smp-debug] tag={} tick={}", tag, now);
+
+    //crate::timer::dump_timer_masks();
+    dump_preempt_masks();
+
+    match TASK_MANAGER.try_lock() {
+        Some(manager) => {
+            manager.dump_tasks();
+        }
+        None => {
+            log::warn!(
+                "[smp-debug] TASK_MANAGER locked owner={} line={}",
+                TASK_MANAGER.debug_owner(),
+                TASK_MANAGER.debug_line(),
+            );
+        }
+    }
+}
+
+fn mark_preempt_enter() {
+    let hart = crate::arch::hartid();
+
+    if hart < crate::arch::MAX_HARTS {
+        PREEMPT_ENTER_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+    }
+}
+
+fn mark_switch_back() {
+    let hart = crate::arch::hartid();
+
+    if hart < crate::arch::MAX_HARTS {
+        SWITCH_BACK_MASK.fetch_or(1usize << hart, Ordering::Relaxed);
+    }
+}
+
+pub fn dump_preempt_masks() {
+    log::warn!(
+        "[preempt-mask] enter={:#x} back={:#x}",
+        PREEMPT_ENTER_MASK.load(Ordering::Relaxed),
+        SWITCH_BACK_MASK.load(Ordering::Relaxed),
+    );
 }

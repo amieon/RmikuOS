@@ -120,3 +120,17 @@ macro_rules! lock_detect {
         $mutex.lock_at(line!())
     };
 }
+
+impl<T> Mutex<T> {
+    pub fn debug_is_locked(&self) -> bool {
+        self.locked.load(Ordering::Relaxed)
+    }
+
+    pub fn debug_owner(&self) -> usize {
+        self.owner.load(Ordering::Relaxed)
+    }
+
+    pub fn debug_line(&self) -> usize {
+        self.line.load(Ordering::Relaxed)
+    }
+}

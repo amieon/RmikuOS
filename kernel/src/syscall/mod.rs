@@ -91,16 +91,17 @@ pub fn bkl_unlock() {
 
 #[inline]
 pub fn bkl_is_held_by_current() -> bool {
-    BKL_OWNER.load(Ordering::Acquire) == hartid()
+    //BKL_OWNER.load(Ordering::Acquire) == hartid()
+    true
 }
 
 pub fn syscall(id: usize, args: [usize; 6]) -> isize {
-    bkl_lock();
+    //bkl_lock();
 
     let ret = inner_syscall(id, args);
 
     // 正常返回释放；如果中途 sleep/waitpid/exit 前已经释放过，这里 no-op
-    bkl_unlock_if_held_by_current();
+    //bkl_unlock_if_held_by_current();
 
     ret
 }

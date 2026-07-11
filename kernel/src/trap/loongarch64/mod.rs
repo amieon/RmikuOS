@@ -161,10 +161,15 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
 
 fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
+
     // ─────────── IPI ───────────
     if pending & ESTAT_IS_IPI != 0 {
-        unsafe { core::arch::asm!("csrwr $zero, 0x49"); }
+        unsafe {
+            core::arch::asm!("csrwr $zero, 0x49");
+        }
+
         let need_resched = crate::arch::ipi::handle_ipi();
+
         if need_resched {
             if cx.is_from_user() {
                 if crate::task::can_preempt() {
@@ -176,25 +181,31 @@ fn handle_interrupt(cx: &mut TrapContext) {
                 crate::task::set_current_need_resched(true);
             }
         }
+
         return;
     }
-    // ─────────── 定时器 ───────────
+
+    // ─────────── Timer ───────────
     if pending & ESTAT_IS_TIMER != 0 {
         let should_schedule = crate::timer::tick();
 
         if cx.is_from_user() {
-            crate::task::account_current_tick();
+            crate::timer::mark_user_timer_irq();
 
-            // CPU-bound 用户程序的信号靠 timer trap 处理
+            crate::task::account_current_tick();
             crate::task::do_signal();
 
             if should_schedule {
+                crate::timer::mark_user_should_schedule();
+
                 if crate::task::can_preempt() {
                     crate::task::preempt_current_and_run_next();
                 } else {
                     crate::task::set_current_need_resched(true);
                 }
             }
+        } else {
+            crate::timer::mark_kernel_timer_irq(cx.era);
         }
 
         return;
@@ -206,6 +217,7 @@ fn handle_interrupt(cx: &mut TrapContext) {
         cx.era,
         cx.estat
     );
+
     panic!("unsupported LoongArch interrupt");
 }
 
