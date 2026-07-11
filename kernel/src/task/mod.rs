@@ -15,6 +15,7 @@ pub use processor::*;
 pub use signal::*;
 
 pub const WNOHANG: usize = 1; 
+pub const WUNTRACED: usize = 0;
 
 pub type Pid = usize;
 pub type Tid = usize;
