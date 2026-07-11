@@ -6,6 +6,7 @@ extern "C" {
 
 #include "io.h"
 #define WNOHANG 1
+#define WUNTRACED 0
 
 static inline isize yield(void) {
     return syscall3(SYS_YIELD, 0, 0, 0);
@@ -21,6 +22,10 @@ static inline isize fork(void) {
 
 static inline isize waitpid(isize pid, int *exit_code, usize option) {
     return syscall3(SYS_WAITPID, (usize)pid, (usize)exit_code, option);
+}
+
+static inline isize wait(isize pid, int *exit_code, usize option) {
+    return syscall3(SYS_WAITPID, -1, (usize)exit_code, WUNTRACED);
 }
 
 static inline isize sleep(usize ticks) {
