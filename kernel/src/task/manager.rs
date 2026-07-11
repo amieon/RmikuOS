@@ -383,39 +383,39 @@ pub fn alloc_tid(&mut self) -> Tid {
         Some(tid)
     }
 
-pub fn mark_thread_ready(&mut self, tid: Tid) -> bool {
-    let should_enqueue = {
-        let thread = self.thread_mut(tid);
+    pub fn mark_thread_ready(&mut self, tid: Tid) -> bool {
+        let should_enqueue = {
+            let thread = self.thread_mut(tid);
 
-        match thread.status {
-            ThreadStatus::Blocking => {
-                thread.status = ThreadStatus::Ready;
-                thread.block_reason = BlockReason::None;
-                thread.running_on.is_none()
-            }
-
-            ThreadStatus::Running => {
-                if thread.running_on.is_none() {
+            match thread.status {
+                ThreadStatus::Blocking => {
                     thread.status = ThreadStatus::Ready;
                     thread.block_reason = BlockReason::None;
-                    true
-                } else {
-                    false
+                    thread.running_on.is_none()
                 }
+
+                ThreadStatus::Running => {
+                    if thread.running_on.is_none() {
+                        thread.status = ThreadStatus::Ready;
+                        thread.block_reason = BlockReason::None;
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                ThreadStatus::Ready => false,
+                ThreadStatus::Zombie | ThreadStatus::Dead => false,
             }
+        };
 
-            ThreadStatus::Ready => false,
-            ThreadStatus::Zombie | ThreadStatus::Dead => false,
+        if should_enqueue {
+            self.enqueue_ready_thread(tid);
+            true
+        } else {
+            false
         }
-    };
-
-    if should_enqueue {
-        self.enqueue_ready_thread(tid);
-        true
-    } else {
-        false
     }
-}
 
     pub fn mark_thread_zombie(&mut self, tid: Tid, exit_code: i32) {
         let pid = self.thread(tid).pid;
@@ -606,26 +606,26 @@ pub fn mark_thread_ready(&mut self, tid: Tid) -> bool {
     }
 
 
-pub fn process_is_zombie(&self, pid: Pid) -> bool {
-    let Some(process) = self.try_process(pid) else {
-        return false;
-    };
-
-    if process.threads.is_empty() {
-        return false;
-    }
-
-    process.threads.iter().all(|&tid| {
-        let Some(thread) = self.try_thread(tid) else {
-            return true;
+    pub fn process_is_zombie(&self, pid: Pid) -> bool {
+        let Some(process) = self.try_process(pid) else {
+            return false;
         };
 
-        matches!(thread.status, ThreadStatus::Zombie | ThreadStatus::Dead)
-            && thread.running_on.is_none()
-    })
-}
+        if process.threads.is_empty() {
+            return false;
+        }
 
-pub fn reap_process(&mut self, pid: Pid) {
+        process.threads.iter().all(|&tid| {
+            let Some(thread) = self.try_thread(tid) else {
+                return true;
+            };
+
+            matches!(thread.status, ThreadStatus::Zombie | ThreadStatus::Dead)
+                && thread.running_on.is_none()
+        })
+    }
+
+    pub fn reap_process(&mut self, pid: Pid) {
     log::info!(
         "[reap] pid={} root_ppn={:?}",
         pid,
@@ -914,74 +914,74 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
     }
 
 
-pub fn wake_threads_joining(&mut self, target_tid: Tid) -> bool {
-    let target_pid = match self.try_thread(target_tid) {
-        Some(thread) => thread.pid,
-        None => return false,
-    };
+    pub fn wake_threads_joining(&mut self, target_tid: Tid) -> bool {
+        let target_pid = match self.try_thread(target_tid) {
+            Some(thread) => thread.pid,
+            None => return false,
+        };
 
-    let tids = match self.try_process(target_pid) {
-        Some(process) => process.threads.clone(),
-        None => return false,
-    };
+        let tids = match self.try_process(target_pid) {
+            Some(process) => process.threads.clone(),
+            None => return false,
+        };
 
-    let mut need_ipi = false;
+        let mut need_ipi = false;
 
-    for tid in tids {
-        let should_wake = match self.try_thread(tid) {
-            Some(thread) if thread.status == ThreadStatus::Blocking => {
-                match thread.block_reason {
-                    BlockReason::Join { tid } => tid == target_tid,
-                    _ => false,
+        for tid in tids {
+            let should_wake = match self.try_thread(tid) {
+                Some(thread) if thread.status == ThreadStatus::Blocking => {
+                    match thread.block_reason {
+                        BlockReason::Join { tid } => tid == target_tid,
+                        _ => false,
+                    }
+                }
+                _ => false,
+            };
+
+            if should_wake {
+                if self.wake_blocked_thread(tid) {
+                    need_ipi = true;
                 }
             }
-            _ => false,
-        };
-
-        if should_wake {
-            if self.wake_blocked_thread(tid) {
-                need_ipi = true;
-            }
         }
+
+        need_ipi
     }
 
-    need_ipi
-}
+    pub fn dump_tasks(&self) {
+        log::warn!("===== TASK DUMP =====");
 
-pub fn dump_tasks(&self) {
-    log::warn!("===== TASK DUMP =====");
+        for pid in 0..self.processes.len() {
+            let Some(process) = self.processes[pid].as_ref() else {
+                continue;
+            };
 
-    for pid in 0..self.processes.len() {
-        let Some(process) = self.processes[pid].as_ref() else {
-            continue;
-        };
+            log::warn!(
+                "pid={} children={:?} ready_threads={:?}",
+                pid,
+                process.children,
+                process.ready_threads,
+            );
 
-        log::warn!(
-            "pid={} children={:?} ready_threads={:?}",
-            pid,
-            process.children,
-            process.ready_threads,
-        );
-
-        for &tid in process.threads.iter() {
-            if let Some(thread) = self.try_thread(tid) {
-                log::warn!(
-                    "  tid={} status={:?} block={:?} running_on={:?} run_ticks={}",
-                    tid,
-                    thread.status,
-                    thread.block_reason,
-                    thread.running_on,
-                    thread.run_ticks,
-                );
+            for &tid in process.threads.iter() {
+                if let Some(thread) = self.try_thread(tid) {
+                    log::warn!(
+                        "  tid={} status={:?} block={:?} running_on={:?} run_ticks={}",
+                        tid,
+                        thread.status,
+                        thread.block_reason,
+                        thread.running_on,
+                        thread.run_ticks,
+                    );
+                }
             }
         }
+
+        log::warn!("=====================");
     }
 
-    log::warn!("=====================");
-}
 
-
-pub fn reap_thread(&mut self, tid: Tid) {
+    pub fn reap_thread(&mut self, tid: Tid) {
     {
         let Some(thread) = self.try_thread(tid) else {
             panic!("[thread] reap non-existing thread: tid={}", tid);

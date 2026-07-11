@@ -102,3 +102,5 @@ fn sbi_set_timer(stime_value: usize) {
         );
     }
 }
+
+pub fn dump_timer_masks(){}

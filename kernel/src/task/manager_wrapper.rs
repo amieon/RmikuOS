@@ -74,13 +74,6 @@ pub fn run_first_task() -> ! {
 pub fn run_tasks() -> ! {
     let hart = processor::current_hart_id();
     loop {
-        // 只有可抢占时才处理 need_resched
-        let need_resched = if crate::task::processor::can_preempt() {
-            crate::task::processor::check_and_clear_need_resched()
-        } else {
-            false  // 不可抢占，保留 need_resched 标志，下次再处理
-        };
-
         let next_tid = {
             let mut manager = lock_detect!(TASK_MANAGER);  // lock 内部已 preempt_disable
             let now = crate::timer::ticks();
@@ -106,10 +99,10 @@ pub fn run_tasks() -> ! {
 
             crate::mm::activate_kernel_page_table();
             crate::arch::flush_tlb();
-mark_switch_back();
-mark_switch_back_tick();
+            // mark_switch_back();
+            // mark_switch_back_tick();
 
-maybe_dump_smp_debug("switch-back");
+            // maybe_dump_smp_debug("switch-back");
 
             let pending_tid = crate::task::processor::take_pending_ready_tid();
             let mut need_ipi = false;
@@ -150,10 +143,6 @@ maybe_dump_smp_debug("switch-back");
                         //need_ipi = true;
                     }
                 } else if returned_status == Some(ThreadStatus::Ready) {
-                    // 关键补丁：
-                    // 当前线程在真正切回 scheduler 前已经被别的 CPU 唤醒。
-                    // 当时 running_on != None，所以 wake_blocked_thread 没有入队。
-                    // 现在 running_on 已经清掉，必须补入队。
                     manager.enqueue_ready_thread(tid);
                     //need_ipi = true;
 
@@ -190,7 +179,6 @@ maybe_dump_smp_debug("switch-back");
                 let mut manager = lock_detect!(TASK_MANAGER);
                 let now = crate::timer::ticks();
 
-                // 如果你想减少多核抢 TASK_MANAGER，可以后面改成只 timekeeper 扫 sleep。
                 manager.wake_sleeping_threads(now);
 
                 !manager.has_ready_thread()
@@ -198,7 +186,7 @@ maybe_dump_smp_debug("switch-back");
 
             if still_empty {
 
-                maybe_dump_smp_debug("idle-empty");
+                //maybe_dump_smp_debug("idle-empty");
                 crate::arch::enable_interrupt();
 
                 unsafe {
