@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 
     printf("[smp_syscall] workers=%d loops=%d\n", workers, loops);
 
-    long start = get_ticks();
+    long start = get_time();
 
     for (int i = 0; i < workers; i++) {
         int pid = fork();
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
         wait(&status);
     }
 
-    long end = get_ticks();
+    long end = get_time();
 
     printf("[smp_syscall] done workers=%d elapsed_ticks=%ld\n",
            workers, end - start);

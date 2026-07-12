@@ -48,6 +48,8 @@ extern "C" {
 #define SYS_SHUTDOWN                 39
 #define SYS_KILL                     40
 #define SYS_FCNTL                    41
+#define SYS_GET_TIME                 42
+#define SYS_HARTID                   43
 
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 

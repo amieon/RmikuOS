@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
 
     printf("[fork_wait_bench] rounds=%d\n", rounds);
 
-    long start = get_ticks();
+    long start = get_time();
 
     for (int i = 0; i < rounds; i++) {
         int pid = fork();
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
         wait(&status);
     }
 
-    long end = get_ticks();
+    long end = get_time();
 
     printf("[fork_wait_bench] done rounds=%d elapsed_ticks=%ld\n",
            rounds, end - start);

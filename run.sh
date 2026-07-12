@@ -87,7 +87,8 @@ case "$ARCH" in
     QEMU_ARGS=(
       -machine virt
       -cpu rv64
-      -smp 8
+      -accel tcg,thread=multi
+      -smp 8,cores=8,threads=1,sockets=1
       -m 512M
       -nographic
       -kernel "$KERNEL_ELF"
@@ -103,7 +104,8 @@ case "$ARCH" in
       -machine virt
       -cpu la464
       -m 2G
-      -smp 8
+      -accel tcg,thread=multi
+      -smp 8,cores=8,threads=1,sockets=1
       -nographic
       -kernel "$KERNEL_ELF"
       -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"

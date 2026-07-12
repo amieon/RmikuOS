@@ -46,7 +46,8 @@ pub const SYSCALL_REMOVE_RECURSIVE: usize = 38;
 pub const SYSCALL_SHUTDOWN: usize = 39;
 pub const SYSCALL_KILL: usize = 40;
 pub const SYSCALL_FCNTL: usize = 41;
-pub const SYSCALL_TIME: usize = 42;
+pub const SYSCALL_GET_TIME: usize = 42;
+pub const SYSCALL_HARTID: usize = 43;
 
 use core::{sync::atomic::{AtomicUsize, Ordering}};
 
@@ -152,7 +153,8 @@ pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SHUTDOWN => arch::shutdown(),
         SYSCALL_KILL => process::sys_kill(args[0],args[1]),
         SYSCALL_FCNTL => process::sys_fcntl(args[0], args[1], args[2]),
-        SYSCALL_TIME => arch::sys_read_time(),
+        SYSCALL_GET_TIME => arch::sys_arch_time(),
+        SYSCALL_HARTID => arch::sys_hartid(),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",
