@@ -1,8 +1,5 @@
 // smp_fork_wait_bench.c
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/wait.h>
+#include "user.h"
 
 
 int my_atoi(const char *str)
@@ -70,7 +67,7 @@ int main(int argc, char **argv) {
         }
 
         int status = 0;
-        waitpid(&status);
+        wait(&status);
     }
 
     long end = get_ticks();

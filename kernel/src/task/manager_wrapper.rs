@@ -280,7 +280,7 @@ pub fn preempt_current_and_run_next() {
         None => return,
     };
 
-    mark_preempt_enter();
+    //mark_preempt_enter();
 
     let task_cx_ptr = {
         let mut manager = match TASK_MANAGER.try_lock() {

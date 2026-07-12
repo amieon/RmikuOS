@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
 
     int status = 0;
     for (int i = 0; i < workers; i++) {
-        waitpid(&status);
+        wait(&status);
     }
 
     long end = get_ticks();

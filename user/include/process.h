@@ -24,7 +24,7 @@ static inline isize waitpid(isize pid, int *exit_code, usize option) {
     return syscall3(SYS_WAITPID, (usize)pid, (usize)exit_code, option);
 }
 
-static inline isize wait(isize pid, int *exit_code, usize option) {
+static inline isize wait(int *exit_code) {
     return syscall3(SYS_WAITPID, -1, (usize)exit_code, WUNTRACED);
 }
 

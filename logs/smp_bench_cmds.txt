@@ -1,0 +1,4 @@
+smp_cpu_bench 1 50000000
+smp_cpu_bench 2 50000000
+smp_cpu_bench 4 50000000
+smp_cpu_bench 8 50000000

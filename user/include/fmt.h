@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "syscall.h"
 #include "types.h"
+#include "io.h"
 
 #ifndef UPRINTF_BUF_SIZE
 #define UPRINTF_BUF_SIZE 1024
@@ -303,4 +304,148 @@ static inline int fprintf(int fd, const char* fmt, ...) {
     (void)fd;
     va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
     return 0;
+}
+
+
+static int parse_int(const char *s) {
+    int x = 0;
+    int sign = 1;
+
+    if (*s == '-') {
+        sign = -1;
+        s++;
+    }
+
+    while (*s >= '0' && *s <= '9') {
+        x = x * 10 + (*s - '0');
+        s++;
+    }
+
+    return x * sign;
+}
+
+/* ---- 直接输出 ---- */
+
+static inline void put_int(long x) {
+    char buf[32];
+    int i = 0;
+
+    if (x == 0) {
+        put_char('0');
+        return;
+    }
+
+    if (x < 0) {
+        put_char('-');
+        x = -x;
+    }
+
+    while (x > 0) {
+        buf[i++] = '0' + (x % 10);
+        x /= 10;
+    }
+
+    while (i > 0) {
+        i--;
+        put_char(buf[i]);
+    }
+}
+
+static char c(long x) {
+    if (x <= 9) return x + '0';
+    return x - 10 + 'a';
+}
+
+static inline void put_hex(long x) {
+    char buf[32];
+    int i = 0;
+
+    if (x == 0) {
+        put_char('0');
+        return;
+    }
+
+    if (x < 0) {
+        put_char('-');
+        x = -x;
+    }
+
+    while (x > 0) {
+        buf[i++] = c(x % 16);
+        x /= 16;
+    }
+
+    while (i > 0) {
+        i--;
+        put_char(buf[i]);
+    }
+}
+
+/* ---- 缓冲拼接 ---- */
+
+static int append_str(char *buf, int pos, const char *s) {
+    while (*s) {
+        buf[pos++] = *s++;
+    }
+    return pos;
+}
+
+static int append_int(char *buf, int pos, int x) {
+    char tmp[16];
+    int n = 0;
+
+    if (x == 0) {
+        buf[pos++] = '0';
+        return pos;
+    }
+
+    if (x < 0) {
+        buf[pos++] = '-';
+        x = -x;
+    }
+
+    while (x > 0) {
+        tmp[n++] = '0' + (x % 10);
+        x /= 10;
+    }
+
+    while (n > 0) {
+        buf[pos++] = tmp[--n];
+    }
+
+    return pos;
+}
+
+static int append_usize(char *buf, int pos, usize x) {
+    char tmp[32];
+    int n = 0;
+
+    if (x == 0) {
+        buf[pos++] = '0';
+        return pos;
+    }
+
+    while (x > 0) {
+        tmp[n++] = '0' + (x % 10);
+        x /= 10;
+    }
+
+    while (n > 0) {
+        buf[pos++] = tmp[--n];
+    }
+
+    return pos;
+}
+
+/* ---- 比较 ---- */
+
+static int str_eq(const char *a, const char *b) {
+    while (*a && *b) {
+        if (*a != *b) {
+            return 0;
+        }
+        a++;
+        b++;
+    }
+    return *a == 0 && *b == 0;
 }
