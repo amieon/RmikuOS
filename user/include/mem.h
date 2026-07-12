@@ -36,6 +36,7 @@ void *memcpy(void *dst, const void *src, unsigned long n);
 typedef struct malloc_block {
     usize size;
     usize free;
+    usize mmap_size;
     struct malloc_block *next;
 } malloc_block_t;
 
@@ -108,6 +109,7 @@ static inline void *slab_alloc(int sc) {
     malloc_block_t *b = (malloc_block_t *)((char *)p - header);
     b->size = SLAB_MAGIC | (usize)sc;
     b->free = 0;
+    b->mmap_size = 0;
     return p;
 }
 
@@ -140,6 +142,7 @@ static inline void malloc_split_block(malloc_block_t *block, usize size) {
     malloc_block_t *new_block = (malloc_block_t *)((char *)malloc_payload(block) + size);
     new_block->size = block->size - size - header;
     new_block->free = 1;
+    new_block->mmap_size = 0;
     new_block->next = block->next;
     block->size = size;
     block->next = new_block;
@@ -155,6 +158,7 @@ static inline malloc_block_t *malloc_request_chunk(usize size) {
     malloc_block_t *block = (malloc_block_t *)mem;
     block->size = total - header;
     block->free = 1;
+    block->mmap_size = total;
     block->next = 0;
     if (!malloc_head) {
         malloc_head = block;
@@ -174,9 +178,39 @@ static inline void malloc_coalesce(void) {
         if (cur->free && cur->next->free && cur_end == (char *)cur->next) {
             cur->size += header + cur->next->size;
             cur->next = cur->next->next;
+            cur->mmap_size = 0;
         } else {
             cur = cur->next;
         }
+    }
+}
+
+static inline void malloc_trim(void) {
+    usize header = malloc_header_size();
+    malloc_block_t *cur = malloc_head;
+    malloc_block_t *prev = 0;
+
+    while (cur) {
+        /* 条件：空闲 + 是 chunk 头 + 整个 chunk 都空闲 */
+        if (cur->free && cur->mmap_size > 0 &&
+            cur->size == cur->mmap_size - header) {
+
+            /* 从链表摘除 */
+            if (prev) {
+                prev->next = cur->next;
+            } else {
+                malloc_head = cur->next;
+            }
+
+            /* 归还内核 */
+            munmap((void *)cur, cur->mmap_size);
+
+            /* 继续检查下一块 */
+            cur = prev ? prev->next : malloc_head;
+            continue;
+        }
+        prev = cur;
+        cur = cur->next;
     }
 }
 
@@ -215,6 +249,7 @@ static inline void __free_unlocked(void *ptr) {
     }
     block->free = 1;
     malloc_coalesce();
+    malloc_trim();
 }
 
 static inline void free(void *ptr) {
