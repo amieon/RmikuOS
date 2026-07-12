@@ -243,8 +243,6 @@ int main(int argc, char **argv) {
 
     wait_until(start_at);
 
-    long t0 = get_time();
-
     int reaped = 0;
     int wait_fail = 0;
     int status_sum = 0;
@@ -262,10 +260,10 @@ int main(int argc, char **argv) {
         status_sum += status;
     }
 
-    long t1 = get_time();
+    long end = get_time();
 
     printf("[smp_probe] done workers=%d forked=%d reaped=%d wait_fail=%d status_sum=%d elapsed=%ld\n",
-           workers, forked, reaped, wait_fail, status_sum, t1 - t0);
+        workers, forked, reaped, wait_fail, status_sum, end - start_at);
 
     return 0;
 }

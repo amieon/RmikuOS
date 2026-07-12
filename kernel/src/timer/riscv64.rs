@@ -12,7 +12,7 @@ static LOCAL_TICKS: [AtomicUsize; MAX_HARTS] =
     [const { AtomicUsize::new(0) }; MAX_HARTS];
 
 const INTERVAL: usize = 500_000;
-const TICKS_PER_SLICE: usize = 3;
+const TICKS_PER_SLICE: usize = 15;
 
 pub fn init() {
     let hart = crate::arch::hartid();
@@ -39,6 +39,14 @@ pub fn init() {
         // sstatus.SIE
         asm!("csrs sstatus, {}", in(reg) 1usize << 1, options(nostack));
     }
+}
+
+pub fn read_arch_time() -> usize {
+    let time: usize;
+    unsafe {
+        core::arch::asm!("csrr {}, time", out(reg) time, options(nostack));
+    }
+    time
 }
 
 /*

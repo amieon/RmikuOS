@@ -10,7 +10,7 @@ static LOCAL_TICKS: [AtomicUsize; MAX_HARTS] =
 
 
 const TIMER_INITVAL: usize = 500_000;
-const TICKS_PER_SLICE: usize = 3;
+const TICKS_PER_SLICE: usize = 15;
 
 pub fn init() {
     let hart = crate::arch::hartid();
@@ -44,6 +44,22 @@ pub fn init() {
         crmd |= 1usize << 2;
         asm!("csrwr {}, 0x0", in(reg) crmd, options(nostack));
     }
+}
+
+pub fn read_arch_time() -> usize {
+    let time: usize;
+    let _id: usize;
+
+    unsafe {
+        core::arch::asm!(
+            "rdtime.d {time}, {id}",
+            time = out(reg) time,
+            id = out(reg) _id,
+            options(nostack)
+        );
+    }
+
+    time
 }
 
 /// 兼容旧接口。没有 trap context 的调用统一当作 kernel tick。
