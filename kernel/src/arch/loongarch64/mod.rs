@@ -1,5 +1,7 @@
 // src/arch/loongarch64/mod.rs
 pub mod boot; 
+pub mod shutdown;
+pub use shutdown::shutdown;
 pub const NAME: &str = "LoongArch 64";
 pub const MAX_HARTS: usize = 8;
 

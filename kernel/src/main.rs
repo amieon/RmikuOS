@@ -16,7 +16,6 @@ mod fs;
 mod block;
 mod pci;
 mod math;
-mod shutdown;
 mod oscomp;
 
 #[macro_use]

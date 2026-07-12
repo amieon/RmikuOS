@@ -2,6 +2,7 @@
 mod fs;
 mod process;
 mod thread;
+mod arch;
 
 pub const SYSCALL_EXIT: usize = 0;
 pub const SYSCALL_YIELD: usize = 1;
@@ -45,8 +46,9 @@ pub const SYSCALL_REMOVE_RECURSIVE: usize = 38;
 pub const SYSCALL_SHUTDOWN: usize = 39;
 pub const SYSCALL_KILL: usize = 40;
 pub const SYSCALL_FCNTL: usize = 41;
+pub const SYSCALL_TIME: usize = 42;
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::{sync::atomic::{AtomicUsize, Ordering}};
 
 const NO_HART: usize = usize::MAX;
 
@@ -147,9 +149,10 @@ pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_UNLINK => fs::sys_unlink(args[0],args[1]),
         SYSCALL_RMDIR => fs::sys_rmdir(args[0],args[1]),
         SYSCALL_REMOVE_RECURSIVE => fs::sys_remove_recursive(args[0],args[1]),
-        SYSCALL_SHUTDOWN => crate::shutdown::shutdown(),
+        SYSCALL_SHUTDOWN => arch::shutdown(),
         SYSCALL_KILL => process::sys_kill(args[0],args[1]),
         SYSCALL_FCNTL => process::sys_fcntl(args[0], args[1], args[2]),
+        SYSCALL_TIME => arch::sys_read_time(),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

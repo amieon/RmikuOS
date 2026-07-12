@@ -16,7 +16,7 @@ pub fn run_oscomp_stub() -> ! {
     }
 
     // 跑完关机
-    crate::shutdown::shutdown();
+    crate::arch::shutdown();
 
     // shutdown 不返回,但 Rust 要求 -> ! 的函数不结束
     loop {
