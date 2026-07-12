@@ -1,19 +1,10 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，主要用于学习操作系统、体系结构、虚拟化设备、文件系统和调度器设计。
-
-目前 RmikuOS 支持：
-
-* `riscv64`
-* `loongarch64`
-
 RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust** 三种语言的用户程序。
 
-当前系统支持：进程与线程、VFS、多文件系统挂载（只读 ext4 + 可写 tmpfs + 落盘 FAT）、virtio 块设备驱动、Unix 风格 open flags、多级管道与重定向、功能完整的 shell、最小通用信号机制、以及一套用于调度器实验的 workload 与自适应调度控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、管道与重定向、信号、stride / alpha-scaled 调度器，以及用于调度器实验的 workload 与自适应控制器。
 
-作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN)（图神经网络）已通过 `stdcompat.h` 桥接层**零改动**移植到 RmikuOS 上运行，真实 Cora 数据集准确率达 **78.3%**。
-
-RmikuOS 不是一个只会打印 `Hello, world` 的玩具内核。它的目标是逐步构建一个小而完整、能运行真实用户程序、能做系统实验的教学型 OS。
+RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
 ```text
  ____            _ _         ___  ____
@@ -997,6 +988,37 @@ phase 2 (轻)：AI 退回少量，负载回落       -> alpha 应重新爬高
 
 ---
 
+
+## SMP and Timing Notes
+
+RmikuOS 已经支持 RISC-V 64 与 LoongArch64 的多核启动、per-hart timer、IPI reschedule、基本 TLB shootdown 与多核调度状态维护。调度器使用 `running_on` 记录线程当前所在 hart，避免同一线程被多个 hart 同时取走；timer 与 IPI 路径用于触发抢占和唤醒空闲 hart。
+
+在 QEMU 软件模拟环境中，尤其是 Windows / VMware / Linux / QEMU 多层嵌套时，guest 看到的 hart 数量不一定等于宿主真正并行执行的 CPU 数量。因此：
+
+```text
+-smp 8 适合验证多核正确性：
+    多核启动
+    timer / IPI
+    waitpid / reap
+    running_on 状态
+    TLB shootdown
+    锁与死锁检测
+
+-smp 8 不一定适合判断真实性能扩展：
+    QEMU TCG 可能只使用少量 host CPU 线程
+    串口输出和调试日志会显著污染性能结果
+    跨 hart 读取 raw time counter 可能不适合作为 wall-clock
+```
+
+因此，性能测试中推荐区分两类时间：
+
+* `get_ticks()`：内核逻辑 tick，适合 sleep、timeout、调度统计和粗粒度观察；
+* `read_time()` / monotonic time：基于架构时间计数器并由内核做单调化处理，适合 benchmark 计时。
+
+多核 benchmark 建议使用只在父进程最终打印一次的 quiet 版本，避免 child 频繁 `printf` 把串口 IO 测进去。对于 CPU-bound scaling，可以分别测试「每个 worker 固定工作量」与「总工作量固定」两种模式，并结合宿主机 `top -H` / `ps -L` 观察 QEMU 是否真的有多个执行线程吃满 CPU。
+
+---
+
 ## Build and Run
 
 ### RISC-V 64
@@ -1017,7 +1039,7 @@ RISC-V 使用 QEMU `virt` 机器和 virtio-mmio 块设备。
 
 LoongArch64 使用 QEMU `virt` 机器和 virtio-pci 块设备。
 
-> 注：在 QEMU 软件模拟下，loongarch64 的指令翻译与串口 IO 效率低于 riscv64，交互体感更慢；这是仿真环境特性，与内核逻辑无关。日常开发建议以 riscv64 为主，loongarch64 用于跨架构验证。
+> 注：在 QEMU 软件模拟下，loongarch64 的指令翻译、串口 IO 与多 vCPU 执行效率可能明显低于 riscv64；如果宿主环境是 Windows / VMware / Linux / QEMU 多层嵌套，`-smp 8` 也不一定代表 QEMU 会吃满 8 个宿主核心。日常开发建议以 riscv64 为主，loongarch64 用于跨架构正确性验证；真实性能扩展需要结合宿主机 `top -H` / `ps -L` 观察 QEMU 线程占用。
 
 ---
 
@@ -1201,6 +1223,8 @@ virtio-mmio virtio-pci
 * **图神经网络 GCN/GAT 在裸运行时上运行**：完整前向/反向传播、AdamW、Dropout、softmax/交叉熵、数值梯度检验（`gradcheck` 1e-8 级 PASS）
 * 统一构建脚本 `build.py`（C / C++ / 单文件 Rust / cargo Rust 分派编译）
 * 双架构关机（riscv SiFive Test finisher / loongarch ACPI GED）
+* RISC-V / LoongArch64 SMP 启动与多核调度验证（per-hart timer、IPI reschedule、running_on 防重入）
+* QEMU 软件模拟下的多核性能测试说明：区分 correctness 验证与真实性能 scaling，避免把 TCG / 串口 / 调试日志开销误判为内核开销
 * alpha mechanism / edge deadline / AIMD 自适应 / 动态负载 四层调度实验
 
 ---
