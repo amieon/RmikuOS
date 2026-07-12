@@ -23,6 +23,7 @@ SECTIONS
     . = ALIGN(4K);
 
     _kernel_load_start = .;
+
     . += KERNEL_OFFSET;
 
     _kernel_start = .;
@@ -49,9 +50,19 @@ SECTIONS
         _sdata = .;
         *(.data)
         *(.data.*)
-        /* 存储 _start 的物理地址，供 SBI HSM 使用 */
+
+        /*
+         * 存储 _start 的物理地址，供 SBI HSM hart_start 使用。
+         *
+         * 注意：
+         *   _start 位于 .text.boot，VMA 本来就是物理地址 0x80200000 附近。
+         *   boot_entry_addr 本身位于 high-half .data，
+         *   所以 Rust 在正式内核页表启用后仍然可以安全读取它。
+         */
+        . = ALIGN(8);
         boot_entry_addr = .;
         QUAD(_start);
+
         *(.data.boot)
         *(.data.boot.*)
         _edata = .;
