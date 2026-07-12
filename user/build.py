@@ -188,6 +188,22 @@ def build_one(arch: str, source: Path, app_id: int, category):
     ]
     run(runtime_cmd)
 
+
+    string_src = LIB_DIR / "string.c"
+    string_obj = out_dir / f"{app_id}_{stem}_string.o"
+    has_string = string_src.exists()
+    if has_string:
+        run([
+            cfg["gcc"],
+            *cfg["cflags"],
+            *common_flags,
+            "-c",
+            str(string_src),
+            "-o",
+            str(string_obj),
+        ])
+
+
     link_objects = []
 
     if source.suffix == ".c":
@@ -197,6 +213,11 @@ def build_one(arch: str, source: Path, app_id: int, category):
 
     if source.suffix == ".c":
         link_objects.append(str(runtime_obj))
+
+
+    if has_string:         
+        link_objects.append(str(string_obj))
+
     link_cmd = [
         cfg["gcc"],
         *cfg["cflags"],
@@ -271,6 +292,13 @@ def build_cpp(arch: str, source: Path, app_id: int, category):
     # 用户源
     run([cfg["gxx"], *cfg["cflags"], *cfg["cxxflags"], *common_flags, "-c",
          str(source), "-o", str(obj)])
+    
+    string_src = LIB_DIR / "string.c"
+    string_obj = out_dir / f"{app_id}_{stem}_string.o"
+    has_string = string_src.exists()
+    if has_string:
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(string_src), "-o", str(string_obj)])
 
     # 链接:crt0 + 用户 + syscall + cpp_runtime
     link_cmd = [
@@ -279,8 +307,10 @@ def build_cpp(arch: str, source: Path, app_id: int, category):
         "-Wl,--build-id=none", *cfg["ldflags"],
         "-T", str(cfg["linker"]),
         str(crt0_obj), str(obj), str(runtime_obj), str(cpprt_obj),
-        "-o", str(elf),
     ]
+    if has_string:                     # ← 加这一行
+        link_cmd.append(str(string_obj))
+    link_cmd.extend(["-o", str(elf)])
     run(link_cmd)
 
     run([cfg["objcopy"], "-O", "binary", "-j", ".text",
@@ -423,6 +453,13 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
     # 预编译公共对象（crt0 + syscall）
     crt0_obj    = out_dir / "_crt0.o"
     runtime_obj = out_dir / "_syscall.o"
+    
+    string_obj = None
+    string_src = LIB_DIR / "string.c"
+    if string_src.exists():
+        string_obj = out_dir / "_string.o"
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(string_src), "-o", str(string_obj)])
 
     run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
          str(cfg["crt0"]), "-o", str(crt0_obj)])
@@ -484,6 +521,8 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
         bin_path = out_dir / f"{entry_stem}.bin"
 
         link_objs = [str(crt0_obj), str(entry_obj), str(runtime_obj)] + other_objs
+        if string_obj:                   
+            link_objs.append(str(string_obj))
         if cpprt_obj and cpprt_obj.exists():
             link_objs.append(str(cpprt_obj))
 

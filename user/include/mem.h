@@ -22,6 +22,12 @@ static inline int munmap(void *addr, usize len) {
     return syscall3(SYS_MUNMAP, (usize)addr, len, 0);
 }
 
+
+void *memset(void *s, int c, unsigned long n);
+void *memcpy(void *dst, const void *src, unsigned long n);
+
+
+
 /* ---- 用户态堆分配器 ---- */
 #define MALLOC_ALIGNMENT 16
 #define MALLOC_PAGE_SIZE 4096
