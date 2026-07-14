@@ -3,10 +3,17 @@
 #define LINE_SIZE 128
 #define MAX_ARGC  16
 #define HISTORY_MAX 16
+#define MAX_DIRS 8
+#define DIR_LEN 64
+#define MAX_MATCHES 32
+#define MAX_JOBS 8
 
 static char history[HISTORY_MAX][LINE_SIZE];
 static int history_count = 0;
 static int history_idx = 0;   // 当前浏览位置，history_count 表示"当前编辑行"
+
+static char search_dirs[MAX_DIRS][DIR_LEN];
+static int num_dirs = 0;
 
 static int streq(const char *a, const char *b) {
     int i = 0;
@@ -39,6 +46,157 @@ static void redraw_line(const char *prompt, const char *buf, int cursor) {
     }
 }
 
+#define MAX_MATCHES 32
+
+static int get_token_start(const char *buf, int cursor) {
+    int start = cursor;
+    while (start > 0 && buf[start - 1] != ' ' && buf[start - 1] != '\t')
+        start--;
+    return start;
+}
+
+static int is_first_token(const char *buf, int cursor) {
+    for (int i = 0; i < cursor; i++)
+        if (buf[i] == ' ' || buf[i] == '\t')
+            return 0;
+    return 1;
+}
+
+static int strncmp_(const char *a, const char *b, int n) {
+    for (int i = 0; i < n; i++) {
+        if (a[i] != b[i]) return (unsigned char)a[i] - (unsigned char)b[i];
+        if (a[i] == 0) return 0;
+    }
+    return 0;
+}
+
+static int lcp_len(char matches[][LINE_SIZE], int count) {
+    if (count == 0) return 0;
+    int len = 0;
+    while (matches[0][len]) {
+        for (int i = 1; i < count; i++)
+            if (matches[i][len] != matches[0][len])
+                return len;
+        len++;
+    }
+    return len;
+}
+
+// 把 buf 中 [token_start, token_start+token_len) 替换为 replacement
+static void replace_token(char *buf, int *len, int *cursor, int token_start,
+                          int token_len, const char *replacement) {
+    int repl_len = strlen_(replacement);
+    int tail = *len - (token_start + token_len);
+    for (int i = tail; i >= 0; i--)
+        buf[token_start + repl_len + i] = buf[token_start + token_len + i];
+    for (int i = 0; i < repl_len; i++)
+        buf[token_start + i] = replacement[i];
+    *len = token_start + repl_len + tail;
+    *cursor = token_start + repl_len;
+    buf[*len] = 0;
+}
+
+ 
+
+static int scan_dir(const char *dir, const char *prefix,
+                    char matches[][LINE_SIZE], int max_matches)
+{
+    int fd = open(dir, O_RDONLY);
+    if (fd < 0) return 0;
+
+    int count = 0;
+    int prefix_len = strlen_(prefix);
+
+    while (count < max_matches) {
+        struct dirent entries[16];
+        isize n = getdents(fd, entries, sizeof(entries));
+        if (n <= 0) break;
+
+        int num = n / sizeof(struct dirent);
+        for (int i = 0; i < num && count < max_matches; i++) {
+            int nl = entries[i].name_len;
+            if (nl > 56) nl = 56;
+
+            // 跳过 . 和 ..
+            if (nl >= 1 && entries[i].name[0] == '.') {
+                if (nl == 1) continue;
+                if (nl == 2 && entries[i].name[1] == '.') continue;
+            }
+
+            char name[64];
+            if (nl > 63) nl = 63;
+            for (int j = 0; j < nl; j++) name[j] = entries[i].name[j];
+            name[nl] = 0;
+
+            if (prefix_len == 0 || strncmp_(name, prefix, prefix_len) == 0) {
+                copy_str(matches[count], name, LINE_SIZE);
+                count++;
+            }
+        }
+    }
+
+    close(fd);
+    return count;
+}
+
+static int complete_path(const char *prefix, char matches[][LINE_SIZE], int max_matches) {
+    char dir[LINE_SIZE];
+    char file_prefix[LINE_SIZE];
+
+    int last_slash = -1;
+    for (int i = 0; prefix[i]; i++)
+        if (prefix[i] == '/') last_slash = i;
+
+    if (last_slash >= 0) {
+        int dir_len = last_slash + 1;
+        if (dir_len > LINE_SIZE - 1) dir_len = LINE_SIZE - 1;
+        for (int i = 0; i < dir_len; i++) dir[i] = prefix[i];
+        dir[dir_len] = 0;
+
+        int j = 0;
+        for (int i = last_slash + 1; prefix[i]; i++)
+            file_prefix[j++] = prefix[i];
+        file_prefix[j] = 0;
+    } else {
+        if (getcwd(dir, sizeof(dir)) < 0) return 0;
+        int dlen = strlen_(dir);
+        if (dlen > 0 && dir[dlen - 1] != '/') {
+            dir[dlen] = '/';
+            dir[dlen + 1] = 0;
+        }
+        copy_str(file_prefix, prefix, LINE_SIZE);
+    }
+
+    return scan_dir(dir, file_prefix, matches, max_matches);
+}
+
+static int complete_command(const char *prefix, char matches[][LINE_SIZE], int max_matches) {
+    int count = 0;
+    int prefix_len = strlen_(prefix);
+
+    const char *builtins[] = {
+        "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir",
+        "shutdown", "ls", "cat", "clear", NULL
+    };
+
+    for (int i = 0; builtins[i] && count < max_matches; i++) {
+        if (strncmp_(builtins[i], prefix, prefix_len) == 0)
+            copy_str(matches[count++], builtins[i], LINE_SIZE);
+    }
+
+    for (int d = 0; d < num_dirs && count < max_matches; d++) {
+        char tmp[MAX_MATCHES][LINE_SIZE];
+        int n = scan_dir(search_dirs[d], prefix, tmp, max_matches - count);
+        for (int i = 0; i < n && count < max_matches; i++) {
+            int dup = 0;
+            for (int j = 0; j < count; j++)
+                if (streq(matches[j], tmp[i])) { dup = 1; break; }
+            if (!dup) copy_str(matches[count++], tmp[i], LINE_SIZE);
+        }
+    }
+    return count;
+}
+
 static int read_line(const char *prompt, char *buf, int max_len) {
     int len = 0;
     int cursor = 0;
@@ -65,6 +223,51 @@ static int read_line(const char *prompt, char *buf, int max_len) {
         if (ch == '\n') {
             puts("\n");
             break;
+        }
+
+        if (ch == '\t') {
+            int token_start = get_token_start(buf, cursor);
+            int token_len = cursor - token_start;
+            char prefix[LINE_SIZE];
+            for (int i = 0; i < token_len; i++) prefix[i] = buf[token_start + i];
+            prefix[token_len] = 0;
+
+            int is_cmd = is_first_token(buf, cursor);
+            char matches[MAX_MATCHES][LINE_SIZE];
+            int n = is_cmd ? complete_command(prefix, matches, MAX_MATCHES)
+                           : complete_path(prefix, matches, MAX_MATCHES);
+
+            if (n == 0) {
+                write(1, "\a", 1);   // bell
+            } else if (n == 1) {
+                replace_token(buf, &len, &cursor, token_start, token_len, matches[0]);
+                // 命令补全且光标在末尾时，自动加空格
+                if (is_cmd && cursor == len && len < LINE_SIZE - 1) {
+                    buf[len++] = ' ';
+                    buf[len] = 0;
+                    cursor++;
+                }
+                redraw_line(prompt, buf, cursor);
+            } else {
+                int lcp = lcp_len(matches, n);
+                if (lcp > token_len) {
+                    char lcp_str[LINE_SIZE];
+                    for (int i = 0; i < lcp; i++) lcp_str[i] = matches[0][i];
+                    lcp_str[lcp] = 0;
+                    replace_token(buf, &len, &cursor, token_start, token_len, lcp_str);
+                    redraw_line(prompt, buf, cursor);
+                } else {
+                    // 补无可补，显示候选列表
+                    write(1, "\n", 1);
+                    for (int i = 0; i < n; i++) {
+                        puts(matches[i]);
+                        puts("  ");
+                    }
+                    puts("\n");
+                    redraw_line(prompt, buf, cursor);
+                }
+            }
+            continue;
         }
 
         /* ESC 序列：上 下 右 左 */
@@ -384,11 +587,6 @@ static int builtin_rmdir(int argc, char *argv[]) {
     }
     return ret;
 }
-
-#define MAX_DIRS 8
-#define DIR_LEN 64
-static char search_dirs[MAX_DIRS][DIR_LEN];
-static int num_dirs = 0;
 
 static void load_search_dirs(void) {
     num_dirs = 0;
@@ -728,7 +926,9 @@ static int has_pipe_or_redirect(const char *s) {
     }
     return 0;
 }
- 
+
+
+
 int main(void) {
     char line[LINE_SIZE];
     char *argv[MAX_ARGC];

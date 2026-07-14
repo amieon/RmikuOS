@@ -76,7 +76,7 @@ void trim2(char *str) {
 }
 
 
-void copy_str(char *dst, char *src, isize len){
+void copy_str(char *dst,const char *src, isize len){
     int i = 0;
     for(; i < len-1 && src[i] != '\0'; ++i){
         dst[i] = src[i];
