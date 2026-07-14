@@ -452,10 +452,17 @@ static void build_exec_path(const char *prefix, const char *cmd, char *out, int 
     out[pos] = 0;
 }
 
+static int has_slash(const char *s) {
+    for (int i = 0; s[i]; i++) {
+        if (s[i] == '/') return 1;
+    }
+    return 0;
+}
+
 static void run_exec(int argc, char *argv[]){
-    char path[96];
     struct exec_args args;
     args.argc = argc;
+
     for (int i = 0; i < EXEC_MAX_ARGS; i++) {
         args.argv[i].ptr = 0;
         args.argv[i].len = 0;
@@ -464,18 +471,26 @@ static void run_exec(int argc, char *argv[]){
         args.argv[i].ptr = argv[i];
         args.argv[i].len = strlen_(argv[i]);
     }
-    if (argv[0][0] == '/') {
+
+    // 包含 '/' 的是绝对路径或相对路径，直接执行
+    if (has_slash(argv[0])) {
         exec_with_args(argv[0], &args);
         puts("exec failed: ");
         puts(argv[0]);
         puts("\n");
         return;
     }
+
+    // 先尝试当前目录（不经过 PATH 搜索）
+    exec_with_args(argv[0], &args);
+
+    // 再遍历 PATH
     for (int d = 0; d < num_dirs; d++) {
         char path[96];
         build_exec_path(search_dirs[d], argv[0], path, sizeof(path));  
         exec_with_args(path, &args);
     }
+
     puts("command not found: ");
     puts(argv[0]);
     puts("\n");
