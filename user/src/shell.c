@@ -8,7 +8,9 @@
 #define MAX_MATCHES 32
 #define MAX_JOBS 8
 #define MAX_SEGMENTS 8
+#define MAX_BRACE 32
 
+/* ---- 全局变量 ---- */
 static char history[HISTORY_MAX][LINE_SIZE];
 static int history_count = 0;
 static int history_idx = 0;
@@ -18,6 +20,9 @@ static int num_dirs = 0;
 
 static char glob_pool[MAX_ARGC][LINE_SIZE];
 static int glob_pool_idx = 0;
+
+static char brace_pool[MAX_BRACE][LINE_SIZE];
+static int brace_pool_idx = 0;
 
 struct job {
     int used;
@@ -41,6 +46,29 @@ static int streq(const char *a, const char *b) {
 static int strlen_(const char *s) {
     int n = 0;
     while (s[n]) n++;
+    return n;
+}
+
+static void copy_str(char *dst, const char *src, int max) {
+    int i = 0;
+    while (src[i] && i < max - 1) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = 0;
+}
+
+static int isdigit_(char c) { return c >= '0' && c <= '9'; }
+
+static int parse_int(const char *s, int *out) {
+    int n = 0;
+    int val = 0;
+    while (isdigit_(s[n])) {
+        val = val * 10 + (s[n] - '0');
+        n++;
+    }
+    if (n == 0) return 0;
+    *out = val;
     return n;
 }
 
@@ -201,10 +229,110 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
     return count;
 }
 
-/* ---- 通配符 ---- */
+/* ---- 大括号展开 Brace Expansion ---- */
+static int brace_expand_token(const char *token, char *outv[], int max_out) {
+    int brace_open = -1;
+    int brace_close = -1;
+    int depth = 0;
+    for (int i = 0; token[i]; i++) {
+        if (token[i] == '{') {
+            if (depth == 0) brace_open = i;
+            depth++;
+        } else if (token[i] == '}') {
+            depth--;
+            if (depth == 0) {
+                brace_close = i;
+                break;
+            }
+        }
+    }
+    if (brace_open < 0 || brace_close < 0 || brace_open > brace_close)
+        return 0;
+
+    char prefix[LINE_SIZE];
+    char suffix[LINE_SIZE];
+    for (int i = 0; i < brace_open && i < LINE_SIZE - 1; i++) prefix[i] = token[i];
+    prefix[brace_open > LINE_SIZE - 1 ? LINE_SIZE - 1 : brace_open] = 0;
+
+    int suffix_len = strlen_(token) - brace_close - 1;
+    if (suffix_len > LINE_SIZE - 1) suffix_len = LINE_SIZE - 1;
+    for (int i = 0; i < suffix_len; i++) suffix[i] = token[brace_close + 1 + i];
+    suffix[suffix_len] = 0;
+
+    char body[LINE_SIZE];
+    int body_len = brace_close - brace_open - 1;
+    if (body_len > LINE_SIZE - 1) body_len = LINE_SIZE - 1;
+    for (int i = 0; i < body_len; i++) body[i] = token[brace_open + 1 + i];
+    body[body_len] = 0;
+
+    /* 检查数字范围 {1..3} */
+    int start_num, end_num;
+    int consumed = parse_int(body, &start_num);
+    if (consumed > 0 && body[consumed] == '.' && body[consumed + 1] == '.') {
+        int consumed2 = parse_int(body + consumed + 2, &end_num);
+        if (consumed2 > 0 && body[consumed + 2 + consumed2] == 0) {
+            int count = 0;
+            if (start_num <= end_num) {
+                for (int n = start_num; n <= end_num && count < max_out && brace_pool_idx < MAX_BRACE; n++) {
+                    char num_str[16];
+                    int num_len = 0;
+                    int tmp = n;
+                    if (tmp == 0) num_str[num_len++] = '0';
+                    while (tmp > 0) {
+                        num_str[num_len++] = '0' + (tmp % 10);
+                        tmp /= 10;
+                    }
+                    for (int l = 0; l < num_len / 2; l++) {
+                        char t = num_str[l];
+                        num_str[l] = num_str[num_len - 1 - l];
+                        num_str[num_len - 1 - l] = t;
+                    }
+                    num_str[num_len] = 0;
+
+                    int pl = strlen_(prefix);
+                    int sl = strlen_(suffix);
+                    if (pl + num_len + sl >= LINE_SIZE) continue;
+                    for (int j = 0; j < pl; j++) brace_pool[brace_pool_idx][j] = prefix[j];
+                    for (int j = 0; j < num_len; j++) brace_pool[brace_pool_idx][pl + j] = num_str[j];
+                    for (int j = 0; j < sl; j++) brace_pool[brace_pool_idx][pl + num_len + j] = suffix[j];
+                    brace_pool[brace_pool_idx][pl + num_len + sl] = 0;
+                    outv[count++] = brace_pool[brace_pool_idx++];
+                }
+            }
+            return count;
+        }
+    }
+
+    /* 逗号分隔 {a,b,c} */
+    int count = 0;
+    int start = 0;
+    for (int i = 0; i <= body_len && count < max_out && brace_pool_idx < MAX_BRACE; i++) {
+        if (body[i] == ',' || body[i] == 0) {
+            int item_len = i - start;
+            if (item_len > LINE_SIZE - 1) item_len = LINE_SIZE - 1;
+
+            int pl = strlen_(prefix);
+            int sl = strlen_(suffix);
+            if (pl + item_len + sl >= LINE_SIZE) { start = i + 1; continue; }
+
+            for (int j = 0; j < pl; j++) brace_pool[brace_pool_idx][j] = prefix[j];
+            for (int j = 0; j < item_len; j++) brace_pool[brace_pool_idx][pl + j] = body[start + j];
+            for (int j = 0; j < sl; j++) brace_pool[brace_pool_idx][pl + item_len + j] = suffix[j];
+            brace_pool[brace_pool_idx][pl + item_len + sl] = 0;
+
+            outv[count++] = brace_pool[brace_pool_idx++];
+            start = i + 1;
+        }
+    }
+
+    if (count == 0) return 0;
+    return count;
+}
+
+/* ---- 通配符 + 字符类 ---- */
 static int has_glob(const char *s) {
     for (int i = 0; s[i]; i++)
-        if (s[i] == '*' || s[i] == '?') return 1;
+        if (s[i] == '*' || s[i] == '?' || s[i] == '[') return 1;
     return 0;
 }
 
@@ -220,6 +348,26 @@ static int match_pattern(const char *pat, const char *str) {
             while (pat[1] == '*') pat++;
             last_star = pat++;
             last_star_str = str;
+        } else if (*pat == '[') {
+            pat++;
+            int negate = 0;
+            if (*pat == '!' || *pat == '^') {
+                negate = 1;
+                pat++;
+            }
+            int match = 0;
+            while (*pat && *pat != ']') {
+                if (pat[1] == '-' && pat[2] != ']' && pat[2] != '\0') {
+                    if (*str >= pat[0] && *str <= pat[2]) match = 1;
+                    pat += 3;
+                } else {
+                    if (*pat == *str) match = 1;
+                    pat++;
+                }
+            }
+            if (*pat == ']') pat++;
+            if (match == negate) return 0;
+            str++;
         } else if (last_star) {
             pat = last_star + 1;
             str = ++last_star_str;
@@ -314,11 +462,28 @@ static int expand_token(const char *token, char *outv[], int max_out, int is_quo
 
 static int expand_args(int argc, char *argv[], char *outv[], int quoted[]) {
     glob_pool_idx = 0;
+    brace_pool_idx = 0;
     int outc = 0;
     for (int i = 0; i < argc && outc < MAX_ARGC; i++) {
-        int n = expand_token(argv[i], &outv[outc], MAX_ARGC - outc, quoted[i]);
-        if (n == 0) break;
-        outc += n;
+        if (quoted[i]) {
+            if (glob_pool_idx >= MAX_ARGC) break;
+            copy_str(glob_pool[glob_pool_idx], argv[i], LINE_SIZE);
+            outv[outc++] = glob_pool[glob_pool_idx++];
+            continue;
+        }
+
+        char *brace_results[MAX_ARGC];
+        int brace_count = brace_expand_token(argv[i], brace_results, MAX_ARGC - outc);
+        if (brace_count <= 0) {
+            brace_results[0] = argv[i];
+            brace_count = 1;
+        }
+
+        for (int b = 0; b < brace_count && outc < MAX_ARGC; b++) {
+            int n = expand_token(brace_results[b], &outv[outc], MAX_ARGC - outc, 0);
+            if (n == 0) break;
+            outc += n;
+        }
     }
     return outc;
 }
@@ -995,7 +1160,7 @@ static void run_line(char *line) {
 
     static char *seg_argv[MAX_SEGMENTS][MAX_ARGC];
     int seg_argc[MAX_SEGMENTS];
-    int seg_quoted[MAX_SEGMENTS][MAX_ARGC];  // 对齐签名，管道内暂不做通配展开
+    int seg_quoted[MAX_SEGMENTS][MAX_ARGC];
     for (int s = 0; s < nseg; s++) {
         seg_argc[s] = parse_args(segs[s].cmd_str, seg_argv[s], MAX_ARGC, seg_quoted[s]);
         if (seg_argc[s] == 0) {
