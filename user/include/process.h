@@ -8,6 +8,8 @@ extern "C" {
 #define WNOHANG 1
 #define WUNTRACED 0
 
+#define WEXITSTATUS(status)  (((status) >> 8) & 0xFF)
+
 static inline isize yield(void) {
     return syscall3(SYS_YIELD, 0, 0, 0);
 }

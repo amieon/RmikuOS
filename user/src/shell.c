@@ -49,18 +49,9 @@ static int strlen_(const char *s) {
     return n;
 }
 
-static void copy_str(char *dst, const char *src, int max) {
-    int i = 0;
-    while (src[i] && i < max - 1) {
-        dst[i] = src[i];
-        i++;
-    }
-    dst[i] = 0;
-}
-
 static int isdigit_(char c) { return c >= '0' && c <= '9'; }
 
-static int parse_int(const char *s, int *out) {
+static int parse_int_prefix__(const char *s, int *out) {
     int n = 0;
     int val = 0;
     while (isdigit_(s[n])) {
@@ -72,7 +63,6 @@ static int parse_int(const char *s, int *out) {
     return n;
 }
 
-/* 清掉当前行，重新打印 prompt + buf，然后把光标移到 cursor 位置 */
 static void redraw_line(const char *prompt, const char *buf, int cursor) {
     int len = strlen_(buf);
     write(1, "\r", 1);
@@ -267,9 +257,9 @@ static int brace_expand_token(const char *token, char *outv[], int max_out) {
 
     /* 检查数字范围 {1..3} */
     int start_num, end_num;
-    int consumed = parse_int(body, &start_num);
+    int consumed = parse_int_prefix__(body, &start_num);
     if (consumed > 0 && body[consumed] == '.' && body[consumed + 1] == '.') {
-        int consumed2 = parse_int(body + consumed + 2, &end_num);
+        int consumed2 = parse_int_prefix__(body + consumed + 2, &end_num);
         if (consumed2 > 0 && body[consumed + 2 + consumed2] == 0) {
             int count = 0;
             if (start_num <= end_num) {
@@ -377,7 +367,7 @@ static int match_pattern(const char *pat, const char *str) {
     }
 
     while (*pat == '*') pat++;
-    return *pat == '\0';
+    return *pat == '\\0';
 }
 
 static int expand_token(const char *token, char *outv[], int max_out, int is_quoted) {
@@ -982,7 +972,7 @@ static void run_exec(int argc, char *argv[]){
     puts("\n");
 }
 
-static void run_external(int argc, char *argv[], int background) {
+static int run_external(int argc, char *argv[], int background) {
     fcntl(0, F_SETFL, O_NONBLOCK);
     isize pid = fork();
     if (pid == 0) {
@@ -993,10 +983,10 @@ static void run_external(int argc, char *argv[], int background) {
             add_job(pid, argv[0]);
             uprintf("[%d] %d\n", next_job_id - 1, pid);
             fcntl(0, F_SETFL, 0);
-            return;
+            return 0;
         }
+        int status = 0;
         while (1) {
-            int status;
             isize ret = waitpid(pid, &status, WNOHANG);
             if (ret == pid) break;
             char ch;
@@ -1010,8 +1000,10 @@ static void run_external(int argc, char *argv[], int background) {
             yield();
         }
         fcntl(0, F_SETFL, 0);
+        return WEXITSTATUS(status);
     } else {
         puts("fork failed\n");
+        return 1;
     }
 }
 
@@ -1119,7 +1111,7 @@ static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[])
     exit(1);
 }
 
-static void run_line(char *line) {
+static int run_pipeline(char *line) {
     char *seg_strs[MAX_SEGMENTS];
     int   nseg = 0;
     seg_strs[nseg++] = line;
@@ -1143,7 +1135,7 @@ static void run_line(char *line) {
                 line[i] = 0;
                 if (nseg >= MAX_SEGMENTS) {
                     puts("too many pipe segments\n");
-                    return;
+                    return 1;
                 }
                 seg_strs[nseg++] = line + i + 1;
             }
@@ -1154,7 +1146,7 @@ static void run_line(char *line) {
     for (int s = 0; s < nseg; s++) {
         if (parse_redirect(seg_strs[s], &segs[s]) < 0) {
             puts("syntax error in redirection\n");
-            return;
+            return 1;
         }
     }
 
@@ -1165,7 +1157,7 @@ static void run_line(char *line) {
         seg_argc[s] = parse_args(segs[s].cmd_str, seg_argv[s], MAX_ARGC, seg_quoted[s]);
         if (seg_argc[s] == 0) {
             puts("syntax error: empty command\n");
-            return;
+            return 1;
         }
     }
 
@@ -1207,23 +1199,64 @@ static void run_line(char *line) {
         }
     }
     if (prev_read >= 0) close(prev_read);
+
+    int last_status = 0;
     for (int i = 0; i < npid; i++) {
-        waitpid(pids[i], 0, 0);
+        int status;
+        waitpid(pids[i], &status, 0);
+        if (i == npid - 1) {
+            last_status = WEXITSTATUS(status);
+        }
     }
+    return last_status;
 }
 
 static int has_pipe_or_redirect(const char *s) {
     for (int i = 0; s[i]; i++) {
-        if (s[i] == '|' || s[i] == '<' || s[i] == '>') return 1;
+        if (s[i] == '|' || s[i] == '<' || s[i] == '>') {
+            return 1;
+        }
     }
     return 0;
+}
+
+/* ---- 单命令执行（含内置命令、通配展开、后台） ---- */
+static int run_node(char *cmd, int background) {
+    if (has_pipe_or_redirect(cmd)) {
+        return run_pipeline(cmd);
+    }
+
+    int quoted[MAX_ARGC];
+    char *argv[MAX_ARGC];
+    int argc = parse_args(cmd, argv, MAX_ARGC, quoted);
+    if (argc == 0) return 0;
+
+    if (argc > 0 && streq(argv[argc - 1], "&")) {
+        background = 1;
+        argc--;
+    }
+
+    char *exp_argv[MAX_ARGC];
+    int exp_argc = expand_args(argc, argv, exp_argv, quoted);
+
+    if (streq(exp_argv[0], "help")) { print_help(); return 0; }
+    if (streq(exp_argv[0], "exit")) { puts("bye\n"); exit(0); }
+    if (streq(exp_argv[0], "pwd")) { return builtin_pwd(); }
+    if (streq(exp_argv[0], "cd")) { return builtin_cd(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "touch")) { return builtin_create(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "rm")) { return builtin_rm(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "rmdir")) { return builtin_rmdir(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "jobs")) { print_jobs(); return 0; }
+    if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
+    if (streq(exp_argv[0], "shutdown")) { puts("bye bye~\n"); shutdown(); return 0; }
+
+    return run_external(exp_argc, exp_argv, background);
 }
 
 /* ---- main ---- */
 int main(void) {
     char line[LINE_SIZE];
-    char *argv[MAX_ARGC];
-    int quoted[MAX_ARGC];
 
     puts("\nRmikuOS shell\n");
     print_help();
@@ -1246,70 +1279,130 @@ int main(void) {
         int len = read_line(prompt, line, LINE_SIZE);
         if (len == 0) continue;
 
-        if (has_pipe_or_redirect(line)) {
-            run_line(line);
-            continue;
-        }
+        /* 按 ; 分割语句 */
+        char line_copy[LINE_SIZE];
+        copy_str(line_copy, line, LINE_SIZE);
 
-        int argc = parse_args(line, argv, MAX_ARGC, quoted);
-        if (argc == 0) continue;
+        char *stmts[16];
+        int nstmt = 0;
+        int quote = 0;
+        char *start = line_copy;
 
-        int background = 0;
-        if (argc > 0 && streq(argv[argc - 1], "&")) {
-            background = 1;
-            argc--;
+        for (int i = 0; line_copy[i] && nstmt < 16; i++) {
+            if (line_copy[i] == '"' || line_copy[i] == '\'') {
+                if (!quote) quote = line_copy[i];
+                else if (quote == line_copy[i]) quote = 0;
+            } else if (!quote && line_copy[i] == ';') {
+                line_copy[i] = 0;
+                while (*start == ' ' || *start == '\t') start++;
+                if (*start) stmts[nstmt++] = start;
+                start = line_copy + i + 1;
+            }
         }
+        while (*start == ' ' || *start == '\t') start++;
+        if (*start && nstmt < 16) stmts[nstmt++] = start;
 
-        char *exp_argv[MAX_ARGC];
-        int exp_argc = expand_args(argc, argv, exp_argv, quoted);
+        for (int s = 0; s < nstmt; s++) {
+            /* 按 && / || 分割逻辑节点 */
+            struct logic_node { char *cmd; int op; int bg; };
+            struct logic_node nodes[16];
+            int nnode = 0;
 
-        if (streq(exp_argv[0], "help")) {
-            print_help();
-            continue;
-        }
-        if (streq(exp_argv[0], "exit")) {
-            puts("bye\n");
-            return 0;
-        }
-        if (streq(exp_argv[0], "pwd")) {
-            builtin_pwd();
-            continue;
-        }
-        if (streq(exp_argv[0], "cd")) {
-            builtin_cd(exp_argc, exp_argv);
-            continue;
-        }
-        if (streq(exp_argv[0], "mkdir")) {
-            builtin_mkdir(exp_argc, exp_argv);
-            continue;
-        }
-        if (streq(exp_argv[0], "touch")) {
-            builtin_create(exp_argc, exp_argv);
-            continue;
-        }
-        if (streq(exp_argv[0], "rm")) {
-            builtin_rm(exp_argc, exp_argv);
-            continue;
-        }
-        if (streq(exp_argv[0], "rmdir")) {
-            builtin_rmdir(exp_argc, exp_argv);
-            continue;
-        }
-        if (streq(exp_argv[0], "jobs")) {
-            print_jobs();
-            continue;
-        }
-        if (streq(exp_argv[0], "clear")) {
-            builtin_clear();
-            continue;
-        }
-        if (streq(exp_argv[0], "shutdown")) {
-            puts("bye bye~\n");
-            shutdown();
-            continue;
-        }
+            char *p = stmts[s];
+            char *seg_start = p;
+            quote = 0;
 
-        run_external(exp_argc, exp_argv, background);
+            for (int i = 0; p[i] && nnode < 16; i++) {
+                if (p[i] == '"' || p[i] == '\'') {
+                    if (!quote) quote = p[i];
+                    else if (quote == p[i]) quote = 0;
+                    continue;
+                }
+                if (quote) continue;
+
+                if (p[i] == '&' && p[i+1] == '&') {
+                    p[i] = 0;
+                    int bg = 0;
+                    char *end = p + i - 1;
+                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                        *end = 0;
+                        end--;
+                    }
+                    if (end >= seg_start && *end == '&') {
+                        bg = 1;
+                        *end = 0;
+                        end--;
+                        while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                            *end = 0;
+                            end--;
+                        }
+                    }
+                    while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
+                    nodes[nnode].cmd = seg_start;
+                    nodes[nnode].op = 1; /* AND */
+                    nodes[nnode].bg = bg;
+                    nnode++;
+                    i++;
+                    seg_start = p + i + 1;
+                } else if (p[i] == '|' && p[i+1] == '|') {
+                    p[i] = 0;
+                    int bg = 0;
+                    char *end = p + i - 1;
+                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                        *end = 0;
+                        end--;
+                    }
+                    if (end >= seg_start && *end == '&') {
+                        bg = 1;
+                        *end = 0;
+                        end--;
+                        while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                            *end = 0;
+                            end--;
+                        }
+                    }
+                    while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
+                    nodes[nnode].cmd = seg_start;
+                    nodes[nnode].op = 2; /* OR */
+                    nodes[nnode].bg = bg;
+                    nnode++;
+                    i++;
+                    seg_start = p + i + 1;
+                }
+            }
+
+            if (nnode < 16 && *seg_start) {
+                int bg = 0;
+                char *end = seg_start + strlen_(seg_start) - 1;
+                while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                    *end = 0;
+                    end--;
+                }
+                if (end >= seg_start && *end == '&') {
+                    bg = 1;
+                    *end = 0;
+                    end--;
+                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                        *end = 0;
+                        end--;
+                    }
+                }
+                while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
+                nodes[nnode].cmd = seg_start;
+                nodes[nnode].op = 0;
+                nodes[nnode].bg = bg;
+                nnode++;
+            }
+
+            int last_status = 0;
+            for (int i = 0; i < nnode; i++) {
+                if (i > 0) {
+                    if (nodes[i-1].op == 1 && last_status != 0) continue; /* AND */
+                    if (nodes[i-1].op == 2 && last_status == 0) continue; /* OR */
+                }
+                last_status = run_node(nodes[i].cmd, nodes[i].bg);
+            }
+        }
     }
     return 0;
 }
