@@ -7,20 +7,32 @@
 #define DIR_LEN 64
 #define MAX_MATCHES 32
 #define MAX_JOBS 8
+#define MAX_SEGMENTS 8
 
 static char history[HISTORY_MAX][LINE_SIZE];
 static int history_count = 0;
-static int history_idx = 0;   // 当前浏览位置，history_count 表示"当前编辑行"
+static int history_idx = 0;
 
 static char search_dirs[MAX_DIRS][DIR_LEN];
 static int num_dirs = 0;
 
+static char glob_pool[MAX_ARGC][LINE_SIZE];
+static int glob_pool_idx = 0;
+
+struct job {
+    int used;
+    int id;
+    isize pid;
+    char cmd[LINE_SIZE];
+};
+static struct job jobs[MAX_JOBS];
+static int next_job_id = 1;
+
+/* ---- 工具函数 ---- */
 static int streq(const char *a, const char *b) {
     int i = 0;
     while (a[i] && b[i]) {
-        if (a[i] != b[i]) {
-            return 0;
-        }
+        if (a[i] != b[i]) return 0;
         i++;
     }
     return a[i] == 0 && b[i] == 0;
@@ -35,19 +47,16 @@ static int strlen_(const char *s) {
 /* 清掉当前行，重新打印 prompt + buf，然后把光标移到 cursor 位置 */
 static void redraw_line(const char *prompt, const char *buf, int cursor) {
     int len = strlen_(buf);
-    // 回到行首并清除整行
     write(1, "\r", 1);
-    write(1, "\x1b[2K", 4);   // ESC [ 2K
+    write(1, "\x1b[2K", 4);
     puts(prompt);
     puts(buf);
-    // 光标目前在行尾，把它移回 cursor 处
     for (int i = 0; i < len - cursor; i++) {
         write(1, "\b", 1);
     }
 }
 
-#define MAX_MATCHES 32
-
+/* ---- Tab 补全 ---- */
 static int get_token_start(const char *buf, int cursor) {
     int start = cursor;
     while (start > 0 && buf[start - 1] != ' ' && buf[start - 1] != '\t')
@@ -82,7 +91,6 @@ static int lcp_len(char matches[][LINE_SIZE], int count) {
     return len;
 }
 
-// 把 buf 中 [token_start, token_start+token_len) 替换为 replacement
 static void replace_token(char *buf, int *len, int *cursor, int token_start,
                           int token_len, const char *replacement) {
     int repl_len = strlen_(replacement);
@@ -96,11 +104,8 @@ static void replace_token(char *buf, int *len, int *cursor, int token_start,
     buf[*len] = 0;
 }
 
- 
-
 static int scan_dir(const char *dir, const char *prefix,
-                    char matches[][LINE_SIZE], int max_matches)
-{
+                    char matches[][LINE_SIZE], int max_matches) {
     int fd = open(dir, O_RDONLY);
     if (fd < 0) return 0;
 
@@ -117,7 +122,6 @@ static int scan_dir(const char *dir, const char *prefix,
             int nl = entries[i].name_len;
             if (nl > 56) nl = 56;
 
-            // 跳过 . 和 ..
             if (nl >= 1 && entries[i].name[0] == '.') {
                 if (nl == 1) continue;
                 if (nl == 2 && entries[i].name[1] == '.') continue;
@@ -176,7 +180,7 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
 
     const char *builtins[] = {
         "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir",
-        "shutdown", "ls", "cat", "clear", NULL
+        "shutdown", "ls", "cat", "clear", "jobs", NULL
     };
 
     for (int i = 0; builtins[i] && count < max_matches; i++) {
@@ -197,10 +201,167 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
     return count;
 }
 
+/* ---- 通配符 ---- */
+static int has_glob(const char *s) {
+    for (int i = 0; s[i]; i++)
+        if (s[i] == '*' || s[i] == '?') return 1;
+    return 0;
+}
+
+static int match_pattern(const char *pat, const char *str) {
+    const char *last_star = NULL;
+    const char *last_star_str = NULL;
+
+    while (*str) {
+        if (*pat == *str || *pat == '?') {
+            pat++;
+            str++;
+        } else if (*pat == '*') {
+            while (pat[1] == '*') pat++;
+            last_star = pat++;
+            last_star_str = str;
+        } else if (last_star) {
+            pat = last_star + 1;
+            str = ++last_star_str;
+        } else {
+            return 0;
+        }
+    }
+
+    while (*pat == '*') pat++;
+    return *pat == '\0';
+}
+
+static int expand_token(const char *token, char *outv[], int max_out, int is_quoted) {
+    if (is_quoted || !has_glob(token)) {
+        if (glob_pool_idx >= MAX_ARGC) return 0;
+        copy_str(glob_pool[glob_pool_idx], token, LINE_SIZE);
+        outv[0] = glob_pool[glob_pool_idx++];
+        return 1;
+    }
+
+    char dir[LINE_SIZE];
+    char pat[LINE_SIZE];
+    int last_slash = -1;
+    for (int i = 0; token[i]; i++)
+        if (token[i] == '/') last_slash = i;
+
+    if (last_slash >= 0) {
+        int dl = last_slash + 1;
+        if (dl >= LINE_SIZE) dl = LINE_SIZE - 1;
+        for (int i = 0; i < dl; i++) dir[i] = token[i];
+        dir[dl] = 0;
+        int j = 0;
+        for (int i = last_slash + 1; token[i]; i++) pat[j++] = token[i];
+        pat[j] = 0;
+    } else {
+        if (getcwd(dir, sizeof(dir)) < 0) return 0;
+        int dlen = strlen_(dir);
+        if (dlen > 0 && dir[dlen - 1] != '/') {
+            dir[dlen] = '/';
+            dir[dlen + 1] = 0;
+        }
+        copy_str(pat, token, LINE_SIZE);
+    }
+
+    int count = 0;
+    int fd = open(dir, O_RDONLY);
+    if (fd < 0) {
+        if (glob_pool_idx >= MAX_ARGC) return 0;
+        copy_str(glob_pool[glob_pool_idx], token, LINE_SIZE);
+        outv[0] = glob_pool[glob_pool_idx++];
+        return 1;
+    }
+
+    while (count < max_out && glob_pool_idx < MAX_ARGC) {
+        struct dirent entries[16];
+        isize n = getdents(fd, entries, sizeof(entries));
+        if (n <= 0) break;
+
+        int num = n / sizeof(struct dirent);
+        for (int i = 0; i < num && count < max_out && glob_pool_idx < MAX_ARGC; i++) {
+            int nl = entries[i].name_len;
+            if (nl > 56) nl = 56;
+
+            if (nl >= 1 && entries[i].name[0] == '.') continue;
+
+            char name[64];
+            if (nl > 63) nl = 63;
+            for (int j = 0; j < nl; j++) name[j] = entries[i].name[j];
+            name[nl] = 0;
+
+            if (match_pattern(pat, name)) {
+                int dl = strlen_(dir);
+                int nlen = strlen_(name);
+                if (dl + nlen >= LINE_SIZE) continue;
+                for (int j = 0; j < dl; j++) glob_pool[glob_pool_idx][j] = dir[j];
+                for (int j = 0; j < nlen; j++) glob_pool[glob_pool_idx][dl + j] = name[j];
+                glob_pool[glob_pool_idx][dl + nlen] = 0;
+                outv[count++] = glob_pool[glob_pool_idx++];
+            }
+        }
+    }
+    close(fd);
+
+    if (count == 0) {
+        if (glob_pool_idx >= MAX_ARGC) return 0;
+        copy_str(glob_pool[glob_pool_idx], token, LINE_SIZE);
+        outv[0] = glob_pool[glob_pool_idx++];
+        return 1;
+    }
+    return count;
+}
+
+static int expand_args(int argc, char *argv[], char *outv[], int quoted[]) {
+    glob_pool_idx = 0;
+    int outc = 0;
+    for (int i = 0; i < argc && outc < MAX_ARGC; i++) {
+        int n = expand_token(argv[i], &outv[outc], MAX_ARGC - outc, quoted[i]);
+        if (n == 0) break;
+        outc += n;
+    }
+    return outc;
+}
+
+/* ---- 后台作业 ---- */
+static void add_job(isize pid, const char *cmd) {
+    for (int i = 0; i < MAX_JOBS; i++) {
+        if (!jobs[i].used) {
+            jobs[i].used = 1;
+            jobs[i].id = next_job_id++;
+            jobs[i].pid = pid;
+            copy_str(jobs[i].cmd, cmd, LINE_SIZE);
+            return;
+        }
+    }
+}
+
+static void reap_jobs(void) {
+    for (int i = 0; i < MAX_JOBS; i++) {
+        if (jobs[i].used) {
+            int status;
+            if (waitpid(jobs[i].pid, &status, WNOHANG) == jobs[i].pid) {
+                uprintf("[%d] done %s\n", jobs[i].id, jobs[i].cmd);
+                jobs[i].used = 0;
+            }
+        }
+    }
+}
+
+static void print_jobs(void) {
+    for (int i = 0; i < MAX_JOBS; i++) {
+        if (jobs[i].used) {
+            uprintf("[%d] running %s\n", jobs[i].id, jobs[i].cmd);
+        }
+    }
+}
+
+/* ---- read_line ---- */
 static int read_line(const char *prompt, char *buf, int max_len) {
     int len = 0;
     int cursor = 0;
-    char saved_line[LINE_SIZE] = {0};
+    char saved_line[LINE_SIZE];
+    for (int i = 0; i < LINE_SIZE; i++) saved_line[i] = 0;
     int saved_len = 0;
     int in_history = 0;
 
@@ -212,13 +373,8 @@ static int read_line(const char *prompt, char *buf, int max_len) {
         char ch = 0;
         isize n = read(0, &ch, 1);
 
-        if (n <= 0) {
-            continue;
-        }
-
-        if (ch == '\r') {
-            ch = '\n';
-        }
+        if (n <= 0) continue;
+        if (ch == '\r') ch = '\n';
 
         if (ch == '\n') {
             puts("\n");
@@ -238,10 +394,9 @@ static int read_line(const char *prompt, char *buf, int max_len) {
                            : complete_path(prefix, matches, MAX_MATCHES);
 
             if (n == 0) {
-                write(1, "\a", 1);   // bell
+                write(1, "\a", 1);
             } else if (n == 1) {
                 replace_token(buf, &len, &cursor, token_start, token_len, matches[0]);
-                // 命令补全且光标在末尾时，自动加空格
                 if (is_cmd && cursor == len && len < LINE_SIZE - 1) {
                     buf[len++] = ' ';
                     buf[len] = 0;
@@ -257,7 +412,6 @@ static int read_line(const char *prompt, char *buf, int max_len) {
                     replace_token(buf, &len, &cursor, token_start, token_len, lcp_str);
                     redraw_line(prompt, buf, cursor);
                 } else {
-                    // 补无可补，显示候选列表
                     write(1, "\n", 1);
                     for (int i = 0; i < n; i++) {
                         puts(matches[i]);
@@ -270,7 +424,6 @@ static int read_line(const char *prompt, char *buf, int max_len) {
             continue;
         }
 
-        /* ESC 序列：上 下 右 左 */
         if (ch == 0x1b) {
             char seq[2];
             if (read(0, &seq[0], 1) <= 0) continue;
@@ -278,7 +431,7 @@ static int read_line(const char *prompt, char *buf, int max_len) {
 
             if (seq[0] == '[') {
                 switch (seq[1]) {
-                    case 'A': { // 上
+                    case 'A':
                         if (history_idx > 0) {
                             if (!in_history) {
                                 copy_str(saved_line, buf, LINE_SIZE);
@@ -292,8 +445,7 @@ static int read_line(const char *prompt, char *buf, int max_len) {
                             redraw_line(prompt, buf, cursor);
                         }
                         break;
-                    }
-                    case 'B': { // 下
+                    case 'B':
                         if (history_idx < history_count) {
                             history_idx++;
                             if (history_idx == history_count) {
@@ -309,38 +461,31 @@ static int read_line(const char *prompt, char *buf, int max_len) {
                             redraw_line(prompt, buf, cursor);
                         }
                         break;
-                    }
-                    case 'C': { // 右
+                    case 'C':
                         if (cursor < len) {
                             write(1, &buf[cursor], 1);
                             cursor++;
                         }
                         break;
-                    }
-                    case 'D': { // 左
+                    case 'D':
                         if (cursor > 0) {
                             write(1, "\b", 1);
                             cursor--;
                         }
                         break;
-                    }
                 }
             }
             continue;
         }
 
-        /* Backspace / DEL：在光标处删除 */
         if (ch == 8 || ch == 127) {
             if (cursor > 0) {
-                // 把 cursor-1 后面的字符前移
                 for (int i = cursor - 1; i < len - 1; i++) {
                     buf[i] = buf[i + 1];
                 }
                 len--;
                 buf[len] = 0;
                 cursor--;
-
-                // 视觉更新：回退一格，打印后续字符，末尾补空格，光标移回
                 write(1, "\b", 1);
                 for (int i = cursor; i < len; i++) {
                     write(1, &buf[i], 1);
@@ -353,7 +498,6 @@ static int read_line(const char *prompt, char *buf, int max_len) {
             continue;
         }
 
-        /* 普通字符：在光标位置插入 */
         if (len < max_len - 1) {
             for (int i = len; i > cursor; i--) {
                 buf[i] = buf[i - 1];
@@ -361,12 +505,9 @@ static int read_line(const char *prompt, char *buf, int max_len) {
             buf[cursor] = ch;
             len++;
             buf[len] = 0;
-
-            // 从 cursor 开始打印后续所有字符
             for (int i = cursor; i < len; i++) {
                 write(1, &buf[i], 1);
             }
-            // 光标移回 cursor+1 的位置
             for (int i = 0; i < len - cursor - 1; i++) {
                 write(1, "\b", 1);
             }
@@ -376,7 +517,6 @@ static int read_line(const char *prompt, char *buf, int max_len) {
 
     buf[len] = 0;
 
-    // 存入历史（非空且与上一条不同）
     if (len > 0) {
         int dup = 0;
         if (history_count > 0 && streq(history[history_count - 1], buf)) {
@@ -399,25 +539,20 @@ static int read_line(const char *prompt, char *buf, int max_len) {
     return len;
 }
 
-static int parse_args(char *line, char *argv[], int max_argc) {
+/* ---- parse_args with quoted tracking ---- */
+static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
     int argc = 0;
-    int i = 0;  
+    int i = 0;
 
     while (line[i]) {
-        while (line[i] == ' ' || line[i] == '\t') {
-            i++;
-        }
-        if (!line[i]) {
-            break;
-        }
-        if (line[i] == '#') {
-            break;
-        }
-        if (argc >= max_argc) {
-            break;
-        }
-        argv[argc++] = &line[i];
+        while (line[i] == ' ' || line[i] == '\t') i++;
+        if (!line[i]) break;
+        if (line[i] == '#') break;
+        if (argc >= max_argc) break;
+
+        argv[argc] = &line[i];
         int w = i;
+        int is_quoted = 0;
 
         while (line[i] && line[i] != ' ' && line[i] != '\t') {
             char c = line[i];
@@ -428,7 +563,8 @@ static int parse_args(char *line, char *argv[], int max_argc) {
                     i++;
                 }
             } else if (c == '"') {
-                i++;  
+                is_quoted = 1;
+                i++;
                 while (line[i] && line[i] != '"') {
                     if (line[i] == '\\') {
                         i++;
@@ -440,17 +576,14 @@ static int parse_args(char *line, char *argv[], int max_argc) {
                         line[w++] = line[i++];
                     }
                 }
-                if (line[i] == '"') {
-                    i++;   
-                }
+                if (line[i] == '"') i++;
             } else if (c == '\'') {
-                i++; 
+                is_quoted = 1;
+                i++;
                 while (line[i] && line[i] != '\'') {
                     line[w++] = line[i++];
                 }
-                if (line[i] == '\'') {
-                    i++; 
-                }
+                if (line[i] == '\'') i++;
             } else {
                 line[w++] = c;
                 i++;
@@ -458,37 +591,29 @@ static int parse_args(char *line, char *argv[], int max_argc) {
         }
         int had_sep = (line[i] == ' ' || line[i] == '\t');
         line[w] = '\0';
-        if (had_sep) {
-            i++;
-        }
+        if (had_sep) i++;
+        quoted[argc] = is_quoted;
+        argc++;
     }
     return argc;
 }
 
+/* ---- builtins ---- */
 static void print_help(void) {
     puts("commands:\n");
     puts("  help\n");
     puts("  exit\n");
-    puts("  ls [path]\n");
-    puts("  cat <path>\n");
-    puts("\n");
-    puts("external commands are in /bin:\n");
-    puts("  try: ls /bin\n");
-    puts("  cd <path>\n");
     puts("  pwd\n");
-}
-
-static void print_dirent_name(struct dirent *d) {
-    for (int i = 0; i < d->name_len; i++) {
-        char ch = d->name[i];
-        write(1, &ch, 1);
-    }
-
-    if (d->file_type == FILE_TYPE_DIR) {
-        puts("/");
-    }
-
-    puts("\n");
+    puts("  cd <path>\n");
+    puts("  mkdir <path>\n");
+    puts("  touch <path>\n");
+    puts("  rm [-r] <path>\n");
+    puts("  rmdir <path>\n");
+    puts("  jobs\n");
+    puts("  clear\n");
+    puts("  shutdown\n");
+    puts("\nexternal commands are in /bin:\n");
+    puts("  try: ls /bin\n");
 }
 
 static int builtin_pwd(void) {
@@ -505,9 +630,7 @@ static int builtin_pwd(void) {
 
 static int builtin_cd(int argc, char *argv[]) {
     const char *path = "/";
-    if (argc >= 2) {
-        path = argv[1];
-    }
+    if (argc >= 2) path = argv[1];
     if (chdir(path) < 0) {
         puts("cd: no such directory: ");
         puts(path);
@@ -554,16 +677,11 @@ static int builtin_rm(int argc, char *argv[]) {
     int start = 1;
     if (streq(argv[1], "-r") || streq(argv[1], "-rf") || streq(argv[1], "-f")) {
         if (streq(argv[1], "-r") || streq(argv[1], "-rf")) recursive = 1;
-        start = 2; 
+        start = 2;
     }
     int ret = 0;
     for (int i = start; i < argc; i++) {
-        int r;
-        if (recursive) {
-            r = remove_recursive(argv[i]); 
-        } else {
-            r = unlink(argv[i]);         
-        }
+        int r = recursive ? remove_recursive(argv[i]) : unlink(argv[i]);
         if (r < 0) {
             puts("rm: cannot remove ");
             puts(argv[i]);
@@ -575,10 +693,13 @@ static int builtin_rm(int argc, char *argv[]) {
 }
 
 static int builtin_rmdir(int argc, char *argv[]) {
-    if (argc < 2) { puts("rmdir: missing operand\n"); return 1; }
+    if (argc < 2) {
+        puts("rmdir: missing operand\n");
+        return 1;
+    }
     int ret = 0;
     for (int i = 1; i < argc; i++) {
-        if (rmdir(argv[i]) < 0) { 
+        if (rmdir(argv[i]) < 0) {
             puts("rmdir: failed to remove ");
             puts(argv[i]);
             puts("\n");
@@ -586,6 +707,10 @@ static int builtin_rmdir(int argc, char *argv[]) {
         }
     }
     return ret;
+}
+
+static void builtin_clear(void) {
+    write(1, "\x1b[2J\x1b[H", 7);
 }
 
 static void load_search_dirs(void) {
@@ -605,6 +730,7 @@ static void load_search_dirs(void) {
     }
     buf[total] = '\0';
     close(fd);
+
     int start = 0;
     for (int i = 0; i <= total; i++) {
         if (buf[i] == '\n' || buf[i] == '\0') {
@@ -670,7 +796,6 @@ static void run_exec(int argc, char *argv[]){
         args.argv[i].len = strlen_(argv[i]);
     }
 
-    // 包含 '/' 的是绝对路径或相对路径，直接执行
     if (has_slash(argv[0])) {
         exec_with_args(argv[0], &args);
         puts("exec failed: ");
@@ -679,13 +804,11 @@ static void run_exec(int argc, char *argv[]){
         return;
     }
 
-    // 先尝试当前目录（不经过 PATH 搜索）
     exec_with_args(argv[0], &args);
 
-    // 再遍历 PATH
     for (int d = 0; d < num_dirs; d++) {
         char path[96];
-        build_exec_path(search_dirs[d], argv[0], path, sizeof(path));  
+        build_exec_path(search_dirs[d], argv[0], path, sizeof(path));
         exec_with_args(path, &args);
     }
 
@@ -694,13 +817,19 @@ static void run_exec(int argc, char *argv[]){
     puts("\n");
 }
 
-static void run_external(int argc, char *argv[]) {
+static void run_external(int argc, char *argv[], int background) {
     fcntl(0, F_SETFL, O_NONBLOCK);
     isize pid = fork();
     if (pid == 0) {
-        run_exec(argc,argv);
+        run_exec(argc, argv);
         exit(1);
     } else if (pid > 0) {
+        if (background) {
+            add_job(pid, argv[0]);
+            uprintf("[%d] %d\n", next_job_id - 1, pid);
+            fcntl(0, F_SETFL, 0);
+            return;
+        }
         while (1) {
             int status;
             isize ret = waitpid(pid, &status, WNOHANG);
@@ -721,13 +850,12 @@ static void run_external(int argc, char *argv[]) {
     }
 }
 
-#define MAX_SEGMENTS 8    
-
+/* ---- 管道 & 重定向 ---- */
 struct segment {
-    char *cmd_str;      
-    char  infile[LINE_SIZE];  
+    char *cmd_str;
+    char  infile[LINE_SIZE];
     char  outfile[LINE_SIZE];
-    int   append;   
+    int   append;
 };
 
 static char *skip_spaces(char *p) {
@@ -741,13 +869,13 @@ static int parse_redirect(char *seg_str, struct segment *out) {
     out->outfile[0] = 0;
     out->append     = 0;
 
-    int i = 0;   
-    int w = 0; 
+    int i = 0;
+    int w = 0;
     while (seg_str[i]) {
         char c = seg_str[i];
         if (c == '"' || c == '\'') {
             char quote = c;
-            seg_str[w++] = seg_str[i++];  
+            seg_str[w++] = seg_str[i++];
             while (seg_str[i] && seg_str[i] != quote) {
                 if (quote == '"' && seg_str[i] == '\\' && seg_str[i+1]) {
                     seg_str[w++] = seg_str[i++];
@@ -755,7 +883,7 @@ static int parse_redirect(char *seg_str, struct segment *out) {
                 seg_str[w++] = seg_str[i++];
             }
             if (seg_str[i] == quote) {
-                seg_str[w++] = seg_str[i++];    
+                seg_str[w++] = seg_str[i++];
             }
             continue;
         }
@@ -768,7 +896,7 @@ static int parse_redirect(char *seg_str, struct segment *out) {
             int is_output = (c == '>');
             int append = 0;
             i++;
-            if (is_output && seg_str[i] == '>') { 
+            if (is_output && seg_str[i] == '>') {
                 append = 1;
                 i++;
             }
@@ -795,7 +923,7 @@ static int parse_redirect(char *seg_str, struct segment *out) {
         }
         seg_str[w++] = seg_str[i++];
     }
-    seg_str[w] = 0;   
+    seg_str[w] = 0;
     return 0;
 }
 
@@ -831,12 +959,12 @@ static void run_line(char *line) {
     int   nseg = 0;
     seg_strs[nseg++] = line;
     {
-        char quote = 0; 
+        char quote = 0;
         for (int i = 0; line[i]; i++) {
             char c = line[i];
             if (quote) {
                 if (c == '\\' && quote == '"' && line[i+1]) {
-                    i++;   
+                    i++;
                 } else if (c == quote) {
                     quote = 0;
                 }
@@ -845,7 +973,7 @@ static void run_line(char *line) {
             if (c == '"' || c == '\'') {
                 quote = c;
             } else if (c == '\\' && line[i+1]) {
-                i++;  
+                i++;
             } else if (c == '|') {
                 line[i] = 0;
                 if (nseg >= MAX_SEGMENTS) {
@@ -856,25 +984,30 @@ static void run_line(char *line) {
             }
         }
     }
+
     struct segment segs[MAX_SEGMENTS];
     for (int s = 0; s < nseg; s++) {
         if (parse_redirect(seg_strs[s], &segs[s]) < 0) {
             puts("syntax error in redirection\n");
-            return;   
+            return;
         }
     }
+
     static char *seg_argv[MAX_SEGMENTS][MAX_ARGC];
     int seg_argc[MAX_SEGMENTS];
+    int seg_quoted[MAX_SEGMENTS][MAX_ARGC];  // 对齐签名，管道内暂不做通配展开
     for (int s = 0; s < nseg; s++) {
-        seg_argc[s] = parse_args(segs[s].cmd_str, seg_argv[s], MAX_ARGC);
+        seg_argc[s] = parse_args(segs[s].cmd_str, seg_argv[s], MAX_ARGC, seg_quoted[s]);
         if (seg_argc[s] == 0) {
             puts("syntax error: empty command\n");
             return;
         }
     }
+
     int prev_read = -1;
     int pids[MAX_SEGMENTS];
     int npid = 0;
+
     for (int s = 0; s < nseg; s++) {
         int pipefd[2];
         int has_next = (s < nseg - 1);
@@ -886,12 +1019,8 @@ static void run_line(char *line) {
         }
         int pid = fork();
         if (pid == 0) {
-            if (prev_read >= 0) {
-                dup2(prev_read, 0);
-            }
-            if (has_next) {
-                dup2(pipefd[1], 1);
-            }
+            if (prev_read >= 0) dup2(prev_read, 0);
+            if (has_next) dup2(pipefd[1], 1);
             if (prev_read >= 0) close(prev_read);
             if (has_next) {
                 close(pipefd[0]);
@@ -906,8 +1035,8 @@ static void run_line(char *line) {
         }
         if (prev_read >= 0) close(prev_read);
         if (has_next) {
-            close(pipefd[1]);  
-            prev_read = pipefd[0]; 
+            close(pipefd[1]);
+            prev_read = pipefd[0];
         } else {
             prev_read = -1;
         }
@@ -920,22 +1049,24 @@ static void run_line(char *line) {
 
 static int has_pipe_or_redirect(const char *s) {
     for (int i = 0; s[i]; i++) {
-        if (s[i] == '|' || s[i] == '<' || s[i] == '>') {
-            return 1;
-        }
+        if (s[i] == '|' || s[i] == '<' || s[i] == '>') return 1;
     }
     return 0;
 }
 
-
-
+/* ---- main ---- */
 int main(void) {
     char line[LINE_SIZE];
     char *argv[MAX_ARGC];
+    int quoted[MAX_ARGC];
+
     puts("\nRmikuOS shell\n");
     print_help();
     load_search_dirs();
+
     while (1) {
+        reap_jobs();
+
         char cwd_buf[128];
         char prompt[128];
         int p = 0;
@@ -946,56 +1077,74 @@ int main(void) {
         prompt[p++] = '$';
         prompt[p++] = ' ';
         prompt[p] = '\0';
+
         int len = read_line(prompt, line, LINE_SIZE);
-        if (len == 0) {
-            continue;
-        }
+        if (len == 0) continue;
+
         if (has_pipe_or_redirect(line)) {
             run_line(line);
             continue;
         }
-        int argc = parse_args(line, argv, MAX_ARGC);
-        if (argc == 0) {
-            continue;
+
+        int argc = parse_args(line, argv, MAX_ARGC, quoted);
+        if (argc == 0) continue;
+
+        int background = 0;
+        if (argc > 0 && streq(argv[argc - 1], "&")) {
+            background = 1;
+            argc--;
         }
-        if (streq(argv[0], "help")) {
+
+        char *exp_argv[MAX_ARGC];
+        int exp_argc = expand_args(argc, argv, exp_argv, quoted);
+
+        if (streq(exp_argv[0], "help")) {
             print_help();
             continue;
         }
-        if (streq(argv[0], "exit")) {
+        if (streq(exp_argv[0], "exit")) {
             puts("bye\n");
             return 0;
         }
-        if (streq(argv[0], "pwd")) {
+        if (streq(exp_argv[0], "pwd")) {
             builtin_pwd();
             continue;
         }
-        if (streq(argv[0], "cd")) {
-            builtin_cd(argc, argv);
+        if (streq(exp_argv[0], "cd")) {
+            builtin_cd(exp_argc, exp_argv);
             continue;
         }
-        if (streq(argv[0], "mkdir")) {
-            builtin_mkdir(argc, argv);
+        if (streq(exp_argv[0], "mkdir")) {
+            builtin_mkdir(exp_argc, exp_argv);
             continue;
         }
-        if (streq(argv[0], "touch")) {
-            builtin_create(argc, argv);
+        if (streq(exp_argv[0], "touch")) {
+            builtin_create(exp_argc, exp_argv);
             continue;
         }
-        if (streq(argv[0], "rm")) {
-            builtin_rm(argc, argv);
+        if (streq(exp_argv[0], "rm")) {
+            builtin_rm(exp_argc, exp_argv);
             continue;
         }
-        if (streq(argv[0], "rmdir")) {
-            builtin_rmdir(argc, argv);
+        if (streq(exp_argv[0], "rmdir")) {
+            builtin_rmdir(exp_argc, exp_argv);
             continue;
         }
-        if (streq(argv[0], "shutdown")) {
+        if (streq(exp_argv[0], "jobs")) {
+            print_jobs();
+            continue;
+        }
+        if (streq(exp_argv[0], "clear")) {
+            builtin_clear();
+            continue;
+        }
+        if (streq(exp_argv[0], "shutdown")) {
             puts("bye bye~\n");
             shutdown();
             continue;
         }
-        run_external(argc, argv);
+
+        run_external(exp_argc, exp_argv, background);
     }
     return 0;
 }
