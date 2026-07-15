@@ -1,4 +1,4 @@
-use super::virtio_mmio::VirtioMmioHeader;
+use super::transport::mmio::VirtioMmioHeader;
 
 const VIRTIO_MAGIC: u32 = 0x7472_6976;
 const VIRTIO_DEVICE_ID_BLOCK: u32 = 2;
@@ -28,10 +28,10 @@ pub fn probe_all_virtio_blk_mmio() -> alloc::vec::Vec<usize> {
                 crate::arch::VIRTIO_MMIO_BASE
                 + i * crate::arch::VIRTIO_MMIO_STRIDE;
             let virt_base = crate::mm::kernel_phys_to_virt(phys_base);
-            let hdr = super::virtio_mmio::VirtioMmioHeader::new(virt_base);
+            let hdr = super::transport::mmio::VirtioMmioHeader::new(virt_base);
 
             let magic = hdr.magic();
-            if magic != super::virtio_mmio::VIRTIO_MAGIC {
+            if magic != super::transport::mmio::VIRTIO_MAGIC {
                 continue;
             }
 
@@ -42,7 +42,7 @@ pub fn probe_all_virtio_blk_mmio() -> alloc::vec::Vec<usize> {
                 i, phys_base, device_id, hdr.vendor_id(),
             );
 
-            if device_id == super::virtio_mmio::VIRTIO_DEVICE_ID_BLOCK {
+            if device_id == super::transport::mmio::VIRTIO_DEVICE_ID_BLOCK {
                 log::info!("[virtio] found block device at pa={:#x}", phys_base);
                 found.push(phys_base);     // 收集,不 return
             }

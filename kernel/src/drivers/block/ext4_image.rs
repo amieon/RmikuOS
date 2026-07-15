@@ -10,11 +10,11 @@ use super::{
 // 评测模式(oscomp)不读盘,不需要嵌入 fs 镜像
 #[cfg(not(feature = "oscomp"))]
 #[cfg(target_arch = "loongarch64")]
-static FS_IMG: &[u8] = include_bytes!("../../../target/fs-loongarch64.img");
+static FS_IMG: &[u8] = include_bytes!("../../../../target/fs-loongarch64.img");
 
 #[cfg(not(feature = "oscomp"))]
 #[cfg(target_arch = "riscv64")]
-static FS_IMG: &[u8] = include_bytes!("../../../target/fs-riscv64.img");
+static FS_IMG: &[u8] = include_bytes!("../../../../target/fs-riscv64.img");
 
 #[cfg(feature = "oscomp")]
 static FS_IMG: &[u8] = &[];

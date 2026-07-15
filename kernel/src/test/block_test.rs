@@ -1,5 +1,5 @@
 
-use crate::block::{BlockDevice, RamDisk};
+use crate::drivers::block::{BlockDevice, RamDisk};
 
 static TEST_DISK: [u8; 1024] = {
     let mut data = [0u8; 1024];

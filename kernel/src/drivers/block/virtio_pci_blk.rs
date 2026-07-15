@@ -4,11 +4,11 @@ use core::ptr::{read_volatile, write_volatile};
 use crate::sync::spin::Mutex;
 
 use super::device::BlockDevice;
-use super::virtio_pci::{
+use crate::drivers::virtio::transport::pci::{
     VirtioPciRegions,
     VirtioPciRegion,
 };
-use super::virtio_queue::{
+use crate::drivers::virtio::queue::{
     VirtioQueue,
     VirtioBlkDma,
     VirtioBlkReq,

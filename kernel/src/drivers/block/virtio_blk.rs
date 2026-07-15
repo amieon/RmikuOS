@@ -8,7 +8,7 @@ use crate::mm::{
 use crate::mm::config::PAGE_SIZE;
 use crate::mm::frame_allocator::alloc_frame;
 
-use super::virtio_mmio::{
+use crate::drivers::virtio::transport::mmio::{
     VirtioMmioHeader,
     VIRTIO_DEVICE_ID_BLOCK,
     VIRTIO_F_VERSION_1,

@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
-use crate::block::virtio_blk::VirtioBlkDevice;
-use crate::block::BlockDevice;
-use crate::block::virtio_pci_blk::VirtioPciBlkDevice;
+use crate::drivers::block::virtio_blk::VirtioBlkDevice;
+use crate::drivers::block::BlockDevice;
+use crate::drivers::block::virtio_pci_blk::VirtioPciBlkDevice;
 
 pub fn test_second_disk_rw(dev: Arc<VirtioBlkDevice>) {
     let sector = 1000; 

@@ -14,7 +14,7 @@ use ext4_view::{
     FileType,
 };
 
-use crate::block::{
+use crate::drivers::block::{
     get_block_cache,
     BlockDevice,
     BLOCK_SIZE,

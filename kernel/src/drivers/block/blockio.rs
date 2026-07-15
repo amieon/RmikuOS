@@ -1,5 +1,5 @@
 use alloc::sync::Arc;
-use crate::block::BlockDevice;
+use crate::drivers::block::BlockDevice;
 use fatfs::{IoBase, Read, Write, Seek, SeekFrom};
 
 const SECTOR_SIZE: usize = 512;

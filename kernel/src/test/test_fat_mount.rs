@@ -1,10 +1,10 @@
 use alloc::sync::Arc;
-use crate::block::BlockDevice;
-use crate::block::blockio::BlockIo;
+use crate::drivers::block::BlockDevice;
+use crate::drivers::block::blockio::BlockIo;
 
-pub fn test_fat_mount(fat_dev: Arc<dyn crate::block::BlockDevice>) {
+pub fn test_fat_mount(fat_dev: Arc<dyn crate::drivers::block::BlockDevice>) {
     // FAT 镜像 32MB / 512 = 65536 扇区
-    let io = crate::block::blockio::BlockIo::new(fat_dev, 65536);
+    let io = crate::drivers::block::blockio::BlockIo::new(fat_dev, 65536);
 
     let fs = match fatfs::FileSystem::new(io, fatfs::FsOptions::new()) {
         Ok(fs) => fs,

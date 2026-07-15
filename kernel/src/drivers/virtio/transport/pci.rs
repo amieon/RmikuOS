@@ -1,4 +1,4 @@
-use crate::block::device::BlockDevice;
+use crate::drivers::block::device::BlockDevice;
 use crate::pci::ecam::{
     PciAddress,
     read_config_u8,

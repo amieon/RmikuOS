@@ -13,7 +13,7 @@ mod test;
 mod task;
 mod syscall;
 mod fs;
-mod block;
+mod drivers;
 mod pci;
 mod math;
 mod oscomp;
@@ -134,9 +134,9 @@ fn primary_init(id: usize) -> ! {
     mm::init();
     mm::init_paging();
 
-    block::ext4_image::test_ext4_magic();
+    drivers::block::ext4_image::test_ext4_magic();
 
-    let (ext4_dev, fat_dev) = block::discover_disks::discover_disks();
+    let (ext4_dev, fat_dev) = drivers::block::discover_disks::discover_disks();
 
     #[cfg(feature = "oscomp")]
     {
@@ -145,7 +145,7 @@ fn primary_init(id: usize) -> ! {
 
     let rootfs_device = ext4_dev.unwrap_or_else(|| {
         log::warn!("[disk] no ext4 disk, fallback to ramdisk");
-        crate::block::ext4_image::rootfs_ramdisk()
+        crate::drivers::block::ext4_image::rootfs_ramdisk()
     });
 
     fs::ext4fs::init(rootfs_device);

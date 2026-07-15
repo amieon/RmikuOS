@@ -8,7 +8,7 @@ pub fn discover_disks() -> (Option<Arc<dyn BlockDevice>>, Option<Arc<dyn BlockDe
     {
         use super::virtio_blk::VirtioBlkDevice;
 
-        let all = crate::block::virtio_probe::probe_all_virtio_blk_mmio();
+        let all = crate::drivers::virtio::probe::probe_all_virtio_blk_mmio();
         if all.is_empty() {
             log::warn!("[disk] no virtio-blk mmio found");
             return (None, None);
@@ -63,7 +63,7 @@ pub fn discover_disks() -> (Option<Arc<dyn BlockDevice>>, Option<Arc<dyn BlockDe
             crate::pci::bar::ensure_mem_bar(addr, 4, mmio_cursor);
             crate::pci::ecam::enable_pci_device(addr);
 
-            let regions = match crate::block::virtio_pci::parse_virtio_pci_caps(addr) {
+            let regions = match crate::drivers::virtio::transport::pci::parse_virtio_pci_caps(addr) {
                 Some(r) => r,
                 None => {
                     log::warn!("[disk] parse caps failed, skip");

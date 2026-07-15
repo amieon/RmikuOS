@@ -1,5 +1,5 @@
 use alloc::sync::Arc;
-use crate::block::{BlockDevice, virtio_blk::VirtioBlkDevice};
+use crate::drivers::block::{BlockDevice, virtio_blk::VirtioBlkDevice};
 
 pub fn test_write_read(dev: Arc<VirtioBlkDevice>) {
 

@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use crate::block::{
+use crate::drivers::block::{
     BlockDevice,
     RamDisk,
     get_block_cache,

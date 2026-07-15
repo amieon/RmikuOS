@@ -7,8 +7,8 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::string::ToString;
 
-use crate::block::blockio::BlockIo;
-use crate::block::BlockDevice;
+use crate::drivers::block::blockio::BlockIo;
+use crate::drivers::block::BlockDevice;
 use crate::fs::flag::*;
 use crate::sync::spin::Mutex;
 
