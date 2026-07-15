@@ -367,7 +367,7 @@ static int match_pattern(const char *pat, const char *str) {
     }
 
     while (*pat == '*') pat++;
-    return *pat == '\\0';
+    return *pat == '\0';
 }
 
 static int expand_token(const char *token, char *outv[], int max_out, int is_quoted) {
@@ -768,7 +768,7 @@ static void print_help(void) {
     puts("  clear\n");
     puts("  shutdown\n");
     puts("\nexternal commands are in /bin:\n");
-    puts("  try: ls /bin\n");
+    puts("  try: ls /bin\n\n");
 }
 
 static int builtin_pwd(void) {
@@ -1220,6 +1220,9 @@ static int has_pipe_or_redirect(const char *s) {
     return 0;
 }
 
+static int builtin_source(const char *path);
+static int execute_line(char *line);
+
 /* ---- 单命令执行（含内置命令、通配展开、后台） ---- */
 static int run_node(char *cmd, int background) {
     if (has_pipe_or_redirect(cmd)) {
@@ -1249,10 +1252,188 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "rmdir")) { return builtin_rmdir(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "jobs")) { print_jobs(); return 0; }
     if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
+    if (streq(exp_argv[0], "source") || streq(exp_argv[0], ".")) {
+        if (exp_argc < 2) {
+            puts("source: missing file operand\n");
+            return 1;
+        }
+        return builtin_source(exp_argv[1]);
+    }
     if (streq(exp_argv[0], "shutdown")) { puts("bye bye~\n"); shutdown(); return 0; }
 
     return run_external(exp_argc, exp_argv, background);
 }
+
+/* 执行一行输入（处理 ; 和 && || 逻辑链） */
+static int execute_line(char *line) {
+    int last_status = 0;
+
+    /* 按 ; 分割语句 */
+    char line_copy[LINE_SIZE];
+    copy_str(line_copy, line, LINE_SIZE);
+
+    char *stmts[16];
+    int nstmt = 0;
+    int quote = 0;
+    char *start = line_copy;
+
+    for (int i = 0; line_copy[i] && nstmt < 16; i++) {
+        if (line_copy[i] == '\"' || line_copy[i] == '\'') {
+            if (!quote) quote = line_copy[i];
+            else if (quote == line_copy[i]) quote = 0;
+        } else if (!quote && line_copy[i] == ';') {
+            line_copy[i] = 0;
+            while (*start == ' ' || *start == '\t') start++;
+            if (*start) stmts[nstmt++] = start;
+            start = line_copy + i + 1;
+        }
+    }
+    while (*start == ' ' || *start == '\t') start++;
+    if (*start && nstmt < 16) stmts[nstmt++] = start;
+
+    /* 逐条语句执行 */
+    for (int s = 0; s < nstmt; s++) {
+        /* 按 && / || 分割逻辑节点 */
+        struct logic_node { char *cmd; int op; int bg; };
+        struct logic_node nodes[16];
+        int nnode = 0;
+
+        char *p = stmts[s];
+        char *seg_start = p;
+        quote = 0;
+
+        for (int i = 0; p[i] && nnode < 16; i++) {
+            if (p[i] == '\"' || p[i] == '\'') {
+                if (!quote) quote = p[i];
+                else if (quote == p[i]) quote = 0;
+                continue;
+            }
+            if (quote) continue;
+
+            if (p[i] == '&' && p[i+1] == '&') {
+                p[i] = 0;
+                int bg = 0;
+                char *end = p + i - 1;
+                while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                    *end = 0; end--;
+                }
+                if (end >= seg_start && *end == '&') {
+                    bg = 1; *end = 0; end--;
+                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                        *end = 0; end--;
+                    }
+                }
+                while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
+                nodes[nnode].cmd = seg_start;
+                nodes[nnode].op = 1; /* AND */
+                nodes[nnode].bg = bg;
+                nnode++; i++; seg_start = p + i + 1;
+            } else if (p[i] == '|' && p[i+1] == '|') {
+                p[i] = 0;
+                int bg = 0;
+                char *end = p + i - 1;
+                while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                    *end = 0; end--;
+                }
+                if (end >= seg_start && *end == '&') {
+                    bg = 1; *end = 0; end--;
+                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                        *end = 0; end--;
+                    }
+                }
+                while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
+                nodes[nnode].cmd = seg_start;
+                nodes[nnode].op = 2; /* OR */
+                nodes[nnode].bg = bg;
+                nnode++; i++; seg_start = p + i + 1;
+            }
+        }
+
+        if (nnode < 16 && *seg_start) {
+            int bg = 0;
+            char *end = seg_start + strlen_(seg_start) - 1;
+            while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                *end = 0; end--;
+            }
+            if (end >= seg_start && *end == '&') {
+                bg = 1; *end = 0; end--;
+                while (end > seg_start && (*end == ' ' || *end == '\t')) {
+                    *end = 0; end--;
+                }
+            }
+            while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
+            nodes[nnode].cmd = seg_start;
+            nodes[nnode].op = 0;
+            nodes[nnode].bg = bg;
+            nnode++;
+        }
+
+        for (int i = 0; i < nnode; i++) {
+            if (i > 0) {
+                if (nodes[i-1].op == 1 && last_status != 0) continue;
+                if (nodes[i-1].op == 2 && last_status == 0) continue;
+            }
+            last_status = run_node(nodes[i].cmd, nodes[i].bg);
+        }
+    }
+
+    return last_status;
+}
+
+static int builtin_source(const char *path) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        puts("source: cannot open ");
+        puts(path);
+        puts("\n");
+        return 1;
+    }
+
+    char buf[4096];
+    int total = 0;
+    while (total < (int)sizeof(buf) - 1) {
+        isize n = read(fd, buf + total, sizeof(buf) - 1 - total);
+        if (n <= 0) break;
+        total += n;
+    }
+    buf[total] = 0;
+    close(fd);
+
+    int last_status = 0;
+    int i = 0;
+
+    while (i < total) {
+        /* 收集一行，处理续行 \ */
+        char line[LINE_SIZE];
+        int len = 0;
+
+        while (i < total && len < LINE_SIZE - 1) {
+            char c = buf[i++];
+            if (c == '\n') {
+                if (len > 0 && line[len - 1] == '\\') {
+                    len--;  /* 去掉反斜杠，继续读下一行 */
+                    continue;
+                }
+                break;
+            }
+            if (c != '\r') {
+                line[len++] = c;
+            }
+        }
+        line[len] = 0;
+
+        /* 跳过空行和注释 */
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == 0 || *p == '#') continue;
+
+        last_status = execute_line(line);
+    }
+
+    return last_status;
+}
+
+
 
 /* ---- main ---- */
 int main(void) {
@@ -1279,130 +1460,7 @@ int main(void) {
         int len = read_line(prompt, line, LINE_SIZE);
         if (len == 0) continue;
 
-        /* 按 ; 分割语句 */
-        char line_copy[LINE_SIZE];
-        copy_str(line_copy, line, LINE_SIZE);
-
-        char *stmts[16];
-        int nstmt = 0;
-        int quote = 0;
-        char *start = line_copy;
-
-        for (int i = 0; line_copy[i] && nstmt < 16; i++) {
-            if (line_copy[i] == '"' || line_copy[i] == '\'') {
-                if (!quote) quote = line_copy[i];
-                else if (quote == line_copy[i]) quote = 0;
-            } else if (!quote && line_copy[i] == ';') {
-                line_copy[i] = 0;
-                while (*start == ' ' || *start == '\t') start++;
-                if (*start) stmts[nstmt++] = start;
-                start = line_copy + i + 1;
-            }
-        }
-        while (*start == ' ' || *start == '\t') start++;
-        if (*start && nstmt < 16) stmts[nstmt++] = start;
-
-        for (int s = 0; s < nstmt; s++) {
-            /* 按 && / || 分割逻辑节点 */
-            struct logic_node { char *cmd; int op; int bg; };
-            struct logic_node nodes[16];
-            int nnode = 0;
-
-            char *p = stmts[s];
-            char *seg_start = p;
-            quote = 0;
-
-            for (int i = 0; p[i] && nnode < 16; i++) {
-                if (p[i] == '"' || p[i] == '\'') {
-                    if (!quote) quote = p[i];
-                    else if (quote == p[i]) quote = 0;
-                    continue;
-                }
-                if (quote) continue;
-
-                if (p[i] == '&' && p[i+1] == '&') {
-                    p[i] = 0;
-                    int bg = 0;
-                    char *end = p + i - 1;
-                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                        *end = 0;
-                        end--;
-                    }
-                    if (end >= seg_start && *end == '&') {
-                        bg = 1;
-                        *end = 0;
-                        end--;
-                        while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                            *end = 0;
-                            end--;
-                        }
-                    }
-                    while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
-                    nodes[nnode].cmd = seg_start;
-                    nodes[nnode].op = 1; /* AND */
-                    nodes[nnode].bg = bg;
-                    nnode++;
-                    i++;
-                    seg_start = p + i + 1;
-                } else if (p[i] == '|' && p[i+1] == '|') {
-                    p[i] = 0;
-                    int bg = 0;
-                    char *end = p + i - 1;
-                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                        *end = 0;
-                        end--;
-                    }
-                    if (end >= seg_start && *end == '&') {
-                        bg = 1;
-                        *end = 0;
-                        end--;
-                        while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                            *end = 0;
-                            end--;
-                        }
-                    }
-                    while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
-                    nodes[nnode].cmd = seg_start;
-                    nodes[nnode].op = 2; /* OR */
-                    nodes[nnode].bg = bg;
-                    nnode++;
-                    i++;
-                    seg_start = p + i + 1;
-                }
-            }
-
-            if (nnode < 16 && *seg_start) {
-                int bg = 0;
-                char *end = seg_start + strlen_(seg_start) - 1;
-                while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                    *end = 0;
-                    end--;
-                }
-                if (end >= seg_start && *end == '&') {
-                    bg = 1;
-                    *end = 0;
-                    end--;
-                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                        *end = 0;
-                        end--;
-                    }
-                }
-                while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
-                nodes[nnode].cmd = seg_start;
-                nodes[nnode].op = 0;
-                nodes[nnode].bg = bg;
-                nnode++;
-            }
-
-            int last_status = 0;
-            for (int i = 0; i < nnode; i++) {
-                if (i > 0) {
-                    if (nodes[i-1].op == 1 && last_status != 0) continue; /* AND */
-                    if (nodes[i-1].op == 2 && last_status == 0) continue; /* OR */
-                }
-                last_status = run_node(nodes[i].cmd, nodes[i].bg);
-            }
-        }
+        execute_line(line);
     }
     return 0;
 }
