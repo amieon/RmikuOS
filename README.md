@@ -187,144 +187,134 @@ fd 1 -> stdout
 
 ## User Programs and Shell
 
-RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init shell）也不依赖内核内置 app table，而是通过 VFS 从 `/bin/shell` 加载。
+RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init shell）通过 VFS 从 `/bin/shell` 加载。Shell 不是内核内置的玩具解释器，而是一个**支持交互式编辑、通配符展开、逻辑链、后台执行与脚本 source** 的完整用户态程序。
 
-### Shell 命令
+### Shell 命令体系
 
-shell 区分**内建命令**（改变 shell 自身状态，必须内建）与**外部命令**（独立程序，可被管道 / 重定向组合）：
+区分**内建命令**（改变 shell 自身状态，必须内建）与**外部命令**（独立 ELF，可被管道 / 重定向组合）：
 
 ```text
-内建：  cd  pwd  exit  help  shutdown
-        mkdir  touch  rm  rmdir          (增删,内核原子判断类型)
-外部：  ls  cat  echo  grep  shell ...    (位于 /bin、/tests、/programs)
+内建：  cd  pwd  exit  help  shutdown  jobs  clear
+        mkdir  touch  rm  rmdir  source  .
+外部：  ls  cat  echo  grep  shell  sleep ...
 ```
 
-`ls` / `cat` / `echo` / `grep` 等 IO 工具被实现为**独立的外部程序**而非内建命令，这样它们才能出现在管道与重定向中（管道两端走 `fork + exec`，内建命令无法被 exec）。`cd` / `pwd` / `exit` 则保持内建，因为它们必须修改 shell 进程自身的状态。
+`ls` / `cat` / `echo` / `grep` 等 IO 工具被实现为独立的外部程序，因此它们能出现在管道与重定向中；`cd` / `pwd` / `exit` / `jobs` / `source` 保持内建，因为它们必须修改 shell 进程自身的状态或访问 shell 内部数据结构。
 
-示例：
+### Interactive Line Editing
+
+Shell 支持完整的命令行编辑，无需依赖 readline 库：
 
 ```text
-/ $ ls
-dir     4096 bin/
-dir     4096 tests/
-dir     4096 programs/
-dir     4096 etc/
-...
-
-/ $ cat /etc/motd
-Welcome to RmikuOS real ext4 rootfs!
-
-/ $ mkdir /tmp/work
-/ $ touch /tmp/work/note
-/ $ ls /tmp/work
-file    0 note
+↑ / ↓         浏览历史命令（环形缓冲区，自动去重）
+← / →         光标左右移动，支持任意位置插入与删除
+Backspace     在光标处删除字符（自动重绘后续内容）
+Tab           命令补全 + 路径补全
 ```
 
-### Command Search Path（命令搜索路径）
+**Tab 补全**：
 
-外部命令支持在多个目录中搜索，无需输入完整路径——这相当于一个简化的 `PATH`，在`etc/path`文件中写入即可：
+- 唯一匹配时直接补全，命令后自动追加空格；
+- 多匹配时先补**最长公共前缀**（LCP），再次按 Tab 列出候选列表；
+- 支持绝对路径与相对路径（`ls /bi<Tab>` → `ls /bin/`）。
+
+### Glob, Brace Expansion & Quoting
+
+Shell 在参数展开阶段实现了**大括号展开 → 通配符展开**的两级展开，且引号内完全保护：
 
 ```text
-/bin/
-/tests/
-/programs/
+# 通配符
+/ $ ls *.c
+/ $ ls /bin/s?ell
+/ $ rm [abc]*.o
+
+# 大括号展开
+/ $ echo {hello,world}
+hello world
+/ $ echo file{1,2,3}.txt
+file1.txt file2.txt file3.txt
+/ $ echo num{10..13}
+num10 num11 num12 num13
+
+# 引号保护（内部不做任何展开）
+/ $ echo "*.c"
+*.c
+/ $ echo 'hello * ? [abc]'
+hello * ? [abc]
 ```
 
-* `/bin`      系统命令（ls / cat / echo / grep / shell）
-* `/tests`    C 与单文件 Rust 测试程序
-* `/programs` cargo workspace 构建的 Rust 程序
+**字符类** `[abc]`、`[a-z]`、`[^abc]`（或 `[!abc]`）也支持，与 `*` `?` 自由组合。
 
-shell 执行外部命令时按顺序遍历这些目录、逐个尝试 `exec`：由于 `exec` 失败才返回、成功则进程映像被替换，第一个能成功 `exec` 的目录即被采用，全部失败才报 `command not found`。这避免了「先 stat 检查再 exec」的额外系统调用与 TOCTOU 竞态。绝对路径（`/` 开头）则直接 `exec`，不经过搜索。
+### Control Flow: `;` `&&` `||` `&`
 
-### Pipe（管道）
-
-RmikuOS 实现了 Unix 匿名管道作为基础 IPC 原语，shell 支持 `|` 管道符。
-
-`pipe()` 创建一对单向 fd：写端写入、读端读出，数据经由内核中一段固定大小的环形字节缓冲区（`PIPE_BUF_SIZE = 512`）传递，先进先出。管道是**字节流**而非消息流，不保留写入边界。
+Shell 支持完整的命令控制流：
 
 ```text
-pipe(fd)  ->  fd[0] = 读端, fd[1] = 写端
+;           顺序执行（多条命令分隔）
+&&          短路与（前一条成功才执行后一条）
+||          短路或（前一条失败才执行后一条）
+&           后台执行（不阻塞 shell，返回 job id）
 ```
 
-读写两端各实现统一的 `File` trait，因此 `read` / `write` 系统调用无需特殊处理，管道作为一种文件自动被支持。两端共享同一个 `Arc<Mutex<Pipe>>`，核心边界语义：
-
 ```text
-缓冲空 + 仍有写者   -> 读者阻塞,等写入后被唤醒
-缓冲满 + 仍有读者   -> 写者阻塞,等读出后被唤醒
-缓冲空 + 写端全关   -> 读者得到 EOF(返回 0)
-读端全关           -> 写者得到 EPIPE
+/ $ cd /bin && ls | grep shell || echo not found
+/ $ echo one; echo two; echo three
+/ $ sleep 5 &
+[1] 3
+/ $ jobs
+[1] running sleep
+/ $ ...（5秒后自动打印）[1] done sleep
 ```
 
-阻塞复用调度器的 block/wake 机制（`BlockReason::PipeRead / PipeWrite`），唤醒时只标记线程 Ready 并重新入就绪队列，不切换上下文。
+`&&` / `||` 与管道 `|` 的优先级关系与 bash 一致：管道先组合命令，再参与逻辑短路。
 
-**引用计数**：管道的 EOF / EPIPE 依赖一对手动维护的引用计数（`reader_count` / `writer_count`），独立于 `Arc` 自身的引用计数，记录当前存活的读端 / 写端 fd 数量：
+### Script Execution: `source` / `.`
+
+Shell 支持从文件逐行执行脚本，实现为内建命令 `source` 或 `.`：
 
 ```text
-make_pipe          -> 各置 1
-fork / dup2        -> 复制 fd 时对应计数 +1
-close / exec / exit -> 释放 fd 时对应计数 -1,归零则唤醒对端
+/ $ cat test.sh
+echo "========== hello =========="
+echo {1,2,3}
+ls /bin/*.c 2>/dev/null || echo no .c files
+cd /tmp && touch foo && ls foo
+/ $ source test.sh
+========== hello ==========
+1 2 3
+no .c files
+foo
 ```
 
-三条 fd 释放路径（`close`、`exec` 时关闭非标准 fd、进程退出）统一经由 `release_file` 减计数并按需唤醒对端，保证任意多进程共享同一管道时计数始终配平。
+支持**续行**（行尾 `\` 将下一行拼接），支持 `#` 行内注释。脚本中可任意使用管道、重定向、逻辑链与后台执行。
 
-### Redirection（重定向）
+### Pipeline & Redirection
 
-`dup2(oldfd, newfd)` 把 `newfd` 重定向到 `oldfd` 指向的对象，是管道与重定向共同的底层机制。shell 支持输出 `>`、追加 `>>`、输入 `<` 三种重定向，并且**重定向与管道可以自由组合、管道可以多级串联**：
+`pipe()` 创建匿名管道，`dup2` 实现重定向。Shell 支持：
 
 ```text
-cmd > file        stdout 覆盖写入 file(不存在则创建)
-cmd >> file       stdout 追加到 file
-cmd < file        stdin 从 file 读取
+cmd > file        stdout 覆盖写入
+cmd >> file       stdout 追加
+cmd < file        stdin 从文件读取
+cmd1 | cmd2       单级管道
 cmd1 | cmd2 | ... 多级管道
-cmd < in | f1 | f2 > out   管道 + 两端重定向自由组合
+cmd < in | f1 | f2 > out   管道 + 两端重定向
 ```
 
-shell 把一行命令分三层处理（与真实 shell 一致）：
-
-```text
-1. 按 | 切成若干命令段（引号内的 | 不分段）
-2. 每段独立解析自己的重定向（> >> < 是自分隔操作符，紧贴也切，
-   引号内不算操作符）；操作符后必须紧跟文件名，否则报语法错误
-3. 用 N-1 个管道把 N 段串联，每段的 < / > 覆盖该段的管道方向
-```
-
-执行时，shell 为每段 fork 一个子进程，在 `exec` 之前用 `dup2`：非首段的 stdin 接上一段的管道读端，非末段的 stdout 接下一段的管道写端，而该段自己的 `< file` / `> file` 再覆盖对应方向。程序本身只认 fd 0 / 1，无需任何改动即可被重定向或接入任意位置的管道。
-
-```text
-/ $ ls | grep bin
-dir     4096 bin/
-
-/ $ cat /etc/motd | grep Welcome
-Welcome to RmikuOS real ext4 rootfs!
-
-/ $ ls | grep txt | grep test          # 多级管道
-
-/ $ grep root < /tmp/list | grep bin > /tmp/out   # 输入 + 管道 + 输出
-/ $ echo log >> /fat/history           # 追加到落盘文件
-
-/ $ pipe_writer | pipe_reader
-hello from writer
-line2
-line3
-[reader got EOF]
-```
-
-最后一例中 `[reader got EOF]` 是关键：它证明 `pipe_writer` 退出后，所有写端（writer 进程的 + shell 的）都干净关闭、`writer_count` 归零，reader 才收到 EOF——整条 EOF 链由前述引用计数驱动。
-
-畸形语法（操作符后无文件、`>>>`、`><`、`<>`、空命令段）统一报错且整行不执行，不产生副作用。
+管道与重定向的解析在**引号保护**下进行：`echo "a > b | c"` 被正确当作单个字面参数，不会触发重定向或管道。
 
 ### Lexing（词法解析）
 
-命令行解析做成一个**原地压缩**的词法分析器，单遍扫描完成引号剥离、转义、注释与分词，且只删字符不增（写指针永不超过读指针，原地安全）：
+命令行解析为原地压缩的词法分析器，单遍扫描完成：
 
 ```text
-"..." / '...'   引号剥离；引号内的空格不分词、> < | # 不作特殊解释
-                （双引号内处理 \ 转义，单引号内全字面）
-\x              转义：反斜杠后的字符按字面保留
+"..." / '...'   引号剥离；双引号内处理 \ 转义，单引号内全字面
+\               转义：反斜杠后的字符按字面保留
 #               行内注释：词首的 # 起至行尾忽略
 ```
 
-因为引号状态在分词、管道切分、重定向解析三处都被一致地跟踪，`echo "a > b | c"` 这类「引号里含操作符」的输入会被正确当作单个字面参数，而不会触发重定向或管道。
+引号状态在分词、管道切分、重定向解析三处一致跟踪，保证操作符在引号内无特殊含义。
+
+
 
 ---
 
