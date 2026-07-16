@@ -189,6 +189,8 @@ pub fn run_tasks() -> ! {
                 //maybe_dump_smp_debug("idle-empty");
                 crate::arch::enable_interrupt();
 
+                crate::drivers::net::poll();
+
                 unsafe {
                     crate::arch::wait_for_interrupt();
                 }

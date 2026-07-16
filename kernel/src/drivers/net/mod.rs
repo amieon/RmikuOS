@@ -1,4 +1,8 @@
 pub mod virtio_net;
+pub mod eth;
+pub mod arp;
+pub mod ip;
+pub mod icmp;
 
 use virtio_net::VirtioNet;
 
@@ -15,3 +19,12 @@ pub fn init() {
     }
 }
 
+pub fn poll() {
+    let mut buf = [0u8; 2048];
+    let n = unsafe {
+        NET.as_mut().map(|net| net.poll_rx(&mut buf)).unwrap_or(0)
+    };
+    if n > 0 {
+        eth::input(unsafe { NET.as_mut().unwrap() }, &buf[..n]);
+    }
+}

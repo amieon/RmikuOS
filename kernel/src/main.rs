@@ -156,6 +156,7 @@ fn primary_init(id: usize) -> ! {
     } else {
         log::warn!("[disk] no FAT disk found, /fat not mounted");
     }
+    drivers::net::init();
 
     log::info!("logger initialized");
     log::info!("==== RmikuOS 多核启动 ====");
