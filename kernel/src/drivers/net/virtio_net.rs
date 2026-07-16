@@ -1,12 +1,25 @@
 use alloc::vec::Vec;
 use core::ptr::{read_volatile, write_volatile};
 
+#[cfg(target_arch = "riscv64")]
+use crate::drivers::virtio::transport::mmio::VirtioMmioHeader;
 use crate::mm::virt_to_phys;
-use crate::drivers::virtio::queue::{VirtioQueue, VirtqDesc, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
-#[cfg(target_arch = "loongarch64")]
-use crate::pci;
+use crate::drivers::virtio::queue::{VirtioQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
 
 pub const NET_QUEUE_SIZE: usize = 8;
+
+// VirtIO PCI 现代布局寄存器偏移（common cfg）
+#[cfg(target_arch = "loongarch64")]
+mod pci_regs {
+    pub const DEVICE_STATUS:      usize = 0x14;
+    pub const QUEUE_SELECT:       usize = 0x16;
+    pub const QUEUE_SIZE_REG:     usize = 0x18;
+    pub const QUEUE_ENABLE:       usize = 0x1C;
+    pub const QUEUE_NOTIFY_OFF:   usize = 0x1E;
+    pub const QUEUE_DESC_LO:      usize = 0x20;
+    pub const QUEUE_AVAIL_LO:     usize = 0x28;
+    pub const QUEUE_USED_LO:      usize = 0x30;
+}
 
 #[repr(C)]
 pub struct VirtioNetHdr {
@@ -20,40 +33,44 @@ pub struct VirtioNetHdr {
 }
 
 pub struct VirtioNet {
+    rx: VirtioQueue,
+    tx: VirtioQueue,
+    pub mac: [u8; 6],
+    rx_bufs: Vec<Vec<u8>>,
+    rx_last_used: u16,
+
     #[cfg(target_arch = "loongarch64")]
     common_va: usize,
     #[cfg(target_arch = "loongarch64")]
     notify_va: usize,
     #[cfg(target_arch = "loongarch64")]
     notify_mul: u32,
+    #[cfg(target_arch = "loongarch64")]
+    rx_notify_off: u16,
+    #[cfg(target_arch = "loongarch64")]
+    tx_notify_off: u16,
 
-    rx: VirtioQueue,
-    tx: VirtioQueue,
-    pub mac: [u8; 6],
-    rx_bufs: Vec<Vec<u8>>,
-    tx_hdr: VirtioNetHdr,
-    rx_last_used: u16,
+    #[cfg(target_arch = "riscv64")]
+    mmio: crate::drivers::virtio::transport::mmio::VirtioMmioHeader,
 }
 
 impl VirtioNet {
     pub fn init() -> Option<Self> {
         #[cfg(target_arch = "loongarch64")]
-        {
-            Self::init_pci()
-        }
+        { Self::init_pci() }
         #[cfg(target_arch = "riscv64")]
-        {
-            Self::init_mmio()
-        }
+        { Self::init_mmio() }
     }
 
+    // ============================================================
+    //  LoongArch64 — PCI 现代版
+    // ============================================================
     #[cfg(target_arch = "loongarch64")]
     fn init_pci() -> Option<Self> {
         use crate::pci::{ecam::enable_pci_device, probe::PciDeviceLocation};
-        use crate::pci::bar::read_bar;
         use crate::drivers::virtio::transport::pci::parse_virtio_pci_caps;
+        use pci_regs::*;
 
-        // 找 virtio-net
         let loc = Self::find_pci()?;
         let addr = loc.addr();
         enable_pci_device(addr);
@@ -68,45 +85,71 @@ impl VirtioNet {
         let notify_mul = caps.notify_off_multiplier;
 
         // Reset
-        unsafe { write_volatile((common_va + 0x14) as *mut u8, 0) };
-        while unsafe { read_volatile((common_va + 0x14) as *const u8) } != 0 {}
+        unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 0) };
+        while unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) } != 0 {}
 
         // ACK + DRIVER
-        unsafe { write_volatile((common_va + 0x14) as *mut u8, 3) };
+        unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 3) };
 
-        // Features (accept none)
+        // Features
         unsafe {
             write_volatile((common_va + 0x08) as *mut u32, 0);
             write_volatile((common_va + 0x0C) as *mut u32, 0);
-            write_volatile((common_va + 0x14) as *mut u8, 11); // FEATURES_OK
+            write_volatile((common_va + DEVICE_STATUS) as *mut u8, 11); // FEATURES_OK
+        }
+        let mut retries = 1000;
+        while unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) } & 8 == 0 {
+            retries -= 1;
+            if retries == 0 {
+                log::warn!("[virtio-net] PCI device did not accept FEATURES_OK");
+                return None;
+            }
         }
 
-        // Read MAC
+        // MAC
         let mut mac = [0u8; 6];
         for i in 0..6 {
             mac[i] = unsafe { read_volatile((device.va + i) as *const u8) };
         }
 
-        let rx = Self::setup_queue_pci(common_va, notify_va, notify_mul, 0)?;
-        let tx = Self::setup_queue_pci(common_va, notify_va, notify_mul, 1)?;
+        let (rx, rx_notify_off) = Self::setup_queue_pci(common_va, notify_va, notify_mul, 0)?;
+        let (tx, tx_notify_off) = Self::setup_queue_pci(common_va, notify_va, notify_mul, 1)?;
 
-        // DRIVER_OK
-        unsafe { write_volatile((common_va + 0x14) as *mut u8, 15) };
+        unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 15) }; // DRIVER_OK
+
+        let mut rx_bufs: Vec<Vec<u8>> = Vec::new();
+        for i in 0..rx.size {
+            let mut buf = alloc::vec![0u8; 2048];
+            let paddr = virt_to_phys(buf.as_ptr() as usize);
+            unsafe {
+                let d = &mut *rx.desc_mut(i);
+                d.addr = paddr as u64;
+                d.len = 2048;
+                d.flags = VIRTQ_DESC_F_WRITE;
+                d.next = 0;
+
+                let idx = read_volatile(rx.avail_idx_ptr());
+                write_volatile(rx.avail_ring_ptr((idx as usize) % rx.size), i as u16);
+                write_volatile(rx.avail_idx_ptr(), idx.wrapping_add(1));
+            }
+            rx_bufs.push(buf);
+        }
+        {
+            let addr = notify_va + (rx_notify_off as u32 * notify_mul) as usize;
+            unsafe { write_volatile(addr as *mut u16, 0) };
+        }
 
         Some(Self {
             common_va, notify_va, notify_mul,
-            rx, tx, mac,
-            rx_bufs: Vec::new(),
-            tx_hdr: VirtioNetHdr { flags:0, gso_type:0, hdr_len:0, gso_size:0, csum_start:0, csum_offset:0, num_buffers:0 },
+            rx, tx, mac, rx_bufs,
             rx_last_used: 0,
+            rx_notify_off, tx_notify_off,
         })
     }
 
     #[cfg(target_arch = "loongarch64")]
     fn find_pci() -> Option<crate::pci::probe::PciDeviceLocation> {
         use crate::pci::probe::{read_device_info, PciDeviceLocation};
-        use crate::pci::ecam::read_config_u8;
-
         for bus in 0u8..=0 {
             for device in 0u8..32 {
                 for function in 0u8..8 {
@@ -128,50 +171,121 @@ impl VirtioNet {
     }
 
     #[cfg(target_arch = "loongarch64")]
-    fn setup_queue_pci(common_va: usize, notify_va: usize, notify_mul: u32, qid: u16) -> Option<VirtioQueue> {
-        unsafe { write_volatile((common_va + 0x16) as *mut u16, qid) };
-        let max = unsafe { read_volatile((common_va + 0x18) as *const u16) } as usize;
-        let size = if max == 0 { return None; } else if max < NET_QUEUE_SIZE { max } else { NET_QUEUE_SIZE };
+    fn setup_queue_pci(
+        common_va: usize, notify_va: usize, notify_mul: u32, qid: u16,
+    ) -> Option<(VirtioQueue, u16)> {
+        use pci_regs::*;
+        unsafe { write_volatile((common_va + QUEUE_SELECT) as *mut u16, qid) };
+        let max = unsafe { read_volatile((common_va + QUEUE_SIZE_REG) as *const u16) } as usize;
+        if max == 0 { return None; }
+        let size = if max < NET_QUEUE_SIZE { max } else { NET_QUEUE_SIZE };
 
         let vq = VirtioQueue::new_modern(size)?;
         unsafe {
-            write_volatile((common_va + 0x20) as *mut u64, vq.desc_pa as u64);
-            write_volatile((common_va + 0x28) as *mut u64, vq.avail_pa as u64);
-            write_volatile((common_va + 0x30) as *mut u64, vq.used_pa as u64);
-            write_volatile((common_va + 0x1C) as *mut u16, 1);
+            write_volatile((common_va + QUEUE_DESC_LO) as *mut u64, vq.desc_pa as u64);
+            write_volatile((common_va + QUEUE_AVAIL_LO) as *mut u64, vq.avail_pa as u64);
+            write_volatile((common_va + QUEUE_USED_LO) as *mut u64, vq.used_pa as u64);
+            write_volatile((common_va + QUEUE_ENABLE) as *mut u16, 1);
+        }
+        let notify_off = unsafe { read_volatile((common_va + QUEUE_NOTIFY_OFF) as *const u16) };
+        Some((vq, notify_off))
+    }
+
+    // ============================================================
+    //  RISC-V64 — MMIO
+    // ============================================================
+    #[cfg(target_arch = "riscv64")]
+    fn init_mmio() -> Option<Self> {
+        use crate::drivers::virtio::transport::mmio::{
+            probe_virtio_net_mmio, VirtioMmioHeader,
+            VIRTIO_STATUS_ACKNOWLEDGE, VIRTIO_STATUS_DRIVER,
+            VIRTIO_STATUS_FEATURES_OK, VIRTIO_STATUS_DRIVER_OK,
+            VIRTIO_F_VERSION_1,
+        };
+
+        let pa = probe_virtio_net_mmio()?;
+        let virt_base = crate::mm::kernel_phys_to_virt(pa);
+        let hdr = VirtioMmioHeader::new(virt_base);
+
+        if hdr.magic() != 0x7472_6976 || hdr.version() != 2 {
+            log::warn!("[virtio-net] MMIO probe failed: bad magic/version");
+            return None;
         }
 
-        if qid == 0 {
-            // RX: pre-fill
-            for i in 0..size {
-                let mut buf = Vec::with_capacity(2048);
-                buf.resize(2048, 0);
-                let paddr = virt_to_phys(buf.as_ptr() as usize);
-                unsafe {
-                    let d = &mut *vq.desc_mut(i);
-                    d.addr = paddr as u64;
-                    d.len = 2048;
-                    d.flags = VIRTQ_DESC_F_WRITE;
-                    d.next = 0;
-                }
-                let idx = unsafe { read_volatile(vq.avail_idx_ptr()) };
-                unsafe { write_volatile(vq.avail_ring_ptr((idx as usize) % size), i as u16) };
-                unsafe { write_volatile(vq.avail_idx_ptr(), idx + 1) };
+        hdr.reset();
+
+        // ACK + DRIVER
+        hdr.set_status_bits(VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
+
+        // Feature negotiation: only VERSION_1
+        hdr.write_driver_features(0, VIRTIO_F_VERSION_1 as u32);
+        hdr.write_driver_features(1, (VIRTIO_F_VERSION_1 >> 32) as u32);
+
+        hdr.set_status_bits(VIRTIO_STATUS_FEATURES_OK);
+        if hdr.status() & VIRTIO_STATUS_FEATURES_OK == 0 {
+            log::warn!("[virtio-net] MMIO device did not accept FEATURES_OK");
+            hdr.fail();
+            return None;
+        }
+
+        // MAC at device-specific config offset 0x100
+        let mut mac = [0u8; 6];
+        for i in 0..6 {
+            mac[i] = unsafe { read_volatile((virt_base + 0x100 + i) as *const u8) };
+        }
+
+        let rx = Self::setup_queue_mmio(&hdr, 0)?;
+        let tx = Self::setup_queue_mmio(&hdr, 1)?;
+
+        // RX pre-fill
+        let mut rx_bufs: Vec<Vec<u8>> = Vec::new();
+        for i in 0..rx.size {
+            let mut buf = alloc::vec![0u8; 2048];
+            let paddr = virt_to_phys(buf.as_ptr() as usize);
+            unsafe {
+                let d = &mut *rx.desc_mut(i);
+                d.addr = paddr as u64;
+                d.len = 2048;
+                d.flags = VIRTQ_DESC_F_WRITE;
+                d.next = 0;
+
+                let idx = read_volatile(rx.avail_idx_ptr());
+                write_volatile(rx.avail_ring_ptr((idx as usize) % rx.size), i as u16);
+                write_volatile(rx.avail_idx_ptr(), idx.wrapping_add(1));
             }
-            let notify_off = unsafe { read_volatile((common_va + 0x1E) as *const u16) };
-            let addr = notify_va + (notify_off as u32 * notify_mul) as usize;
-            unsafe { write_volatile(addr as *mut u16, qid) };
+            rx_bufs.push(buf);
         }
+        hdr.notify_queue(0); // kick RX
 
-        Some(vq)
+        // DRIVER_OK
+        hdr.set_status_bits(VIRTIO_STATUS_DRIVER_OK);
+
+        Some(Self {
+            mmio: hdr,
+            rx, tx, mac, rx_bufs,
+            rx_last_used: 0,
+        })
     }
 
     #[cfg(target_arch = "riscv64")]
-    fn init_mmio() -> Option<Self> {
-        // TODO: 等你需要 riscv 时补上，和 blk 类似
-        None
+    fn setup_queue_mmio(hdr: &VirtioMmioHeader, qid: u16) -> Option<VirtioQueue> {
+        hdr.select_queue(qid as u32);
+        let max = hdr.queue_size_max() as usize;
+        if max == 0 { return None; }
+        let size = if max < NET_QUEUE_SIZE { max } else { NET_QUEUE_SIZE };
+
+        let vq = VirtioQueue::new_modern(size)?;
+        hdr.set_queue_size(size as u32);
+        hdr.set_queue_desc_addr(vq.desc_pa);
+        hdr.set_queue_driver_addr(vq.avail_pa);
+        hdr.set_queue_device_addr(vq.used_pa);
+        hdr.set_queue_ready(1);
+        Some(vq)
     }
 
+    // ============================================================
+    //  通用发送 / 接收
+    // ============================================================
     pub fn send(&mut self, packet: &[u8]) {
         if packet.len() > 1514 { return; }
 
@@ -179,8 +293,11 @@ impl VirtioNet {
         let id1 = 0usize;
         let id2 = 1usize;
 
-        let hdr_v = &mut self.tx_hdr as *mut _ as usize;
-        let hdr_p = virt_to_phys(hdr_v);
+        let mut tx_hdr = VirtioNetHdr {
+            flags: 0, gso_type: 0, hdr_len: 0,
+            gso_size: 0, csum_start: 0, csum_offset: 0, num_buffers: 0,
+        };
+        let hdr_p = virt_to_phys(&mut tx_hdr as *mut _ as usize);
 
         unsafe {
             let d1 = &mut *tx.desc_mut(id1);
@@ -196,16 +313,34 @@ impl VirtioNet {
             d2.next = 0;
         }
 
-        let idx = unsafe { read_volatile(tx.avail_idx_ptr()) };
-        unsafe { write_volatile(tx.avail_ring_ptr((idx as usize) % tx.size), id1 as u16) };
-        unsafe { write_volatile(tx.avail_idx_ptr(), idx + 1) };
+        let used_before = unsafe { read_volatile(tx.used_idx_ptr()) };
 
-        // kick
+        let idx = unsafe { read_volatile(tx.avail_idx_ptr()) };
+        unsafe {
+            write_volatile(tx.avail_ring_ptr((idx as usize) % tx.size), id1 as u16);
+            write_volatile(tx.avail_idx_ptr(), idx.wrapping_add(1));
+        }
+
+        // kick TX
         #[cfg(target_arch = "loongarch64")]
         {
-            let notify_off = unsafe { read_volatile((self.common_va + 0x1E) as *const u16) };
-            let addr = self.notify_va + (notify_off as u32 * self.notify_mul) as usize;
-            unsafe { write_volatile(addr as *mut u16, 1) };
+            let addr = self.notify_va + (self.tx_notify_off as u32 * self.notify_mul) as usize;
+            unsafe { write_volatile(addr as *mut u16, 0) };
+        }
+        #[cfg(target_arch = "riscv64")]
+        {
+            self.mmio.notify_queue(1);
+        }
+
+        // 同步等待
+        let mut spin = 0usize;
+        while unsafe { read_volatile(tx.used_idx_ptr()) } == used_before {
+            spin += 1;
+            if spin > 1_000_000 {
+                log::warn!("[virtio-net] TX timeout");
+                break;
+            }
+            core::hint::spin_loop();
         }
     }
 
@@ -230,20 +365,23 @@ impl VirtioNet {
             let d = &mut *rx.desc_mut(id);
             d.len = 2048;
             d.flags = VIRTQ_DESC_F_WRITE;
+            let idx = read_volatile(rx.avail_idx_ptr());
+            write_volatile(rx.avail_ring_ptr((idx as usize) % rx.size), id as u16);
+            write_volatile(rx.avail_idx_ptr(), idx.wrapping_add(1));
         }
-        let idx = unsafe { read_volatile(rx.avail_idx_ptr()) };
-        unsafe { write_volatile(rx.avail_ring_ptr((idx as usize) % rx.size), id as u16) };
-        unsafe { write_volatile(rx.avail_idx_ptr(), idx + 1) };
 
-        // kick
+        // kick RX
         #[cfg(target_arch = "loongarch64")]
         {
-            let notify_off = unsafe { read_volatile((self.common_va + 0x1E) as *const u16) };
-            let addr = self.notify_va + (notify_off as u32 * self.notify_mul) as usize;
+            let addr = self.notify_va + (self.rx_notify_off as u32 * self.notify_mul) as usize;
             unsafe { write_volatile(addr as *mut u16, 0) };
         }
+        #[cfg(target_arch = "riscv64")]
+        {
+            self.mmio.notify_queue(0);
+        }
 
-        self.rx_last_used += 1;
+        self.rx_last_used = self.rx_last_used.wrapping_add(1);
         copy_len
     }
 }

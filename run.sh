@@ -114,8 +114,8 @@ case "$ARCH" in
       -device "virtio-blk-pci,drive=blk0,disable-legacy=on"
       -drive "file=target/fat-loongarch64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
-      -netdev tap,id=net0,ifname=tap0,script=no,downscript=no
-      -device virtio-net-pci,netdev=net0
+      -netdev user,id=net0 
+      -device virtio-net-pci,netdev=net0 
     )
     ;;
 esac

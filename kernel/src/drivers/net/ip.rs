@@ -1,6 +1,6 @@
 use crate::drivers::net::eth::{send as eth_send, MY_MAC};
-use crate::drivers::net::virtio_net::VirtioNet;
 use crate::drivers::net::arp;
+use crate::drivers::net::with_net;
 
 pub const MY_IP: u32 = 0x0A00020F; // 10.0.2.15
 
@@ -34,39 +34,62 @@ pub fn checksum(data: &[u8]) -> u16 {
     !(sum as u16)
 }
 
-pub fn send(net: &mut VirtioNet, dst_ip: u32, protocol: u8, payload: &[u8]) {
+pub fn send(dst_ip: u32, protocol: u8, payload: &[u8]) {
     let ip_len = core::mem::size_of::<IpHeader>() + payload.len();
     let mut pkt = alloc::vec::Vec::with_capacity(ip_len);
     unsafe { pkt.set_len(core::mem::size_of::<IpHeader>()) };
     let ip = unsafe { &mut *(pkt.as_mut_ptr() as *mut IpHeader) };
-    ip.ver_ihl = 0x45; ip.tos = 0;
+    ip.ver_ihl = 0x45;
+    ip.tos = 0;
     ip.tot_len = (ip_len as u16).to_be();
-    ip.id = 0; ip.frag_off = 0x4000u16.to_be();
-    ip.ttl = 64; ip.protocol = protocol;
-    ip.check = 0; ip.saddr = MY_IP.to_be(); ip.daddr = dst_ip.to_be();
+    ip.id = 0;
+    ip.frag_off = 0x4000u16.to_be(); // DF
+    ip.ttl = 64;
+    ip.protocol = protocol;
+    ip.check = 0;
+    ip.saddr = MY_IP.to_be();
+    ip.daddr = dst_ip.to_be();
     pkt.extend_from_slice(payload);
 
     let csum = checksum(&pkt[..core::mem::size_of::<IpHeader>()]);
-    unsafe { core::ptr::write_unaligned(core::ptr::addr_of_mut!((*ip).check), csum) };
+    unsafe {
+        core::ptr::write_unaligned(
+            core::ptr::addr_of_mut!((*ip).check),
+            csum,
+        );
+    }
 
     let mut dst_mac = [0u8; 6];
-    if !arp::lookup(dst_ip, &mut dst_mac) { return; }
-    eth_send(net, &dst_mac, 0x0800, &pkt);
+    if !arp::lookup(dst_ip, &mut dst_mac) {
+        // 没有缓存则发 ARP 请求并丢弃该包（简单处理）
+        arp::request(dst_ip);
+        return;
+    }
+    eth_send(&dst_mac, 0x0800, &pkt);
 }
 
 pub fn input(packet: &[u8]) {
-    if packet.len() < core::mem::size_of::<IpHeader>() { return; }
-    let ip = unsafe { &*(packet.as_ptr() as *const IpHeader) };
+    if packet.len() < core::mem::size_of::<IpHeader>() {
+        return;
+    }
+    let ip = unsafe { packet.as_ptr().cast::<IpHeader>().read_unaligned() };
     let hdr_len = ((ip.ver_ihl & 0x0F) * 4) as usize;
-    if hdr_len < 20 { return; }
-    if checksum(&packet[..hdr_len]) != 0 { return; }
+    if hdr_len < 20 {
+        return;
+    }
+    if checksum(&packet[..hdr_len]) != 0 {
+        return;
+    }
 
     let dst = u32::from_be(ip.daddr);
-    if dst != MY_IP && dst != 0xFFFFFFFF { return; }
+    if dst != MY_IP && dst != 0xFFFFFFFF {
+        return;
+    }
 
     let payload = &packet[hdr_len..];
     match ip.protocol {
         1 => super::icmp::input(payload, u32::from_be(ip.saddr)),
+        17 => super::udp::input(payload, u32::from_be(ip.saddr), dst),
         _ => {}
     }
 }

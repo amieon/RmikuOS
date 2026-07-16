@@ -45,19 +45,27 @@ pub fn socket_create() -> Option<usize> {
 /// 绑定本地端口
 pub fn socket_bind(fd: usize, port: u16) -> bool {
     let mut table = SOCKET_TABLE.lock();
-    if let Some(Some(sock)) = table.get_mut(fd) {
-        // 检查端口冲突
-        for other in table.iter().flatten() {
-            if other.local_port == port {
-                return false;
-            }
-        }
-        sock.local_port = port;
-        return true;
+    
+    // 先检查 fd 是否有效
+    if fd >= table.len() || table[fd].is_none() {
+        return false;
     }
-    false
+    
+    // 检查端口冲突（只读遍历）
+    for other in table.iter().flatten() {
+        if other.local_port == port {
+            return false;
+        }
+    }
+    
+    // 上面遍历结束，不可变借用已释放，现在可以可变借用
+    if let Some(ref mut sock) = table[fd] {
+        sock.local_port = port;
+        true
+    } else {
+        false
+    }
 }
-
 /// 发送数据
 pub fn socket_sendto(fd: usize, dst: SocketAddr, data: &[u8]) -> bool {
     let table = SOCKET_TABLE.lock();
