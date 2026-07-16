@@ -11,3 +11,4 @@ pub mod write_setion_test;
 pub mod test_second_disk_rw;
 pub mod test_fat_mount;
 pub mod test_pci_write_read;
+pub mod udp_kernel_test;
