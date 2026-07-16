@@ -312,17 +312,18 @@ impl VirtioBlkDevice {
                 q.avail_pa,
                 q.used_pa,
             );
-
+            log::info!("[blk] queue pa={:#x} pages={}", q.queue_pa, q.pages);
             q
         };
+        
 
         header.set_status_bits(VIRTIO_STATUS_DRIVER_OK);
 
-        log::info!(
-            "[virtio-blk] init done: version={}, status={:#x}",
-            version,
-            header.status(),
-        );
+        // log::info!(
+        //     "[virtio-blk] init done: version={}, status={:#x}",
+        //     version,
+        //     header.status(),
+        // );
         let dma = match VirtioBlkDma::new() {
             Some(dma) => dma,
             None => {

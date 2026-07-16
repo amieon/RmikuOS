@@ -8,6 +8,8 @@ use crate::drivers::virtio::queue::{VirtioQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F
 
 pub const NET_QUEUE_SIZE: usize = 8;
 
+
+
 #[cfg(target_arch = "loongarch64")]
 mod pci_regs {
     pub const DEVICE_STATUS:      usize = 0x14;
@@ -28,7 +30,7 @@ pub struct VirtioNetHdr {
     pub gso_size: u16,
     pub csum_start: u16,
     pub csum_offset: u16,
-    pub num_buffers: u16,
+    pub num_buffers: u16, 
 }
 
 pub struct VirtioNet {
@@ -53,6 +55,17 @@ pub struct VirtioNet {
     mmio: crate::drivers::virtio::transport::mmio::VirtioMmioHeader,
 }
 
+/// LoongArch 读设备寄存器前刷新缓存
+#[cfg(target_arch = "loongarch64")]
+#[inline]
+fn dev_fence() {
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(not(target_arch = "loongarch64"))]
+#[inline]
+fn dev_fence() {}
+
 impl VirtioNet {
     pub fn init() -> Option<Self> {
         #[cfg(target_arch = "loongarch64")]
@@ -67,18 +80,20 @@ impl VirtioNet {
     #[cfg(target_arch = "loongarch64")]
     fn init_pci() -> Option<Self> {
         use crate::pci::{ecam::enable_pci_device, probe::PciDeviceLocation};
+            
         use crate::drivers::virtio::transport::pci::parse_virtio_pci_caps;
         use pci_regs::*;
 
         log::info!("[virtio-net] PCI: scanning for device...");
         let loc = Self::find_pci()?;
-        log::info!("[virtio-net] PCI: found at {:?}", loc);
-
         let addr = loc.addr();
-        enable_pci_device(addr);
-        log::info!("[virtio-net] PCI: device enabled");
 
-        let caps = parse_virtio_pci_caps(addr)?;
+        crate::pci::bar::assign_all_bars(addr);
+
+        enable_pci_device(addr);                       // 再开 Memory Space + Bus Master
+
+
+        let caps = parse_virtio_pci_caps(addr)?;        // 这时读到的 BAR4 才是真地址
         log::info!("[virtio-net] PCI: caps parsed ok");
 
         let common = caps.common.as_ref()?;
@@ -91,34 +106,76 @@ impl VirtioNet {
         let notify_mul = caps.notify_off_multiplier;
 
         // Reset
+        // ---- Reset ----
         unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 0) };
-        while unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) } != 0 {}
-        log::info!("[virtio-net] PCI: reset done");
+        dev_fence();
+        while unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) } != 0 {
+            dev_fence();
+        }
+        log::info!("[dbg] reset done, status={:#x}",
+            unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) });
 
-        // ACK + DRIVER
+        // 设备身份确认：num_queues 必须是 2（RX/TX）
+        log::info!("[dbg] num_queues={}",
+            unsafe { read_volatile((common_va + 0x12) as *const u16) });
+
+        // ---- ACK -> DRIVER，每步读回 ----
+        unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 1) };
+        dev_fence();
+        log::info!("[dbg] after ACK:    status={:#x}",
+            unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) });
+
         unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 3) };
+        dev_fence();
+        log::info!("[dbg] after DRIVER: status={:#x}",
+            unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) });
 
-        // Feature negotiation: 请求 VERSION_1 (bit 32)
+        // ---- 设备提供的 features（0x00=select, 0x04=device_feature 只读）----
         unsafe {
-            write_volatile((common_va + 0x08) as *mut u32, 1); // driver_feature_select = 1
-            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
-            write_volatile((common_va + 0x0C) as *mut u32, 1); // VERSION_1
-            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
-            write_volatile((common_va + DEVICE_STATUS) as *mut u8, 11); // FEATURES_OK
+            write_volatile((common_va + 0x00) as *mut u32, 0);
+            dev_fence();
+            let lo = read_volatile((common_va + 0x04) as *const u32);
+            write_volatile((common_va + 0x00) as *mut u32, 1);
+            dev_fence();
+            let hi = read_volatile((common_va + 0x04) as *const u32);
+            log::info!("[dbg] device_feature lo={:#010x} hi={:#010x}", lo, hi);
+            // hi 的 bit0 必须是 1（VERSION_1），modern 设备一定提供
         }
-        let mut retries = 1000;
-        while unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) } & 8 == 0 {
-            retries -= 1;
-            if retries == 0 {
-                log::warn!("[virtio-net] PCI: FEATURES_OK timeout");
-                return None;
-            }
+
+        // ---- 写 driver features：只要 VERSION_1 ----
+        unsafe {
+            write_volatile((common_va + 0x08) as *mut u32, 0);  // driver_feature_select = 0
+            dev_fence();
+            write_volatile((common_va + 0x0C) as *mut u32, 1 << 15);  // 低 32 位全不要
+            dev_fence();
+            write_volatile((common_va + 0x08) as *mut u32, 1);  // select = 1
+            dev_fence();
+            write_volatile((common_va + 0x0C) as *mut u32, 1);  // VERSION_1
+            dev_fence();
+
+            // 回读验证（注意：映射是 cached 的话这里会说谎）
+            write_volatile((common_va + 0x08) as *mut u32, 0);
+            dev_fence();
+            let r_lo = read_volatile((common_va + 0x0C) as *const u32);
+            write_volatile((common_va + 0x08) as *mut u32, 1);
+            dev_fence();
+            let r_hi = read_volatile((common_va + 0x0C) as *const u32);
+            log::info!("[dbg] driver_feature readback lo={:#x} hi={:#x}", r_lo, r_hi);
         }
-        log::info!("[virtio-net] PCI: FEATURES_OK accepted, modern mode enabled");
+
+        // ---- FEATURES_OK ----
+        unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 11) };
+        dev_fence();
+        for i in 0..5 {
+            dev_fence();
+            let s = unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) };
+            log::info!("[dbg] FEATURES_OK poll[{}]: status={:#x}", i, s);
+        }
 
         // 读 MAC；如果 device config 读出来全 0，用 QEMU 默认 MAC
         let mut mac = [0u8; 6];
         for i in 0..6 {
+            dev_fence();
             mac[i] = unsafe { read_volatile((device.va + i) as *const u8) };
         }
         if mac == [0u8; 6] {
@@ -130,13 +187,14 @@ impl VirtioNet {
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         }
 
-        // 建队列：如果读 queue_size 返回 0，直接尝试 256（QEMU 默认值）
+        // 建队列
         let (rx, rx_notify_off) = Self::setup_queue_pci(common_va, notify_va, notify_mul, 0)?;
         log::info!("[virtio-net] PCI: RX queue ready, size={} notify_off={}", rx.size, rx_notify_off);
         let (tx, tx_notify_off) = Self::setup_queue_pci(common_va, notify_va, notify_mul, 1)?;
         log::info!("[virtio-net] PCI: TX queue ready, size={} notify_off={}", tx.size, tx_notify_off);
 
         unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 15) }; // DRIVER_OK
+        dev_fence();
         log::info!("[virtio-net] PCI: DRIVER_OK");
 
         // RX pre-fill
@@ -153,15 +211,23 @@ impl VirtioNet {
 
                 let idx = read_volatile(rx.avail_idx_ptr());
                 write_volatile(rx.avail_ring_ptr((idx as usize) % rx.size), i as u16);
+            }
+            dev_fence();
+            unsafe {
+                let idx = read_volatile(rx.avail_idx_ptr());
                 write_volatile(rx.avail_idx_ptr(), idx.wrapping_add(1));
             }
+            dev_fence();
             rx_bufs.push(buf);
         }
         {
             let addr = notify_va + (rx_notify_off as u32 * notify_mul) as usize;
             unsafe { write_volatile(addr as *mut u16, 0) };
+            dev_fence();
         }
-        log::info!("[virtio-net] PCI: RX buffers filled, kicked");
+        log::info!("[net] rxq pa={:#x} txq pa={:#x}", rx.queue_pa, tx.queue_pa);
+        log::info!("[net] rx_buf0 pa={:#x}", virt_to_phys(rx_bufs[0].as_ptr() as usize));
+        log::info!("[virtio-net] PCI: RX buffers filled, kicked at {:#x}", notify_va + (rx_notify_off as u32 * notify_mul) as usize);
 
         Some(Self {
             common_va, notify_va, notify_mul,
@@ -205,12 +271,11 @@ impl VirtioNet {
     ) -> Option<(VirtioQueue, u16)> {
         use pci_regs::*;
         unsafe { write_volatile((common_va + QUEUE_SELECT) as *mut u16, qid) };
-        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        dev_fence();
         let max = unsafe { read_volatile((common_va + QUEUE_SIZE_REG) as *const u16) } as usize;
+        dev_fence();
         log::info!("[virtio-net] setup_queue_pci qid={} raw_max_size={}", qid, max);
 
-        // QEMU transitional 设备在 modern 模式下有时读 queue_size 返回 0，
-        // 但设备实际支持 256。如果读到 0，直接尝试 256。
         let size = if max == 0 {
             log::info!("[virtio-net] setup_queue_pci qid={}: max_size=0, trying fallback 256", qid);
             256
@@ -221,13 +286,27 @@ impl VirtioNet {
         };
 
         let vq = VirtioQueue::new_modern(size)?;
+        // setup_queue_pci 里，替换三个 u64 写：
         unsafe {
-            write_volatile((common_va + QUEUE_DESC_LO) as *mut u64, vq.desc_pa as u64);
-            write_volatile((common_va + QUEUE_AVAIL_LO) as *mut u64, vq.avail_pa as u64);
-            write_volatile((common_va + QUEUE_USED_LO) as *mut u64, vq.used_pa as u64);
+            write_volatile((common_va + QUEUE_SIZE_REG) as *mut u16, size as u16);
+            dev_fence();
+            let mut wr64 = |off: usize, val: u64| {
+                write_volatile((common_va + off) as *mut u32, val as u32);
+                write_volatile((common_va + off + 4) as *mut u32, (val >> 32) as u32);
+            };
+            wr64(QUEUE_DESC_LO, vq.desc_pa as u64);
+            wr64(QUEUE_AVAIL_LO, vq.avail_pa as u64);
+            wr64(QUEUE_USED_LO, vq.used_pa as u64);
+            dev_fence();
             write_volatile((common_va + QUEUE_ENABLE) as *mut u16, 1);
         }
-        let notify_off = unsafe { read_volatile((common_va + QUEUE_NOTIFY_OFF) as *const u16) };
+        dev_fence();
+        let mut notify_off = unsafe { read_volatile((common_va + QUEUE_NOTIFY_OFF) as *const u16) };
+        dev_fence();
+        if notify_off == 0 && qid > 0 {
+            log::warn!("[virtio-net] setup_queue_pci qid={}: notify_off=0, fallback to {}", qid, qid);
+            notify_off = qid as u16;
+        }
         Some((vq, notify_off))
     }
 
@@ -318,8 +397,13 @@ impl VirtioNet {
 
                 let idx = read_volatile(rx.avail_idx_ptr());
                 write_volatile(rx.avail_ring_ptr((idx as usize) % rx.size), i as u16);
+            }
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+            unsafe {
+                let idx = read_volatile(rx.avail_idx_ptr());
                 write_volatile(rx.avail_idx_ptr(), idx.wrapping_add(1));
             }
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
             rx_bufs.push(buf);
         }
         hdr.notify_queue(0);
@@ -341,9 +425,10 @@ impl VirtioNet {
         let max = hdr.queue_size_max() as usize;
         log::info!("[virtio-net] setup_queue_mmio qid={} max_size={}", qid, max);
         if max == 0 {
-            log::warn!("[virtio-net] setup_queue_mmio qid={}: max_size=0, trying fallback 256", qid);
+            log::warn!("[virtio-net] setup_queue_mmio qid={}: max_size=0", qid);
+            return None;
         }
-        let size = if max == 0 || max < NET_QUEUE_SIZE { 256 } else { NET_QUEUE_SIZE };
+        let size = max.min(NET_QUEUE_SIZE);
 
         let vq = VirtioQueue::new_modern(size)?;
         hdr.set_queue_size(size as u32);
@@ -355,9 +440,7 @@ impl VirtioNet {
         Some(vq)
     }
 
-    // ============================================================
-    //  通用发送 / 接收
-    // ============================================================
+
     pub fn send(&mut self, packet: &[u8]) {
         if packet.len() > 1514 { return; }
 
@@ -367,7 +450,7 @@ impl VirtioNet {
 
         let mut tx_hdr = VirtioNetHdr {
             flags: 0, gso_type: 0, hdr_len: 0,
-            gso_size: 0, csum_start: 0, csum_offset: 0, num_buffers: 0,
+            gso_size: 0, csum_start: 0, csum_offset: 0,num_buffers: 0,
         };
         let hdr_p = virt_to_phys(&mut tx_hdr as *mut _ as usize);
 
@@ -383,33 +466,49 @@ impl VirtioNet {
             d2.len = packet.len() as u32;
             d2.flags = 0;
             d2.next = 0;
+            log::info!("[tx] d1_len={} packet_len={}", d1.len, packet.len());
+// 必须看到 d1_len=10
         }
 
+        dev_fence();
         let used_before = unsafe { read_volatile(tx.used_idx_ptr()) };
+        dev_fence();
 
         let idx = unsafe { read_volatile(tx.avail_idx_ptr()) };
         unsafe {
             write_volatile(tx.avail_ring_ptr((idx as usize) % tx.size), id1 as u16);
+        }
+        dev_fence();
+        unsafe {
             write_volatile(tx.avail_idx_ptr(), idx.wrapping_add(1));
         }
+        dev_fence();
+        log::info!("[tx] {:02x?}", packet);
 
         // kick TX
         #[cfg(target_arch = "loongarch64")]
         {
             let addr = self.notify_va + (self.tx_notify_off as u32 * self.notify_mul) as usize;
-            unsafe { write_volatile(addr as *mut u16, 0) };
+            unsafe { write_volatile(addr as *mut u16, 1) };
+            dev_fence();
         }
         #[cfg(target_arch = "riscv64")]
         {
             self.mmio.notify_queue(1);
         }
 
-        // 同步等待
+        // 同步等待：每次读 used_idx 前 fence 刷新缓存
         let mut spin = 0usize;
-        while unsafe { read_volatile(tx.used_idx_ptr()) } == used_before {
+        loop {
+            dev_fence();
+            let used_now = unsafe { read_volatile(tx.used_idx_ptr()) };
+            if used_now != used_before {
+                log::info!("[virtio-net] TX completed: used_before={} used_now={}", used_before, used_now);
+                break;
+            }
             spin += 1;
             if spin > 1_000_000 {
-                log::warn!("[virtio-net] TX timeout");
+                log::warn!("[virtio-net] TX timeout: used_before={} used_now={}", used_before, used_now);
                 break;
             }
             core::hint::spin_loop();
@@ -418,6 +517,7 @@ impl VirtioNet {
 
     pub fn poll_rx(&mut self, out: &mut [u8]) -> usize {
         let rx = &self.rx;
+        dev_fence();
         let used_idx = unsafe { read_volatile(rx.used_idx_ptr()) };
         if self.rx_last_used == used_idx { return 0; }
 
@@ -433,20 +533,22 @@ impl VirtioNet {
         }
 
         // 回收
+        let idx = unsafe { read_volatile(rx.avail_idx_ptr()) };
         unsafe {
-            let d = &mut *rx.desc_mut(id);
-            d.len = 2048;
-            d.flags = VIRTQ_DESC_F_WRITE;
-            let idx = read_volatile(rx.avail_idx_ptr());
             write_volatile(rx.avail_ring_ptr((idx as usize) % rx.size), id as u16);
+        }
+        dev_fence();
+        unsafe {
             write_volatile(rx.avail_idx_ptr(), idx.wrapping_add(1));
         }
+        dev_fence();
 
         // kick RX
         #[cfg(target_arch = "loongarch64")]
         {
             let addr = self.notify_va + (self.rx_notify_off as u32 * self.notify_mul) as usize;
             unsafe { write_volatile(addr as *mut u16, 0) };
+            dev_fence();
         }
         #[cfg(target_arch = "riscv64")]
         {
@@ -456,4 +558,23 @@ impl VirtioNet {
         self.rx_last_used = self.rx_last_used.wrapping_add(1);
         copy_len
     }
+}
+
+
+impl VirtioNet {
+// VirtioNet 里加：
+pub fn dbg_rx(&self) -> (u16, u16, u8) {
+    unsafe {
+        let avail = read_volatile(self.rx.avail_idx_ptr());
+        let used = read_volatile(self.rx.used_idx_ptr());
+        let isr = read_volatile((self.notify_va - 0x2000) as *const u8); // ISR_CFG = notify - 0x2000
+        (avail, used, isr)
+    }
+}
+// VirtioNet 里加：
+pub fn dbg_rx_buf0(&self) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    out.copy_from_slice(&self.rx_bufs[0][..16]);
+    out
+}
 }

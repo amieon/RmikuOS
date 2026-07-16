@@ -74,6 +74,7 @@ pub fn run_first_task() -> ! {
 pub fn run_tasks() -> ! {
     let hart = processor::current_hart_id();
     loop {
+        crate::drivers::net::poll();
         let next_tid = {
             let mut manager = lock_detect!(TASK_MANAGER);  // lock 内部已 preempt_disable
             let now = crate::timer::ticks();

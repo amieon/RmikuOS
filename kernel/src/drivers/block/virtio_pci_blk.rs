@@ -342,12 +342,12 @@ impl VirtioPciBlkDevice {
         };
 
         transport.add_status(VIRTIO_STATUS_DRIVER_OK);
-
+        log::info!("[pci-blk] queue pa={:#x} pages={}", queue0.queue_pa, queue0.pages);
         log::info!(
             "[virtio-pci-blk] init done, status={:#x}",
             transport.status(),
         );
-
+        
         Some(Arc::new(Self {
             transport,
             inner: Mutex::new(VirtioPciBlkInner {
@@ -483,13 +483,13 @@ impl VirtioPciBlkDevice {
 
             let status = read_volatile(status_va as *const u8);
 
-            log::info!(
-                "[virtio-pci-blk] done sector={}, used.id={}, used.len={}, status={}",
-                sector,
-                used.id,
-                used.len,
-                status,
-            );
+            // log::info!(
+            //     "[virtio-pci-blk] done sector={}, used.id={}, used.len={}, status={}",
+            //     sector,
+            //     used.id,
+            //     used.len,
+            //     status,
+            // );
 
             if used.id != 0 {
                 log::error!("[virtio-pci-blk] unexpected used id={}", used.id);

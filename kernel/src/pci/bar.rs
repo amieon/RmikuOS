@@ -81,3 +81,49 @@ pub fn ensure_mem_bar(addr: PciAddress, bar: u8, base: usize) {
 
     assign_mem_bar(addr, bar, base);
 }
+
+use core::sync::atomic::{AtomicUsize, Ordering};
+
+const MMIO_WIN_BASE: usize = 0x4000_0000;
+const MMIO_WIN_END: usize = 0x8000_0000;
+static NEXT_MMIO: AtomicUsize = AtomicUsize::new(crate::arch::PCI_MMIO_BASE);
+
+pub fn bar_size(addr: PciAddress, bar: u8) -> usize {
+    let off = 0x10 + (bar as usize) * 4;
+    let old = read_config_u32(addr, off);
+    if old & 0x1 != 0 { return 0; }
+    write_config_u32(addr, off, 0xFFFF_FFFF);
+    let mask = read_config_u32(addr, off);
+    write_config_u32(addr, off, old);
+    let size_bits = mask & !0xF;
+    if size_bits == 0 { 0 } else { (!size_bits).wrapping_add(1) as usize }
+}
+
+/// 给设备所有未分配的 Memory BAR 分地址，全局 bump allocator，撞车不可能
+pub fn assign_all_bars(addr: PciAddress) {
+    let mut bar = 0u8;
+    while bar < 6 {
+        let lo = read_bar_raw(addr, bar);
+        if lo & 0x1 != 0 {                 // I/O BAR，跳过
+            bar += 1;
+            continue;
+        }
+        let is_64 = (lo >> 1) & 0x3 == 0x2;
+        if lo & !0xF == 0 {                // 地址部分为 0：未分配或不存在
+            let size = bar_size(addr, bar);
+            if size == 0 {                 // 不存在
+                bar += 1;
+                continue;
+            }
+            let cur = NEXT_MMIO.load(Ordering::Relaxed);
+            let base = (cur + size - 1) & !(size - 1);   // 按 size 对齐
+            if base + size > MMIO_WIN_END {
+                log::warn!("[pci] BAR{}: MMIO 窗口耗尽", bar);
+                return;
+            }
+            assign_mem_bar(addr, bar, base);
+            NEXT_MMIO.store(base + size, Ordering::Relaxed);
+        }
+        bar += if is_64 { 2 } else { 1 };  // 64-bit BAR 占两槽
+    }
+}

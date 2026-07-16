@@ -220,3 +220,51 @@ pub fn find_all_virtio_blk_pci() -> alloc::vec::Vec<PciDeviceInfo> {
 
     found
 }
+
+use core::sync::atomic::{AtomicUsize, Ordering};
+use super::bar::{read_bar,read_bar_raw,assign_mem_bar};
+use super::ecam::write_config_u32;
+/// LoongArch QEMU virt 的 PCI MMIO32 窗口
+const MMIO_WIN_BASE: usize = 0x4000_0000;
+const MMIO_WIN_END: usize = 0x8000_0000;
+static NEXT_MMIO: AtomicUsize = AtomicUsize::new(MMIO_WIN_BASE);
+
+/// BAR sizing：写全 1 读回算大小，0 = BAR 不存在
+pub fn bar_size(addr: PciAddress, bar: u8) -> usize {
+    let off = 0x10 + (bar as usize) * 4;
+    let old = read_config_u32(addr, off);
+    if old & 0x1 != 0 { return 0; }              // I/O BAR 不管
+    write_config_u32(addr, off, 0xFFFF_FFFF);
+    let mask = read_config_u32(addr, off);
+    write_config_u32(addr, off, old);            // 恢复原值
+    let size_bits = mask & !0xF;
+    if size_bits == 0 { 0 } else { (!size_bits).wrapping_add(1) as usize }
+}
+
+/// 已分配就返回现地址，未分配就从窗口 bump 分配（BAR 地址必须按 size 对齐）
+pub fn alloc_mem_bar(addr: PciAddress, bar: u8) -> Option<usize> {
+    let old = read_bar(addr, bar);
+    if old != 0 { return Some(old as usize); }
+    let size = bar_size(addr, bar);
+    if size == 0 { return None; }
+    let cur = NEXT_MMIO.load(Ordering::Relaxed);
+    let base = (cur + size - 1) & !(size - 1);
+    if base + size > MMIO_WIN_END {
+        log::warn!("[pci] BAR{}: MMIO 窗口耗尽 (size={:#x})", bar, size);
+        return None;
+    }
+    assign_mem_bar(addr, bar, base);
+    NEXT_MMIO.store(base + size, Ordering::Relaxed);
+    Some(base)
+}
+
+/// 给设备所有 mem BAR 分地址（64-bit BAR 占两个槽，要跳）
+pub fn assign_all_bars(addr: PciAddress) {
+    let mut bar = 0u8;
+    while bar < 6 {
+        let lo = read_bar_raw(addr, bar);
+        let is_64 = lo & 0x1 == 0 && (lo >> 1) & 0x3 == 0x2;
+        let _ = alloc_mem_bar(addr, bar);
+        bar += if is_64 { 2 } else { 1 };
+    }
+}

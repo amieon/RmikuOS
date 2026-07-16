@@ -55,12 +55,12 @@ pub fn discover_disks() -> (Option<Arc<dyn BlockDevice>>, Option<Arc<dyn BlockDe
 
         let mut ext4_dev: Option<Arc<dyn BlockDevice>> = None;
         let mut fat_dev: Option<Arc<dyn BlockDevice>> = None;
-        let mut mmio_cursor = crate::arch::PCI_MMIO_BASE;
+        // mmio_cursor 删掉
 
         for info in all {
             let addr = info.loc.addr();
 
-            crate::pci::bar::ensure_mem_bar(addr, 4, mmio_cursor);
+            crate::pci::bar::assign_all_bars(addr);        // ← 原来是 ensure_mem_bar(addr, 4, mmio_cursor)
             crate::pci::ecam::enable_pci_device(addr);
 
             let regions = match crate::drivers::virtio::transport::pci::parse_virtio_pci_caps(addr) {
@@ -70,7 +70,6 @@ pub fn discover_disks() -> (Option<Arc<dyn BlockDevice>>, Option<Arc<dyn BlockDe
                     continue;
                 }
             };
-
             let dev = match VirtioPciBlkDevice::init(regions) {
                 Some(d) => d,
                 None => {
@@ -91,7 +90,7 @@ pub fn discover_disks() -> (Option<Arc<dyn BlockDevice>>, Option<Arc<dyn BlockDe
                 fat_dev = Some(dev as Arc<dyn BlockDevice>);
             }
 
-            mmio_cursor += 0x10000;
+            
         }
 
         (ext4_dev, fat_dev)
