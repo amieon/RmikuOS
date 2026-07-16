@@ -83,7 +83,7 @@ pub fn socket_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)>
     let mut table = SOCKET_TABLE.lock();
     if let Some(Some(sock)) = table.get_mut(fd) {
         if let Some(frame) = sock.rx_queue.pop_front() {
-            if frame.len() < 10 {
+            if frame.len() < 6 {
                 return None;
             }
             let src_ip = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
