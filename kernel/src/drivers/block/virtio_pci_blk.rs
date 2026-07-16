@@ -10,8 +10,6 @@ use crate::drivers::virtio::transport::pci::{
 };
 use crate::drivers::virtio::queue::{
     VirtioQueue,
-    VirtioBlkDma,
-    VirtioBlkReq,
     VirtqDesc,
     VIRTIO_BLK_QUEUE_SIZE,
     VIRTQ_DESC_F_NEXT,
@@ -21,6 +19,13 @@ use crate::drivers::virtio::queue::{
     VIRTIO_BLK_T_IN,
     VIRTIO_BLK_S_OK,
 };
+
+use super::virtio_blk_dma::{
+    VirtioBlkDma,
+    VirtioBlkReq,
+};
+
+
 
 const COMMON_DEVICE_FEATURE_SELECT: usize = 0x00;
 const COMMON_DEVICE_FEATURE: usize = 0x04;
@@ -301,7 +306,7 @@ impl VirtioPciBlkDevice {
             return None;
         }
 
-        let queue0 = match VirtioQueue::new_modern() {
+        let queue0 = match VirtioQueue::new_modern(VIRTIO_BLK_QUEUE_SIZE) {
             Some(q) => q,
             None => {
                 log::error!("[virtio-pci-blk] alloc queue failed");

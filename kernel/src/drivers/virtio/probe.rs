@@ -1,70 +1,50 @@
-use super::transport::mmio::VirtioMmioHeader;
+use alloc::vec::Vec;
 
-const VIRTIO_MAGIC: u32 = 0x7472_6976;
-const VIRTIO_DEVICE_ID_BLOCK: u32 = 2;
+use crate::pci::probe::{PciDeviceInfo, find_virtio_blk_pci as find_pci_blk};
+use crate::drivers::virtio::transport::mmio::{
+    probe_virtio_mmio,
+    VIRTIO_DEVICE_ID_BLOCK,
+    VIRTIO_DEVICE_ID_NETWORK,
+};
 
-#[cfg(target_arch = "riscv64")]
-const VIRTIO_MMIO_BASE: usize = 0x1000_1000;
-
-#[cfg(target_arch = "riscv64")]
-const VIRTIO_MMIO_STRIDE: usize = 0x1000;
-
-#[cfg(target_arch = "riscv64")]
-const VIRTIO_MMIO_COUNT: usize = 8;
-
-
-
-
-pub fn probe_virtio_blk_mmio() -> Option<usize> {
-    probe_all_virtio_blk_mmio().into_iter().next()
-}
-pub fn probe_all_virtio_blk_mmio() -> alloc::vec::Vec<usize> {
-    let mut found = alloc::vec::Vec::new();
-
-    #[cfg(target_arch = "riscv64")]
-    {
-        for i in 0..crate::arch::VIRTIO_MMIO_COUNT {
-            let phys_base =
-                crate::arch::VIRTIO_MMIO_BASE
-                + i * crate::arch::VIRTIO_MMIO_STRIDE;
-            let virt_base = crate::mm::kernel_phys_to_virt(phys_base);
-            let hdr = super::transport::mmio::VirtioMmioHeader::new(virt_base);
-
-            let magic = hdr.magic();
-            if magic != super::transport::mmio::VIRTIO_MAGIC {
-                continue;
-            }
-
-            let device_id = hdr.device_id();
-
-            log::info!(
-                "[virtio] mmio slot {} pa={:#x}, device_id={}, vendor={:#x}",
-                i, phys_base, device_id, hdr.vendor_id(),
-            );
-
-            if device_id == super::transport::mmio::VIRTIO_DEVICE_ID_BLOCK {
-                log::info!("[virtio] found block device at pa={:#x}", phys_base);
-                found.push(phys_base);     // 收集,不 return
-            }
-        }
-
-        if found.is_empty() {
-            log::warn!("[virtio] no virtio-blk mmio device found");
-        } else {
-            log::info!("[virtio] found {} virtio-blk device(s)", found.len());
-        }
-    }
-
-    #[cfg(not(target_arch = "riscv64"))]
-    {
-        use alloc::vec::Vec;
-
-        log::warn!("[virtio] mmio probe not implemented for this arch");
-        let v : alloc::vec::Vec<usize> = alloc::vec::Vec::new();
-        return v;
-    }
-
-    found
+pub fn find_virtio_blk_mmio() -> Vec<usize> {
+    probe_virtio_mmio(VIRTIO_DEVICE_ID_BLOCK)
 }
 
+pub fn find_virtio_net_mmio() -> Vec<usize> {
+    probe_virtio_mmio(VIRTIO_DEVICE_ID_NETWORK)
+}
 
+// PCI 探测：在 pci/probe.rs 里加这个，或者在这里封装
+pub fn find_virtio_net_pci() -> Option<PciDeviceInfo> {
+    #[cfg(target_arch = "loongarch64")]
+    {
+        use crate::pci::probe::{read_device_info, PciDeviceLocation};
+        use crate::pci::ecam::read_config_u8;
+
+        const PCI_DEVICE_ID_VIRTIO_NET_MODERN: u16 = 0x1041;
+        const PCI_DEVICE_ID_VIRTIO_NET_TRANSITIONAL: u16 = 0x1000;
+
+        for bus in 0u8..=0 {
+            for device in 0u8..32 {
+                for function in 0u8..8 {
+                    let loc = PciDeviceLocation { bus, device, function };
+                    let Some(info) = read_device_info(loc) else {
+                        if function == 0 { break; }
+                        continue;
+                    };
+                    if info.vendor_id == 0x1AF4
+                        && (info.device_id == PCI_DEVICE_ID_VIRTIO_NET_MODERN
+                            || info.device_id == PCI_DEVICE_ID_VIRTIO_NET_TRANSITIONAL)
+                    {
+                        return Some(info);
+                    }
+                    if function == 0 && (info.header_type & 0x80) == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    None
+}

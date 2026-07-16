@@ -1,3 +1,7 @@
-pub mod probe;
 pub mod queue;
-pub mod transport;
+pub mod probe;
+
+pub mod transport {
+    pub mod mmio;
+    pub mod pci;
+}

@@ -8,7 +8,7 @@ pub fn discover_disks() -> (Option<Arc<dyn BlockDevice>>, Option<Arc<dyn BlockDe
     {
         use super::virtio_blk::VirtioBlkDevice;
 
-        let all = crate::drivers::virtio::probe::probe_all_virtio_blk_mmio();
+        let all = crate::drivers::virtio::transport::mmio::probe_all_virtio_blk_mmio();
         if all.is_empty() {
             log::warn!("[disk] no virtio-blk mmio found");
             return (None, None);

@@ -200,3 +200,52 @@ impl VirtioMmioHeader {
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
     }
 }
+
+// 在原有常量下面加
+pub const VIRTIO_DEVICE_ID_NETWORK: u32 = 1;
+
+// 把探测函数改成通用
+pub fn probe_virtio_mmio(device_id: u32) -> alloc::vec::Vec<usize> {
+    let mut found = alloc::vec::Vec::new();
+
+    #[cfg(target_arch = "riscv64")]
+    {
+        for i in 0..crate::arch::VIRTIO_MMIO_COUNT {
+            let phys_base = crate::arch::VIRTIO_MMIO_BASE
+                          + i * crate::arch::VIRTIO_MMIO_STRIDE;
+            let virt_base = crate::mm::kernel_phys_to_virt(phys_base);
+            let hdr = VirtioMmioHeader::new(virt_base);
+
+            if hdr.magic() != VIRTIO_MAGIC {
+                continue;
+            }
+
+            let id = hdr.device_id();
+            if id == device_id {
+                log::info!(
+                    "[virtio-mmio] found device_id={} at pa={:#x}",
+                    device_id, phys_base,
+                );
+                found.push(phys_base);
+            }
+        }
+    }
+
+    #[cfg(not(target_arch = "riscv64"))]
+    {
+        log::warn!("[virtio-mmio] probe not implemented for this arch");
+    }
+
+    found
+}
+
+// 保留旧接口做兼容
+pub fn probe_virtio_blk_mmio() -> Option<usize> {
+    probe_virtio_mmio(VIRTIO_DEVICE_ID_BLOCK).into_iter().next()
+}
+pub fn probe_all_virtio_blk_mmio() -> alloc::vec::Vec<usize> {
+    probe_virtio_mmio(VIRTIO_DEVICE_ID_BLOCK)
+}
+pub fn probe_virtio_net_mmio() -> Option<usize> {
+    probe_virtio_mmio(VIRTIO_DEVICE_ID_NETWORK).into_iter().next()
+}

@@ -22,6 +22,8 @@ pub const VIRTIO_BLK_T_IN: u32 = 0;
 pub const VIRTIO_BLK_T_OUT: u32 = 1;
 pub const VIRTIO_BLK_S_OK: u8 = 0;
 
+
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VirtqDesc {
@@ -38,43 +40,43 @@ pub struct VirtqUsedElem {
     pub len: u32,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct VirtioBlkReq {
-    pub req_type: u32,
-    pub reserved: u32,
-    pub sector: u64,
+pub fn desc_size(queue_size: usize) -> usize {
+    16 * queue_size
 }
 
-const DESC_SIZE: usize = 16 * VIRTIO_BLK_QUEUE_SIZE;
-const AVAIL_SIZE: usize = 2 + 2 + 2 * VIRTIO_BLK_QUEUE_SIZE + 2;
+pub fn avail_size(queue_size: usize) -> usize {
+    2 + 2 + 2 * queue_size + 2
+}
 
-pub const DESC_OFFSET: usize = 0;
-pub const AVAIL_OFFSET: usize = DESC_OFFSET + DESC_SIZE;
+pub fn used_size(queue_size: usize) -> usize {
+    2 + 2 + 8 * queue_size
+}
 
 const fn align_up(value: usize, align: usize) -> usize {
     (value + align - 1) & !(align - 1)
 }
 
-pub const MODERN_USED_OFFSET: usize =
-    align_up(AVAIL_OFFSET + AVAIL_SIZE, 4);
+pub fn modern_used_offset(queue_size: usize) -> usize {
+    align_up(desc_size(queue_size) + avail_size(queue_size), 4)
+}
 
-pub const LEGACY_USED_OFFSET: usize =
-    align_up(AVAIL_OFFSET + AVAIL_SIZE, PAGE_SIZE);
+pub fn legacy_used_offset(queue_size: usize) -> usize {
+    align_up(desc_size(queue_size) + avail_size(queue_size), PAGE_SIZE)
+}
 
 pub struct VirtioQueue {
     pub queue_ppn: PhysPageNum,
     pub queue_pa: usize,
     pub queue_va: usize,
     pub pages: usize,
-
     pub desc_pa: usize,
     pub avail_pa: usize,
     pub used_pa: usize,
+    pub size: usize,
 }
 
 impl VirtioQueue {
-    fn new_with_layout(pages: usize, used_offset: usize) -> Option<Self> {
+    fn new_with_layout(pages: usize, used_offset: usize, queue_size: usize) -> Option<Self> {
         let ppn = alloc_contiguous_frames(pages)?;
 
         let pa = ppn.0 << PAGE_SIZE_BITS;
@@ -89,27 +91,38 @@ impl VirtioQueue {
             queue_pa: pa,
             queue_va: va,
             pages,
-
-            desc_pa: pa + DESC_OFFSET,
-            avail_pa: pa + AVAIL_OFFSET,
+            desc_pa: pa,
+            avail_pa: pa + desc_size(queue_size),
             used_pa: pa + used_offset,
+            size: queue_size,
         })
     }
 
-    pub fn new_legacy() -> Option<Self> {
-        Self::new_with_layout(2, LEGACY_USED_OFFSET)
+    pub fn new_legacy(queue_size: usize) -> Option<Self> {
+        let desc = desc_size(queue_size);
+        let avail = avail_size(queue_size);
+        let used = used_size(queue_size);
+        let total = desc + avail + used;
+        let pages = (total + PAGE_SIZE - 1) / PAGE_SIZE;
+        let pages = if pages < 2 { 2 } else { pages };
+        Self::new_with_layout(pages, legacy_used_offset(queue_size), queue_size)
     }
 
-    pub fn new_modern() -> Option<Self> {
-        Self::new_with_layout(1, MODERN_USED_OFFSET)
+    pub fn new_modern(queue_size: usize) -> Option<Self> {
+        let desc = desc_size(queue_size);
+        let avail = avail_size(queue_size);
+        let used = used_size(queue_size);
+        let total = desc + avail + used;
+        let pages = (total + PAGE_SIZE - 1) / PAGE_SIZE;
+        Self::new_with_layout(pages, modern_used_offset(queue_size), queue_size)
     }
 
     pub fn desc_va(&self) -> usize {
-        self.queue_va + DESC_OFFSET
+        self.queue_va
     }
 
     pub fn avail_va(&self) -> usize {
-        self.queue_va + AVAIL_OFFSET
+        self.queue_va + (self.avail_pa - self.queue_pa)
     }
 
     pub fn used_va(&self) -> usize {
@@ -117,7 +130,7 @@ impl VirtioQueue {
     }
 
     pub unsafe fn desc_mut(&self, index: usize) -> *mut VirtqDesc {
-        assert!(index < VIRTIO_BLK_QUEUE_SIZE);
+        assert!(index < self.size);
         (self.desc_va() as *mut VirtqDesc).add(index)
     }
 
@@ -130,7 +143,7 @@ impl VirtioQueue {
     }
 
     pub unsafe fn avail_ring_ptr(&self, index: usize) -> *mut u16 {
-        assert!(index < VIRTIO_BLK_QUEUE_SIZE);
+        assert!(index < self.size);
         ((self.avail_va() + 4) as *mut u16).add(index)
     }
 
@@ -139,52 +152,7 @@ impl VirtioQueue {
     }
 
     pub unsafe fn used_ring_ptr(&self, index: usize) -> *const VirtqUsedElem {
-        assert!(index < VIRTIO_BLK_QUEUE_SIZE);
+        assert!(index < self.size);
         ((self.used_va() + 4) as *const VirtqUsedElem).add(index)
-    }
-}
-
-const DMA_REQ_OFFSET: usize = 0;
-const DMA_DATA_OFFSET: usize = 512;
-const DMA_STATUS_OFFSET: usize = DMA_DATA_OFFSET + 512;
-
-pub struct VirtioBlkDma {
-    pub ppn: PhysPageNum,
-    pub pa: usize,
-    pub va: usize,
-
-    pub req_pa: usize,
-    pub data_pa: usize,
-    pub status_pa: usize,
-
-    pub req_va: usize,
-    pub data_va: usize,
-    pub status_va: usize,
-}
-
-impl VirtioBlkDma {
-    pub fn new() -> Option<Self> {
-        let ppn = alloc_frame()?;
-
-        let pa = ppn.0 << PAGE_SIZE_BITS;
-        let va = kernel_phys_to_virt(pa);
-
-        unsafe {
-            core::ptr::write_bytes(va as *mut u8, 0, PAGE_SIZE);
-        }
-
-        Some(Self {
-            ppn,
-            pa,
-            va,
-
-            req_pa: pa + DMA_REQ_OFFSET,
-            data_pa: pa + DMA_DATA_OFFSET,
-            status_pa: pa + DMA_STATUS_OFFSET,
-
-            req_va: va + DMA_REQ_OFFSET,
-            data_va: va + DMA_DATA_OFFSET,
-            status_va: va + DMA_STATUS_OFFSET,
-        })
     }
 }

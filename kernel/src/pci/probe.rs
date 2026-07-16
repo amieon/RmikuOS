@@ -44,7 +44,7 @@ pub struct PciDeviceInfo {
     pub header_type: u8,
 }
 
-fn read_device_info(loc: PciDeviceLocation) -> Option<PciDeviceInfo> {
+pub fn read_device_info(loc: PciDeviceLocation) -> Option<PciDeviceInfo> {
     let addr = loc.addr();
 
     let vendor_id = read_config_u16(addr, 0x00);
