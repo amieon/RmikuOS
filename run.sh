@@ -89,7 +89,7 @@ case "$ARCH" in
       -cpu rv64
       -accel tcg,thread=multi
       -smp 8,cores=8,threads=1,sockets=1
-      -m 512M
+      -m 1G
       -nographic
       -kernel "$KERNEL_ELF"
       -drive "file=target/fs-riscv64.img,format=raw,if=none,id=blk0"
@@ -115,7 +115,7 @@ case "$ARCH" in
       -drive "file=target/fat-loongarch64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
       -netdev user,id=net0 
-      -device virtio-net-pci,netdev=net0 
+      -device virtio-net-pci,disable-legacy=on,netdev=net0
     )
     ;;
 esac

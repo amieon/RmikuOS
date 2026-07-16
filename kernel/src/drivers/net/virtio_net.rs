@@ -8,7 +8,6 @@ use crate::drivers::virtio::queue::{VirtioQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F
 
 pub const NET_QUEUE_SIZE: usize = 8;
 
-// VirtIO PCI 现代布局寄存器偏移（common cfg）
 #[cfg(target_arch = "loongarch64")]
 mod pci_regs {
     pub const DEVICE_STATUS:      usize = 0x14;
@@ -63,7 +62,7 @@ impl VirtioNet {
     }
 
     // ============================================================
-    //  LoongArch64 — PCI 现代版
+    //  LoongArch64 — PCI
     // ============================================================
     #[cfg(target_arch = "loongarch64")]
     fn init_pci() -> Option<Self> {
@@ -71,14 +70,21 @@ impl VirtioNet {
         use crate::drivers::virtio::transport::pci::parse_virtio_pci_caps;
         use pci_regs::*;
 
+        log::info!("[virtio-net] PCI: scanning for device...");
         let loc = Self::find_pci()?;
+        log::info!("[virtio-net] PCI: found at {:?}", loc);
+
         let addr = loc.addr();
         enable_pci_device(addr);
+        log::info!("[virtio-net] PCI: device enabled");
 
         let caps = parse_virtio_pci_caps(addr)?;
-        let common = caps.common?;
-        let notify = caps.notify?;
-        let device = caps.device?;
+        log::info!("[virtio-net] PCI: caps parsed ok");
+
+        let common = caps.common.as_ref()?;
+        let notify = caps.notify.as_ref()?;
+        let device = caps.device.as_ref()?;
+        log::info!("[virtio-net] PCI: common={:#x} notify={:#x} device={:#x}", common.va, notify.va, device.va);
 
         let common_va = common.va;
         let notify_va = notify.va;
@@ -87,36 +93,53 @@ impl VirtioNet {
         // Reset
         unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 0) };
         while unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) } != 0 {}
+        log::info!("[virtio-net] PCI: reset done");
 
         // ACK + DRIVER
         unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 3) };
 
-        // Features
+        // Feature negotiation: 请求 VERSION_1 (bit 32)
         unsafe {
-            write_volatile((common_va + 0x08) as *mut u32, 0);
-            write_volatile((common_va + 0x0C) as *mut u32, 0);
+            write_volatile((common_va + 0x08) as *mut u32, 1); // driver_feature_select = 1
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+            write_volatile((common_va + 0x0C) as *mut u32, 1); // VERSION_1
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
             write_volatile((common_va + DEVICE_STATUS) as *mut u8, 11); // FEATURES_OK
         }
         let mut retries = 1000;
         while unsafe { read_volatile((common_va + DEVICE_STATUS) as *const u8) } & 8 == 0 {
             retries -= 1;
             if retries == 0 {
-                log::warn!("[virtio-net] PCI device did not accept FEATURES_OK");
+                log::warn!("[virtio-net] PCI: FEATURES_OK timeout");
                 return None;
             }
         }
+        log::info!("[virtio-net] PCI: FEATURES_OK accepted, modern mode enabled");
 
-        // MAC
+        // 读 MAC；如果 device config 读出来全 0，用 QEMU 默认 MAC
         let mut mac = [0u8; 6];
         for i in 0..6 {
             mac[i] = unsafe { read_volatile((device.va + i) as *const u8) };
         }
+        if mac == [0u8; 6] {
+            mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+            log::info!("[virtio-net] PCI: device MAC is zero, using default {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        } else {
+            log::info!("[virtio-net] PCI: MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        }
 
+        // 建队列：如果读 queue_size 返回 0，直接尝试 256（QEMU 默认值）
         let (rx, rx_notify_off) = Self::setup_queue_pci(common_va, notify_va, notify_mul, 0)?;
+        log::info!("[virtio-net] PCI: RX queue ready, size={} notify_off={}", rx.size, rx_notify_off);
         let (tx, tx_notify_off) = Self::setup_queue_pci(common_va, notify_va, notify_mul, 1)?;
+        log::info!("[virtio-net] PCI: TX queue ready, size={} notify_off={}", tx.size, tx_notify_off);
 
         unsafe { write_volatile((common_va + DEVICE_STATUS) as *mut u8, 15) }; // DRIVER_OK
+        log::info!("[virtio-net] PCI: DRIVER_OK");
 
+        // RX pre-fill
         let mut rx_bufs: Vec<Vec<u8>> = Vec::new();
         for i in 0..rx.size {
             let mut buf = alloc::vec![0u8; 2048];
@@ -138,6 +161,7 @@ impl VirtioNet {
             let addr = notify_va + (rx_notify_off as u32 * notify_mul) as usize;
             unsafe { write_volatile(addr as *mut u16, 0) };
         }
+        log::info!("[virtio-net] PCI: RX buffers filled, kicked");
 
         Some(Self {
             common_va, notify_va, notify_mul,
@@ -158,7 +182,11 @@ impl VirtioNet {
                         if function == 0 { break; }
                         continue;
                     };
-                    if info.vendor_id == 0x1AF4 && info.device_id == 0x1041 {
+                    if info.vendor_id == 0x1AF4
+                        && (info.device_id == 0x1000 || info.device_id == 0x1041)
+                    {
+                        log::info!("[virtio-net] find_pci: hit 1AF4:{:04x} at bus={} dev={} fn={}",
+                            info.device_id, bus, device, function);
                         return Some(loc);
                     }
                     if function == 0 && (info.header_type & 0x80) == 0 {
@@ -167,6 +195,7 @@ impl VirtioNet {
                 }
             }
         }
+        log::warn!("[virtio-net] find_pci: no virtio-net (1AF4:1000/1041) found");
         None
     }
 
@@ -176,9 +205,20 @@ impl VirtioNet {
     ) -> Option<(VirtioQueue, u16)> {
         use pci_regs::*;
         unsafe { write_volatile((common_va + QUEUE_SELECT) as *mut u16, qid) };
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
         let max = unsafe { read_volatile((common_va + QUEUE_SIZE_REG) as *const u16) } as usize;
-        if max == 0 { return None; }
-        let size = if max < NET_QUEUE_SIZE { max } else { NET_QUEUE_SIZE };
+        log::info!("[virtio-net] setup_queue_pci qid={} raw_max_size={}", qid, max);
+
+        // QEMU transitional 设备在 modern 模式下有时读 queue_size 返回 0，
+        // 但设备实际支持 256。如果读到 0，直接尝试 256。
+        let size = if max == 0 {
+            log::info!("[virtio-net] setup_queue_pci qid={}: max_size=0, trying fallback 256", qid);
+            256
+        } else if max < NET_QUEUE_SIZE {
+            max
+        } else {
+            NET_QUEUE_SIZE
+        };
 
         let vq = VirtioQueue::new_modern(size)?;
         unsafe {
@@ -203,39 +243,66 @@ impl VirtioNet {
             VIRTIO_F_VERSION_1,
         };
 
+        log::info!("[virtio-net] MMIO: probing...");
         let pa = probe_virtio_net_mmio()?;
+        log::info!("[virtio-net] MMIO: found at pa={:#x}", pa);
+
         let virt_base = crate::mm::kernel_phys_to_virt(pa);
         let hdr = VirtioMmioHeader::new(virt_base);
 
-        if hdr.magic() != 0x7472_6976 || hdr.version() != 2 {
-            log::warn!("[virtio-net] MMIO probe failed: bad magic/version");
+        let magic = hdr.magic();
+        let version = hdr.version();
+        let dev_id = hdr.device_id();
+        log::info!("[virtio-net] MMIO: magic={:#x} version={} device_id={}", magic, version, dev_id);
+
+        if magic != 0x7472_6976 {
+            log::warn!("[virtio-net] MMIO: bad magic, expected 0x74726976");
+            return None;
+        }
+        if version != 2 {
+            log::warn!("[virtio-net] MMIO: bad version {}, expected 2", version);
+            return None;
+        }
+        if dev_id != 1 {
+            log::warn!("[virtio-net] MMIO: bad device_id {}, expected 1 (net)", dev_id);
             return None;
         }
 
         hdr.reset();
+        log::info!("[virtio-net] MMIO: reset done");
 
         // ACK + DRIVER
         hdr.set_status_bits(VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
 
-        // Feature negotiation: only VERSION_1
+        // Feature negotiation
         hdr.write_driver_features(0, VIRTIO_F_VERSION_1 as u32);
         hdr.write_driver_features(1, (VIRTIO_F_VERSION_1 >> 32) as u32);
 
         hdr.set_status_bits(VIRTIO_STATUS_FEATURES_OK);
         if hdr.status() & VIRTIO_STATUS_FEATURES_OK == 0 {
-            log::warn!("[virtio-net] MMIO device did not accept FEATURES_OK");
+            log::warn!("[virtio-net] MMIO: FEATURES_OK not accepted");
             hdr.fail();
             return None;
         }
+        log::info!("[virtio-net] MMIO: FEATURES_OK accepted");
 
-        // MAC at device-specific config offset 0x100
+        // MAC at offset 0x100
         let mut mac = [0u8; 6];
         for i in 0..6 {
             mac[i] = unsafe { read_volatile((virt_base + 0x100 + i) as *const u8) };
         }
+        if mac == [0u8; 6] {
+            mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+            log::warn!("[virtio-net] MMIO: device MAC is zero, using default");
+        } else {
+            log::info!("[virtio-net] MMIO: MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        }
 
         let rx = Self::setup_queue_mmio(&hdr, 0)?;
+        log::info!("[virtio-net] MMIO: RX queue ready");
         let tx = Self::setup_queue_mmio(&hdr, 1)?;
+        log::info!("[virtio-net] MMIO: TX queue ready");
 
         // RX pre-fill
         let mut rx_bufs: Vec<Vec<u8>> = Vec::new();
@@ -255,10 +322,11 @@ impl VirtioNet {
             }
             rx_bufs.push(buf);
         }
-        hdr.notify_queue(0); // kick RX
+        hdr.notify_queue(0);
+        log::info!("[virtio-net] MMIO: RX buffers filled, kicked");
 
-        // DRIVER_OK
         hdr.set_status_bits(VIRTIO_STATUS_DRIVER_OK);
+        log::info!("[virtio-net] MMIO: DRIVER_OK");
 
         Some(Self {
             mmio: hdr,
@@ -271,8 +339,11 @@ impl VirtioNet {
     fn setup_queue_mmio(hdr: &VirtioMmioHeader, qid: u16) -> Option<VirtioQueue> {
         hdr.select_queue(qid as u32);
         let max = hdr.queue_size_max() as usize;
-        if max == 0 { return None; }
-        let size = if max < NET_QUEUE_SIZE { max } else { NET_QUEUE_SIZE };
+        log::info!("[virtio-net] setup_queue_mmio qid={} max_size={}", qid, max);
+        if max == 0 {
+            log::warn!("[virtio-net] setup_queue_mmio qid={}: max_size=0, trying fallback 256", qid);
+        }
+        let size = if max == 0 || max < NET_QUEUE_SIZE { 256 } else { NET_QUEUE_SIZE };
 
         let vq = VirtioQueue::new_modern(size)?;
         hdr.set_queue_size(size as u32);
@@ -280,6 +351,7 @@ impl VirtioNet {
         hdr.set_queue_driver_addr(vq.avail_pa);
         hdr.set_queue_device_addr(vq.used_pa);
         hdr.set_queue_ready(1);
+        log::info!("[virtio-net] setup_queue_mmio qid={}: size={} desc_pa={:#x}", qid, size, vq.desc_pa);
         Some(vq)
     }
 

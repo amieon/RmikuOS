@@ -156,7 +156,7 @@ fn primary_init(id: usize) -> ! {
     } else {
         log::warn!("[disk] no FAT disk found, /fat not mounted");
     }
-    drivers::net::init();
+
 
     log::info!("logger initialized");
     log::info!("==== RmikuOS 多核启动 ====");
@@ -194,12 +194,12 @@ fn primary_init(id: usize) -> ! {
             }
         }
     }
-
+    
     timer::init();
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);
     MASTER_READY.store(true, Ordering::Release);
-
+    //drivers::net::init();
     println!("主核初始化完成，从核可以进入了。");
 
     task::run_tasks();
