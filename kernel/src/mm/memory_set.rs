@@ -172,6 +172,22 @@ impl MemorySet {
                     crate::mm::PAGE_SIZE,
                 ) + crate::mm::PAGE_SIZE,
             ),
+            // 新增：PCIe ECAM（config space，256MB）
+            (
+                crate::mm::align_down(crate::arch::PCI_ECAM_BASE, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(
+                    crate::arch::PCI_ECAM_BASE + crate::arch::PCI_ECAM_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE,
+            ),
+            // 新增：PCIe MMIO 窗口（1GB，BAR 分配从这里切）
+            (
+                crate::mm::align_down(crate::arch::PCI_MMIO_BASE, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(
+                    crate::arch::PCI_MMIO_BASE + crate::arch::PCI_MMIO_SIZE - 1,
+                    crate::mm::PAGE_SIZE,
+                ) + crate::mm::PAGE_SIZE,
+            ),
         ];
 
         let mut cursor = map_start;

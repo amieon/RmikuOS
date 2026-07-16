@@ -71,152 +71,137 @@ pub fn read_device_info(loc: PciDeviceLocation) -> Option<PciDeviceInfo> {
 }
 
 pub fn scan_pci_bus() {
-    #[cfg(not(target_arch = "loongarch64"))]
-    {
-        log::warn!("[pci] scan only implemented for loongarch64 now");
+
+
+    for bus in 0u8..=0 {
+        for device in 0u8..32 {
+            for function in 0u8..8 {
+                let loc = PciDeviceLocation {
+                    bus,
+                    device,
+                    function,
+                };
+
+                let Some(info) = read_device_info(loc) else {
+                    if function == 0 {
+                        break;
+                    }
+                    continue;
+                };
+
+                log::info!(
+                    "[pci] bus={:02x} dev={:02x} func={} vendor={:#06x} device={:#06x} class={:02x}/{:02x}/{:02x} header={:#x}",
+                    bus,
+                    device,
+                    function,
+                    info.vendor_id,
+                    info.device_id,
+                    info.class_code,
+                    info.subclass,
+                    info.prog_if,
+                    info.header_type,
+                );
+
+                /*
+                    * 如果 function 0 不是 multifunction，就不用扫 function 1..7。
+                    */
+                if function == 0 && (info.header_type & 0x80) == 0 {
+                    break;
+                }
+            }
+        }
     }
 
-    #[cfg(target_arch = "loongarch64")]
-    {
-        log::info!("[pci] scan start");
+    log::info!("[pci] scan done");
 
-        for bus in 0u8..=0 {
-            for device in 0u8..32 {
-                for function in 0u8..8 {
-                    let loc = PciDeviceLocation {
-                        bus,
-                        device,
-                        function,
-                    };
+}
 
-                    let Some(info) = read_device_info(loc) else {
-                        if function == 0 {
-                            break;
-                        }
-                        continue;
-                    };
+pub fn find_virtio_blk_pci() -> Option<PciDeviceInfo> {
 
+    for bus in 0u8..=0 {
+        for device in 0u8..32 {
+            for function in 0u8..8 {
+                let loc = PciDeviceLocation {
+                    bus,
+                    device,
+                    function,
+                };
+
+                let Some(info) = read_device_info(loc) else {
+                    if function == 0 {
+                        break;
+                    }
+                    continue;
+                };
+
+                if info.vendor_id == PCI_VENDOR_ID_VIRTIO
+                    && (
+                        info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_MODERN
+                        || info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_TRANSITIONAL
+                    )
+                {
                     log::info!(
-                        "[pci] bus={:02x} dev={:02x} func={} vendor={:#06x} device={:#06x} class={:02x}/{:02x}/{:02x} header={:#x}",
+                        "[pci] found virtio-blk-pci: bus={:02x} dev={:02x} func={} vendor={:#06x} device={:#06x}",
                         bus,
                         device,
                         function,
                         info.vendor_id,
                         info.device_id,
-                        info.class_code,
-                        info.subclass,
-                        info.prog_if,
-                        info.header_type,
                     );
+                    return Some(info);
+                }
 
-                    /*
-                     * 如果 function 0 不是 multifunction，就不用扫 function 1..7。
-                     */
-                    if function == 0 && (info.header_type & 0x80) == 0 {
-                        break;
-                    }
+                if function == 0 && (info.header_type & 0x80) == 0 {
+                    break;
                 }
             }
         }
-
-        log::info!("[pci] scan done");
-    }
-}
-
-pub fn find_virtio_blk_pci() -> Option<PciDeviceInfo> {
-    #[cfg(target_arch = "loongarch64")]
-    {
-        for bus in 0u8..=0 {
-            for device in 0u8..32 {
-                for function in 0u8..8 {
-                    let loc = PciDeviceLocation {
-                        bus,
-                        device,
-                        function,
-                    };
-
-                    let Some(info) = read_device_info(loc) else {
-                        if function == 0 {
-                            break;
-                        }
-                        continue;
-                    };
-
-                    if info.vendor_id == PCI_VENDOR_ID_VIRTIO
-                        && (
-                            info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_MODERN
-                            || info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_TRANSITIONAL
-                        )
-                    {
-                        log::info!(
-                            "[pci] found virtio-blk-pci: bus={:02x} dev={:02x} func={} vendor={:#06x} device={:#06x}",
-                            bus,
-                            device,
-                            function,
-                            info.vendor_id,
-                            info.device_id,
-                        );
-                        return Some(info);
-                    }
-
-                    if function == 0 && (info.header_type & 0x80) == 0 {
-                        break;
-                    }
-                }
-            }
-        }
-
-        log::warn!("[pci] no virtio-blk-pci found");
-        None
     }
 
-    #[cfg(not(target_arch = "loongarch64"))]
-    {
-        None
-    }
+    log::warn!("[pci] no virtio-blk-pci found");
+    None
 }
 
 pub fn find_all_virtio_blk_pci() -> alloc::vec::Vec<PciDeviceInfo> {
     let mut found = alloc::vec::Vec::new();
 
-    #[cfg(target_arch = "loongarch64")]
-    {
-        for bus in 0u8..=0 {
-            for device in 0u8..32 {
-                for function in 0u8..8 {
-                    let loc = PciDeviceLocation { bus, device, function };
 
-                    let Some(info) = read_device_info(loc) else {
-                        if function == 0 {
-                            break;
-                        }
-                        continue;
-                    };
+    for bus in 0u8..=0 {
+        for device in 0u8..32 {
+            for function in 0u8..8 {
+                let loc = PciDeviceLocation { bus, device, function };
 
-                    if info.vendor_id == PCI_VENDOR_ID_VIRTIO
-                        && (info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_MODERN
-                            || info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_TRANSITIONAL)
-                    {
-                        log::info!(
-                            "[pci] found virtio-blk-pci: bus={:02x} dev={:02x} func={} device={:#06x}",
-                            bus, device, function, info.device_id,
-                        );
-                        found.push(info);    // 收集,不 return
-                    }
-
-                    if function == 0 && (info.header_type & 0x80) == 0 {
+                let Some(info) = read_device_info(loc) else {
+                    if function == 0 {
                         break;
                     }
+                    continue;
+                };
+
+                if info.vendor_id == PCI_VENDOR_ID_VIRTIO
+                    && (info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_MODERN
+                        || info.device_id == PCI_DEVICE_ID_VIRTIO_BLK_TRANSITIONAL)
+                {
+                    log::info!(
+                        "[pci] found virtio-blk-pci: bus={:02x} dev={:02x} func={} device={:#06x}",
+                        bus, device, function, info.device_id,
+                    );
+                    found.push(info);    // 收集,不 return
+                }
+
+                if function == 0 && (info.header_type & 0x80) == 0 {
+                    break;
                 }
             }
         }
-
-        if found.is_empty() {
-            log::warn!("[pci] no virtio-blk-pci found");
-        } else {
-            log::info!("[pci] found {} virtio-blk-pci device(s)", found.len());
-        }
     }
+
+    if found.is_empty() {
+        log::warn!("[pci] no virtio-blk-pci found");
+    } else {
+        log::info!("[pci] found {} virtio-blk-pci device(s)", found.len());
+    }
+    
 
     found
 }

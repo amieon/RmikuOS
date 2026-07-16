@@ -100,7 +100,7 @@ case "$ARCH" in
       -drive "file=target/fat-riscv64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-device,drive=blk1"
       -netdev user,id=net0
-      -device virtio-net-device,netdev=net0
+      -device virtio-net-pci,disable-legacy=on,netdev=net0 
     )
     ;;
 

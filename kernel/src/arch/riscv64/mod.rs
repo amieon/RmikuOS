@@ -21,8 +21,13 @@ pub const VIRTIO_MMIO_STRIDE: usize = 0x1000;
 pub const VIRTIO_MMIO_COUNT: usize = 8;
 pub const VIRTIO_MMIO_SIZE: usize = VIRTIO_MMIO_STRIDE * VIRTIO_MMIO_COUNT;
 
-//和loongarch那边统一一下变量，不然会爆红，看着难受
-pub const PCI_ECAM_BASE:usize = 0x7f7f7f7f;
+
+pub const PCI_ECAM_BASE: usize = 0x3000_0000;   // ECAM，256MB
+pub const PCI_MMIO_BASE: usize = 0x4000_0000;   // MMIO 窗口，1GB
+pub const PCI_MMIO_END:  usize = 0x8000_0000;
+pub const PCI_ECAM_SIZE: usize = 0x1000_0000;   // 256MB
+pub const PCI_MMIO_SIZE: usize = 0x4000_0000;   // 1GB
+
 
 pub mod shutdown;
 pub use shutdown::shutdown;

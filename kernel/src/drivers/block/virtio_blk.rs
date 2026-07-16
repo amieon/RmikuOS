@@ -644,13 +644,13 @@ impl VirtioBlkDevice {
              */
             let status = read_volatile(status_va as *const u8);
 
-            log::info!(
-                "[virtio-blk] done sector={}, used.id={}, used.len={}, status={}",
-                sector,
-                used.id,
-                used.len,
-                status,
-            );
+            // log::info!(
+            //     "[virtio-blk] done sector={}, used.id={}, used.len={}, status={}",
+            //     sector,
+            //     used.id,
+            //     used.len,
+            //     status,
+            // );
 
             if used.id != 0 {
                 log::error!(
