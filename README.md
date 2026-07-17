@@ -1,8 +1,8 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust** 三种语言的用户程序。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust** 三种语言的用户程序，还通过自研 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
-当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、管道与重定向、信号、stride / alpha-scaled 调度器，以及用于调度器实验的 workload 与自适应控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、管道与重定向、信号、stride / alpha-scaled 调度器、从零实现的 TCP/IP 网络协议栈与用户态 HTTP 服务器，以及用于调度器实验的 workload 与自适应控制器。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -32,9 +32,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 
 ![arch map](docs/images/arch.png)
 
-### Memory Map
 
-![memory map](docs/images/memory.png)
 
 
 
@@ -75,6 +73,7 @@ loongarch64
 * block cache
 * shell 和用户程序（C / C++ / Rust）
 * 调度器与调度实验框架
+* 网络协议栈（virtio-net / ARP / IPv4 / TCP / UDP / DHCP / ICMP）
 
 架构相关部分主要集中在：
 
@@ -522,6 +521,104 @@ BlockDevice (读 + 写)
 
 ---
 
+## Network Stack
+
+RmikuOS 自带一套从零实现的 TCP/IP 协议栈：自 virtio-net 驱动起，经 Ethernet / ARP / IPv4 / UDP / TCP 与 DHCP，到一组专用的 socket 系统调用（号段 100–109），最终在用户态跑起一个真实的 HTTP 服务器——宿主机浏览器经 QEMU `hostfwd` 直接访问 guest 内的页面。协议栈每一层都是内核 `drivers/net/` 下的 Rust 代码，不依赖任何外部网络 crate。
+
+```text
+用户态   httpd(静态文件 + JSON API)    udp_test / tcp_test
+            │  socket syscalls:100 SOCKET … 109 RECV(专用网络号段)
+────────────┼───────────────────────────────────────────────────
+内核       Socket 层(UDP / TCP 统一 socket table,端口冲突检查)
+            │
+            ├─ TCP   11 态状态机 · 滑动窗口 · 超时重传(RTO 指数退避)
+            └─ UDP   无连接收发 · 校验和
+            │
+            IPv4   头部校验和 · 按 protocol 字段分发(17=UDP,6=TCP)
+            DHCP   四步交互(DORA)· 广播位 · options 解析,自动配置地址
+            ARP    地址缓存 + 挂起队列(未命中先存整包,解析成功补发)
+            │
+            Ethernet → virtio-net 驱动 → QEMU slirp → 宿主机协议栈
+```
+
+QEMU 侧使用 slirp 用户态网络（`-netdev user`）：无需宿主机 root 权限，自带 DHCP 服务器（`10.0.2.2`）与 DNS（`10.0.2.3`），guest 默认落在 `10.0.2.15`。
+
+### ARP：挂起队列（Pending Queue）
+
+发包时 ARP 缓存未命中是常态，而地址解析是异步的。朴素实现直接丢包、把重试责任推给上层；RmikuOS 在 ARP 层内置一张 4 槽 PENDING 队列：未命中时整包入队并发出 ARP request，`on_arp_learned` 回调时补发，上层（IP / TCP / UDP）完全无感。实现上有一条锁纪律：回调点不得持有 ARP 缓存锁，否则会触发自研锁的同核重入死锁检测。
+
+### IPv4 与校验和
+
+* 发送时生成头部校验和、接收时验证；checksum 写回必须显式转大端——slirp 对校验失败的包**静默丢弃**（实踩的坑）；
+* 本机地址原子化（`MY_IP`）：DHCP 完成前用默认值，租约落地后 `set_my_ip` 热切换；
+* 按 protocol 字段分发到 UDP（17）/ TCP（6），未知协议打日志——漏写分发行曾导致 SYN-ACK 静默消失，这类坑必须能被一眼看见。
+
+### TCP：教学版「满血」实现
+
+「满血」指**连接管理完整**，而非性能特性齐全：
+
+* 11 态状态机（Closed → Listen → SynSent / SynReceived → Established → FinWait1 / 2 → CloseWait / Closing / LastAck → TimeWait），主动 open（connect）与被动 open（listen / accept）均支持；
+* 发送侧：`tx_unacked` 重传队列（SYN / FIN 各占一个序号），RTO 1s 起步、指数退避、封顶 16s、最多 8 次；
+* 接收侧：按序交付 + 固定窗口广告（65535），乱序段丢弃并重复 ACK；
+* 定时器不依赖硬件中断：RTO / TIME_WAIT 等全部期限由 socket 层 `poll()` 内嵌的 `tick()` 驱动；
+* 两条路径均已实机验证：主动 connect 经 slirp 访问宿主机 `nc -l`；被动 listen 经 hostfwd 接受宿主机浏览器连接。
+
+> **裁剪声明**：无拥塞控制（慢启动 / 拥塞避免）、无乱序重组（乱序即丢）、无 MSS 协商。QEMU slirp 链路几乎不丢包、不乱序，这些裁剪不影响当前正确性；它们在 Roadmap 的第一梯队。
+
+### DHCP 客户端
+
+内核态 DHCP 客户端：BOOTP 236 字节头 + magic cookie（`99,130,83,99`）+ options 编解码（53 消息类型 / 50 请求地址 / 54 服务器标识 / 55 参数请求 / 3 网关 / 6 DNS / 51 租期）。flags 置广播位 `0x8000`，使 OFFER / ACK 走二层广播——租约落地之前本机没有合法地址，单播回复无从送达。四步交互后 `set_my_ip(yiaddr)`，实测租得 `10.0.2.15`、租期 86400s。
+
+### Socket 系统调用：100–109 专用号段
+
+网络调用不挤占主系统调用表，独立开一段号段——主分发只多一条范围判断，后续扩充也不污染既有编号：
+
+```text
+100 SOCKET    101 BIND    102 SENDTO    103 RECVFROM    104 CLOSE
+105 CONNECT   106 LISTEN  107 ACCEPT    108 SEND        109 RECV
+```
+
+用户态经 `net.h` 封装为 `net_socket()` / `net_socket_tcp()` / `net_bind()` / `net_connect()` / `net_listen()` / `net_accept()` / `net_send()` / `net_recv()` 等，体感与 POSIX 对齐。
+
+### httpd：跑在自研协议栈上的 Web 服务器
+
+协议栈的「真应用」验证：一个多文件 C 工程（`httpd.c` / `http.c` / `pages.c` + 头文件），顺带压测了用户态多文件编译与链接——并因此逼出并修复了头文件函数体未加 `static inline` 导致的 `multiple definition` 隐患（单文件时代不可见，多文件链接即炸）。
+
+* **静态文件模式**：`httpd wow.html` 启动时将文件读入内存（16KB 缓冲），`/` 与 `/index.html` 发送文件内容；
+* **内联路由**：`/demo` 内联演示页、`/hello`、`/api/stats`（JSON 实时请求计数）、404；
+* **HTTP 细节自己扛**：TCP 是字节流，请求头边界靠扫描 `\r\n\r\n` 确定；发送超 1460 字节按 1400 切片；`Connection: close` 迭代式服务；
+* **浏览器适配**：Chrome 会打开「占位不说话」的预热连接，迭代式服务器 accept 到它就会被焊死——recv 增加软超时（800ms），空连接到点踢掉，真实请求随后即被服务。
+
+宿主机访问只需在 run.sh 的 netdev 上挂一行 port forward（**必须与 `id=net0` 同行**，拆成独立参数会被 QEMU 误认为磁盘镜像）：
+
+```text
+-netdev user,id=net0,hostfwd=tcp::8080-:8080
+```
+
+```text
+/ $ httpd wow.html
+[httpd] loaded wow.html, 6986 bytes, serving at /
+[httpd] RmikuOS httpd listening on 10.0.2.15:8080
+[httpd] #1 GET /
+[httpd] #1 served, 6986 bytes, closing fd=2
+```
+
+浏览器打开 `http://127.0.0.1:8080/` 即可（内联演示页在 `/demo`）。随附的 `wow.html` 演示页每 2 秒 `fetch('/api/stats')` 刷新请求计数——页面上数字每跳一次，背后都是一次完整的 TCP 建立—传输—挥手。
+
+### 排障方法学：三段定位法
+
+网络问题一律按「guest 发没发对 → slirp 转没转发 → 宿主机谁收走」三段切分：
+
+```text
+-object filter-dump,id=f0,netdev=net0,file=/tmp/rmiku.pcap   # guest 网线上抓包
+sudo tcpdump -i lo -nn -X udp port 9999                      # slirp 是否已转发到宿主机
+ss -ulnp | grep 9999                                         # 宿主机端口被谁持有
+```
+
+实战战绩：曾用这套方法揪出「4 个僵尸 nc 进程同绑一个 UDP 端口、报文全进旧进程接收队列」——guest 侧报文逐字节验证完美，锅在宿主机。
+
+---
+
 ## User Programs in C, C++ and Rust
 
 RmikuOS 的用户程序可以用 **C、C++ 或 Rust** 编写。三者编译成相同格式的静态 ELF、走完全相同的系统调用 ABI（号在 `a7`/`r11`，参数在 `a0..`/`r4..`，触发 `ecall` / `syscall 0`，返回值在 `a0`/`r4`），因此在内核看来完全等价——**支持 C++ 用户程序内核侧零改动**，只是多了一条产出兼容 ELF 的编译流程。
@@ -546,8 +643,9 @@ lock.h      spinlock / mutex
 thread.h    thread_create/exit/join + 栈管理
 sched.h     tickets / alpha / sched_proc_stat / get_ticks
 ipc.h       pipe / dup2
-string.h    trim / copy_str / read_file
-fmt.h       parse_int / put_int / put_hex / uprintf
+net.h       socket 封装(socket/bind/connect/listen/accept/send/recv/sendto/recvfrom/close)
+string.h    标准字符串/内存函数(strlen/strstr/memmove 等,static inline)+ trim / copy_str / read_file
+fmt.h       parse_int / put_int / put_hex / uprintf / snprintf 族
 ```
 
 ### 用户态堆分配器（Slab + First-Fit 混合）
@@ -1107,8 +1205,9 @@ user/
 │   ├── thread.h            thread_create/exit/join + 栈管理
 │   ├── sched.h             tickets / alpha / sched_proc_stat / get_ticks
 │   ├── ipc.h               pipe / dup2
-│   ├── string.h            trim / copy_str / read_file
-│   ├── fmt.h               parse_int / put_int / put_hex / append_* / str_eq + uprintf
+│   ├── net.h               socket 封装(100–109 号段)
+│   ├── string.h            标准字符串/内存函数(static inline)+ trim / copy_str / read_file
+│   ├── fmt.h               parse_int / put_int / put_hex / append_* / str_eq + uprintf / snprintf 族
 │   ├── user.h              纯汇总入口（#include 全部上述头文件）
 │   └── my/                 C++ 桥接层与裸运行时库
 │       ├── stdcompat.h     C++ 桥接头文件：std::vector→mv::Vector, std::exp→mymath::exp...
@@ -1126,7 +1225,7 @@ user/
 │   ├── grep.c              文本过滤
 │   └── shell.c             交互式 shell（内建命令 + 外部命令执行）
 ├── tests/                  C / 单文件 Rust / 单文件 C++ 测试程序 → /tests
-├── c/                      C 项目型构建目录（每个子文件夹编译为一个 ELF）→ /programs
+├── c/                      C 项目型构建目录（每个子文件夹编译为一个 ELF，如多文件工程 httpd）→ /programs
 ├── cpp/                    C++ 项目型构建目录（每个子文件夹编译为一个 ELF）→ /programs
 ├── gcn/                    C++ 图神经网络项目（GCN/GAT）→ /gcn
 │   ├── Tensor.h
@@ -1238,6 +1337,25 @@ virtio-mmio virtio-pci
  RISC-V     LoongArch64
 ```
 
+网络子系统与文件系统并列，挂在同一棵调用树下，并与块设备共享 virtio transport：
+
+```text
+User Programs (httpd / udp_test / tcp_test)
+                │  socket syscalls(100–109 专用号段)
+                ▼
+            Socket 层(UDP / TCP 统一 socket table)
+                │
+        TCP(状态机/滑窗/重传)   UDP
+                │
+        IPv4  ·  DHCP(自动配置地址)
+                │
+        ARP(缓存 + 挂起队列)
+                │
+        Ethernet → virtio-net 驱动
+                │
+        virtio-mmio(riscv64)/ virtio-pci(loongarch64)
+```
+
 ---
 
 ## Current Status
@@ -1262,6 +1380,12 @@ virtio-mmio virtio-pci
 * 可写 **FAT16** 落盘文件系统（vendored `fatfs` + `BlockIo` 适配，挂载于 `/fat`，跨重启持久化，开启 LFN）
 * BlockDevice trait（读 + 写）、RamDisk、BlockCache
 * RISC-V virtio-mmio / LoongArch64 virtio-pci block device（读 + 写路径，多盘发现）
+* virtio-net 网卡驱动，自研 TCP/IP 协议栈（Ethernet / ARP / IPv4 / UDP / TCP / DHCP）
+* TCP 11 态状态机、滑动窗口、超时重传（RTO 指数退避）；connect 与 listen / accept 双路径实机验证
+* DHCP 客户端四步交互（DORA），自动配置地址（实测 10.0.2.15，租期 86400s）
+* socket 专用系统调用号段 100–109（socket / bind / connect / listen / accept / send / recv / sendto / recvfrom / close）
+* 用户态 HTTP 服务器 `httpd`（多文件 C 工程：静态文件 + 内联路由 + JSON API），宿主机浏览器经 `hostfwd` 实机访问
+* 用户态 libc 补全：标准 `string.h`、`snprintf` 族（全 `static inline`，多文件链接安全）
 * 从 ext4 `/bin/shell` 启动 init shell
 * C 用户库（分层头文件）与 Rust 用户库 `ulib`
 * Rust 用户程序支持（单文件 rustc + cargo workspace），双架构，syscall ABI 语言无关
@@ -1280,7 +1404,12 @@ virtio-mmio virtio-pci
 
 ### Network
 
-后续实现 virtio-net，并逐步支持 Ethernet frame / ARP / IPv4 / ICMP / UDP / 简单 socket API。
+virtio-net → Ethernet / ARP / IPv4 / UDP / TCP / DHCP / socket / httpd 已打通（见 Network Stack 一节），下一步：
+
+* TCP 补强：拥塞控制（慢启动 / 拥塞避免）、乱序重组、MSS 协商
+* DHCP 租约续期（T1 / T2）
+* socket fd 与文件 fd 的统一 fd 表
+* 并发 httpd：每连接一个用户态线程（`thread_create` 已就位）
 
 ### Filesystem
 
