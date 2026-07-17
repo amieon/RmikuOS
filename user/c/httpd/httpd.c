@@ -2,8 +2,20 @@
 #include "pages.h"
 
 static int req_count = 0;
+char http_file_buf[HTTP_FILE_CAP];
+int  http_file_len = 0;
 
-int main(void) {
+int main(int argc, char **argv)
+{
+    if (argc > 1) {
+        int n = http_load_file(argv[1], http_file_buf, HTTP_FILE_CAP);
+        if (n > 0) {
+            http_file_len = n;
+            uprintf("[httpd] loaded %s, %d bytes, serving at /\n", argv[1], n);
+        } else {
+            uprintf("[httpd] cannot open %s, fallback to inline pages\n", argv[1]);
+        }
+    }
     int lfd = net_socket_tcp();
     if (lfd < 0) { printf("[httpd] socket failed\n"); return 1; }
     if (net_bind(lfd, HTTPD_PORT) < 0) { printf("[httpd] bind failed\n"); return 1; }

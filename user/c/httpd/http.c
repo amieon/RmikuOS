@@ -57,3 +57,31 @@ void http_send_response(int fd, int code, const char *status,
     if (body_len > 0)
         http_send_all(fd, body, body_len);
 }
+
+// 把整个文件读进 buf,返回字节数;失败返回 -1。
+// 适配点就这三个:open/read/close,名字和参数按你的 fs 系统调用改。
+int http_load_file(const char *path, char *buf, int cap)
+{
+    int fd = open(path, 0);              // 0 = 只读
+    if (fd < 0)
+        return -1;
+    int used = 0, n;
+    while (used < cap - 1 && (n = read(fd, buf + used, cap - 1 - used)) > 0)
+        used += n;
+    close(fd);
+    buf[used] = 0;
+    return used;
+}
+
+// 发文件内容(显式长度,不靠 strlen,以后发图片等二进制也不用改)
+void http_send_file(int fd, const char *body, int len)
+{
+    char hdr[128];
+    int hn = snprintf(hdr, sizeof(hdr),
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html; charset=utf-8\r\n"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n\r\n", len);
+    http_send_all(fd, hdr, hn);
+    http_send_all(fd, body, len);        // 1400 切片逻辑复用,不用动
+}

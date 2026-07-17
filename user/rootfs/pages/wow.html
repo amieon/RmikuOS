@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RmikuOS · 自研协议栈实机演示</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#070b12;--fg:#e6edf3;--dim:#8b98a9;--cy:#22d3ee;--vi:#a78bfa;--gn:#34d399}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;overflow-x:hidden}
+#net{position:fixed;inset:0;z-index:0}
+.wrap{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:48px 24px 64px}
+nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:72px}
+.logo{font-weight:700;font-size:20px}
+.logo b{background:linear-gradient(90deg,var(--cy),var(--vi));-webkit-background-clip:text;background-clip:text;color:transparent}
+.live{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);border:1px solid #ffffff1a;border-radius:999px;padding:6px 14px;background:#ffffff08}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--gn);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 #34d39966}50%{box-shadow:0 0 0 7px #34d39900}}
+h1{font-size:76px;line-height:1.05;font-weight:800;background:linear-gradient(90deg,var(--cy),var(--vi),var(--gn),var(--cy));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:flow 8s linear infinite}
+@keyframes flow{to{background-position:300% 0}}
+.sub{margin-top:18px;color:var(--dim);font-size:17px;min-height:26px;font-family:ui-monospace,Consolas,monospace}
+.caret{display:inline-block;width:9px;color:var(--cy);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:56px 0}
+.card{background:#ffffff0a;border:1px solid #ffffff14;border-radius:16px;padding:22px 24px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.card .k{font-size:13px;color:var(--dim);margin-bottom:10px}
+.card .v{font-size:38px;font-weight:700;font-variant-numeric:tabular-nums}
+#rq{display:inline-block}
+.v.cy{color:var(--cy)}.v.vi{color:var(--vi)}.v.gn{color:var(--gn)}
+.sec{margin-top:64px}
+.sec h2{font-size:14px;color:var(--dim);letter-spacing:2px;margin-bottom:20px}
+.pipe{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.chip{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:9px 14px;border-radius:10px;background:#ffffff0d;border:1px solid #ffffff1f;position:relative;overflow:hidden}
+.chip::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#22d3ee33,transparent);transform:translateX(-100%);animation:sweep 3.2s infinite}
+@keyframes sweep{40%,100%{transform:translateX(100%)}}
+.arr{color:var(--dim);font-size:12px}
+.tags{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.tag{font-size:13px;color:var(--dim);border:1px dashed #ffffff26;border-radius:999px;padding:7px 14px}
+footer{margin-top:72px;padding-top:24px;border-top:1px solid #ffffff12;color:var(--dim);font-size:13px;line-height:1.9}
+footer b{color:var(--fg)}
+.fade{opacity:0;transform:translateY(24px);animation:enter .9s forwards}
+@keyframes enter{to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<canvas id="net"></canvas>
+<div class="wrap">
+<nav class="fade"><div class="logo"><b>Rmiku</b>OS</div><div class="live"><span class="dot"></span><span id="live">LIVE · 自研协议栈服务中</span></div></nav>
+<header class="fade">
+<h1>RmikuOS</h1>
+<p class="sub"><span id="ty"></span><span class="caret">|</span></p>
+</header>
+<div class="cards fade">
+<div class="card"><div class="k">已服务 HTTP 请求</div><div class="v cy"><span id="rq">–</span></div></div>
+<div class="card"><div class="k">本页面已打开</div><div class="v vi"><span id="tm">0</span><span style="font-size:13px;color:var(--dim)"> 秒</span></div></div>
+<div class="card"><div class="k">Linux 代码行数</div><div class="v gn">0</div></div>
+</div>
+<div class="sec fade"><h2>这个页面走过的路</h2>
+<div class="pipe">
+<span class="chip">virtio-net</span><span class="arr">→</span><span class="chip">eth</span><span class="arr">→</span><span class="chip">arp</span><span class="arr">→</span><span class="chip">ip</span><span class="arr">→</span><span class="chip">tcp</span><span class="arr">→</span><span class="chip">socket</span><span class="arr">→</span><span class="chip">httpd</span><span class="arr">→</span><span class="chip">你的浏览器</span>
+</div>
+<div class="tags">
+<span class="tag">Rust 编写</span><span class="tag">riscv64 · loongarch64</span><span class="tag">8 核 SMP</span><span class="tag">TCP 握手 / 滑动窗口 / 超时重传</span><span class="tag">DHCP 自动获取地址</span><span class="tag">系统调用 100–109</span>
+</div></div>
+<footer class="fade">
+<b>这不是一台普通服务器。</b>这是一个教学操作系统,用它自己实现的 TCP/IP 协议栈,把这一个 HTML 文件送进你的浏览器。<br>
+请求计数来自页面对 guest 内 <span style="font-family:monospace">/api/stats</span> 的实时轮询——数字每跳一次,都是一次完整的 TCP 建立—传输—挥手。
+</footer>
+</div>
+<script>
+var cv=document.getElementById('net'),cx=cv.getContext('2d'),W,H,ps=[];
+function rs(){W=cv.width=innerWidth;H=cv.height=innerHeight}
+rs();onresize=rs;
+for(var i=0;i<70;i++)ps.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4});
+(function draw(){cx.clearRect(0,0,W,H);
+for(var i=0;i<ps.length;i++){var p=ps[i];p.x+=p.vx;p.y+=p.vy;
+if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
+for(var j=i+1;j<ps.length;j++){var q=ps[j],dx=p.x-q.x,dy=p.y-q.y,d=dx*dx+dy*dy;
+if(d<16900){cx.strokeStyle='rgba(56,139,253,'+(0.22*(1-d/16900))+')';cx.beginPath();cx.moveTo(p.x,p.y);cx.lineTo(q.x,q.y);cx.stroke();}}
+cx.fillStyle='#58a6ff';cx.beginPath();cx.arc(p.x,p.y,1.4,0,7);cx.fill();}
+requestAnimationFrame(draw)})();
+var txt='这个 HTML 文件,经自研 TCP 协议栈,从 RmikuOS 用户态一路送到你面前。',ti=0;
+(function type(){if(ti<=txt.length){document.getElementById('ty').textContent=txt.slice(0,ti++);setTimeout(type,55)}})();
+var t0=Date.now();setInterval(function(){document.getElementById('tm').textContent=((Date.now()-t0)/1000)|0},1000);
+var last=-1;
+function poll(){fetch('/api/stats').then(function(r){return r.text()}).then(function(s){
+var m=s.match(/"requests"\s*:\s*(\d+)/);if(!m)return;var n=+m[1],el=document.getElementById('rq');
+el.textContent=n;
+if(last>=0&&n>last){el.style.transition='transform .18s';el.style.transform='scale(1.25)';setTimeout(function(){el.style.transform=''},180)}
+last=n}).catch(function(){document.getElementById('live').textContent='离线'})}
+poll();setInterval(poll,2000);
+console.log('%cRmikuOS%c  0 行 Linux 代码,100% 自研。','font-size:24px;font-weight:bold;color:#22d3ee','color:#8b98a9');
+</script>
+</body>
+</html>

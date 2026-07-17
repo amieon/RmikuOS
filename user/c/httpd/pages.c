@@ -1,22 +1,6 @@
 #include "pages.h"
-
-static const char *PAGE_FMT =
-"<!DOCTYPE html><html lang='zh'><head><meta charset='utf-8'>"
-"<title>RmikuOS httpd</title><style>"
-"body{background:#0d1117;color:#c9d1d9;font-family:monospace;max-width:720px;margin:60px auto;padding:0 20px}"
-"h1{color:#58a6ff}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin:16px 0}"
-".badge{color:#3fb950}a{color:#58a6ff}"
-"</style></head><body>"
-"<h1>RmikuOS <span class='badge'>httpd v1.0</span></h1>"
-"<div class='card'>这个页面由 RmikuOS 自带的 TCP 协议栈实时提供。<br>"
-"virtio-net &rarr; eth &rarr; arp &rarr; ip &rarr; tcp &rarr; socket syscall &rarr; 用户态 httpd,零第三方网络代码。</div>"
-"<div class='card'><b>机器信息</b><br>"
-"Arch: riscv64 / loongarch64 &nbsp; SMP: 8 harts<br>"
-"IP: 10.0.2.15(DHCP 租约)&nbsp; TCP: 滑动窗口 + 超时重传 + 四次挥手<br>"
-"<b>你看到的是本服务器处理的第 %d 个请求</b></div>"
-"<div class='card'>试试: <a href='/hello'>/hello</a> &nbsp; "
-"<a href='/api/stats'>/api/stats</a> &nbsp; <a href='/nope'>/nope(404)</a></div>"
-"</body></html>";
+#include "http.h"
+#include "string.h"
 
 static char page_buf[2048];
 static char json_buf[256];
@@ -26,22 +10,54 @@ static struct route_result ok(const char *ctype, const char *body, int len) {
     return r;
 }
 
+// 内联演示页(原 GitHub 风首页,现住 /demo;%d = 请求计数)
+static const char PAGE_FMT[] =
+    "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='UTF-8'>"
+    "<title>RmikuOS httpd</title><style>"
+    "body{background:#0d1117;color:#e6edf3;font-family:system-ui,sans-serif;"
+    "display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}"
+    ".box{text-align:center;max-width:640px;padding:0 24px}"
+    "h1{background:linear-gradient(90deg,#22d3ee,#a78bfa);-webkit-background-clip:text;"
+    "background-clip:text;color:transparent;font-size:56px;margin:0 0 16px}"
+    ".tag{color:#8b98a9;font-size:14px}a{color:#58a6ff}"
+    "</style></head><body><div class='box'>"
+    "<h1>RmikuOS</h1>"
+    "<p>这个内联页面由 RmikuOS 自研 TCP/IP 协议栈 + 用户态 httpd 提供。</p>"
+    "<p class='tag'>你看到的是本服务器处理的第 %d 个请求 &middot; <a href='/'>返回 wow 页</a></p>"
+    "</div></body></html>";
+
 struct route_result route_handle(const char *path, int req_count) {
-    if (strcmp(path, "/") == 0) {
+    // 1. 文件模式:/ 与 /index.html 发启动时已读进内存的文件。
+    //    注意:文件在 main() 里就加载好了,这里只引用,不 open、不 send。
+    if (http_file_len > 0 &&
+        (strcmp(path, "/") == 0 || strcmp(path, "/index.html") == 0))
+        return ok("text/html; charset=utf-8", http_file_buf, http_file_len);
+
+    // 2. 内联首页:无文件模式时的 /;有文件模式时走 /demo
+    if (strcmp(path, "/") == 0 || strcmp(path, "/demo") == 0) {
         int n = snprintf(page_buf, sizeof(page_buf), PAGE_FMT, req_count);
+        if (n >= (int)sizeof(page_buf))
+            n = sizeof(page_buf) - 1;    // snprintf 返回"本应写入长度",截断要钳位
         return ok("text/html; charset=utf-8", page_buf, n);
     }
+
+    // 3. /hello
     if (strcmp(path, "/hello") == 0) {
-        const char *msg = "Hello from RmikuOS! 这一行字走过了完整的 TCP 三次握手。\n";
-        int n = strlen(msg);
-        return ok("text/plain; charset=utf-8", msg, n);
+        const char *msg = "Hello from RmikuOS httpd!\n";
+        return ok("text/plain; charset=utf-8", msg, strlen(msg));
     }
+
+    // 4. /api/stats:wow.html 每 2s 轮询,JS 只认 "requests" 这个字段
     if (strcmp(path, "/api/stats") == 0) {
         int n = snprintf(json_buf, sizeof(json_buf),
-            "{\"os\":\"RmikuOS\",\"requests\":%d,\"stack\":\"virtio-net/eth/arp/ip/tcp/dhcp\"}\n",
+            "{\"requests\":%d,\"os\":\"RmikuOS\",\"stack\":\"self-made\"}",
             req_count);
+        if (n >= (int)sizeof(json_buf))
+            n = sizeof(json_buf) - 1;
         return ok("application/json", json_buf, n);
     }
+
+    // 5. 404
     {
         const char *msg = "404 Not Found —— RmikuOS httpd\n";
         struct route_result r = { 404, "Not Found", "text/plain; charset=utf-8", msg, strlen(msg) };
