@@ -198,6 +198,7 @@ fn primary_init(id: usize) -> ! {
     timer::init();
 
     drivers::net::init();
+    drivers::net::dhcp::dhcp_test();
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);
     MASTER_READY.store(true, Ordering::Release);

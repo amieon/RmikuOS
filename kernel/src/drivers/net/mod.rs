@@ -6,6 +6,7 @@ pub mod icmp;
 pub mod udp;
 pub mod tcp;
 pub mod socket;
+pub mod dhcp;
 
 use virtio_net::VirtioNet;
 use crate::{drivers::net::virtio_net::VirtioNetHdr, println, sync::spin::Mutex};

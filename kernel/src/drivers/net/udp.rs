@@ -109,3 +109,20 @@ pub fn input(packet: &[u8], src_ip: u32, dst_ip: u32) {
         }
     }
     }
+    
+pub fn send_broadcast(src_port: u16, dst_port: u16, data: &[u8]) {
+    let udp_len = core::mem::size_of::<UdpHeader>() + data.len();
+    let mut pkt = alloc::vec::Vec::with_capacity(udp_len);
+    unsafe { pkt.set_len(core::mem::size_of::<UdpHeader>()) };
+    let hdr = unsafe { &mut *(pkt.as_mut_ptr() as *mut UdpHeader) };
+    hdr.src_port = src_port.to_be();
+    hdr.dst_port = dst_port.to_be();
+    hdr.len = (udp_len as u16).to_be();
+    hdr.checksum = 0;
+    pkt.extend_from_slice(data);
+    let csum = udp_checksum(0, 0xFFFFFFFF, &pkt); // 源地址 0.0.0.0
+    unsafe {
+        core::ptr::write_unaligned(core::ptr::addr_of_mut!((*hdr).checksum), csum.to_be());
+    }
+    crate::drivers::net::ip::send_broadcast(0, 17, &pkt);
+}

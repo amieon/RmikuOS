@@ -171,3 +171,26 @@ pub fn input(packet: &[u8]) {
         _ => log::warn!("[ip] unhandled protocol {}", ip.protocol),
     }
 }
+
+pub fn send_broadcast(src_ip: u32, protocol: u8, payload: &[u8]) {
+    let ip_len = core::mem::size_of::<IpHeader>() + payload.len();
+    let mut pkt = alloc::vec::Vec::with_capacity(ip_len);
+    unsafe { pkt.set_len(core::mem::size_of::<IpHeader>()) };
+    let ip = unsafe { &mut *(pkt.as_mut_ptr() as *mut IpHeader) };
+    ip.ver_ihl = 0x45;
+    ip.tos = 0;
+    ip.tot_len = (ip_len as u16).to_be();
+    ip.id = 0;
+    ip.frag_off = 0x4000u16.to_be();
+    ip.ttl = 64;
+    ip.protocol = protocol;
+    ip.check = 0;
+    ip.saddr = src_ip.to_be();
+    ip.daddr = 0xFFFFFFFFu32.to_be();
+    pkt.extend_from_slice(payload);
+    let csum = checksum(&pkt[..core::mem::size_of::<IpHeader>()]);
+    unsafe {
+        core::ptr::write_unaligned(core::ptr::addr_of_mut!((*ip).check), csum.to_be());
+    }
+    eth_send(&[0xFF; 6], 0x0800, &pkt);
+}

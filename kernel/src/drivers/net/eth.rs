@@ -13,6 +13,10 @@ pub struct EthHeader {
 
 pub static MY_MAC: Mutex<[u8; 6]> = Mutex::new([0x52, 0x54, 0x00, 0x12, 0x34, 0x56]);
 
+pub fn my_mac_slice() -> &'static [u8] {
+    &[0x52, 0x54, 0x00, 0x12, 0x34, 0x56] // 如果是静态常量
+}
+
 pub fn send(dst_mac: &[u8; 6], ethertype: u16, payload: &[u8]) {
     let mut pkt = alloc::vec::Vec::with_capacity(ETH_HDR_LEN + payload.len());
     pkt.extend_from_slice(dst_mac);
