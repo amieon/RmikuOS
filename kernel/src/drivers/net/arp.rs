@@ -72,6 +72,7 @@ pub fn input(packet: &[u8]) {
     let target_ip = u32::from_be(arp.target_ip);
 
     insert(sender_ip, &arp.sender_mac);
+    crate::drivers::net::ip::on_arp_learned(sender_ip,  arp.sender_mac);
 
     if opcode == 1 && target_ip == MY_IP {
         let mut reply = [0u8; 42];

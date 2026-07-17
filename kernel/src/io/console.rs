@@ -34,10 +34,10 @@ macro_rules! println {
     () => {
         $crate::io::console::_print(format_args!("\n"))
     };
-    ($($arg:tt)*) => {
+    ($($arg:tt)*) => {{
         $crate::io::console::_print(format_args!($($arg)*));
-        $crate::io::console::_print(format_args!("\n"));
-    };
+        $crate::io::console::_print(format_args!("\n")) 
+    }};
 }
 
 pub fn _trap_log(args: fmt::Arguments<'_>) {

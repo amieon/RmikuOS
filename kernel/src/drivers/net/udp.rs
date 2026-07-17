@@ -1,4 +1,4 @@
-use crate::drivers::net::ip::{send as ip_send, MY_IP, checksum};
+use crate::drivers::net::ip::{IpHeader, MY_IP, checksum, send as ip_send};
 use crate::drivers::net::socket::{SOCKET_TABLE, SocketAddr};
 use alloc::vec::Vec;
 
@@ -53,6 +53,7 @@ fn udp_checksum(src_ip: u32, dst_ip: u32, payload: &[u8]) -> u16 {
     while (sum >> 16) != 0 {
         sum = (sum & 0xFFFF) + (sum >> 16);
     }
+    
     !(sum as u16)
 }
 
@@ -69,10 +70,12 @@ pub fn send(dst_ip: u32, src_port: u16, dst_port: u16, data: &[u8]) {
 
     let csum = udp_checksum(MY_IP, dst_ip, &pkt);
     unsafe {
-        core::ptr::write_unaligned(core::ptr::addr_of_mut!((*hdr).checksum), csum);
+        core::ptr::write_unaligned(core::ptr::addr_of_mut!((*hdr).checksum), csum.to_be());
     }
+    
 
     ip_send(dst_ip, 17, &pkt);
+    debug_assert_eq!(udp_checksum(MY_IP, dst_ip, &pkt), 0); 
 }
 
 pub fn input(packet: &[u8], src_ip: u32, dst_ip: u32) {

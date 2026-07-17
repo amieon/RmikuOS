@@ -1,6 +1,8 @@
 use crate::drivers::net::eth::{send as eth_send, MY_MAC};
 use crate::drivers::net::arp;
 use crate::drivers::net::with_net;
+use crate::println;
+use crate::sync::spin::Mutex;
 
 pub const MY_IP: u32 = 0x0A00020F; // 10.0.2.15
 
@@ -34,6 +36,75 @@ pub fn checksum(data: &[u8]) -> u16 {
     !(sum as u16)
 }
 
+
+/// 存的是「已经组好的完整 IP 包」，补发时直接 eth_send，不需要重新组包
+struct PendingPkt {
+    dst_ip: u32,
+    len: usize,
+    data: [u8; 1514],
+}
+
+const EMPTY: Option<PendingPkt> = None;
+static PENDING: Mutex<[Option<PendingPkt>; 4]> = Mutex::new([None, None, None, None]);
+
+fn enqueue_pending(dst_ip: u32, pkt: &[u8]) {
+    if pkt.len() > 1514 {
+        return; // 教学版不做 IP 分片
+    }
+    let mut guard = PENDING.lock();
+    let q: &mut [Option<PendingPkt>; 4] = &mut *guard;
+
+    // 同目标的旧包直接覆盖，省一个槽
+    for i in 0..q.len() {
+        if let Some(p) = q[i].as_mut() {
+            if p.dst_ip == dst_ip {
+                p.data[..pkt.len()].copy_from_slice(pkt);
+                p.len = pkt.len();
+                return;
+            }
+        }
+    }
+    // 找空槽
+    for i in 0..q.len() {
+        if q[i].is_none() {
+            let mut p = PendingPkt { dst_ip, len: pkt.len(), data: [0; 1514] };
+            p.data[..pkt.len()].copy_from_slice(pkt);
+            q[i] = Some(p);
+            return;
+        }
+    }
+   // println!("[ip] pending queue full, drop"); // 4 槽全满才真丢
+}
+
+/// ARP 学到新表项后由 arp 模块回调。
+/// 锁纪律：调用点不能持有 ARP_CACHE 锁；发包时 PENDING 锁已释放，无环。
+pub fn on_arp_learned(ip: u32, mac: [u8; 6]) {
+    loop {
+        // 每次摘一个匹配包，摘不到就结束；锁在发包前已释放
+        let pkt: Option<PendingPkt> = {
+            let mut guard = PENDING.lock();
+            let q: &mut [Option<PendingPkt>; 4] = &mut *guard;
+            let mut found: Option<PendingPkt> = None;
+            for i in 0..q.len() {
+                if let Some(p) = q[i].as_ref() {
+                    if p.dst_ip == ip {
+                        found = q[i].take();
+                        break;
+                    }
+                }
+            }
+            found
+        };
+        match pkt {
+            Some(p) => {
+                //println!("[ip] ARP resolved, flush pending {} bytes", p.len);
+                eth_send(&mac, 0x0800, &p.data[..p.len]);
+            }
+            None => break,
+        }
+    }
+}
+
 pub fn send(dst_ip: u32, protocol: u8, payload: &[u8]) {
     let ip_len = core::mem::size_of::<IpHeader>() + payload.len();
     let mut pkt = alloc::vec::Vec::with_capacity(ip_len);
@@ -55,13 +126,14 @@ pub fn send(dst_ip: u32, protocol: u8, payload: &[u8]) {
     unsafe {
         core::ptr::write_unaligned(
             core::ptr::addr_of_mut!((*ip).check),
-            csum,
+            csum.to_be(),
         );
     }
 
     let mut dst_mac = [0u8; 6];
     if !arp::lookup(dst_ip, &mut dst_mac) {
-        // 没有缓存则发 ARP 请求并丢弃该包（简单处理）
+        // ARP 未命中：挂起完整 IP 包，reply 到了由 on_arp_learned 补发（原来在这里直接丢包）
+        enqueue_pending(dst_ip, &pkt);
         arp::request(dst_ip);
         return;
     }
