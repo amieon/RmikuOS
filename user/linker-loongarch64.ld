@@ -27,6 +27,11 @@ SECTIONS
         *(.data.*)
         *(.sdata)
         *(.sdata.*)
+
+        . = ALIGN(8);
+
+        *(.got)     
+        *(.got.*)
     }
 
     . = ALIGN(8);
@@ -44,8 +49,6 @@ SECTIONS
         *(.debug_frame)
         *(.note.*)
         *(.comment)
-        *(.got)
-        *(.got.*)
         *(.plt)
         *(.plt.*)
         *(.dynamic)

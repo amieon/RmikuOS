@@ -2,7 +2,7 @@
 
 #define HTTPD_PORT   8080
 #define REQ_BUF_SIZE 4096
-#define HTTP_FILE_CAP 16384
+#define HTTP_FILE_CAP 16384*4
 
 extern char http_file_buf[HTTP_FILE_CAP];
 extern int  http_file_len;

@@ -163,7 +163,11 @@ pub fn input(packet: &[u8]) {
         return;
     }
 
-    let payload = &packet[hdr_len..];
+    let tot = u16::from_be(ip.tot_len) as usize;
+    if tot < hdr_len || tot > packet.len() {
+        return;
+    }
+    let payload = &packet[hdr_len..tot];
     match ip.protocol {
         1 => super::icmp::input(payload, u32::from_be(ip.saddr)),
         17 => super::udp::input(payload, u32::from_be(ip.saddr), dst),

@@ -6,9 +6,11 @@ use crate::drivers::net::socket::{Socket, SocketAddr, SOCKET_TABLE};
 use crate::println;
 use crate::sync::spin::Mutex;
 
-fn now_ms() -> u64 {
-    (crate::timer::monotonic_time() / 10_000) as u64
-}
+#[cfg(target_arch = "riscv64")]
+fn now_ms() -> u64 { (crate::timer::monotonic_time() / 10_000) as u64 }
+
+#[cfg(target_arch = "loongarch64")]
+fn now_ms() -> u64 { (crate::timer::monotonic_time() / 100_000) as u64 }
 
 pub const FIN: u8 = 0x01;
 pub const SYN: u8 = 0x02;
@@ -363,7 +365,7 @@ pub fn tick() {
                 if now >= t.time_wait_deadline {
                     free = true;
                 }
-            } else if t.rto_deadline != 0 && now >= t.rto_deadline {
+            } else if t.state != TcpState::Closed && t.rto_deadline != 0 && now >= t.rto_deadline {
                 let front = t.tx_unacked.front();
                 match (front, t.remote) {
                     (Some(seg), Some(remote)) => {
@@ -371,10 +373,12 @@ pub fn tick() {
                         let (seq, flags, data) = (seg.seq, seg.flags, seg.data.clone());
                         let (lp, rn) = (t.local_port, t.rcv_nxt);
                         send_segment(lp, remote, seq, rn, flags, &data);
-                        t.retries += 1;
+                        t.retries = t.retries.saturating_add(1);
+                        log::warn!("[tcp] rtx seq={} retry={} rto={}", seq, t.retries, t.rto_ms);
                         t.rto_ms = (t.rto_ms * 2).min(RTO_MAX_MS);
                         t.rto_deadline = now + t.rto_ms;
                         if t.retries > MAX_RETRIES {
+                            t.rto_deadline = 0;  
                             if t.state == TcpState::SynReceived {
                                 free = true; // 半开子连接直接回收
                             } else {

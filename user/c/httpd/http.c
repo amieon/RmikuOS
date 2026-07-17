@@ -32,18 +32,21 @@ int http_recv_request(int fd, char *buf, int cap)
 }
 
 /* 内核 sys_net_send 单次上限 1460，大了要切片 */
-int http_send_all(int fd, const char *data, int len) {
-    int off = 0;
-    while (off < len) {
-        int chunk = len - off;
-        if (chunk > 1400) chunk = 1400;
-        int n = net_send(fd, data + off, chunk);
-        if (n <= 0) return -1;
-        off += n;
+int http_send_all(int fd, const char *buf, int len)
+{
+    int sent = 0;
+    while (sent < len) {
+        int chunk = (len - sent > 1400) ? 1400 : len - sent;
+        int n = net_send(fd, buf + sent, chunk);
+        uprintf("[http] send %d..%d -> %d\n", sent, sent + chunk, n);
+        if (n <= 0) {
+            uprintf("[http] STALLED at %d/%d\n", sent, len);
+            return sent;
+        }
+        sent += n;
     }
-    return 0;
+    return sent;
 }
-
 void http_send_response(int fd, int code, const char *status,
                         const char *ctype, const char *body, int body_len) {
     char hdr[256];

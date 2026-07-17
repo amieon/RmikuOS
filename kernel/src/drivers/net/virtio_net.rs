@@ -246,7 +246,7 @@ impl VirtioNet {
         log::info!("[virtio-net] queue{} ready: size={} notify_off={}", qid, size, notify_off);
         Some((vq, notify_off))
     }
-
+    
     pub fn send(&mut self, packet: &[u8]) {
         if packet.len() > 1514 { return; }
 
