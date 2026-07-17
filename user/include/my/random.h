@@ -74,7 +74,7 @@ struct uniform_int_distribution {
 
 // Fisher-Yates shuffle
 template <typename Iter>
-void shuffle(Iter first, Iter last, RNG& rng) {
+static inline void shuffle(Iter first, Iter last, RNG& rng) {
     size_t n = last - first;
     if (n < 2) return;
     for (size_t i = n - 1; i > 0; --i) {

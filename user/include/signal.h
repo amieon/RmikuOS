@@ -12,7 +12,7 @@ extern "C" {
 #define SIGKILL 9
 #define SIGTERM 15
 
-void kill(isize pid, usize sig){
+static inline void kill(isize pid, usize sig){
     syscall3(SYS_KILL, pid, sig, 0);
 }
 

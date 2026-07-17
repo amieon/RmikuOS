@@ -9,9 +9,16 @@ extern "C" {
 
 /* socket 类型：1 = TCP(STREAM)，2 = UDP(DGRAM) */
 
-/* 无参版默认 UDP，向后兼容，udp_test.c 不用改 */
+
 static inline int net_socket(int ty){
     return syscall3(SYS_NET_SOCKET0, ty, 0, 0);
+}
+
+static inline int net_socket_tcp(){
+    return syscall3(SYS_NET_SOCKET0, 1, 0, 0);
+}
+static inline int net_socket_udp(){
+    return syscall3(SYS_NET_SOCKET0, 2, 0, 0);
 }
 
 static inline int net_bind(int fd, int port){

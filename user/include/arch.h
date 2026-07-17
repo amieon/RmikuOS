@@ -5,16 +5,16 @@ extern "C" {
 
 #include "syscall.h"
 
-void shutdown(){
+static inline void shutdown(){
     syscall3(SYS_SHUTDOWN,0,0,0);
 }
 
 
-isize get_time(){
+static inline isize get_time(){
     return syscall3(SYS_GET_TIME,0,0,0);
 }
 
-isize hartid(){
+static inline isize hartid(){
     return syscall3(SYS_HARTID,0,0,0);
 }
 

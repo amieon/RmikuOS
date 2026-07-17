@@ -449,3 +449,117 @@ static int str_eq(const char *a, const char *b) {
     }
     return *a == 0 && *b == 0;
 }
+
+
+static inline int __vsn_put(char *str, int cap, int pos, char ch) {
+    if (pos < cap - 1) str[pos] = ch;
+    return pos + 1; // pos 永远递增，结尾返回"本应写入的长度"（C 标准语义）
+}
+
+static inline int __vsn_str(char *str, int cap, int pos, const char *s, int width, char pad) {
+    if (!s) s = "(null)";
+    int len = 0;
+    while (s[len]) len++;
+    while (len < width) { pos = __vsn_put(str, cap, pos, pad); width--; }
+    while (*s) pos = __vsn_put(str, cap, pos, *s++);
+    return pos;
+}
+
+static inline int __vsn_u64(char *str, int cap, int pos, unsigned long long v,
+                            int base, int upper, int width, char pad) {
+    const char *digits = upper ? "0123456789ABCDEF" : "0123456789abcdef";
+    char tmp[32]; int n = 0;
+    if (v == 0) tmp[n++] = '0';
+    while (v) { tmp[n++] = digits[v % base]; v /= base; }
+    while (n < width) { pos = __vsn_put(str, cap, pos, pad); width--; }
+    while (n > 0) pos = __vsn_put(str, cap, pos, tmp[--n]);
+    return pos;
+}
+
+static inline int __vsn_i64(char *str, int cap, int pos, long long v, int width, char pad) {
+    unsigned long long uv;
+    int neg = 0;
+    if (v < 0) { neg = 1; uv = (unsigned long long)(-(v + 1)) + 1ULL; }
+    else       { uv = (unsigned long long)v; }
+    char tmp[24]; int n = 0;
+    if (uv == 0) tmp[n++] = '0';
+    while (uv) { tmp[n++] = '0' + (uv % 10); uv /= 10; }
+    int total = n + neg;
+    if (pad == '0' && neg) {   // %05d 负数：符号在零填充前面（-0042）
+        pos = __vsn_put(str, cap, pos, '-');
+        neg = 0;
+    }
+    while (total < width) { pos = __vsn_put(str, cap, pos, pad); total++; }
+    if (neg) pos = __vsn_put(str, cap, pos, '-');
+    while (n > 0) pos = __vsn_put(str, cap, pos, tmp[--n]);
+    return pos;
+}
+
+static inline int vsnprintf(char *str, size_t cap, const char *fmt, va_list ap) {
+    int pos = 0;
+    int c = (int)cap;
+    while (*fmt) {
+        char ch = *fmt++;
+        if (ch != '%') { pos = __vsn_put(str, c, pos, ch); continue; }
+
+        char pad = ' ';
+        int width = 0, is_long = 0, is_ll = 0, is_z = 0;
+        while (*fmt == '0' || *fmt == '-') { if (*fmt == '0') pad = '0'; fmt++; }
+        while (*fmt >= '0' && *fmt <= '9') { width = width * 10 + (*fmt - '0'); fmt++; }
+        if (*fmt == 'l') {
+            fmt++;
+            if (*fmt == 'l') { is_ll = 1; fmt++; } else { is_long = 1; }
+        } else if (*fmt == 'z') { is_z = 1; fmt++; }
+
+        char spec = *fmt ? *fmt++ : 0;
+        switch (spec) {
+            case 'd': case 'i': {
+                long long v = is_ll ? va_arg(ap, long long)
+                              : is_long ? va_arg(ap, long)
+                              : is_z ? (long long)va_arg(ap, size_t)
+                              : va_arg(ap, int);
+                pos = __vsn_i64(str, c, pos, v, width, pad);
+                break;
+            }
+            case 'u': case 'x': case 'X': case 'o': {
+                unsigned long long v = is_ll ? va_arg(ap, unsigned long long)
+                                       : is_long ? va_arg(ap, unsigned long)
+                                       : is_z ? (unsigned long long)va_arg(ap, size_t)
+                                       : va_arg(ap, unsigned int);
+                int base = (spec == 'u') ? 10 : (spec == 'o') ? 8 : 16;
+                pos = __vsn_u64(str, c, pos, v, base, spec == 'X', width, pad);
+                break;
+            }
+            case 'p': {
+                unsigned long long v = (unsigned long long)(usize)va_arg(ap, void *);
+                pos = __vsn_str(str, c, pos, "0x", 0, ' ');
+                pos = __vsn_u64(str, c, pos, v, 16, 0, width > 2 ? width - 2 : 0, pad);
+                break;
+            }
+            case 'c': { int v = va_arg(ap, int); pos = __vsn_put(str, c, pos, (char)v); break; }
+            case 's': { const char *v = va_arg(ap, const char *);
+                        pos = __vsn_str(str, c, pos, v, width, ' '); break; }
+            case '%': pos = __vsn_put(str, c, pos, '%'); break;
+            default:
+                pos = __vsn_put(str, c, pos, '%');
+                if (spec) pos = __vsn_put(str, c, pos, spec);
+                break;
+        }
+    }
+    if (c > 0) str[pos < c ? pos : c - 1] = 0;
+    return pos;
+}
+
+static inline int snprintf(char *str, size_t cap, const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    int r = vsnprintf(str, cap, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+static inline int sprintf(char *str, const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    int r = vsnprintf(str, 0x7fffffff, fmt, ap); // 不限长，调用者保证缓冲区够大
+    va_end(ap);
+    return r;
+}
