@@ -29,8 +29,7 @@ pub fn poll() {
         guard.as_mut().map(|net| net.poll_rx(&mut buf)).unwrap_or(0)
     };
     if n > 0 {
-        println!("[net] RX {} bytes", n);  // 确认收到包
-        // net/mod.rs poll() 里，把 size_of 换成：
+        //println!("[net] RX {} bytes", n);  // 确认收到包
         let hdr_len = core::mem::size_of::<VirtioNetHdr>() as usize;
         if n > hdr_len {
             eth::input(&buf[hdr_len..n]);

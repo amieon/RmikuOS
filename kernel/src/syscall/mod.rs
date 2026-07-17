@@ -3,6 +3,7 @@ mod fs;
 mod process;
 mod thread;
 mod arch;
+mod net;
 
 pub const SYSCALL_EXIT: usize = 0;
 pub const SYSCALL_YIELD: usize = 1;
@@ -48,6 +49,14 @@ pub const SYSCALL_KILL: usize = 40;
 pub const SYSCALL_FCNTL: usize = 41;
 pub const SYSCALL_GET_TIME: usize = 42;
 pub const SYSCALL_HARTID: usize = 43;
+
+
+
+pub const SYSCALL_NET_SOCKET: usize = 100; 
+pub const SYSCALL_NET_BIND: usize = 101;
+pub const SYSCALL_NET_SENDTO: usize = 102;
+pub const SYSCALL_NET_RECVFROM: usize = 103; 
+pub const SYSCALL_NET_CLOSE: usize = 104;
 
 use core::{sync::atomic::{AtomicUsize, Ordering}};
 
@@ -155,6 +164,12 @@ pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_FCNTL => process::sys_fcntl(args[0], args[1], args[2]),
         SYSCALL_GET_TIME => arch::sys_arch_time(),
         SYSCALL_HARTID => arch::sys_hartid(),
+
+        SYSCALL_NET_SOCKET => net::sys_net_socket(),
+        SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),
+        SYSCALL_NET_SENDTO => net::sys_net_sendto(args[0], args[1], args[2], args[3], args[4]),
+        SYSCALL_NET_RECVFROM => net::sys_net_recvfrom(args[0], args[1], args[2], args[3]),
+        SYSCALL_NET_CLOSE => net::sys_net_close(args[0]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",
