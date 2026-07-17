@@ -167,6 +167,7 @@ pub fn input(packet: &[u8]) {
     match ip.protocol {
         1 => super::icmp::input(payload, u32::from_be(ip.saddr)),
         17 => super::udp::input(payload, u32::from_be(ip.saddr), dst),
-        _ => {}
+        6 => super::tcp::input(payload, u32::from_be(ip.saddr)),
+        _ => log::warn!("[ip] unhandled protocol {}", ip.protocol),
     }
 }

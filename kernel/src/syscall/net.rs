@@ -1,9 +1,10 @@
 use crate::drivers::net::socket::{self, SocketAddr};
+use crate::drivers::net::tcp;
 use crate::task::{read_current_user_bytes, write_current_user_bytes};
 
 
-pub fn sys_net_socket() -> isize {
-    match socket::socket_create() {
+pub fn sys_net_socket(stype: usize) -> isize {
+    match socket::socket_create(stype) {
         Some(fd) => fd as isize,
         None => -1,
     }
@@ -61,8 +62,70 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
     }
 }
 
-/// close(fd) -> 0
+
+pub fn sys_net_connect(fd: usize, ip: usize, port: usize) -> isize {
+    tcp::connect(fd, ip as u32, port as u16)
+}
+
+pub fn sys_net_listen(fd: usize, _backlog: usize) -> isize {
+    tcp::listen(fd)
+}
+
+/// accept(fd, info) -> child_fd / -1；info 同 recvfrom 的 8 字节格式
+pub fn sys_net_accept(fd: usize, info: usize) -> isize {
+    match tcp::accept(fd) {
+        Some((child, remote)) => {
+            if info != 0 {
+                let mut raw = [0u8; 8];
+                raw[0..4].copy_from_slice(&remote.ip.to_be_bytes());
+                raw[4..6].copy_from_slice(&remote.port.to_be_bytes());
+                if write_current_user_bytes(info, &raw).is_none() {
+                    return -1;
+                }
+            }
+            child as isize
+        }
+        None => -1,
+    }
+}
+
+pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
+    if len == 0 || len > 1460 {
+        return -1;
+    }
+    let data = match read_current_user_bytes(buf, len) {
+        Some(d) if d.len() == len => d,
+        _ => return -1,
+    };
+    tcp::send_data(fd, &data)
+}
+
+/// recv 返回 n / 0(EOF) / -1
+pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize) -> isize {
+    let mut kbuf = alloc::vec![0u8; maxlen.min(2048)];
+    let n = tcp::recv_data(fd, &mut kbuf);
+    if n <= 0 {
+        return n;
+    }
+    if write_current_user_bytes(buf, &kbuf[..n as usize]).is_none() {
+        return -1;
+    }
+    n
+}
+
+
 pub fn sys_net_close(fd: usize) -> isize {
-    socket::socket_close(fd);
-    0
+    let is_tcp = {
+        let table = socket::SOCKET_TABLE.lock();
+        matches!(table.get(fd), Some(Some(socket::Socket::Tcp(_))))
+    };
+    if is_tcp {
+        tcp::close(fd)
+    } else {
+        let mut table = socket::SOCKET_TABLE.lock();
+        match table.get_mut(fd) {
+            Some(slot) if slot.is_some() => { *slot = None; 0 }
+            _ => -1,
+        }
+    }
 }

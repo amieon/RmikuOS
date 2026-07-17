@@ -57,6 +57,11 @@ extern "C" {
 #define SYS_NET_SENDTO0              102
 #define SYS_NET_RECVFROM             103
 #define SYS_NET_CLOSE                104
+#define SYS_NET_CONNECT              105
+#define SYS_NET_LISTEN               106
+#define SYS_NET_ACCEPT               107
+#define SYS_NET_SEND                 108
+#define SYS_NET_RECV                 109
 
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 

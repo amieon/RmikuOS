@@ -1,7 +1,7 @@
 #include "user.h"
 
 int main(void) {
-    int fd = net_socket();
+    int fd = net_socket(2);
     if (fd < 0) { printf("socket failed\n"); return 1; }
     if (net_bind(fd, 12345) < 0) { printf("bind failed\n"); return 1; }
 

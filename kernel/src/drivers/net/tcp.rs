@@ -228,7 +228,6 @@ pub fn input(segment: &[u8], src_ip: u32) {
         Some(i) => i,
         None => return, // 无人监听，丢（教学版不回 RST）
     };
-
     // ---- LISTEN：SYN 建子连接 ----
     let is_listener = matches!(&table[i], Some(Socket::Tcp(t)) if t.state == TcpState::Listen);
     if is_listener {
@@ -421,6 +420,7 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
         let lp = t.local_port;
         drop(table);
         send_segment(lp, SocketAddr { ip, port }, isn, 0, SYN, &[]);
+        // println!("[tcp] SYN sent");
     }
     // 阻塞等握手完成
     let mut spins = 0usize;
@@ -430,7 +430,7 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
             let table = SOCKET_TABLE.lock();
             match table.get(fd).and_then(|s| s.as_ref()).and_then(as_tcp) {
                 Some(t) if t.state == TcpState::Established => return 0,
-                Some(t) if t.state == TcpState::Closed => return -1, // RST / 重传耗尽
+                Some(t) if t.state == TcpState::Closed => return -1,
                 None => return -1,
                 _ => {}
             }
@@ -438,9 +438,12 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
         spins += 1;
         if spins > 30_000_000 {
             close(fd);
+            log::warn!("[tcp] connect timeout");
             return -1;
         }
+        
     }
+    
 }
 
 pub fn listen(fd: usize) -> isize {

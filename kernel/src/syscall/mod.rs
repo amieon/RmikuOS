@@ -57,6 +57,11 @@ pub const SYSCALL_NET_BIND: usize = 101;
 pub const SYSCALL_NET_SENDTO: usize = 102;
 pub const SYSCALL_NET_RECVFROM: usize = 103; 
 pub const SYSCALL_NET_CLOSE: usize = 104;
+pub const SYSCALL_NET_CONNECT: usize = 105;
+pub const SYSCALL_NET_LISTEN: usize = 106;
+pub const SYSCALL_NET_ACCEPT: usize = 107;
+pub const SYSCALL_NET_SEND: usize = 108;
+pub const SYSCALL_NET_RECV: usize = 109;
 
 use core::{sync::atomic::{AtomicUsize, Ordering}};
 
@@ -165,11 +170,17 @@ pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GET_TIME => arch::sys_arch_time(),
         SYSCALL_HARTID => arch::sys_hartid(),
 
-        SYSCALL_NET_SOCKET => net::sys_net_socket(),
+        SYSCALL_NET_SOCKET => net::sys_net_socket(args[0]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),
         SYSCALL_NET_SENDTO => net::sys_net_sendto(args[0], args[1], args[2], args[3], args[4]),
         SYSCALL_NET_RECVFROM => net::sys_net_recvfrom(args[0], args[1], args[2], args[3]),
         SYSCALL_NET_CLOSE => net::sys_net_close(args[0]),
+        SYSCALL_NET_CONNECT => net::sys_net_connect(args[0],args[1],args[2]),
+        SYSCALL_NET_LISTEN => net::sys_net_listen(args[0], args[1]),
+        SYSCALL_NET_ACCEPT => net::sys_net_accept(args[0], args[1]),
+        SYSCALL_NET_SEND => net::sys_net_send(args[0], args[1], args[2]),
+        SYSCALL_NET_RECV => net::sys_net_recv(args[0],args[1],args[2]),
+
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",
