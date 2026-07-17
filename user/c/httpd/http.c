@@ -38,7 +38,7 @@ int http_send_all(int fd, const char *buf, int len)
     while (sent < len) {
         int chunk = (len - sent > 1400) ? 1400 : len - sent;
         int n = net_send(fd, buf + sent, chunk);
-        uprintf("[http] send %d..%d -> %d\n", sent, sent + chunk, n);
+       // uprintf("[http] send %d..%d -> %d\n", sent, sent + chunk, n);
         if (n <= 0) {
             uprintf("[http] STALLED at %d/%d\n", sent, len);
             return sent;

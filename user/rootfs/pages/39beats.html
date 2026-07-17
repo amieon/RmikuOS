@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>39 音源 · 初音未来 P 主图鉴</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0b0e14;color:#e8ecf3;font-family:"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;overflow-x:hidden}
+canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+.wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:48px 20px 80px}
+header{text-align:center;margin-bottom:44px}
+h1{font-size:40px;letter-spacing:4px;background:linear-gradient(90deg,#39c5bb,#7ee8fa,#ff77a9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:#8b93a7;margin-top:10px;font-size:14px;letter-spacing:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:22px}
+.card{background:#151a26;border:1px solid #232b3d;border-radius:14px;overflow:hidden;cursor:pointer;transition:.25s;position:relative}
+.card:hover{transform:translateY(-6px);border-color:#39c5bb;box-shadow:0 12px 32px rgba(57,197,187,.18)}
+.thumb{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#1c2233}
+.meta{padding:14px 16px 18px}
+.name{font-size:18px;font-weight:700}
+.tag{display:inline-block;font-size:11px;color:#39c5bb;border:1px solid #2a4a48;border-radius:999px;padding:2px 9px;margin:8px 6px 0 0}
+.brief{color:#aab2c5;font-size:13px;line-height:1.7;margin-top:10px}
+.detail{animation:fade .4s ease}
+@keyframes fade{from{opacity:0;transform:translateY(14px)}to{opacity:1}}
+.back{display:inline-block;color:#7ee8fa;text-decoration:none;font-size:14px;margin-bottom:22px;cursor:pointer}
+.hero{display:flex;gap:34px;flex-wrap:wrap;background:#151a26;border:1px solid #232b3d;border-radius:18px;padding:28px}
+.hero img{width:340px;max-width:100%;border-radius:12px;object-fit:cover;align-self:flex-start;background:#1c2233}
+.info{flex:1;min-width:280px}
+.info h2{font-size:30px}
+.alias{color:#8b93a7;font-size:14px;margin:6px 0 14px}
+.desc{color:#c6cddd;font-size:14.5px;line-height:2;margin:14px 0}
+.works{margin-top:18px}
+.works h3{font-size:15px;color:#39c5bb;letter-spacing:2px;margin-bottom:10px}
+.song{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;background:#10151f;border-radius:9px;margin-bottom:8px;font-size:13.5px}
+.song i{color:#6f7a92;font-style:normal;flex-shrink:0}
+.nav{display:flex;justify-content:space-between;margin-top:26px}
+.nav a{color:#7ee8fa;text-decoration:none;font-size:14px;cursor:pointer}
+.ph{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1/1;font-size:64px;color:#39c5bb;background:linear-gradient(135deg,#131a2a,#1a2438)}
+footer{text-align:center;color:#566078;font-size:12px;margin-top:56px;line-height:1.9}
+</style>
+<base target="_blank">
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="wrap" id="app"></div>
+<script>
+var P=[{id:"ryo",name:"ryo (supercell)",alias:"supercell 核心",since:"2007 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/i.scdn.co/135d737fe9df4df1c12b05572f05cd1bdaaa4b00",
+tags:["元祖顶流","メルトショック","商业化先驱"],
+brief:"一首《メルト》炸开 VOCALOID 大众化的闸门，把一切变成“传说”的起点。",
+desc:"2007 年末投稿的《メルト》引发了史称“メルトショック”的现象级热潮，让初音未来从圈层玩物变成社会话题；随后的《ワールドイズマイン》更是奠定“世界第一的公主殿下”的国民认知。ryo 率领的创作团体 supercell 汇集 redjuice、huke 等顶尖画师，随后全面进军商业音乐（《君の知らない物語》、EGOIST、chelly），是从 niconico 走向主流乐坛的第一人。",
+works:[["メルト","2007"],["ワールドイズマイン","2008"],["ブラック★ロックシューター","2008"],["恋は戦争","2008"],["初めての恋が終わる時","2008"]]},
+{id:"sasakure",name:"sasakure.UK",alias:"TJ.hangneil / ささくれ",since:"2007 年开始投稿",
+img:"https://kimi-web-img.moonshot.cn/img/images.genius.com/dd542c4fc2c05f618b17b18067f204b8bd23784f.png",
+tags:["8bit 芯片音","童话叙事","像素美学"],
+brief:"用红白机音源写末日童话的吟游诗人，chiptune 与 VOCALOID 的混血宗师。",
+desc:"以 FC 游戏机音源为底色的芯片音乐遇上管弦与电子，再裹上末世、宇宙、AI 的寓言叙事——sasakure.UK 的声音一响就能认出来。《＊ハロー、プラネット。》里手持花盆仰望地球的像素 miku，是 VOCALOID 史上最经典的画面之一。近年亦为《世界计划》供曲（《トンデモワンダーズ》），与 DECO*27 合作的《39》是历年“ミクの日”的定番。",
+works:[["＊ハロー、プラネット。","2009"],["ワンダーラスト","2009"],["ぼくらの16bitエンズ・ウォー","2010"],["39","2012"],["トンデモワンダーズ","2021"]]},
+{id:"kz",name:"kz (livetune)",alias:"livetune 核心",since:"2007 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/i.scdn.co/809cb32e2bad647e1c69cf9a08b1950b59e4311b",
+tags:["清透电子","世界化","Hand in Hand"],
+brief:"《Tell Your World》的标题就是宣言——他真的把 miku 的歌声送到了全世界。",
+desc:"电子音乐组合 livetune 的核心，以澄澈的四四拍电音与纤细的钢琴音色著称。《Packaged》《ストロボナイツ》定义了早期 miku 的“电子歌姬”形象；2012 年的《Tell Your World》成为 Google Chrome 全球广告曲，让初音未来第一次真正意义上走向世界。《Hand in Hand》则是魔法未来 2015 的万人合唱主题曲。ClariS 的《コネクト》亦出自其手。",
+works:[["Packaged","2007"],["ストロボナイツ","2007"],["Last Night, Good Night","2008"],["Tell Your World","2012"],["Hand in Hand","2015"]]},
+{id:"rerulili",name:"れるりり",alias:"当社比P",since:"2008 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/m.media-amazon.com/0bf884d5d5e3d7929d91a471751c4a3835233bbf.jpg",
+tags:["高速念白","电波系","跨媒体之王"],
+brief:"让脑浆炸裂了一整个时代的高速电波炮，VOCALOID 曲跨媒体改编的先行者。",
+desc:"以“当社比”系列标题与机关枪式念白旋律闻名。2012 年的《脳漿炸裂ガール》以快到离谱的语速和魔性旋律成为现象级曲目，随后被改编为小说、舞台剧乃至真人电影，是 VOCALOID 曲 IP 化的最早成功案例之一。《神のまにまに》则证明了他写温吞治愈系也同样拿手。",
+works:[["脳漿炸裂ガール","2012"],["聖槍爆裂ボーイ","2013"],["神のまにまに","2014"],["厨病激発ボーイ","2015"]]},
+{id:"40mp",name:"40mP",alias:"よんじゅうめーとる",since:"2008 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/i.kfs.io/a695d9d4c05cbf13451041350d050e74370c62a8.jpg",
+tags:["钢琴叙事","温柔本柔","小说家"],
+brief:"用一架钢琴撑起无数眼泪的叙事派，温柔是永远的必杀技。",
+desc:"2008 年以《Melody in the sky》出道，以干净的钢琴织体和细水长流的旋律见长。《トリノコシティ》的都市孤独、《からくりピエロ》的单恋独白，都是翻唱区十年不衰的定番。作词作曲之外还以小说家身份活动，是少数在文字与音符两边都成立的全能型创作者。",
+works:[["トリノコシティ","2010"],["からくりピエロ","2011"],["シリョクケンサ","2011"],["少年と魔法のロボット","2013"]]},
+{id:"doriko",name:"doriko",alias:"抒情摇滚巨匠",since:"2008 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/m.media-amazon.com/5a55213ea90f42d174422f40fdd1f9d5f4923f78.jpg",
+tags:["抒情摇滚","豪华编曲","叙情诗"],
+brief:"把初音未来写成女主角的抒情巨匠，《ロミオとシンデレラ》的华丽与危险。",
+desc:"以弦乐与钢琴铺陈的华丽抒情摇滚著称。《歌に形はないけれど》把“虚拟歌手的存在意义”唱成了全体歌迷的泪点，《ロミオとシンデレラ》则以大胆的歌词与拉丁风情成为殿堂级话题作。2016 年雪未来主题曲《雪がとける前に》亦出自其手，是“初音ミク抒情曲”这条赛道的奠基人之一。",
+works:[["歌に形はないけれど","2008"],["ロミオとシンデレラ","2009"],["キャットフード","2009"],["雪がとける前に","2016"]]},
+{id:"jimmythumb",name:"ジミーサムP",alias:"OneRoom",since:"2008 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/cdn.piapro.jp/bcfed163f93d5184631517fae3696df928110603.png",
+tags:["清爽电子","失恋名曲","干净利落的编曲"],
+brief:"一首《from Y to Y》，定义了 VOCALOID 失恋曲的标准答案。",
+desc:"以 OneRoom 名义活动，编曲干净透亮，钢琴与电子音色的平衡感堪称教科书。《from Y to Y》与《Starduster》是 niconico 翻唱区十年长青的失恋双璧，《Calc.》里藏在歌词与标题中的回文式巧思，至今仍被乐迷反复解读。",
+works:[["from Y to Y","2009"],["Starduster","2009"],["Calc.","2010"]]},
+{id:"164",name:"164",alias:"吉他摇滚职人",since:"2008 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/silentblue.remywiki.com/f79c6ca1f3184b095feee44a23f40278b55a9cd1.png",
+tags:["吉他摇滚","GUMI 名手","青春疾走"],
+brief:"《天ノ弱》一曲封神，把 GUMI 的声线用到了骨子里。",
+desc:"以疾走感十足的吉他摇滚见长，是公认最会调 GUMI 的 P 主之一。《天ノ弱》把“傲沉”的恋心写进高速吉他里，成为 GUMI 的国民代表曲并被小说化；《shiningray》《青》同样充满夏日与青春的冲刺感。与 40mP 的组合“1640mP”也留下不少合作名曲。",
+works:[["shiningray","2008"],["天ノ弱","2011"],["青","2012"]]},
+{id:"deco27",name:"DECO*27",alias:"デコ・ニーナ / 火锅P",since:"2008 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/imgs.ototoy.jp/ccc4ab69a619428771dd801fd895a4f780673af7.jpg",
+tags:["流行摇滚","国民情歌","高产劳模"],
+brief:"把“我爱你”写了十几年的情歌之王，VOCALOID 界的流行金曲制造机。",
+desc:"2008 年以《僕みたいな君、君みたいな僕》出道，凭《二息歩行》《愛言葉》《モザイクロール》迅速跻身一线。曲风以朗朗上口的流行摇滚为骨架，歌词擅长把恋爱心理写成机锋与双关。《愛言葉》系列跨越十五年出了四部，几乎成了 VOCALOID 情歌的时间刻度。2018 年创立个人厂牌 OTOIRO，进入《ヴァンパイア》《サラマンダー》《ラビットホール》的第二个全盛期，是极少数从 2008 年一直红到现在的 P 主。",
+works:[["愛言葉","2009"],["モザイクロール","2010"],["弱虫モンブラン","2010"],["火花","2017"],["ヴァンパイア","2021"],["サラマンダー","2022"],["ラビットホール","2023"]]},
+{id:"kurousa",name:"黒うさP",alias:"WhiteFlame / 黑兔",since:"2008 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/ogre.natalie.mu/1af2f6d5d8f53ef2dd2ab45e74d895457f5eef2c.jpg",
+tags:["和风电音","千本桜","国民现象级"],
+brief:"写出《千本桜》的人——一首歌长成小说、漫画、歌舞伎和一整座主题乐园。",
+desc:"创作社团 WhiteFlame 的核心。早期以《紅一葉》《カンタレラ》奠定和风摇滚路线，2011 年的《千本桜》则彻底破圈：大正浪漫的美术、疾走的四拍子与樱花意象击中了所有人，成为 niconico 史上再生数最高的 VOCALOID 曲之一，并被改编为小说、漫画、音乐剧乃至歌舞伎，是 VOCALOID 曲 IP 化的天花板。",
+works:[["紅一葉","2008"],["カンタレラ","2008"],["千本桜","2011"],["リスキーゲーム","2011"],["恋愛フィロソフィア","2012"]]},
+{id:"cosmo",name:"cosMo@暴走P",alias:"暴走P",since:"2008 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/www.atpress.ne.jp/6ae33c345adab0c9da7537e6bb05254bc4d2966b.jpg",
+tags:["极限语速","电子核","音游常客"],
+brief:"BPM 240 的《初音ミクの消失》，把“语速”这件事推到了人类（和声库）的极限。",
+desc:"以超高 BPM、疾风骤雨的电子编曲和“压榨声库极限性能”的调教闻名。《初音ミクの消失》用近乎故障的高速歌唱讲述虚拟歌姬的告别，成为 VOCALOID 技术表现力的里程碑。此后长期为 BEMANI 系音游供曲，是“听了手会抽筋”那一挂作曲家的总代表。",
+works:[["初音ミクの消失","2008"],["初音ミクの戸惑","2009"],["初音ミクの分裂→破壊","2010"],["ディストピア・ジパング","2012"]]},
+{id:"hachi",name:"ハチ",alias:"米津玄師",since:"2009 年开始投稿",
+img:"https://kimi-web-img.moonshot.cn/img/imgs.ototoy.jp/7e51ee6e6a2ce241b7c79995337fee6621983e17.jpg",
+tags:["自绘 PV","鬼才旋律","国民音乐人"],
+brief:"从《マトリョシカ》到《Lemon》——VOCALOID 走出了日本这十年最大的巨星。",
+desc:"2009 年起以ハチ名义投稿，作曲、作词、曲绘、PV 全部一人包办。《マトリョシカ》《パンダヒーロー》《ドーナツホール》以诡谲的旋律与美术风格独步天下。2012 年以本名米津玄師主流出道后一路成为国民级音乐人；2017 年“回娘家”写下魔法未来主题曲《砂の惑星》，被视作对 VOCALOID 场景最深情的回望。",
+works:[["マトリョシカ","2010"],["パンダヒーロー","2011"],["ドーナツホール","2013"],["砂の惑星","2017"]]},
+{id:"wowaka",name:"wowaka",alias:"现实逃避P / ヒトリエ",since:"2009 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/static.wikia.nocookie.net/d4313a200cf2a8496807875cfbf9dcbf86728f7e",
+tags:["疾走摇滚","破碎美学","永远的传说"],
+brief:"用失真吉他和密集歌词撕开裂口的人，VOCALOID 史上最耀眼的流星。",
+desc:"2009 年以《グレーゾーンにて。》出道，因简介里一句“現実逃避って、いいよね！”被称作“现实逃避P”。碎裂般的吉他 riff、快到几乎咬字不及的旋律、黑白色调的一图流 PV，构成了独一无二的 wowaka 美学。《ワールズエンド・ダンスホール》一周内达成传说入り。2011 年后以乐队ヒトリエ主唱身份活动。2019 年 4 月 5 日因急性心力衰竭离世，年仅 31 岁。他离开后，《ローリンガール》评论区至今仍是歌迷的树洞。",
+works:[["裏表ラバーズ","2009"],["ワールズエンド・ダンスホール","2010"],["ローリンガール","2010"],["アンハッピーリフレイン","2011"],["日常と地球の額縁","2011"]]},
+{id:"pinocchio",name:"ピノキオピー",alias:"匹诺曹P",since:"2009 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/typing.twi1.me/a34a210c06871673560999cc5767e1f9738efa49.jpg",
+tags:["毒舌社会派","自绘曲绘","洗脑大师"],
+brief:"用最甜的旋律讲最毒的实话，社会的别扭都被他写成了歌。",
+desc:"歌词以冷峻的社会观察和黑色幽默著称，旋律却抓耳得近乎犯规，曲绘则是本人绘制的独特二值笔角色“暧昧酱”系列。《すきなことだけでいいです》唱出对消费社会式“自我实现论”的倦怠，《魔法少女とチョコレゐト》《匿名M》持续霸榜，是长盛十五年的一线常青树。",
+works:[["腐れ外道とチョコレゐト","2011"],["ありふれたせかいせいふく","2012"],["すきなことだけでいいです","2016"],["魔法少女とチョコレゐト","2022"],["匿名M","2023"]]},
+{id:"easypop",name:"EasyPop",alias:"BETTI",since:"2009 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/static.wikia.nocookie.net/973dd4a503133de3f960e832d5473bde50246750",
+tags:["舞曲","甜系电波","宅舞圣曲"],
+brief:"《ハッピーシンセサイザ》一响，全世界的宅舞 DNA 都动了。",
+desc:"以高甜度四四拍舞曲闻名。《ハッピーシンセサイザ》凭借“120% 元气”的旋律成为宅舞区十年不冷的圣曲，也让 EasyPop 成为“听了就想跳”的代名词。甜而不腻的流行感，是派对歌单里永远的保留节目。",
+works:[["マイルームディスコナイト","2009"],["ハッピーシンセサイザ","2010"],["なりすましゲンガー","2012"]]},
+{id:"hachioji",name:"八王子P",alias:"电音王子",since:"2009 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/i.scdn.co/491677ff2d62bf6a3c4a218e87e5447fef01ba35",
+tags:["EDM","エレクトロ","俱乐部文化"],
+brief:"把 VOCALOID 拉进夜店的电音王子，甜辣舞曲二十年如一日。",
+desc:"以精致的 EDM/エレクトロ制作闻名，《Sweet Devil》《気まぐれメルシィ》塑造了 miku 又甜又辣的一面；与ギガ合作的《Gimme×Gimme》火遍全球短视频平台。作为 DJ 频繁登上国内外舞台，是 VOCALOID 俱乐部文化的旗手。",
+works:[["Sweet Devil","2010"],["エレクトリック・ラブ","2012"],["気まぐれメルシィ","2016"],["Gimme×Gimme","2019"]]},
+{id:"neru",name:"Neru",alias:"押入れP",since:"2010 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/cdn.karent.jp/9ca6676c1b59959fb368182e6106979b3006557b.jpg",
+tags:["青春摇滚","烦躁美学","东京系"],
+brief:"替所有拧巴的年轻人喊出“烦死了”的摇滚辩护人。",
+desc:"以粗粝而直接的乐队摇滚书写青春期的无力感与反骨。《東京テディベア》把自我厌弃缝进玩偶，《ロストワンの号哭》唱应试教育的窒息，《脱法ロック》则用狂欢反讽规则。旋律性与攻击性并存，是 2010 年代 VOCALOID 摇滚的中坚力量。",
+works:[["東京テディベア","2011"],["ハウトゥー世界征服","2013"],["ロストワンの号哭","2013"],["脱法ロック","2016"],["い〜やい〜やい〜や","2017"]]},
+{id:"mikito",name:"みきとP",alias:"mikitoP",since:"2010 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/www.ponycanyon.co.jp/c0b6c933f89a9522e36635745f18fbc52a707a6d.jpg",
+tags:["流行摇滚","翻唱区顶流","国民度"],
+brief:"《ロキ》一出，全日本的小学生都会唱——翻唱区与卡拉 OK 的双料霸主。",
+desc:"旋律天赋点满的流行摇滚写手，作品兼具“一听就会唱”的亲和力与耐嚼的编排。《いーあるふぁんくらぶ》曾是 niconico 全站级热门，《ロキ》成为 2018 年现象级合唱曲，《少女レイ》则在多年后凭二创再度翻红。为 39 的纪念日写下的《39みゅーじっく！》更是演唱会的定番合唱。",
+works:[["いーあるふぁんくらぶ","2012"],["39みゅーじっく！","2016"],["ロキ","2018"],["少女レイ","2018"]]},
+{id:"keeno",name:"keeno",alias:"木吉他系哀愁",since:"2010 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/stat.ameba.jp/93ca649fc41facaed8358cc55ce3a0a014f01b60.jpg",
+tags:["初音ミクDark","木吉他","雨季美学"],
+brief:"一把木吉他配上 miku Dark 的气声，下不完的雨与说不完的心事。",
+desc:"2010 年以《glow》出道，用木吉他的分解和弦与初音ミクDark 的轻声气音营造出独有的湿润哀愁，《crack》《morning haze》一脉相承。产量不高却曲曲精品，是“安静系 VOCALOID”的标杆——适合在雨天的窗边单曲循环。",
+works:[["glow","2010"],["crack","2011"],["morning haze","2014"],["before light","2015"]]},
+{id:"giga",name:"ギガP",alias:"Giga / REOL 搭档",since:"2010 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/img.cdn.nimg.jp/8661a7506c6384cb17f28e30c614442ceccb5325",
+tags:["病娇电子","高音狂魔","派对轰炸机"],
+brief:"高音与失真齐飞的派对轰炸机，VOCALOID 界的夜店之王。",
+desc:"以极具攻击性的电子编曲和招牌高音调教著称，镜音双子的《ギガンティックO.T.N》《おこちゃま戦争》奠定了“ギガ節”的地位。与歌手れをる、画师お菊长期搭档（后组成 REOL），《ヒビカセ》与魔法未来 2018 主题曲《劣等上等》让他稳坐一线。",
+works:[["ギガンティックO.T.N","2012"],["おこちゃま戦争","2013"],["ヒビカセ","2014"],["劣等上等","2018"]]},
+{id:"tohma",name:"トーマ",alias:"tohma",since:"2010 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/tx-free-imgs.acfun.cn/7ef32fbff632683593aecfff899237b62ca825d1.png",
+tags:["民族爵士","一图流美学","幻之天才"],
+brief:"只活动了三年就封笔，留下的十几首歌首首是精品的传说级幻才。",
+desc:"2010 年以《魔法少女幸福論》出道。把爵士和声、民族调式与摇滚编制熔在一起，配上信息量爆炸的一图流 PV，审美超前了一个时代。《骸骨楽団とリリア》《エンヴィキャットウォーク》《九龍レトロ》至今仍是“曲风无法归类”的代名词。2013 年宣布引退，删稿、解散社群，干脆得像一阵风——这也让他的作品成了 VOCALOID 考古学的圣地。",
+works:[["魔法少女幸福論","2010"],["骸骨楽団とリリア","2011"],["エンヴィキャットウォーク","2011"],["オレンジ","2012"],["九龍レトロ","2012"]]},
+{id:"orangestar",name:"Orangestar",alias:"蜜柑星P",since:"2011 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/img.youtube.com/c16960759c3cd8d9b5d4d1d011e6d7b6bcb87bc8.jpg",
+tags:["夏日摇滚","清亮电吉他","青春的声音"],
+brief:"如果夏天有声音，那一定是蜜柑星的电吉他。",
+desc:"中学生时期开始投稿，以汽水般清亮的电吉他音色与辽阔的旋律线定义了“夏曲”的标准答案。《アスノヨゾラ哨戒班》是无数人心中的青春主题曲，与 IA 合作的《回る空うさぎ》《Henceforth》同样经典。短暂引退后复出，依旧一开口就是满天星斗。",
+works:[["雨き声残響","2014"],["アスノヨゾラ哨戒班","2014"],["回る空うさぎ","2016"],["Henceforth","2020"]]},
+{id:"jin",name:"じん",alias:"自然の敵P",since:"2011 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/img.animatetimes.com/794c79ee208b093e9b8c35230a66d4c316116995.jpg",
+tags:["物语音乐","阳炎计划","跨媒体帝国"],
+brief:"把一首歌写成一个宇宙——阳炎计划的缔造者，物语音乐的代名词。",
+desc:"2011 年以《人造エネミー》出道，同年的《カゲロウデイズ》引爆全网：循环的 8 月 15 日、目にまつわる能力者们的群像剧，从歌曲一路扩张为小说、漫画与动画《メカクシティアクターズ》。疾走的乐队声响配上精密嵌套的多视角叙事，让“听完想去补设定”成为一代人的共同记忆。",
+works:[["人造エネミー","2011"],["カゲロウデイズ","2011"],["想像フォレスト","2011"],["チルドレンレコード","2012"],["夜咄ディセイブ","2013"]]},
+{id:"maretu",name:"MARETU",alias:"極悪P",since:"2011 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/i1.hdslb.com/13e5108da9afe3049e86179b4c79fa87e37f4831.jpg@384w_216h_1c",
+tags:["病态美学","高速碎拍","自绘 PV"],
+brief:"把黑暗写成糖的人——毒性旋律配上手绘的眼睛与器官，危险又上头。",
+desc:"早期曲目标题耸动而有“極悪P”之称，实则以精密的 breakbeat 编排、病毒式 hook 与病态心理学歌词著称。所有曲绘均由本人手绘，标志性的“眼睛”意象辨识度拉满。《コインロッカーベイビー》《ダーリン》《トゥール》常年占据二创与手书素材榜。社恐、低产、神隐，但每发一稿必屠榜，是“质胜于量”的极端样本。",
+works:[["コインロッカーベイビー","2013"],["うみたがり","2014"],["うみなおし","2017"],["ダーリン","2017"],["トゥール","2018"],["ニューダーリン","2019"]]},
+{id:"kairiki",name:"かいりきベア",alias:"怪力熊",since:"2011 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/cdn.ibispaint.com/584b1e20aa4e1ff68b67543d0880bea1334e5916.png",
+tags:["电波摇滚","病娇圣经","高速洗脑"],
+brief:"怪力乱神的电波系摇滚，病娇与依赖症候群的专业户。",
+desc:"曲如其名：怪力与暴走。失真的高速摇滚、密不透气的念白式旋律、以及把“喜欢”写成依赖、占有与自毁的歌词，构成强烈的成瘾性。《マネマネサイコトロピック》《アルカリレットウセイ》《ベノム》《ダーリンダンス》一首比一首毒，大量被音游与《世界计划》收录。与固定画师 のう 合作的黑粉配色 PV 已成为电波系的视觉教科书。",
+works:[["マネマネサイコトロピック","2013"],["アルカリレットウセイ","2016"],["ベノム","2018"],["ダーリンダンス","2020"],["メンタルチェンソー","2021"]]},
+{id:"mitchiem",name:"Mitchie M",alias:"神调教 / 巴西P",since:"2011 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/m.media-amazon.com/d1d3894eb7f32857a23aab1b44d538134f63bd77.jpg",
+tags:["神调教","Funky Pop","真实系歌声"],
+brief:"让初音未来唱得比真人还真的人，“神调教”三个字的活体说明书。",
+desc:"童年在巴西度过的音乐人，2011 年以《FREELY TOMORROW》出道并以当时最速纪录杀入殿堂。以细致到恐怖的调教工程让 miku 的歌声拥有真人般的咬字与呼吸感，配上放克十足的律动与铜管，辨识度极高。《ビバハピ》是演唱会的常驻气氛组，《ニュートンダンス》证明他依然宝刀未老。",
+works:[["FREELY TOMORROW","2011"],["イージーデンス","2012"],["ビバハピ","2013"],["アゲアゲアゲイン","2014"],["ニュートンダンス","2021"]]},
+{id:"kemu",name:"kemu",alias:"堀江晶太",since:"2011 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/cdn.piapro.jp/16fbe3853f224e27b7567e8f2ed77157cc2aab65.png",
+tags:["高速摇滚","神话叙事","天才少年"],
+brief:"十几岁写出《六兆年と一夜物語》的天才少年，神话与速度的完美融合。",
+desc:"2011 年以《人生リセットボタン》出道时还是中学生，却以老练到可怕的编曲震惊全场。《インビジブル》《六兆年と一夜物語》以爆表的速度与神话级叙事成为殿堂经典。后以堀江晶太名义组建 PENGUIN RESEARCH 并为大量动画供曲，2017 年的《拝啓ドッペルゲンガー》则是写给 VOCALOID 场景的深情回信。",
+works:[["人生リセットボタン","2011"],["インビジブル","2011"],["六兆年と一夜物語","2012"],["拝啓ドッペルゲンガー","2017"]]},
+{id:"nbuna",name:"n-buna",alias:"ヨルシカ 作曲担当",since:"2012 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/images.genius.com/fb6b0eec415cbdf848df9fe533db82018c171d55.png",
+tags:["文学摇滚","夏日疾走","ヨルシカ"],
+brief:"把小说写进摇滚里的人——后来他和 suis 一起，成了ヨルシカ。",
+desc:"以文学性歌词与疾走感吉他摇滚见长，歌里全是海、列车、花与告别。《ウミユリ海底譚》《メリュー》《花降らし》构建出一个湿漉漉的夏日美学宇宙。2017 年与歌手 suis 组成ヨルシカ 后横扫主流乐坛（《だから僕は音楽を辞めた》《ただ君に晴れ》），但他笔下的雨季，从 VOCALOID 时代就没有停过。",
+works:[["透明エレジー","2013"],["ウミユリ海底譚","2014"],["始発とカフカ","2015"],["メリュー","2015"],["花降らし","2016"]]},
+{id:"nuyuri",name:"ぬゆり",alias:"nulut / 煮儿果实",since:"2012 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/i.scdn.co/d75133fe18bc2b342264cbdb084bf05dfd3657fd",
+tags:["都市电子","冷淡美学","毒系情歌"],
+brief:"冷冰冰的合成器与都市夜行感，把失恋情歌写出了金属质感。",
+desc:"以冷淡、克制却后劲极强的电子摇滚著称，与黑白极简风 PV 构成高度统一的作者性。《フラジール》《フィクサー》《プロトディスコ》《ロウワー》首首都是翻唱区与《世界计划》的热门曲目。爱用 flower、GUMI 与 v flower 系声库，是 2010 年代后半“都市夜行系” VOCALOID 的旗手。",
+works:[["フラジール","2016"],["フィクサー","2017"],["プロトディスコ","2017"],["命ばっかり","2017"],["ロウワー","2021"]]},
+{id:"syudou",name:"syudou",alias:"《うっせぇわ》幕后",since:"2012 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/img.cdn.nimg.jp/6a9f5233cc359c9f0a776c8a5528b253fd954449",
+tags:["放克摇滚","病态叙事","Ado 幕后"],
+brief:"写出《うっせぇわ》的男人——Ado 现象背后的作曲鬼才。",
+desc:"以放克味贝斯线与病态自恋的歌词世界著称，《ビターチョコデコレーション》《孤独の宗教》构建了独特的“syudou 世界观”。2020 年为 Ado 供曲的《うっせぇわ》横扫日本各大榜单、成为社会现象，让他的名字响彻主流乐坛，本人作为唱见同样实力不俗。",
+works:[["ビターチョコデコレーション","2019"],["孤独の宗教","2020"],["うっせぇわ（作曲）","2020"],["爆笑","2021"]]},
+{id:"balloon",name:"バルーン",alias:"須田景凪",since:"2013 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/img.cdn.nimg.jp/03caf9f8bdd4b85a2e7f425ae3374e668a50b7d0",
+tags:["忧郁都会","v flower 名手","唱作双修"],
+brief:"一首《シャルル》养活半个翻唱区，后来他干脆自己唱了。",
+desc:"以 v flower 的沙哑声线书写都市青年的忧郁与失语，《シャルル》《パメラ》《雨とペトラ》构成无可复制的灰色三部曲，其中《シャルル》更是成为 niconico 翻唱史上最被反复演绎的曲目之一。后以須田景凪名义作为创作歌手活动，为动画供曲并持续大热，是从 VOCALOID 走出的新一代唱作人代表。",
+works:[["シャルル","2016"],["パメラ","2017"],["雨とペトラ","2017"],["メーベル","2016"]]},
+{id:"omoi",name:"Omoi",alias:"Sakurai & Kimura",since:"2013 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/imgs.ototoy.jp/d551fa8d192ad5610b81bcd63ee5b951990945fa.jpg",
+tags:["双子组合","爆音摇滚","魔法未来主题曲"],
+brief:"两个人的音量等于一支军队——《グリーンライツ・セレナーデ》点亮了魔法未来的夜空。",
+desc:"由樱井与木村组成的双人组合，以过载到极限的爆音摇滚与疾走旋律著称。《チュルリラ・チュルリラ・ダッダッダ》《テオ》的化学反应让人过耳不忘；2018 年受命创作的魔法未来主题曲《グリーンライツ・セレナーデ》，成为演唱会史上最受爱戴的主题曲之一。",
+works:[["チュルリラ・チュルリラ・ダッダッダ","2016"],["テオ","2017"],["グリーンライツ・セレナーデ","2018"]]},
+{id:"kanzaki",name:"カンザキイオリ",alias:"神椿总帅",since:"2014 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/assets.st-note.com/f692576ab25adc979eabc5958a5fe8ddf520038a.jpg",
+tags:["现象级","生死观","KAMITSUBAKI"],
+brief:"《命に嫌われている。》——一首歌扛起了无数人的黑夜。",
+desc:"以直击生死议题的沉重歌词与钢琴摇滚著称。2017 年的《命に嫌われている。》在年轻一代中引发巨大共鸣，小说化并长销不衰。随后创立虚拟歌手厂牌 KAMITSUBAKI STUDIO（花谱、理芽等），一手打造了虚拟歌手文化的新纪元，也以唱作人身份亲自站上舞台。",
+works:[["命に嫌われている。","2017"],["アイデンティティ","2018"],["あの夏が飽和する。","2018"],["不器用な男","2019"]]},
+{id:"nayutan",name:"ナユタン星人",alias:"来自ナユタン星的物体",since:"2015 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/p1.music.126.net/890cba9c850aaa685d4fb479187c09fc700e99d5.jpg",
+tags:["宇宙电波","自绘外星人","四四拍洗脑"],
+brief:"从ナユタン星来的电波外星人，用正方形节拍征服地球。",
+desc:"2015 年以《アンドロメダアンドロメダ》出道，方整的四四拍、宇宙题材歌词与自绘的简笔外星人 PV 形成强烈作者性。《エイリアンエイリアン》《太陽系デスコ》《惑星ループ》让全站陷入宇宙级中毒，为《世界计划》供曲的《ポジティブ☆ダンスタイム》同样大热。",
+works:[["アンドロメダアンドロメダ","2015"],["エイリアンエイリアン","2016"],["惑星ループ","2016"],["太陽系デスコ","2017"]]},
+{id:"mimi",name:"MIMI",alias:"透明感钢琴系",since:"2017 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/images.genius.com/d7877e790432f7119600e63d5afc22ded551d919.jpg",
+tags:["钢琴流行","透明感","治愈"],
+brief:"钢琴声部像水一样流动的 P 主，把心事唱得很轻，却听哭很多人。",
+desc:"以清透的钢琴织体、空气感混音和温柔到近乎耳语的调教著称，常用初音ミク与可不（KAFU）。歌词多写敏感纤细的日常心绪：说不出口的喜欢、深夜的自我怀疑、小小的和解。《ハナタバ》《くうになる》等曲在翻唱圈与短视频平台被大量二创，是 2020 年代“卧室流行”系 P 主的代表。",
+works:[["ハナタバ","2021"],["だいあるのーと","2021"],["くうになる","2022"],["さよならは言わないで","2021"]]},
+{id:"iyowa",name:"いよわ",alias:"手绘中毒系",since:"2018 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/i.scdn.co/2a94119e6666ca4c2c3a20a007110f5c8a4550e1",
+tags:["中毒性和声","自绘手绘风","令和新世代"],
+brief:"歪歪扭扭的和声与手绘——第一耳怪异，第三耳中毒，第十耳单曲循环。",
+desc:"以不协和却魔性的和声进行、梦呓般的歌词与稚拙感自绘 PV 构成独一无二的世界。《1000年生きてる》《きゅうくらりん》（可不）席卷 2020 年代的翻唱与手书圈，为《世界计划》25 时供曲的《ジャックポットサッドガール》也成为代表曲。是令和世代作者性最强的 P 主之一。",
+works:[["1000年生きてる","2020"],["ジャックポットサッドガール","2020"],["きゅうくらりん","2021"],["熱異常","2022"]]},
+{id:"three",name:"すりぃ",alias:"THREEE",since:"2018 年开始活动",
+img:"https://kimi-web-img.moonshot.cn/img/images.genius.com/190bb44fb4ee4dd60ee7ba8a15fb80754b90e5f5.png",
+tags:["放克流行","贝斯杀","色气律动"],
+brief:"贝斯一响腿就软——《テレキャスタービーボーイ》的律动无人能挡。",
+desc:"以黏糊糊的贝斯线与放克律动著称，《テレキャスタービーボーイ》《エゴロック》让镜音レン散发出前所未有的色气，成为 2019 年后翻唱区与宅舞区的双料热门。小说化、主流出道接连达成，是新世代中商业成绩最亮眼的 P 主之一。",
+works:[["テレキャスタービーボーイ","2019"],["エゴロック","2021"],["じゃあ君の思想が死ねばいい","2021"]]},
+{id:"hiiragi",name:"柊マグネタイト",alias:"柊磁铁",since:"2020 年出道",
+img:"https://kimi-web-img.moonshot.cn/img/img.cdn.nimg.jp/4303c908ac8ef96490c73a0edbd82d3a285db722",
+tags:["极简电子","可不名手","再生数怪物"],
+brief:"一首《マーシャル・マキシマイザー》，让全世界见识了什么叫再生数怪物。",
+desc:"2020 年出道，以极简而锋利的电子编曲与一击必杀的 hook 著称。《マーシャル・マキシマイザー》（可不）以恐怖的速度席卷全网，成为 2021 年最具统治力的 VOCALOID 系曲目；《ラブカ？》《終焉逃避行》同样话题性十足，是令和新世代商业成绩最猛的新星。",
+works:[["終焉逃避行","2020"],["ラブカ？","2020"],["マーシャル・マキシマイザー","2021"],["ファブリック・フラワー","2021"]]},
+{id:"tsumiki",name:"ツミキ",alias:"二创帝王",since:"2021 年凭《フォニイ》爆红",
+img:"https://kimi-web-img.moonshot.cn/img/i.scdn.co/cb9af51a4bccb699cc0da32b620dc13c116f8958",
+tags:["人声质感","有机电子","怀旧前卫"],
+brief:"《フォニイ》的“ファ”一出口，二创区直接改朝换代。",
+desc:"以人声切片般的编曲质感与怀旧又前卫的流行感著称。《フォニイ》（可不）成为 2021 年二创与翻唱最多的曲目之一，《カルチャ》《レゾンデイトル・カレイドスコープ》延续了极高完成度。早年低调投稿多年，一朝爆发便跻身顶流，是“大器晚成”的最佳样本。",
+works:[["フォニイ","2021"],["レゾンデイトル・カレイドスコープ","2021"],["カルチャ","2022"]]}
+];
+var app=document.getElementById("app");
+function fail(el){el.outerHTML='<div class="ph">♪</div>'}
+function list(){
+var h='<header><h1>39 音源</h1><div class="sub">初音未来 · VOCALOID P 主图鉴 —— 点击卡片查看详情</div></header><div class="grid">';
+for(var i=0;i<P.length;i++){var p=P[i];
+h+='<div class="card" onclick="location.hash=\'#/p/'+p.id+'\'"><img class="thumb" src="'+p.img+'" loading="lazy" onerror="fail(this)"><div class="meta"><div class="name">'+p.name+'</div>';
+for(var j=0;j<p.tags.length;j++)h+='<span class="tag">'+p.tags[j]+'</span>';
+h+='<div class="brief">'+p.brief+'</div></div></div>'}
+h+='</div>'+foot();app.innerHTML=h;window.scrollTo(0,0)}
+function detail(id){
+var i;for(i=0;i<P.length;i++)if(P[i].id===id)break;if(i>=P.length)return list();
+var p=P[i],prev=P[(i+P.length-1)%P.length],next=P[(i+1)%P.length];
+var h='<div class="detail"><a class="back" href="#/">← 返回总览</a><div class="hero"><img src="'+p.img+'" onerror="fail(this)"><div class="info"><h2>'+p.name+'</h2><div class="alias">'+p.alias+' · '+p.since+'</div>';
+for(var j=0;j<p.tags.length;j++)h+='<span class="tag">'+p.tags[j]+'</span>';
+h+='<div class="desc">'+p.desc+'</div><div class="works"><h3>代表作品</h3>';
+for(var k=0;k<p.works.length;k++)h+='<div class="song"><span>♪ '+p.works[k][0]+'</span><i>'+p.works[k][1]+'</i></div>';
+h+='</div></div></div><div class="nav"><a href="#/p/'+prev.id+'">← '+prev.name+'</a><a href="#/p/'+next.id+'">'+next.name+' →</a></div></div>'+foot();
+app.innerHTML=h;window.scrollTo(0,0)}
+function foot(){return '<footer>39 音源 · 为 RmikuOS 的 httpd 而作 · 图片源自公开网络，版权归原作者所有</footer>'}
+function route(){var h=location.hash||"#/";
+if(h.indexOf("#/p/")===0)detail(h.slice(4));else list()}
+window.addEventListener("hashchange",route);route();
+var cv=document.getElementById("bg"),cx=cv.getContext("2d"),ps=[];
+function rs(){cv.width=innerWidth;cv.height=innerHeight}
+window.addEventListener("resize",rs);rs();
+for(var i=0;i<36;i++)ps.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,v:.2+Math.random()*.5,s:10+Math.random()*14,o:.06+Math.random()*.15,d:Math.random()*6.28});
+(function tick(){cx.clearRect(0,0,cv.width,cv.height);
+for(var i=0;i<ps.length;i++){var q=ps[i];q.y-=q.v;q.d+=.01;
+if(q.y<-20){q.y=cv.height+20;q.x=Math.random()*cv.width}
+cx.globalAlpha=q.o;cx.fillStyle="#39c5bb";cx.font=q.s+"px serif";
+cx.fillText("♪",q.x+Math.sin(q.d)*16,q.y)}
+cx.globalAlpha=1;requestAnimationFrame(tick)})();
+</script>
+</body>
+</html>
