@@ -4,7 +4,12 @@ use crate::drivers::net::with_net;
 use crate::println;
 use crate::sync::spin::Mutex;
 
-pub const MY_IP: u32 = 0x0A00020F; // 10.0.2.15
+
+use core::sync::atomic::{AtomicU32, Ordering};
+
+pub static MY_IP: AtomicU32 = AtomicU32::new(0x0A00020F);
+pub fn my_ip() -> u32 { MY_IP.load(Ordering::Relaxed) }
+pub fn set_my_ip(ip: u32) { MY_IP.store(ip, Ordering::Relaxed); }
 
 #[repr(C, packed)]
 pub struct IpHeader {
@@ -118,7 +123,7 @@ pub fn send(dst_ip: u32, protocol: u8, payload: &[u8]) {
     ip.ttl = 64;
     ip.protocol = protocol;
     ip.check = 0;
-    ip.saddr = MY_IP.to_be();
+    ip.saddr = my_ip().to_be();
     ip.daddr = dst_ip.to_be();
     pkt.extend_from_slice(payload);
 
@@ -154,7 +159,7 @@ pub fn input(packet: &[u8]) {
     }
 
     let dst = u32::from_be(ip.daddr);
-    if dst != MY_IP && dst != 0xFFFFFFFF {
+    if dst != my_ip() && dst != 0xFFFFFFFF {
         return;
     }
 

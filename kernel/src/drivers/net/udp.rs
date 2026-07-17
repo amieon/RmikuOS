@@ -1,5 +1,5 @@
-use crate::drivers::net::ip::{IpHeader, MY_IP, checksum, send as ip_send};
-use crate::drivers::net::socket::{SOCKET_TABLE, SocketAddr};
+use crate::drivers::net::ip::{IpHeader, my_ip, checksum, send as ip_send};
+use crate::drivers::net::socket::{SOCKET_TABLE, Socket, SocketAddr};
 use alloc::vec::Vec;
 
 #[repr(C, packed)]
@@ -68,14 +68,14 @@ pub fn send(dst_ip: u32, src_port: u16, dst_port: u16, data: &[u8]) {
     hdr.checksum = 0;
     pkt.extend_from_slice(data);
 
-    let csum = udp_checksum(MY_IP, dst_ip, &pkt);
+    let csum = udp_checksum(my_ip(), dst_ip, &pkt);
     unsafe {
         core::ptr::write_unaligned(core::ptr::addr_of_mut!((*hdr).checksum), csum.to_be());
     }
     
 
     ip_send(dst_ip, 17, &pkt);
-    debug_assert_eq!(udp_checksum(MY_IP, dst_ip, &pkt), 0); 
+    debug_assert_eq!(udp_checksum(my_ip(), dst_ip, &pkt), 0); 
 }
 
 pub fn input(packet: &[u8], src_ip: u32, dst_ip: u32) {
@@ -93,17 +93,19 @@ pub fn input(packet: &[u8], src_ip: u32, dst_ip: u32) {
 
     // 投递到 socket 接收队列
     let mut table = SOCKET_TABLE.lock();
-    for sock in table.iter_mut().flatten() {
-        if sock.local_port == dst_port {
-            if sock.rx_queue.len() < 64 {
-                // 保存 (src_ip, src_port, data)
-                let mut frame = Vec::with_capacity(8 + 2 + data.len());
-                frame.extend_from_slice(&src_ip.to_be_bytes());
-                frame.extend_from_slice(&src_port.to_be_bytes());
-                frame.extend_from_slice(data);
-                sock.rx_queue.push_back(frame);
+    for s in table.iter_mut().flatten() {
+        if let Socket::Udp(sock) = s {
+            if sock.local_port == dst_port {
+                if sock.rx_queue.len() < 64 {
+                    // 保存 (src_ip, src_port, data)
+                    let mut frame = Vec::with_capacity(8 + 2 + data.len());
+                    frame.extend_from_slice(&src_ip.to_be_bytes());
+                    frame.extend_from_slice(&src_port.to_be_bytes());
+                    frame.extend_from_slice(data);
+                    sock.rx_queue.push_back(frame);
+                }
+                break;
             }
-            break;
         }
     }
-}
+    }

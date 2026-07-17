@@ -2,8 +2,9 @@ use alloc::collections::vec_deque::VecDeque;
 use alloc::vec::Vec;
 use crate::sync::spin::Mutex;
 use crate::drivers::net::udp;
+use crate::drivers::net::tcp::TcpSocket;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]   // ← 加了 PartialEq/Eq，TCP 四元组匹配要用
 pub struct SocketAddr {
     pub ip: u32,
     pub port: u16,
@@ -17,71 +18,72 @@ pub struct UdpSocket {
 
 impl UdpSocket {
     pub fn new(local_port: u16) -> Self {
-        Self {
-            local_port,
-            remote: None,
-            rx_queue: VecDeque::new(),
-        }
+        Self { local_port, remote: None, rx_queue: VecDeque::new() }
     }
 }
 
-/// 简单 socket 表，固定 8 个槽位
-pub static SOCKET_TABLE: Mutex<[Option<UdpSocket>; 8]> = Mutex::new([
+pub enum Socket {
+    Udp(UdpSocket),
+    Tcp(TcpSocket),
+}
+
+/// socket 表，固定 8 槽；stype: 1 = TCP(STREAM)，2 = UDP(DGRAM)
+pub static SOCKET_TABLE: Mutex<[Option<Socket>; 8]> = Mutex::new([
     None, None, None, None, None, None, None, None,
 ]);
 
-/// 创建 UDP socket，返回 fd（即表索引）
-pub fn socket_create() -> Option<usize> {
+pub fn socket_create(stype: usize) -> Option<usize> {
     let mut table = SOCKET_TABLE.lock();
     for (i, slot) in table.iter_mut().enumerate() {
         if slot.is_none() {
-            *slot = Some(UdpSocket::new(0)); // port 先为 0，bind 时设置
+            *slot = Some(match stype {
+                1 => Socket::Tcp(TcpSocket::new()),
+                2 => Socket::Udp(UdpSocket::new(0)),
+                _ => return None,
+            });
             return Some(i);
         }
     }
     None
 }
 
-/// 绑定本地端口
 pub fn socket_bind(fd: usize, port: u16) -> bool {
     let mut table = SOCKET_TABLE.lock();
-    
-    // 先检查 fd 是否有效
     if fd >= table.len() || table[fd].is_none() {
         return false;
     }
-    
-    // 检查端口冲突（只读遍历）
-    for other in table.iter().flatten() {
-        if other.local_port == port {
+    for s in table.iter().flatten() {
+        let p = match s {
+            Socket::Udp(u) => u.local_port,
+            Socket::Tcp(t) => t.local_port,
+        };
+        if p == port {
             return false;
         }
     }
-    
-    // 上面遍历结束，不可变借用已释放，现在可以可变借用
-    if let Some(ref mut sock) = table[fd] {
-        sock.local_port = port;
-        true
-    } else {
-        false
+    match &mut table[fd] {
+        Some(Socket::Udp(u)) => { u.local_port = port; true }
+        Some(Socket::Tcp(t)) => { t.local_port = port; true }
+        _ => false,
     }
 }
-/// 发送数据
+
+/// UDP 发送（TCP fd 传进来返回 false）
 pub fn socket_sendto(fd: usize, dst: SocketAddr, data: &[u8]) -> bool {
     let table = SOCKET_TABLE.lock();
-    if let Some(Some(sock)) = table.get(fd) {
+    if let Some(Some(Socket::Udp(sock))) = table.get(fd) {
         let src_port = sock.local_port;
-        drop(table); // 释放锁后再调用网络层（避免死锁）
+        drop(table); // 释放锁后再进网络层
         udp::send(dst.ip, src_port, dst.port, data);
         return true;
     }
     false
 }
 
-/// 接收数据，返回 (src_ip, src_port, data)
+/// UDP 接收，返回 (src, len)
 pub fn socket_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
     let mut table = SOCKET_TABLE.lock();
-    if let Some(Some(sock)) = table.get_mut(fd) {
+    if let Some(Some(Socket::Udp(sock))) = table.get_mut(fd) {
         if let Some(frame) = sock.rx_queue.pop_front() {
             if frame.len() < 6 {
                 return None;
@@ -96,12 +98,3 @@ pub fn socket_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)>
     }
     None
 }
-
-/// 关闭 socket
-pub fn socket_close(fd: usize) {
-    let mut table = SOCKET_TABLE.lock();
-    if let Some(slot) = table.get_mut(fd) {
-        *slot = None;
-    }
-}
-

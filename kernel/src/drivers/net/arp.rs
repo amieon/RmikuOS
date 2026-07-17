@@ -1,5 +1,5 @@
 use crate::drivers::net::eth::{send as eth_send, MY_MAC};
-use crate::drivers::net::ip::MY_IP;
+use crate::drivers::net::ip::my_ip;
 use crate::sync::spin::Mutex;
 
 #[repr(C, packed)]
@@ -74,7 +74,7 @@ pub fn input(packet: &[u8]) {
     insert(sender_ip, &arp.sender_mac);
     crate::drivers::net::ip::on_arp_learned(sender_ip,  arp.sender_mac);
 
-    if opcode == 1 && target_ip == MY_IP {
+    if opcode == 1 && target_ip == my_ip() {
         let mut reply = [0u8; 42];
         // 填充以太网头
         {
@@ -95,7 +95,7 @@ pub fn input(packet: &[u8]) {
             let my_mac = MY_MAC.lock();
             arp_r.sender_mac.copy_from_slice(&*my_mac);
         }
-        arp_r.sender_ip = MY_IP.to_be();
+        arp_r.sender_ip = my_ip().to_be();
         arp_r.target_mac.copy_from_slice(&arp.sender_mac);
         arp_r.target_ip = sender_ip.to_be();
 
@@ -125,7 +125,7 @@ pub fn request(dst_ip: u32) {
         let my_mac = MY_MAC.lock();
         arp.sender_mac.copy_from_slice(&*my_mac);
     }
-    arp.sender_ip = MY_IP.to_be();
+    arp.sender_ip = my_ip().to_be();
     arp.target_mac = [0; 6];
     arp.target_ip = dst_ip.to_be();
 

@@ -4,6 +4,7 @@ pub mod arp;
 pub mod ip;
 pub mod icmp;
 pub mod udp;
+pub mod tcp;
 pub mod socket;
 
 use virtio_net::VirtioNet;
@@ -35,6 +36,7 @@ pub fn poll() {
             eth::input(&buf[hdr_len..n]);
         }
     }
+    tcp::tick();
 }
 /// 供 UDP/IP 层发送时获取网卡引用（调用者已持有锁或确保单核执行）
 pub fn with_net<F, R>(f: F) -> R

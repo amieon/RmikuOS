@@ -18,6 +18,7 @@ extern "C" {
 #include "fmt.h"
 #include "arch.h"
 #include "signal.h"
+#include "net.h"
 
 
 #ifdef __cplusplus
