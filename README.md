@@ -51,6 +51,27 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 
 ---
 
+
+
+## 环境搭建
+
+### Docker(推荐)
+```bash
+docker build -t rmikuos-dev .
+docker run -it --rm -v $(pwd):/work -p 8080:8080 rmikuos-dev
+```
+&gt; 构建默认使用本地 cross-tools/ 目录中的 loongarch64 工具链。
+&gt; 没有的话,先从 loong64/cross-tools releases(https://github.com/loong64/cross-tools/releases)下载 x86_64 宿主版解压后将 loongarch64-unknown-linux-gnu 里的内容移至./cross-tools,
+
+### 无 Docker
+bash first_run.sh   # 自动装 apt/rustup/工具链
+之后这样就行：
+```bash
+./run.sh riscv64
+./run.sh loongarch64
+```
+---
+
 ## Features
 
 ### Multi-Architecture Support

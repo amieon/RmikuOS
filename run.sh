@@ -100,7 +100,7 @@ case "$ARCH" in
       -drive "file=target/fat-riscv64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-device,drive=blk1"
       -netdev user,id=net0,hostfwd=tcp::8080-:8080
-      -device virtio-net-pci,disable-legacy=on,netdev=net0
+      -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
     )
     ;;
 
@@ -118,7 +118,7 @@ case "$ARCH" in
       -drive "file=target/fat-loongarch64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
       -netdev user,id=net0,hostfwd=tcp::8080-:8080
-      -device virtio-net-pci,disable-legacy=on,netdev=net0
+      -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
     )
     ;;
 esac

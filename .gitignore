@@ -5,3 +5,5 @@
 /kernel/src/loader
 
 /user/rust/target
+
+cross-tools/
