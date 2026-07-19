@@ -33,8 +33,6 @@ pub fn sys_net_sendto(fd: usize, buf: usize, len: usize, ip: usize, port: usize)
 }
 
 /// recvfrom(fd, buf, maxlen, info) -> 实际长度 / 0(超时) / -1
-/// 阻塞式：队列空就自己 poll。info 是用户态 8 字节缓冲区：
-/// [0..4) 源 IP（网络字节序）、[4..6) 源端口（网络字节序）、[6..8) 保留；传 0 表示不关心。
 pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> isize {
     let cap = maxlen.min(2048);
     let mut kbuf = alloc::vec![0u8; cap];
@@ -47,8 +45,8 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
             }
             if info != 0 {
                 let mut raw = [0u8; 8];
-                raw[0..4].copy_from_slice(&src.ip.to_be_bytes());
-                raw[4..6].copy_from_slice(&src.port.to_be_bytes());
+                raw[0..4].copy_from_slice(&src.ip.to_ne_bytes());    // was: to_be_bytes
+                raw[4..6].copy_from_slice(&src.port.to_ne_bytes());  // was: to_be_bytes
                 if write_current_user_bytes(info, &raw).is_none() {
                     return -1;
                 }
@@ -77,8 +75,8 @@ pub fn sys_net_accept(fd: usize, info: usize) -> isize {
         Some((child, remote)) => {
             if info != 0 {
                 let mut raw = [0u8; 8];
-                raw[0..4].copy_from_slice(&remote.ip.to_be_bytes());
-                raw[4..6].copy_from_slice(&remote.port.to_be_bytes());
+                raw[0..4].copy_from_slice(&remote.ip.to_ne_bytes());    // was: to_be_bytes
+                raw[4..6].copy_from_slice(&remote.port.to_ne_bytes());  // was: to_be_bytes
                 if write_current_user_bytes(info, &raw).is_none() {
                     return -1;
                 }

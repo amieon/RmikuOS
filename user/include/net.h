@@ -52,7 +52,7 @@ static inline struct sockaddr_in addr_of(unsigned int ip, unsigned short port) {
 }
 
 /* ---- 与内核 SocketAddr 布局一致的临时结构(accept/recvfrom 回传用) ---- */
-struct net_peer { unsigned int ip; unsigned short port; };
+struct net_peer { unsigned char raw[6]; };
 
 /* ---- socket ---- */
 static inline int socket(int domain, int type, int protocol) {
@@ -81,8 +81,8 @@ static inline int accept(int fd, struct sockaddr_in *addr, socklen_t *len) {
     int ret = syscall3(SYS_NET_ACCEPT, fd, (long)&p, 0);
     if (ret >= 0 && addr) {
         addr->sin_family = AF_INET;
-        addr->sin_addr   = htonl(p.ip);
-        addr->sin_port   = htons(p.port);
+        addr->sin_addr = htonl((unsigned)p.raw[0] << 24 | p.raw[1] << 16 | p.raw[2] << 8 | p.raw[3]);
+        addr->sin_port = htons((p.raw[4] << 8) | p.raw[5]);
     }
     return ret;
 }
@@ -109,8 +109,8 @@ static inline int recvfrom(int fd, void *buf, int len, int flags,
     int ret = syscall6(SYS_NET_RECVFROM, fd, (long)buf, len, (long)&p, 0, 0);
     if (ret >= 0 && src) {
         src->sin_family = AF_INET;
-        src->sin_addr   = htonl(p.ip);
-        src->sin_port   = htons(p.port);
+        src->sin_addr = htonl((unsigned)p.raw[0] << 24 | p.raw[1] << 16 | p.raw[2] << 8 | p.raw[3]);
+        src->sin_port = htons((p.raw[4] << 8) | p.raw[5]);
     }
     return ret;
 }

@@ -19,14 +19,14 @@ const T_ACK: u8 = 5;
 const T_NAK: u8 = 6;
 
 fn build_packet(xid: u32, msg_type: u8, req_ip: Option<u32>, server_id: Option<u32>) -> Vec<u8> {
-    let mut pkt = alloc::vec![0u8; 236 + 4]; // BOOTP 头 + magic cookie
-    pkt[0] = 1; // op: BOOTREQUEST
-    pkt[1] = 1; // htype: Ethernet
-    pkt[2] = 6; // hlen
+    let mut pkt = alloc::vec![0u8; 236 + 64]; // BOOTP 头 + 64 字节 vend 区(slirp 硬性要求 ≥300)
+    pkt[0] = 1;
+    pkt[1] = 1;
+    pkt[2] = 6;
     pkt[4..8].copy_from_slice(&xid.to_be_bytes());
-    pkt[10..12].copy_from_slice(&0x8000u16.to_be_bytes()); // flags: 广播位，要求回复走广播
+    pkt[10..12].copy_from_slice(&0x8000u16.to_be_bytes());
     pkt[28..34].copy_from_slice(my_mac_slice());
-    pkt[236..240].copy_from_slice(&COOKIE);
+    pkt[236..240].copy_from_slice(&COOKIE); 
 
     pkt.extend_from_slice(&[53, 1, msg_type]); // DHCP message type
     if let Some(ip) = req_ip {
@@ -122,7 +122,7 @@ fn wait_reply(fd: usize, xid: u32, want: &[u8], resend: &dyn Fn()) -> Option<Rep
             println!("[dhcp] still waiting, resending...");
             resend();
         }
-        if spins >= 50_000_000 {          // ← 新增:总超时,放弃
+        if spins >= 50_000_000 {        
             log::warn!("[dhcp] timeout, give up");
             return None;
         }
