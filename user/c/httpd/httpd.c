@@ -48,10 +48,16 @@ int main(int argc, char **argv)
         if (http_parse_request(req, &r) < 0) { net_close(cfd); continue; }
         req_count++;
         printf("[httpd] #%d %s %s\n", req_count, r.method, r.path);
+        
 
         struct route_result res = route_handle(r.path, req_count);
-        http_send_response(cfd, res.code, res.status, res.ctype, res.body, res.len);
-        printf("[httpd] #%d served, %d bytes, closing fd=%d\n", req_count, res.len, cfd);
+        if (res.code == 404 && http_try_file(cfd, r.path)) {
+            printf("[httpd] #%d served file %s, fd=%d\n", req_count, r.path, cfd);
+        } else {
+            http_send_response(cfd, res.code, res.status, res.ctype, res.body, res.len);
+            printf("[httpd] #%d served, %d bytes, closing fd=%d\n", req_count, res.len, cfd);
+        }
+
         net_close(cfd);
     }
     return 0;

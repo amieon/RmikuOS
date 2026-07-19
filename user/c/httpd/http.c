@@ -1,5 +1,16 @@
 #include "http.h"
 
+
+/* 通用文件路由:找到则发送并返回 1,找不到返回 0 */
+int http_try_file(int cfd, const char *path)
+{
+    int n = http_load_file(path, serve_buf, SERVE_CAP);
+    if (n <= 0) return 0;
+    http_send_response(cfd, 200, "OK", "application/octet-stream", serve_buf, n);
+    return 1;
+}
+
+
 /* 解析 "GET /path HTTP/1.1\r\n" 请求行，头部其余字段一律忽略 */
 int http_parse_request(const char *buf, struct http_request *req) {
 

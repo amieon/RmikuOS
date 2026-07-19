@@ -3,10 +3,13 @@
 #define HTTPD_PORT   8080
 #define REQ_BUF_SIZE 4096
 #define HTTP_FILE_CAP 16384*4
+#define SERVE_CAP (200 * 1024)
+static char serve_buf[SERVE_CAP];
 
 extern char http_file_buf[HTTP_FILE_CAP];
 extern int  http_file_len;
 
+int http_try_file(int cfd, const char *path);
 int  http_load_file(const char *path, char *buf, int cap);
 void http_send_file(int fd, const char *body, int len);
 #include "user.h"
