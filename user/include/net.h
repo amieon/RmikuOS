@@ -51,8 +51,10 @@ static inline struct sockaddr_in addr_of(unsigned int ip, unsigned short port) {
     return a;
 }
 
-/* ---- 与内核 SocketAddr 布局一致的临时结构(accept/recvfrom 回传用) ---- */
-struct net_peer { unsigned char raw[6]; };
+/* ---- 与内核 info 缓冲一致的临时结构(accept/recvfrom 回传用) ----
+ * 注意:内核侧固定写入 8 字节(ip 4B + port 2B + 预留 2B),
+ * 这里必须也是 8 字节,否则越界踩栈。 */
+struct net_peer { unsigned char raw[8]; };
 
 /* ---- socket ---- */
 static inline int socket(int domain, int type, int protocol) {
@@ -80,9 +82,16 @@ static inline int accept(int fd, struct sockaddr_in *addr, socklen_t *len) {
     (void)len;
     int ret = syscall3(SYS_NET_ACCEPT, fd, (long)&p, 0);
     if (ret >= 0 && addr) {
+        /* 内核写回主机序(to_ne_bytes,小端:低字节在前),按小端拼回再转网络序 */
+        unsigned int ip = (unsigned)p.raw[0]
+                        | ((unsigned)p.raw[1] << 8)
+                        | ((unsigned)p.raw[2] << 16)
+                        | ((unsigned)p.raw[3] << 24);
+        unsigned short port = (unsigned short)((unsigned)p.raw[4]
+                        | ((unsigned)p.raw[5] << 8));
         addr->sin_family = AF_INET;
-        addr->sin_addr = htonl((unsigned)p.raw[0] << 24 | p.raw[1] << 16 | p.raw[2] << 8 | p.raw[3]);
-        addr->sin_port = htons((p.raw[4] << 8) | p.raw[5]);
+        addr->sin_addr   = htonl(ip);
+        addr->sin_port   = htons(port);
     }
     return ret;
 }
@@ -108,9 +117,16 @@ static inline int recvfrom(int fd, void *buf, int len, int flags,
     (void)flags; (void)slen;
     int ret = syscall6(SYS_NET_RECVFROM, fd, (long)buf, len, (long)&p, 0, 0);
     if (ret >= 0 && src) {
+        /* 与 accept 相同:小端拼回主机序,再转网络序填 sockaddr_in */
+        unsigned int ip = (unsigned)p.raw[0]
+                        | ((unsigned)p.raw[1] << 8)
+                        | ((unsigned)p.raw[2] << 16)
+                        | ((unsigned)p.raw[3] << 24);
+        unsigned short port = (unsigned short)((unsigned)p.raw[4]
+                        | ((unsigned)p.raw[5] << 8));
         src->sin_family = AF_INET;
-        src->sin_addr = htonl((unsigned)p.raw[0] << 24 | p.raw[1] << 16 | p.raw[2] << 8 | p.raw[3]);
-        src->sin_port = htons((p.raw[4] << 8) | p.raw[5]);
+        src->sin_addr   = htonl(ip);
+        src->sin_port   = htons(port);
     }
     return ret;
 }
@@ -149,14 +165,6 @@ static inline unsigned int parse_ip(const char *s) {
     return v;
 }
 
-static inline char* ip_to_string(unsigned int ip, char *buf) {
-    sprintf(buf, "%u.%u.%u.%u",
-            (ip >> 24) & 0xFF,
-            (ip >> 16) & 0xFF,
-            (ip >> 8)  & 0xFF,
-            ip & 0xFF);
-    return buf;
-}
 
 #ifdef __cplusplus
 }
