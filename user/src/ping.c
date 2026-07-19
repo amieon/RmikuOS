@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     struct sockaddr_in gw = addr_of(target, 0); 
     
 
-    struct sockaddr_in gw = addr_of(0x0A000202, 0);   // 10.0.2.2 网关(ICMP 无端口)
+    //struct sockaddr_in gw = addr_of(0x0A000202, 0);   // 10.0.2.2 网关(ICMP 无端口)
     int sent = 0, rcvd = 0;
 
     for (int seq = 1; seq <= 4; seq++) {
@@ -58,7 +58,7 @@ int main(int argc, char **argv)
                     unsigned ip = ntohl(from.sin_addr);
                     unsigned char *p = (unsigned char *)&from.sin_addr;
                     printf("64 bytes from %u.%u.%u.%u: icmp_seq=%d time=%d ticks\n",
-                        p[0], p[1], p[2], p[3], seq, rtt);
+                        p[0], p[1], p[2], p[3], seq, get_ticks() - t0);
                     // printf("64 bytes from %u.%u.%u.%u: icmp_seq=%d time=%lu ticks\n",
                     //        (ip>>24)&0xff, (ip>>16)&0xff, (ip>>8)&0xff, ip&0xff,
                     //        seq, get_ticks() - t0);
