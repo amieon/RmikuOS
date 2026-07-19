@@ -3,8 +3,8 @@ use crate::drivers::net::tcp;
 use crate::task::{read_current_user_bytes, write_current_user_bytes};
 
 
-pub fn sys_net_socket(stype: usize) -> isize {
-    match socket::socket_create(stype) {
+pub fn sys_net_socket(stype: usize,protocol:usize) -> isize {
+    match socket::socket_create(stype,protocol) {
         Some(fd) => fd as isize,
         None => -1,
     }

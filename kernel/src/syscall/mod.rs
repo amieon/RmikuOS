@@ -170,7 +170,7 @@ pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GET_TIME => arch::sys_arch_time(),
         SYSCALL_HARTID => arch::sys_hartid(),
 
-        SYSCALL_NET_SOCKET => net::sys_net_socket(args[0]),
+        SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),
         SYSCALL_NET_SENDTO => net::sys_net_sendto(args[0], args[1], args[2], args[3], args[4]),
         SYSCALL_NET_RECVFROM => net::sys_net_recvfrom(args[0], args[1], args[2], args[3]),
