@@ -24,5 +24,6 @@ ext4-view = { version = "0.9.3", default-features = false }
 fatfs = { path = "third_party/fatfs", default-features = false, features = ["alloc", "lfn"] }
 
 [features]
+pair-net = []
 oscomp = []
 

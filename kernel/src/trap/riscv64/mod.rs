@@ -63,7 +63,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     if cx.is_interrupt() {
         match code {
             INTERRUPT_SUPERVISOR_TIMER => {
-                crate::drivers::net::poll();
+                crate::drivers::net::on_timer_tick();
                 let should_schedule = crate::timer::tick();
 
                 if cx.is_from_user() {
@@ -116,6 +116,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             let args = [cx.x[10], cx.x[11], cx.x[12],cx.x[13], cx.x[14], cx.x[15]];
             cx.x[10] = handle_syscall(syscall_id, args) as usize;
             crate::task::do_signal();
+            crate::drivers::net::maybe_poll();
         }
 
         CAUSE_S_ECALL => {

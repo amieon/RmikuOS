@@ -100,6 +100,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
             let args = [cx.r[4], cx.r[5], cx.r[6], cx.r[7], cx.r[8], cx.r[9]]; // a0, a1, a2
             cx.r[4] = handle_syscall(syscall_id, args) as usize; // return in a0
             crate::task::do_signal();
+            crate::drivers::net::maybe_poll();
         }
         ECODE_BRK => {
             trap_println!("[trap] breakpoint at era={:#x}", cx.era);
@@ -171,7 +172,7 @@ fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
 
     if pending & ESTAT_IS_TIMER != 0 {
-        crate::drivers::net::poll();
+        crate::drivers::net::on_timer_tick();
         let from_user = cx.is_from_user();
 
         let should_schedule =

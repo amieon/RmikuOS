@@ -198,6 +198,8 @@ fn primary_init(id: usize) -> ! {
     timer::init();
 
     drivers::net::init();
+    
+    #[cfg(not(feature = "pair-net"))]
     drivers::net::dhcp::dhcp_test();
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);

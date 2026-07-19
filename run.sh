@@ -6,6 +6,9 @@ cargo clean
 
 ARCH="${1:-riscv64}"
 MODE="${2:-debug}"
+NET="${3:-user}"
+
+
 
 case "$ARCH" in
   riscv64)
@@ -27,6 +30,40 @@ case "$MODE" in
   *)
     echo "用法: $0 [riscv64|loongarch64] [release|debug]" >&2
     exit 1
+    ;;
+esac
+
+
+case "$NET" in
+  user|pair-a|pair-b) ;;
+  *)
+    echo "用法: $0 [riscv64|loongarch64] [release|debug] [user|pair-a|pair-b]" >&2
+    exit 1
+    ;;
+esac
+
+# 网络后端: user=slirp(默认); pair-a/pair-b=两台直联互 ping
+case "$NET" in
+  user)
+    NET_ARGS=(
+      -netdev user,id=net0,hostfwd=tcp::8080-:8080
+      -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
+      -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap
+    )
+    ;;
+  pair-a)
+    NET_ARGS=(
+      -netdev socket,id=net0,listen=:1234
+      -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile=,mac=52:54:00:00:00:0A"
+      -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku-a.pcap
+    )
+    ;;
+  pair-b)
+    NET_ARGS=(
+      -netdev socket,id=net0,connect=127.0.0.1:1234
+      -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile=,mac=52:54:00:00:00:0B"
+      -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku-b.pcap
+    )
     ;;
 esac
 
@@ -73,10 +110,20 @@ LOG_LEVEL="${LOG:-warn}"
 
 echo "=== 编译内核 ($ARCH, $MODE, LOG=$LOG_LEVEL) ==="
 
+
+
 if [ "$MODE" = "release" ]; then
-  LOG="$LOG_LEVEL" cargo build --target "$TARGET" --release
+  if [ "$NET" = "user" ]; then      
+    LOG="$LOG_LEVEL" cargo build --target "$TARGET" --release
+  else
+    LOG="$LOG_LEVEL" cargo build --target "$TARGET" --release --features pair-net
+  fi
 else
-  LOG="$LOG_LEVEL" cargo build --target "$TARGET"
+  if [ "$NET" = "user" ]; then      
+    LOG="$LOG_LEVEL" cargo build --target "$TARGET"
+  else
+    LOG="$LOG_LEVEL" cargo build --target "$TARGET" --features pair-net
+  fi
 fi
 
 KERNEL_ELF="target/$TARGET/$MODE/RmikuOS"
@@ -99,9 +146,7 @@ case "$ARCH" in
       -device "virtio-blk-device,drive=blk0"
       -drive "file=target/fat-riscv64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-device,drive=blk1"
-      -netdev user,id=net0,hostfwd=tcp::8080-:8080
-      -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
-      -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap
+      "${NET_ARGS[@]}"
     )
     ;;
 
@@ -118,15 +163,13 @@ case "$ARCH" in
       -device "virtio-blk-pci,drive=blk0,disable-legacy=on"
       -drive "file=target/fat-loongarch64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
-      -netdev user,id=net0,hostfwd=tcp::8080-:8080
-      -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
-      -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap
+      "${NET_ARGS[@]}"
     )
     ;;
 esac
 
 echo
-echo "=== 启动 QEMU ($ARCH, mode=$MODE) ==="
+echo "=== 启动 QEMU ($ARCH, mode=$MODE, net=$NET) ==="
 echo "KERNEL: $KERNEL_ELF"
 echo
 
