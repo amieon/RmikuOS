@@ -18,10 +18,13 @@ pub const RST: u8 = 0x04;
 pub const PSH: u8 = 0x08;
 pub const ACK: u8 = 0x10;
 
-const RTO_BASE_MS: u64 = 1_000;
-const RTO_MAX_MS: u64 = 16_000;
+// ---------- RTO 常量(RFC 6298 / Jacobson) ----------
+const INITIAL_RTO_MS: u64 = 1_000; // RFC 6298 §2.1:无样本时的初始 RTO
+const RTO_MIN_MS: u64 = 200;       // RFC 建议 1s;QEMU 近零 RTT 场景取 200ms
+const RTO_MAX_MS: u64 = 16_000;    // 退避上限(RFC 为 60s,教学版收紧)
+const RTT_G_MS: u64 = 10;          // G:时钟粒度余量
 const MAX_RETRIES: u8 = 8;
-const TIME_WAIT_MS: u64 = 10_000; // 标准是 2MSL=60s，教学版取 10s
+const TIME_WAIT_MS: u64 = 10_000; // 标准是 2MSL=60s,教学版取 10s
 const MAX_PAYLOAD: usize = 1460;
 
 #[repr(C, packed)]
@@ -57,6 +60,8 @@ pub struct TxSeg {
     pub seq: u32,
     pub flags: u8,
     pub data: Vec<u8>,
+    pub sent_ms: u64,        // 最近一次发出的时间戳(Karn:仅未重传时用于采样)
+    pub retransmitted: bool, // Karn 规则一:重传过的段不采样
 }
 
 impl TxSeg {
@@ -64,6 +69,9 @@ impl TxSeg {
         let cost = self.data.len() as u32
             + if self.flags & (SYN | FIN) != 0 { 1 } else { 0 };
         self.seq.wrapping_add(cost)
+    }
+    fn new(seq: u32, flags: u8, data: Vec<u8>) -> Self {
+        Self { seq, flags, data, sent_ms: now_ms(), retransmitted: false }
     }
 }
 
@@ -80,6 +88,10 @@ pub struct TcpSocket {
     pub rto_deadline: u64,
     pub rto_ms: u64,
     pub retries: u8,
+    // --- Jacobson 估值器(定点):srtt 放大 8 倍、rttvar 放大 4 倍存储 ---
+    pub srtt: u64,
+    pub rttvar: u64,
+    pub has_rtt: bool,
     pub time_wait_deadline: u64,
     pub accept_queue: VecDeque<usize>, // listen 用：已 established 的子连接 fd
     pub parent: Option<usize>,         // 子连接用：listener 的 fd
@@ -99,14 +111,47 @@ impl TcpSocket {
             tx_unacked: VecDeque::new(),
             rx_queue: VecDeque::new(),
             rto_deadline: 0,
-            rto_ms: RTO_BASE_MS,
+            rto_ms: INITIAL_RTO_MS,
             retries: 0,
+            srtt: 0,
+            rttvar: 0,
+            has_rtt: false,
             time_wait_deadline: 0,
             accept_queue: VecDeque::new(),
             parent: None,
             rst: false,
         }
     }
+}
+
+// ---------- RTT 估计:Jacobson 算法(RFC 6298),定点整数实现 ----------
+//
+// SRTT   = (1-α)·SRTT + α·R,        α = 1/8  → 除法即右移 3 位
+// RTTVAR = (1-β)·RTTVAR + β·|SRTT−R|, β = 1/4 → 右移 2 位
+// RTO    = SRTT + max(G, K·RTTVAR), K = 4(rttvar 已 ×4 存储,天然满足)
+//
+// Karn 算法两条:
+//   1. 重传过的段不产生 RTT 样本(ACK 歧义:无法区分是对原发还是重传的确认);
+//   2. 退避后的 RTO 要保持到下一个「干净样本」出现才允许回落。
+
+fn rtt_update(t: &mut TcpSocket, r: u64) {
+    if !t.has_rtt {
+        // RFC 6298 §2.2:首个样本 SRTT=R, RTTVAR=R/2
+        t.has_rtt = true;
+        t.srtt = r << 3;   // ×8
+        t.rttvar = r << 1; // R/2 再 ×4 = 2R
+    } else {
+        // RFC 6298 §2.3
+        let delta = (r as i64 - (t.srtt >> 3) as i64).unsigned_abs();
+        t.rttvar = t.rttvar + delta - (t.rttvar >> 2);
+        t.srtt = (t.srtt as i64 + (r as i64 - (t.srtt >> 3) as i64)) as u64;
+    }
+    t.rto_ms = ((t.srtt >> 3) + core::cmp::max(RTT_G_MS, t.rttvar))
+        .clamp(RTO_MIN_MS, RTO_MAX_MS);
+    log::info!(
+        "[tcp] rtt sample={}ms srtt={}ms rttvar={}ms rto={}ms",
+        r, t.srtt >> 3, t.rttvar >> 2, t.rto_ms
+    );
 }
 
 fn as_tcp(s: &Socket) -> Option<&TcpSocket> {
@@ -166,20 +211,28 @@ fn alloc_slot(table: &[Option<Socket>; 8]) -> Option<usize> {
 }
 
 fn process_ack(t: &mut TcpSocket, ack: u32) {
+    let now = now_ms();
     let mut progress = false;
+    let mut clean_sample: Option<u64> = None; // 本 ACK 确认的最近一个未重传段
     while let Some(seg) = t.tx_unacked.front() {
         if ack >= seg.end_seq() {   // 教学简化：不考虑序号绕回
             t.snd_una = seg.end_seq();
-            t.tx_unacked.pop_front();
+            let seg = t.tx_unacked.pop_front().unwrap();
+            if !seg.retransmitted {
+                clean_sample = Some(now.saturating_sub(seg.sent_ms));
+            }
             progress = true;
         } else {
             break;
         }
     }
     if progress {
-        t.rto_ms = RTO_BASE_MS;
         t.retries = 0;
-        t.rto_deadline = if t.tx_unacked.is_empty() { 0 } else { now_ms() + t.rto_ms };
+        if let Some(r) = clean_sample {
+            rtt_update(t, r); // 干净样本:更新估值并重算 RTO(解除退避)
+        }
+        // 无干净样本(Karn 规则二):保持当前(可能已退避加倍的)rto_ms 不动
+        t.rto_deadline = if t.tx_unacked.is_empty() { 0 } else { now + t.rto_ms };
     }
 }
 
@@ -249,7 +302,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
         child.snd_una = isn;
         child.snd_nxt = isn.wrapping_add(1);
         child.rcv_nxt = seq.wrapping_add(1);
-        child.tx_unacked.push_back(TxSeg { seq: isn, flags: SYN | ACK, data: Vec::new() });
+        child.tx_unacked.push_back(TxSeg::new(isn, SYN | ACK, Vec::new()));
         child.rto_deadline = now_ms() + child.rto_ms;
         table[child_idx] = Some(Socket::Tcp(child));
         send_segment(dst_port, remote, isn, seq.wrapping_add(1), SYN | ACK, &[]);
@@ -275,7 +328,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                 TcpState::SynSent => {
                     if flags & (SYN | ACK) == SYN | ACK && ack == t.snd_nxt {
                         t.rcv_nxt = seq.wrapping_add(1);
-                        process_ack(t, ack);
+                        process_ack(t, ack); // SYN 的 RTT 即首个样本
                         let (lp, r) = (t.local_port, t.remote.unwrap());
                         let (sn, rn) = (t.snd_nxt, t.rcv_nxt);
                         send_segment(lp, r, sn, rn, ACK, &[]);
@@ -366,29 +419,31 @@ pub fn tick() {
                     free = true;
                 }
             } else if t.state != TcpState::Closed && t.rto_deadline != 0 && now >= t.rto_deadline {
-                let front = t.tx_unacked.front();
-                match (front, t.remote) {
-                    (Some(seg), Some(remote)) => {
-                        // clone 一份避免借用冲突，段很小，教学可接受
-                        let (seq, flags, data) = (seg.seq, seg.flags, seg.data.clone());
-                        let (lp, rn) = (t.local_port, t.rcv_nxt);
-                        send_segment(lp, remote, seq, rn, flags, &data);
-                        t.retries = t.retries.saturating_add(1);
-                        log::warn!("[tcp] rtx seq={} retry={} rto={}", seq, t.retries, t.rto_ms);
-                        t.rto_ms = (t.rto_ms * 2).min(RTO_MAX_MS);
-                        t.rto_deadline = now + t.rto_ms;
-                        if t.retries > MAX_RETRIES {
-                            t.rto_deadline = 0;  
-                            if t.state == TcpState::SynReceived {
-                                free = true; // 半开子连接直接回收
-                            } else {
-                                t.state = TcpState::Closed;
-                                t.rst = true;
-                                t.rx_queue.push_back(Vec::new());
-                            }
+                if t.remote.is_some() && !t.tx_unacked.is_empty() {
+                    let remote = t.remote.unwrap();
+                    let seg = t.tx_unacked.front_mut().unwrap();
+                    seg.retransmitted = true; // Karn:此段此后不再贡献 RTT 样本
+                    seg.sent_ms = now;
+                    // clone 一份避免借用冲突，段很小，教学可接受
+                    let (seq, flags, data) = (seg.seq, seg.flags, seg.data.clone());
+                    let (lp, rn) = (t.local_port, t.rcv_nxt);
+                    send_segment(lp, remote, seq, rn, flags, &data);
+                    t.retries = t.retries.saturating_add(1);
+                    log::warn!("[tcp] rtx seq={} retry={} rto={}", seq, t.retries, t.rto_ms);
+                    t.rto_ms = (t.rto_ms * 2).min(RTO_MAX_MS); // 指数退避
+                    t.rto_deadline = now + t.rto_ms;
+                    if t.retries > MAX_RETRIES {
+                        t.rto_deadline = 0;
+                        if t.state == TcpState::SynReceived {
+                            free = true; // 半开子连接直接回收
+                        } else {
+                            t.state = TcpState::Closed;
+                            t.rst = true;
+                            t.rx_queue.push_back(Vec::new());
                         }
                     }
-                    _ => t.rto_deadline = 0,
+                } else {
+                    t.rto_deadline = 0;
                 }
             }
         }
@@ -419,7 +474,7 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
         t.snd_nxt = isn.wrapping_add(1);
         t.rcv_nxt = 0;
         t.state = TcpState::SynSent;
-        t.tx_unacked.push_back(TxSeg { seq: isn, flags: SYN, data: Vec::new() });
+        t.tx_unacked.push_back(TxSeg::new(isn, SYN, Vec::new()));
         t.rto_deadline = now_ms() + t.rto_ms;
         let lp = t.local_port;
         drop(table);
@@ -445,9 +500,9 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
             log::warn!("[tcp] connect timeout");
             return -1;
         }
-        
+
     }
-    
+
 }
 
 pub fn listen(fd: usize) -> isize {
@@ -504,7 +559,7 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
     let len = data.len().min(MAX_PAYLOAD).min(t.snd_wnd as usize);
     let seq = t.snd_nxt;
     t.snd_nxt = t.snd_nxt.wrapping_add(len as u32);
-    t.tx_unacked.push_back(TxSeg { seq, flags: ACK | PSH, data: data[..len].to_vec() });
+    t.tx_unacked.push_back(TxSeg::new(seq, ACK | PSH, data[..len].to_vec()));
     if t.rto_deadline == 0 {
         t.rto_deadline = now_ms() + t.rto_ms;
     }
@@ -551,7 +606,7 @@ pub fn close(fd: usize) -> isize {
             TcpState::Established => {
                 let seq = t.snd_nxt;
                 t.snd_nxt = t.snd_nxt.wrapping_add(1);
-                t.tx_unacked.push_back(TxSeg { seq, flags: FIN | ACK, data: Vec::new() });
+                t.tx_unacked.push_back(TxSeg::new(seq, FIN | ACK, Vec::new()));
                 if t.rto_deadline == 0 {
                     t.rto_deadline = now_ms() + t.rto_ms;
                 }
@@ -562,7 +617,7 @@ pub fn close(fd: usize) -> isize {
             TcpState::CloseWait => {
                 let seq = t.snd_nxt;
                 t.snd_nxt = t.snd_nxt.wrapping_add(1);
-                t.tx_unacked.push_back(TxSeg { seq, flags: FIN | ACK, data: Vec::new() });
+                t.tx_unacked.push_back(TxSeg::new(seq, FIN | ACK, Vec::new()));
                 if t.rto_deadline == 0 {
                     t.rto_deadline = now_ms() + t.rto_ms;
                 }
