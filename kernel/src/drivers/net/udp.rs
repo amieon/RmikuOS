@@ -67,7 +67,8 @@ pub fn send(dst_ip: u32, src_port: u16, dst_port: u16, data: &[u8]) {
     hdr.len = (udp_len as u16).to_be();
     hdr.checksum = 0;
     pkt.extend_from_slice(data);
-
+    let len = pkt.len();
+    log::info!("[udp] drop dst_port={} len={}", dst_port, len);
     let csum = udp_checksum(my_ip(), dst_ip, &pkt);
     unsafe {
         core::ptr::write_unaligned(core::ptr::addr_of_mut!((*hdr).checksum), csum.to_be());

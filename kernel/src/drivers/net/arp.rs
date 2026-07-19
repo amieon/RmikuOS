@@ -73,6 +73,7 @@ pub fn input(packet: &[u8]) {
 
     insert(sender_ip, &arp.sender_mac);
     crate::drivers::net::ip::on_arp_learned(sender_ip,  arp.sender_mac);
+    log::info!("[arp] learned {:#x}", sender_ip);
 
     if opcode == 1 && target_ip == my_ip() {
         let mut reply = [0u8; 42];
@@ -128,7 +129,7 @@ pub fn request(dst_ip: u32) {
     arp.sender_ip = my_ip().to_be();
     arp.target_mac = [0; 6];
     arp.target_ip = dst_ip.to_be();
-
+    log::info!("[arp] who-has {:#x}", dst_ip);
     with_net(|net| net.send(&pkt));
 }
 

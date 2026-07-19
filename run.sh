@@ -42,11 +42,12 @@ case "$NET" in
     ;;
 esac
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 网络后端: user=slirp(默认); pair-a/pair-b=两台直联互 ping
 case "$NET" in
   user)
     NET_ARGS=(
-      -netdev user,id=net0,hostfwd=tcp::8080-:8080
+      -netdev user,id=net0,hostfwd=tcp::8080-:8080,tftp="$SCRIPT_DIR/tftpboot"
       -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
       -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap
     )
