@@ -11,10 +11,17 @@ pub struct EthHeader {
     pub ethertype: u16,
 }
 
-pub static MY_MAC: Mutex<[u8; 6]> = Mutex::new([0x52, 0x54, 0x00, 0x12, 0x34, 0x56]);
+pub static MY_MAC: Mutex<[u8; 6]> = Mutex::new([0x52, 0x54, 0x00, 0x12, 0x34, 0x56]); // 初值只是兜底
 
-pub fn my_mac_slice() -> &'static [u8] {
-    &[0x52, 0x54, 0x00, 0x12, 0x34, 0x56] // 如果是静态常量
+pub fn set_my_mac(mac: [u8; 6]) {
+    *MY_MAC.lock() = mac;
+    log::info!("[eth] MAC = {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+/// 按值返回,替代旧的 my_mac_slice()
+pub fn my_mac() -> [u8; 6] {
+    *MY_MAC.lock()
 }
 
 pub fn send(dst_mac: &[u8; 6], ethertype: u16, payload: &[u8]) {
