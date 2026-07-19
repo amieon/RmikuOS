@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use log::logger;
 
 use crate::arch::ipi;                    // 新增：IPI 发送接口
-use crate::lock_detect;
+use crate::{lock_detect, println};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
 use crate::sync::spin::Mutex;
@@ -74,7 +74,7 @@ pub fn run_first_task() -> ! {
 pub fn run_tasks() -> ! {
     let hart = processor::current_hart_id();
     loop {
-        crate::drivers::net::poll();
+        //crate::drivers::net::poll();
         let next_tid = {
             let mut manager = lock_detect!(TASK_MANAGER);  // lock 内部已 preempt_disable
             let now = crate::timer::ticks();

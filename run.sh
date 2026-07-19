@@ -101,6 +101,7 @@ case "$ARCH" in
       -device "virtio-blk-device,drive=blk1"
       -netdev user,id=net0,hostfwd=tcp::8080-:8080
       -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
+      -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap
     )
     ;;
 
@@ -119,6 +120,7 @@ case "$ARCH" in
       -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
       -netdev user,id=net0,hostfwd=tcp::8080-:8080
       -device "virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
+      -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap
     )
     ;;
 esac

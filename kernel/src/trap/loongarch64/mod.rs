@@ -171,6 +171,7 @@ fn handle_interrupt(cx: &mut TrapContext) {
     let pending = cx.interrupt_pending_bits();
 
     if pending & ESTAT_IS_TIMER != 0 {
+        crate::drivers::net::poll();
         let from_user = cx.is_from_user();
 
         let should_schedule =

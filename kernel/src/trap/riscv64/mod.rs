@@ -10,6 +10,8 @@ use core::fmt::{self, Write};
 
 pub use context::TrapContext;
 
+use crate::println;
+
 global_asm!(include_str!("trap.S"));
 
 
@@ -61,6 +63,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     if cx.is_interrupt() {
         match code {
             INTERRUPT_SUPERVISOR_TIMER => {
+                crate::drivers::net::poll();
                 let should_schedule = crate::timer::tick();
 
                 if cx.is_from_user() {

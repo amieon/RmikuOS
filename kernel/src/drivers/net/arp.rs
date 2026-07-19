@@ -67,7 +67,7 @@ pub fn input(packet: &[u8]) {
         return;
     }
     let arp = unsafe { packet.as_ptr().cast::<ArpHeader>().read_unaligned() };
-    let opcode = u16::from_be(arp.opcode);
+    let opcode: u16 = u16::from_be(arp.opcode);
     let sender_ip = u32::from_be(arp.sender_ip);
     let target_ip = u32::from_be(arp.target_ip);
 
