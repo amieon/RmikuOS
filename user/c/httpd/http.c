@@ -2,6 +2,7 @@
 
 /* 解析 "GET /path HTTP/1.1\r\n" 请求行，头部其余字段一律忽略 */
 int http_parse_request(const char *buf, struct http_request *req) {
+
     int i = 0, j = 0;
     while (buf[i] && buf[i] != ' ' && j < 7) req->method[j++] = buf[i++];
     req->method[j] = 0;
@@ -19,7 +20,8 @@ int http_recv_request(int fd, char *buf, int cap)
 {
     int used = 0;
     while (used < cap - 1) {
-        int n = net_recv(fd, buf + used, cap - 1 - used);
+
+        int n = recv(fd, buf + used, cap - 1 - used, 0);
         if (n <= 0)
             break;                    // 0=超时/EOF,-1=RST:都不值得等
         used += n;
@@ -37,7 +39,9 @@ int http_send_all(int fd, const char *buf, int len)
     int sent = 0;
     while (sent < len) {
         int chunk = (len - sent > 1400) ? 1400 : len - sent;
-        int n = net_send(fd, buf + sent, chunk);
+        
+
+        int n = send(fd, buf + sent, chunk, 0);
        // uprintf("[http] send %d..%d -> %d\n", sent, sent + chunk, n);
         if (n <= 0) {
             uprintf("[http] STALLED at %d/%d\n", sent, len);

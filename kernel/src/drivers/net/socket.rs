@@ -52,7 +52,7 @@ pub enum Socket {
 
 /// socket 表，固定 8 槽；stype: 1 = TCP(STREAM)，2 = UDP(DGRAM)
 pub static SOCKET_TABLE: Mutex<[Option<Socket>; SOCKET_TABLE_SIZE]> = Mutex::new([
-    None; SOCKET_TABLE_SIZE
+    None, None, None, None, None, None, None, None
 ]);
 
 /// stype: 1 = TCP, 2 = UDP, 3 = RAW(protocol 目前只支持 1=ICMP)
@@ -81,7 +81,7 @@ pub fn socket_bind(fd: usize, port: u16) -> bool {
         let p = match s {
             Socket::Udp(u) => u.local_port,
             Socket::Tcp(t) => t.local_port,
-            Socket::Raw(r) => r.local_port,
+            Socket::Raw(_) => return false,
         };
         if p == port {
             return false;

@@ -11,7 +11,7 @@ struct IcmpHeader {
 }
 
 pub fn input(packet: &[u8], src_ip: u32) {
-    crate::socket::deliver_raw(1, src_ip, packet);
+    super::socket::deliver_raw(1, src_ip, packet);
     if packet.len() < core::mem::size_of::<IcmpHeader>() {
         return;
     }

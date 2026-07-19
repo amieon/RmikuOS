@@ -122,11 +122,15 @@ fn wait_reply(fd: usize, xid: u32, want: &[u8], resend: &dyn Fn()) -> Option<Rep
             println!("[dhcp] still waiting, resending...");
             resend();
         }
+        if spins >= 50_000_000 {          // ← 新增:总超时,放弃
+            log::warn!("[dhcp] timeout, give up");
+            return None;
+        }
     }
 }
 
 pub fn dhcp_test() {
-    let fd = match socket::socket_create(2) { // 2 = UDP
+    let fd = match socket::socket_create(2,0) { // 2 = UDP
         Some(f) => f,
         None => {
             log::warn!("[dhcp] socket table full");
