@@ -110,6 +110,18 @@ pub fn on_arp_learned(ip: u32, mac: [u8; 6]) {
     }
 }
 
+pub const GATEWAY: u32 = 0x0A00_0202; // 10.0.2.2,仅 slirp 模式有意义
+const NETMASK: u32 = 0xFFFF_FF00;     // 按 /24 判断同网段
+/// 同网段直接解析目的地址;跨网段才走网关
+pub fn next_hop(dst: u32) -> u32 {
+    let my = my_ip();
+    if dst == 0xFFFF_FFFF || (dst & NETMASK) == (my & NETMASK) {
+        dst
+    } else {
+        GATEWAY // 现有的网关常量,0x0A000202
+    }
+}
+
 pub fn send(dst_ip: u32, protocol: u8, payload: &[u8]) {
     let ip_len = core::mem::size_of::<IpHeader>() + payload.len();
     let mut pkt = alloc::vec::Vec::with_capacity(ip_len);
@@ -136,10 +148,16 @@ pub fn send(dst_ip: u32, protocol: u8, payload: &[u8]) {
     }
 
     let mut dst_mac = [0u8; 6];
-    if !arp::lookup(dst_ip, &mut dst_mac) {
+    if dst_ip == 0xFFFF_FFFF {
+        eth_send(&[0xFF; 6], 0x0800, &pkt);
+        return;
+    }
+    let nh = next_hop(dst_ip);
+    log::info!("[ip] send dst={:#010x} nh={:#010x}", dst_ip, nh);
+    if !arp::lookup(next_hop(dst_ip), &mut dst_mac) {
         // ARP 未命中：挂起完整 IP 包，reply 到了由 on_arp_learned 补发（原来在这里直接丢包）
-        enqueue_pending(dst_ip, &pkt);
-        arp::request(dst_ip);
+        enqueue_pending(next_hop(dst_ip), &pkt);
+        arp::request(next_hop(dst_ip));
         return;
     }
     eth_send(&dst_mac, 0x0800, &pkt);
