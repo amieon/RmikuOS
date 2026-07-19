@@ -38,7 +38,7 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
     let mut kbuf = alloc::vec![0u8; cap];
     let mut spins = 0usize;
     loop {
-        crate::drivers::net::poll();
+        crate::drivers::net::maybe_poll(); 
         if let Some((src, n)) = socket::socket_recvfrom(fd, &mut kbuf) {
             if write_current_user_bytes(buf, &kbuf[..n]).is_none() {
                 return -1;
@@ -135,4 +135,8 @@ pub fn sys_net_set_ip(ip: usize) -> isize {
     let (a, b, c, d) = (ip >> 24 & 0xff, ip >> 16 & 0xff, ip >> 8 & 0xff, ip & 0xff);
     log::info!("[ip] MY_IP {:#010x} -> {}.{}.{}.{}", old, a, b, c, d);
     0
+}
+
+pub fn sys_net_get_ip() -> isize {
+    crate::drivers::net::ip::my_ip() as isize
 }

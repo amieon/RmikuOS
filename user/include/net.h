@@ -124,6 +124,10 @@ static inline int net_close(int fd) {
 static inline int net_set_ip(unsigned int ip) {   /* 主机序 u32 */
     return syscall3(SYS_NET_SET_IP, ip, 0, 0);
 }
+static inline unsigned int net_get_ip() {
+    return (unsigned int)syscall3(SYS_NET_GET_IP, 0, 0, 0);
+}
+
 
 /* "192.168.100.1" -> 主机序 u32;非法返回 0(0.0.0.0 也视为非法,反正没用) */
 static inline unsigned int parse_ip(const char *s) {
@@ -143,6 +147,15 @@ static inline unsigned int parse_ip(const char *s) {
         } else if (*s) return 0;   /* 尾部垃圾 */
     }
     return v;
+}
+
+static inline char* ip_to_string(unsigned int ip, char *buf) {
+    sprintf(buf, "%u.%u.%u.%u",
+            (ip >> 24) & 0xFF,
+            (ip >> 16) & 0xFF,
+            (ip >> 8)  & 0xFF,
+            ip & 0xFF);
+    return buf;
 }
 
 #ifdef __cplusplus
