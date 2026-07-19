@@ -81,7 +81,7 @@ pub fn socket_bind(fd: usize, port: u16) -> bool {
         let p = match s {
             Socket::Udp(u) => u.local_port,
             Socket::Tcp(t) => t.local_port,
-            Socket::Raw(_) => return false,
+            Socket::Raw(_) => continue
         };
         if p == port {
             return false;
@@ -114,21 +114,36 @@ pub fn socket_sendto(fd: usize, dst: SocketAddr, data: &[u8]) -> bool {
     }
 }
 /// UDP 接收，返回 (src, len)
+/// 接收,返回 (src, len);UDP 帧头 6 字节(ip+port),RAW 帧头 4 字节(仅 ip)
 pub fn socket_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
     let mut table = SOCKET_TABLE.lock();
-    if let Some(Some(Socket::Raw(sock))) = table.get_mut(fd) {
-        if let Some(frame) = sock.rx_queue.pop_front() {
-            if frame.len() < 4 { return None; }
+    match table.get_mut(fd) {
+        Some(Some(Socket::Udp(sock))) => {
+            let frame = sock.rx_queue.pop_front()?;
+            if frame.len() < 6 {
+                return None;
+            }
+            let src_ip = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
+            let src_port = u16::from_be_bytes([frame[4], frame[5]]);
+            let data = &frame[6..];
+            let len = data.len().min(buf.len());
+            buf[..len].copy_from_slice(&data[..len]);
+            Some((SocketAddr { ip: src_ip, port: src_port }, len))
+        }
+        Some(Some(Socket::Raw(sock))) => {
+            let frame = sock.rx_queue.pop_front()?;
+            if frame.len() < 4 {
+                return None;
+            }
             let src_ip = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
             let data = &frame[4..];
             let len = data.len().min(buf.len());
             buf[..len].copy_from_slice(&data[..len]);
-            return Some((SocketAddr { ip: src_ip, port: 0 }, len));
+            Some((SocketAddr { ip: src_ip, port: 0 }, len))
         }
+        _ => None,
     }
-    None
 }
-
 /// 把收到的报文副本分发给所有匹配的 RAW socket(在协议层收包路径调用)
 pub fn deliver_raw(protocol: u8, src_ip: u32, data: &[u8]) {
     let mut table = SOCKET_TABLE.lock();
