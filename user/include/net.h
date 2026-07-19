@@ -120,6 +120,31 @@ static inline int net_close(int fd) {
     return syscall3(SYS_NET_CLOSE, fd, 0, 0);
 }
 
+/* SYS_NET_SET_IP 的编号与内核一致 */
+static inline int net_set_ip(unsigned int ip) {   /* 主机序 u32 */
+    return syscall3(SYS_NET_SET_IP, ip, 0, 0);
+}
+
+/* "192.168.100.1" -> 主机序 u32;非法返回 0(0.0.0.0 也视为非法,反正没用) */
+static inline unsigned int parse_ip(const char *s) {
+    unsigned int v = 0;
+    for (int part = 0; part < 4; part++) {
+        unsigned int n = 0, digits = 0;
+        while (*s >= '0' && *s <= '9') {
+            n = n * 10 + (*s - '0');
+            if (n > 255) return 0;
+            s++; digits++;
+        }
+        if (!digits) return 0;
+        v = (v << 8) | n;
+        if (part < 3) {
+            if (*s != '.') return 0;
+            s++;
+        } else if (*s) return 0;   /* 尾部垃圾 */
+    }
+    return v;
+}
+
 #ifdef __cplusplus
 }
 #endif

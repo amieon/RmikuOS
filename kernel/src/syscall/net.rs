@@ -127,3 +127,12 @@ pub fn sys_net_close(fd: usize) -> isize {
         }
     }
 }
+
+/// SYS_NET_SET_IP: 设置本机 IPv4(参数为主机序 u32)
+pub fn sys_net_set_ip(ip: usize) -> isize {
+    let old = crate::drivers::net::ip::my_ip();
+    crate::drivers::net::ip::set_my_ip(ip as u32);
+    let (a, b, c, d) = (ip >> 24 & 0xff, ip >> 16 & 0xff, ip >> 8 & 0xff, ip & 0xff);
+    log::info!("[ip] MY_IP {:#010x} -> {}.{}.{}.{}", old, a, b, c, d);
+    0
+}
