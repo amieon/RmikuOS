@@ -27,6 +27,10 @@ const MAX_RETRIES: u8 = 8;
 const TIME_WAIT_MS: u64 = 10_000; // 标准是 2MSL=60s,教学版取 10s
 const MAX_PAYLOAD: usize = 1460;
 
+// ---- 实验装置:每发 LOSS_EVERY 个数据段丢 1 个;0 = 关闭 ----
+// 确定性丢包(非随机),保证实验可复现;A/B 两组用同一个值。
+const LOSS_EVERY: u32 = 0;
+
 #[repr(C, packed)]
 pub struct TcpHeader {
     pub src_port: u16,
@@ -134,6 +138,12 @@ impl TcpSocket {
 //   1. 重传过的段不产生 RTT 样本(ACK 歧义:无法区分是对原发还是重传的确认);
 //   2. 退避后的 RTO 要保持到下一个「干净样本」出现才允许回落。
 
+/// 由当前估值器算 RTO:SRTT + max(G, 4·RTTVAR),钳位到 [MIN, MAX]
+fn compute_rto(t: &TcpSocket) -> u64 {
+    ((t.srtt >> 3) + core::cmp::max(RTT_G_MS, t.rttvar))
+        .clamp(RTO_MIN_MS, RTO_MAX_MS)
+}
+
 fn rtt_update(t: &mut TcpSocket, r: u64) {
     if !t.has_rtt {
         // RFC 6298 §2.2:首个样本 SRTT=R, RTTVAR=R/2
@@ -146,11 +156,10 @@ fn rtt_update(t: &mut TcpSocket, r: u64) {
         t.rttvar = t.rttvar + delta - (t.rttvar >> 2);
         t.srtt = (t.srtt as i64 + (r as i64 - (t.srtt >> 3) as i64)) as u64;
     }
-    t.rto_ms = ((t.srtt >> 3) + core::cmp::max(RTT_G_MS, t.rttvar))
-        .clamp(RTO_MIN_MS, RTO_MAX_MS);
-    log::info!(
-        "[tcp] rtt sample={}ms srtt={}ms rttvar={}ms rto={}ms",
-        r, t.srtt >> 3, t.rttvar >> 2, t.rto_ms
+    t.rto_ms = compute_rto(t);
+    log::warn!(
+        "[tcp] t={} rtt sample={}ms srtt={}ms rttvar={}ms rto={}ms",
+        now_ms(), r, t.srtt >> 3, t.rttvar >> 2, t.rto_ms
     );
 }
 
@@ -187,6 +196,14 @@ fn tcp_checksum(src_ip: u32, dst_ip: u32, pkt: &[u8]) -> u16 {
 }
 
 fn send_segment(local_port: u16, remote: SocketAddr, seq: u32, ack: u32, flags: u8, payload: &[u8]) {
+    // --- 实验装置:只丢数据段,不动 SYN/FIN(避免干扰建连与挥手) ---
+    if LOSS_EVERY > 0 && flags & (SYN | FIN) == 0 && !payload.is_empty() {
+        static SEND_CNT: AtomicU32 = AtomicU32::new(0);
+        if SEND_CNT.fetch_add(1, Ordering::Relaxed) % LOSS_EVERY == LOSS_EVERY - 1 {
+            log::warn!("[tcp] t={} drop! seq={}", now_ms(), seq);
+            return; // 段不上线,模拟链路丢包
+        }
+    }
     let tcp_len = 20 + payload.len();
     let mut pkt = Vec::with_capacity(tcp_len);
     unsafe { pkt.set_len(20) };
@@ -213,14 +230,20 @@ fn alloc_slot(table: &[Option<Socket>; 8]) -> Option<usize> {
 fn process_ack(t: &mut TcpSocket, ack: u32) {
     let now = now_ms();
     let mut progress = false;
-    let mut clean_sample: Option<u64> = None; // 本 ACK 确认的最近一个未重传段
+    let mut clean_sample: Option<u64> = None;
+    let mut first = true;
     while let Some(seg) = t.tx_unacked.front() {
         if ack >= seg.end_seq() {   // 教学简化：不考虑序号绕回
             t.snd_una = seg.end_seq();
             let seg = t.tx_unacked.pop_front().unwrap();
-            if !seg.retransmitted {
+            // 防陈旧样本:只有「ACK 到达时的队首段」才允许采样。
+            // 孔洞修复后累积 ACK 会连跳多段,后续段的 now-sent_ms 混入了
+            // 修洞等待,不是真实 RTT;队首段若是干净的,说明它发出至今未
+            // 满一个 RTO(否则已被重传标记),样本必然新鲜。
+            if first && !seg.retransmitted {
                 clean_sample = Some(now.saturating_sub(seg.sent_ms));
             }
+            first = false;
             progress = true;
         } else {
             break;
@@ -229,9 +252,13 @@ fn process_ack(t: &mut TcpSocket, ack: u32) {
     if progress {
         t.retries = 0;
         if let Some(r) = clean_sample {
-            rtt_update(t, r); // 干净样本:更新估值并重算 RTO(解除退避)
+            rtt_update(t, r); // 干净样本:更新估值并重算 RTO
+        } else {
+            // 无干净样本但有前向进展:把 RTO 恢复到估值(参考 Linux RTO-restore)。
+            // 严格 Karn 的「退避保持到干净样本」在排水阶段(数据已发完、只剩重传)
+            // 会让 RTO 棘轮式翻倍——连续孔洞各翻一倍直达封顶,实验日志已证实。
+            t.rto_ms = compute_rto(t);
         }
-        // 无干净样本(Karn 规则二):保持当前(可能已退避加倍的)rto_ms 不动
         t.rto_deadline = if t.tx_unacked.is_empty() { 0 } else { now + t.rto_ms };
     }
 }
@@ -429,7 +456,7 @@ pub fn tick() {
                     let (lp, rn) = (t.local_port, t.rcv_nxt);
                     send_segment(lp, remote, seq, rn, flags, &data);
                     t.retries = t.retries.saturating_add(1);
-                    log::warn!("[tcp] rtx seq={} retry={} rto={}", seq, t.retries, t.rto_ms);
+                    log::warn!("[tcp] t={} rtx seq={} retry={} rto={}", now, seq, t.retries, t.rto_ms);
                     t.rto_ms = (t.rto_ms * 2).min(RTO_MAX_MS); // 指数退避
                     t.rto_deadline = now + t.rto_ms;
                     if t.retries > MAX_RETRIES {
@@ -544,28 +571,43 @@ pub fn accept(fd: usize) -> Option<(usize, SocketAddr)> {
 }
 
 pub fn send_data(fd: usize, data: &[u8]) -> isize {
-    let mut table = SOCKET_TABLE.lock();
-    let t = match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
-        Some(t) => t,
-        None => return -1,
-    };
-    match t.state {
-        TcpState::Established | TcpState::CloseWait => {}
-        _ => return -1,
+    let mut spins = 0usize;
+    loop {
+        {
+            let mut table = SOCKET_TABLE.lock();
+            let t = match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+                Some(t) => t,
+                None => return -1,
+            };
+            match t.state {
+                TcpState::Established | TcpState::CloseWait => {}
+                _ => return -1,
+            }
+            // 流量控制:在途字节数不得越过对端通告的接收窗口。
+            // 不跟踪在途就灌 1MB,宿主机的 64KB rcvbuf 会被打爆造成真实丢包。
+            let in_flight = t.snd_nxt.wrapping_sub(t.snd_una) as usize;
+            if in_flight < t.snd_wnd as usize {
+                let len = data.len()
+                    .min(MAX_PAYLOAD)
+                    .min(t.snd_wnd as usize - in_flight);
+                let seq = t.snd_nxt;
+                t.snd_nxt = t.snd_nxt.wrapping_add(len as u32);
+                t.tx_unacked.push_back(TxSeg::new(seq, ACK | PSH, data[..len].to_vec()));
+                if t.rto_deadline == 0 {
+                    t.rto_deadline = now_ms() + t.rto_ms;
+                }
+                let (lp, r, rn) = (t.local_port, t.remote.unwrap(), t.rcv_nxt);
+                send_segment(lp, r, seq, rn, ACK | PSH, &data[..len]);
+                return len as isize;
+            }
+            // 窗口满:解锁 poll,等 ACK 推进 snd_una 后再试
+        }
+        crate::drivers::net::poll();
+        spins += 1;
+        if spins > 50_000_000 {
+            return -1; // 对端长久不开窗,放弃
+        }
     }
-    if t.snd_wnd == 0 {
-        return -1; // 教学版：对端窗口满了直接报错让上层重试
-    }
-    let len = data.len().min(MAX_PAYLOAD).min(t.snd_wnd as usize);
-    let seq = t.snd_nxt;
-    t.snd_nxt = t.snd_nxt.wrapping_add(len as u32);
-    t.tx_unacked.push_back(TxSeg::new(seq, ACK | PSH, data[..len].to_vec()));
-    if t.rto_deadline == 0 {
-        t.rto_deadline = now_ms() + t.rto_ms;
-    }
-    let (lp, r, rn) = (t.local_port, t.remote.unwrap(), t.rcv_nxt);
-    send_segment(lp, r, seq, rn, ACK | PSH, &data[..len]);
-    len as isize
 }
 
 /// 返回 n / 0(EOF，对端已关) / -1(RST 或错误)

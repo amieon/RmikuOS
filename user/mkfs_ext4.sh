@@ -98,7 +98,7 @@ for proj_dir in user/build/${ARCH}/cpp/*; do
   fi
 done
 
-# 新增：GCN（特殊目录 /gcn/）
+# GCN（特殊目录 /gcn/）
 if [ -d "user/build/${ARCH}/gcn" ]; then
   for f in user/build/${ARCH}/gcn/*.elf; do
     [ -e "$f" ] || continue
@@ -107,6 +107,7 @@ if [ -d "user/build/${ARCH}/gcn" ]; then
   done
   echo "  [gcn] -> /gcn/"
 fi
+
 
 # 简单展示 rootfs 内容
 echo "rootfs content:"
