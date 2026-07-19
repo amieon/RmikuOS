@@ -13,9 +13,23 @@ static unsigned short cksum(const void *data, int len) {
 
 struct icmp_hdr { unsigned char type, code; unsigned short cksum, id, seq; };
 
-int main(void) {
+int main(int argc, char **argv)
+{
+    if (argc < 2) {
+        printf("usage: ping a.b.c.d\n");
+        return 1;
+    }
+    unsigned int target = parse_ip(argv[1]);   // "192.168.100.2" -> 0xC0A86402(主机序)
+    if (target == 0) {
+        printf("ping: bad address %s\n", argv[1]);
+        return 1;
+    }
+
     int fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-    if (fd < 0) { printf("socket raw failed\n"); return 1; }
+    if (fd < 0) { printf("ping: socket failed\n"); return 1; }
+
+    struct sockaddr_in gw = addr_of(target, 0); 
+    
 
     struct sockaddr_in gw = addr_of(0x0A000202, 0);   // 10.0.2.2 网关(ICMP 无端口)
     int sent = 0, rcvd = 0;
@@ -42,9 +56,12 @@ int main(void) {
                 struct icmp_hdr *r = (void *)buf;
                 if (r->type == 0 && r->id == htons(PING_ID) && r->seq == htons(seq)) {
                     unsigned ip = ntohl(from.sin_addr);
-                    printf("64 bytes from %u.%u.%u.%u: icmp_seq=%d time=%lu ticks\n",
-                           (ip>>24)&0xff, (ip>>16)&0xff, (ip>>8)&0xff, ip&0xff,
-                           seq, get_ticks() - t0);
+                    unsigned char *p = (unsigned char *)&from.sin_addr;
+                    printf("64 bytes from %u.%u.%u.%u: icmp_seq=%d time=%d ticks\n",
+                        p[0], p[1], p[2], p[3], seq, rtt);
+                    // printf("64 bytes from %u.%u.%u.%u: icmp_seq=%d time=%lu ticks\n",
+                    //        (ip>>24)&0xff, (ip>>16)&0xff, (ip>>8)&0xff, ip&0xff,
+                    //        seq, get_ticks() - t0);
                     rcvd++;
                     break;
                 }
@@ -55,7 +72,7 @@ int main(void) {
             }
         }
     }
-    printf("--- 10.0.2.2 ping statistics ---\n");
+    printf("--- ping statistics ---\n");
     printf("%d packets transmitted, %d received, %d%% packet loss\n",
            sent, rcvd, (sent - rcvd) * 100 / sent);
     net_close(fd);

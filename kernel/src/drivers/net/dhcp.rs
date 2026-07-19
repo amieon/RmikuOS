@@ -2,7 +2,6 @@
 //! 针对 slirp 内置 DHCP 服务器，不做续期/ rebinding。
 
 use alloc::vec::Vec;
-use crate::drivers::net::eth::my_mac_slice;
 use crate::drivers::net::ip::{my_ip, set_my_ip};
 use crate::drivers::net::socket;
 use crate::drivers::net::udp;
@@ -25,7 +24,7 @@ fn build_packet(xid: u32, msg_type: u8, req_ip: Option<u32>, server_id: Option<u
     pkt[2] = 6;
     pkt[4..8].copy_from_slice(&xid.to_be_bytes());
     pkt[10..12].copy_from_slice(&0x8000u16.to_be_bytes());
-    pkt[28..34].copy_from_slice(my_mac_slice());
+    pkt[28..34].copy_from_slice(&crate::drivers::net::eth::my_mac());
     pkt[236..240].copy_from_slice(&COOKIE); 
 
     pkt.extend_from_slice(&[53, 1, msg_type]); // DHCP message type

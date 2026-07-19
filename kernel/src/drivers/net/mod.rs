@@ -55,8 +55,7 @@ where
 
 
 pub fn on_timer_tick() {
-    NET_POLL_PENDING.store(true, Ordering::Relaxed);
-    tcp::tick();  
+    NET_POLL_PENDING.store(true, Ordering::Relaxed); 
 }
 
 pub fn maybe_poll() {

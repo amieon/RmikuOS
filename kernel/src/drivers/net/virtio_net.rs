@@ -126,10 +126,7 @@ impl VirtioNet {
             dev_fence();
             mac[i] = unsafe { read_volatile((device.va + i) as *const u8) };
         }
-        if mac == [0u8; 6] {
-            mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
-            log::warn!("[virtio-net] PCI: device MAC is zero, using default");
-        }
+        crate::drivers::net::eth::set_my_mac(mac);
         log::info!("[virtio-net] PCI: MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
