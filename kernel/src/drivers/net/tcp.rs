@@ -29,7 +29,7 @@ const MAX_PAYLOAD: usize = 1460;
 
 // ---- 实验装置:每发 LOSS_EVERY 个数据段丢 1 个;0 = 关闭 ----
 // 确定性丢包(非随机),保证实验可复现;A/B 两组用同一个值。
-const LOSS_EVERY: u32 = 0;
+const LOSS_EVERY: u32 = 5;
 
 #[repr(C, packed)]
 pub struct TcpHeader {
