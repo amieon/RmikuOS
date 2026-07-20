@@ -31,7 +31,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-OUTDIR = "../logs/tcp"
+OUTDIR = "logs/tcp"
 SIZE_ORDER = ["4K", "8K", "16K", "32K", "64K", "128K", "256K", "512K", "1M"]
 
 LABEL = {"new": "Adaptive RTO (Jacobson/Karn)", "old": "Fixed RTO (1s)"}
@@ -45,14 +45,22 @@ def load_size_sweep(path):
     if not os.path.exists(path):
         print(f"!! {path} not found, skipping fig 1/2")
         return data
+    skipped = []
     with open(path) as f:
         for row in csv.DictReader(f):
             v = row["version"].strip()
             s = row["size"].strip()
             if v not in data or s not in SIZE_ORDER:
+                skipped.append((v, s))
                 continue
             data[v].setdefault(s, []).append(
                 (float(row["median_s"]), int(row["rtx_count"]), int(row["sample_count"])))
+    n_new = sum(len(v) for v in data["new"].values())
+    n_old = sum(len(v) for v in data["old"].values())
+    print(f"   size_sweep.csv: loaded new={n_new} rows, old={n_old} rows")
+    if skipped:
+        print(f"!! skipped {len(skipped)} unrecognized rows in size_sweep.csv: "
+              f"{skipped[:6]}{' ...' if len(skipped) > 6 else ''}")
     return data
 
 
