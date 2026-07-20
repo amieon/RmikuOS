@@ -33,6 +33,22 @@ static PREEMPT_SWITCH_BACK: AtomicUsize = AtomicUsize::new(0);
 static PREEMPT_ENTER_MASK: AtomicUsize = AtomicUsize::new(0);
 static PREEMPT_BACK_MASK: AtomicUsize = AtomicUsize::new(0);
 
+/// 空闲 hart 位图:进入 wfi 前置位,醒来后清除。
+/// 新就绪的线程借此踢醒 idle hart,不再等它们的 timer 兜底。
+static IDLE_HARTS: [AtomicBool; MAX_HARTS] =
+    [const { AtomicBool::new(false) }; MAX_HARTS];
+
+/// 若存在 idle hart,广播一次 Reschedule IPI。
+/// (v1 从简用广播;阶段三可改单播 + 按 hart 踢。)
+fn kick_idle_harts() {
+    for h in 0..MAX_HARTS {
+        if IDLE_HARTS[h].load(Ordering::Acquire) {
+            ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+            return;
+        }
+    }
+}
+
 pub fn init() {
     let init_path = "/bin/shell";
 
@@ -171,7 +187,7 @@ pub fn run_tasks() -> ! {
             crate::arch::enable_interrupt();
 
             if need_ipi {
-                ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+                kick_idle_harts();
             }
         } else {
             crate::arch::disable_interrupt();
@@ -186,8 +202,8 @@ pub fn run_tasks() -> ! {
             };
 
             if still_empty {
+                IDLE_HARTS[hart].store(true, Ordering::Release);
 
-                //maybe_dump_smp_debug("idle-empty");
                 crate::arch::enable_interrupt();
 
                 crate::drivers::net::poll();
@@ -195,6 +211,8 @@ pub fn run_tasks() -> ! {
                 unsafe {
                     crate::arch::wait_for_interrupt();
                 }
+
+                IDLE_HARTS[hart].store(false, Ordering::Release);
             } else {
                 crate::arch::enable_interrupt();
             }
