@@ -1,10 +1,10 @@
-use core::sync::atomic::{AtomicUsize,Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use alloc::string::String;
 use alloc::vec::Vec;
 use log::logger;
 
-use crate::arch::ipi;                    // 新增：IPI 发送接口
+use crate::arch::{MAX_HARTS, ipi};                    // 新增：IPI 发送接口
 use crate::{lock_detect, println};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
