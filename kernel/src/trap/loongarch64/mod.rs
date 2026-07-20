@@ -155,6 +155,15 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
         }
     }
 
+    // 统一出口检查:本轮若挂起了延迟调度(如抢占时锁被占),
+    // 在返回用户态前补一次调度。
+    if cx.is_from_user()
+        && crate::task::can_preempt()
+        && crate::task::check_and_clear_need_resched()
+    {
+        crate::task::preempt_current_and_run_next();
+    }
+
     cx
 }
 use crate::arch::MAX_HARTS;

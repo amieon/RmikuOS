@@ -340,26 +340,27 @@ pub fn alloc_tid(&mut self) -> Tid {
     
 
     pub fn pick_ready_thread_in_process(&mut self, pid: Pid) -> Option<Tid> {
-        let ready_threads = {
-            let process = self.process(pid);
-            process.ready_threads.clone()
-        };
-
+        // 第一遍只读扫描找 pass 最小的 Ready 线程。
+        // 不再 clone 整个 ready_threads Vec——旧实现每次 pick 都在
+        // 内核堆里分配一次,而本函数处于全局调度锁内的热路径上。
         let mut best_tid: Option<Tid> = None;
         let mut best_pass: usize = usize::MAX;
 
-        for tid in ready_threads {
-            let Some(thread) = self.try_thread(tid) else {
-                continue;
-            };
+        {
+            let process = self.process(pid);
+            for &tid in process.ready_threads.iter() {
+                let Some(thread) = self.try_thread(tid) else {
+                    continue;
+                };
 
-            if thread.status != ThreadStatus::Ready {
-                continue;
-            }
+                if thread.status != ThreadStatus::Ready {
+                    continue;
+                }
 
-            if best_tid.is_none() || thread.pass < best_pass {
-                best_tid = Some(tid);
-                best_pass = thread.pass;
+                if best_tid.is_none() || thread.pass < best_pass {
+                    best_tid = Some(tid);
+                    best_pass = thread.pass;
+                }
             }
         }
 

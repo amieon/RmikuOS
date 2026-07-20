@@ -15,6 +15,13 @@ pub struct Processor {
     pub preempt_count: usize,
 
     pub pending_ready_tid: Option<Tid>,
+
+    /// 记账缓冲:account_current_tick 拿不到全局调度锁时,
+    /// 把 tick 暂存在这里,下次拿到锁时一并冲刷。
+    /// 不变式:pending 必然属于"冲刷时的 current tid"——本 hart
+    /// 上 current 的任何变更(调度/抢占)都必须自己拿到调度锁,
+    /// 而 pending 恰恰只在拿不到锁期间累积。
+    pub pending_ticks: usize,
 }
 impl Processor {
     pub const fn new() -> Self {
@@ -25,6 +32,7 @@ impl Processor {
             need_resched: false,
             preempt_count: 0,
             pending_ready_tid: None,
+            pending_ticks: 0,
         }
     }
 }
@@ -169,4 +177,15 @@ pub fn take_pending_ready_tid() -> Option<Tid> {
     let old = p.pending_ready_tid;
     p.pending_ready_tid = None;
     old
+}
+
+pub fn add_pending_tick() {
+    processor().pending_ticks += 1;
+}
+
+pub fn take_pending_ticks() -> usize {
+    let p = processor();
+    let n = p.pending_ticks;
+    p.pending_ticks = 0;
+    n
 }

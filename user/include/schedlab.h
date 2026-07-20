@@ -89,7 +89,7 @@ typedef struct {
 static sl_group_t sl_groups[SL_MAX_GROUPS];
 static int        sl_ngroups;
 static unsigned long sl_t0, sl_t_end;
-static int        sl_window = 100;
+static int        sl_window;
 
 /* ================= 负载注册 ================= */
 

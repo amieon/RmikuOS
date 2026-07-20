@@ -288,7 +288,12 @@ pub fn preempt_current_and_run_next() {
     let task_cx_ptr = {
         let mut manager = match TASK_MANAGER.try_lock() {
             Some(guard) => guard,
-            None => return,
+            None => {
+                // 拿不到锁不等于不用切:挂起延迟调度标记,
+                // 由 trap 返回用户态前的出口检查补枪(否则静默白跑一个 slice)。
+                processor::set_current_need_resched(true);
+                return;
+            }
         };
 
         processor::set_pending_ready_tid(current_tid);
@@ -1262,15 +1267,25 @@ pub fn get_sched_alpha_current() -> isize {
 
 pub fn account_current_tick() {
     let Some(tid) = processor::current_tid_opt() else { return };
-    
+
     let mut manager = match TASK_MANAGER.try_lock() {
         Some(g) => g,
-        None => return,
+        None => {
+            // 拿不到锁不再丢账:暂存到 per-hart 缓冲,下次拿到锁时冲刷。
+            // 归属正确性见 Processor::pending_ticks 的不变式注释。
+            processor::add_pending_tick();
+            return;
+        }
     };
-    
+
+    // 冲刷缓冲:pending 全部属于当前 tid(见 processor.rs 不变式)。
+    // 极端情况(线程在丢账后、冲刷前退出)会把少量 tick 记给继任者,
+    // 数量以 slice 为界,对窗口级统计无影响。
+    let n = 1 + processor::take_pending_ticks();
+
     let pid = manager.pid_of_tid(tid);
-    manager.thread_mut(tid).run_ticks += 1;
-    manager.process_mut(pid).run_ticks += 1;
+    manager.thread_mut(tid).run_ticks += n;
+    manager.process_mut(pid).run_ticks += n;
 }
 
 fn write_value_to_user<T: Copy>(user_ptr: usize, value: &T) -> isize {

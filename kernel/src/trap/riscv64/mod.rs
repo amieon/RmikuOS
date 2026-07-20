@@ -107,6 +107,15 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                 panic!("unsupported RISC-V interrupt");
             }
         }
+
+        // 统一出口检查:本轮若挂起了延迟调度(如抢占时锁被占),
+        // 在返回用户态前补一次调度。
+        if cx.is_from_user()
+            && crate::task::can_preempt()
+            && crate::task::check_and_clear_need_resched()
+        {
+            crate::task::preempt_current_and_run_next();
+        }
         return cx;
     }
     match code {
@@ -170,6 +179,14 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
             panic!("unsupported RISC-V exception");
         }
+    }
+
+    // 统一出口检查:syscall 返回用户态前,补上被延迟的调度。
+    if cx.is_from_user()
+        && crate::task::can_preempt()
+        && crate::task::check_and_clear_need_resched()
+    {
+        crate::task::preempt_current_and_run_next();
     }
 
     cx
