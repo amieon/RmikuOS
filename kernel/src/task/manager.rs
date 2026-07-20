@@ -22,9 +22,6 @@ pub struct TaskManager {
     processes: Vec<Option<ProcessControlBlock>>,
     threads: Vec<Option<ThreadControlBlock>>,
 
-    free_pids: Vec<Pid>,
-    free_tids: Vec<Tid>,
-
     sched_alpha: isize,
 
     scale_cache: Vec<usize>,
@@ -47,56 +44,32 @@ impl TaskManager {
             processes: Vec::new(),
             threads: Vec::new(),
 
-            free_pids: Vec::new(),
-            free_tids: Vec::new(),
-
             sched_alpha: 50,
 
             scale_cache: Vec::new(),
             cache_alpha: -1, // 哨兵：任何合法 alpha(0..=100) 都不等于它
         }
     }
-pub fn alloc_pid(&mut self) -> Pid {
-    while let Some(pid) = self.free_pids.pop() {
-        if self.processes.get(pid).map_or(true, |slot| slot.is_none()) {
-            return pid;
-        } else {
-            log::error!(
-                "[task] stale free pid ignored: pid={} slot still used",
-                pid,
-            );
+    pub fn alloc_pid(&mut self) -> Pid {
+        // 扫描即真源:空槽自然回收,不再维护 free_pids 第二本账。
+        for pid in 0..self.processes.len() {
+            if self.processes[pid].is_none() {
+                return pid;
+            }
         }
+
+        self.processes.len()
     }
 
-    for pid in 0..self.processes.len() {
-        if self.processes[pid].is_none() {
-            return pid;
+    pub fn alloc_tid(&mut self) -> Tid {
+        for tid in 0..self.threads.len() {
+            if self.threads[tid].is_none() {
+                return tid;
+            }
         }
+
+        self.threads.len()
     }
-
-    self.processes.len()
-}
-
-pub fn alloc_tid(&mut self) -> Tid {
-    while let Some(tid) = self.free_tids.pop() {
-        if self.threads.get(tid).map_or(true, |slot| slot.is_none()) {
-            return tid;
-        } else {
-            log::error!(
-                "[task] stale free tid ignored: tid={} slot still used",
-                tid,
-            );
-        }
-    }
-
-    for tid in 0..self.threads.len() {
-        if self.threads[tid].is_none() {
-            return tid;
-        }
-    }
-
-    self.threads.len()
-}
 
     pub fn insert_process(&mut self, process: ProcessControlBlock) {
         let pid = process.pid;
@@ -670,20 +643,8 @@ pub fn alloc_tid(&mut self) -> Tid {
             }
         }
 
-        if let Some(slot) = self.threads.get_mut(tid) {
-            if slot.take().is_some() {
-                if !self.free_tids.contains(&tid) {
-                    self.free_tids.push(tid);
-                }
-            }
-        }
     }
 
-    if !self.free_pids.contains(&pid) {
-        self.free_pids.push(pid);
-    } else {
-        panic!("[task] double free pid={}", pid);
-    }
 }
 
 pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
@@ -1010,11 +971,6 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
         process.ready_threads.retain(|&x| x != tid);
     }
 
-    if !self.free_tids.contains(&tid) {
-        self.free_tids.push(tid);
-    } else {
-        panic!("[thread] double free tid={}", tid);
-    }
 
     log::info!(
         "[thread] reaped tid={} from pid={}",
