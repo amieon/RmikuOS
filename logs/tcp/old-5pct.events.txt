@@ -1,0 +1,38 @@
+[93m[ WARN] [tcp] t=35872 drop! seq=305476970[0m
+[93m[ WARN] [tcp] t=36102 drop! seq=305504970[0m
+[93m[ WARN] [tcp] t=36353 drop! seq=305532970[0m
+[93m[ WARN] [tcp] t=36872 rtx seq=305476970 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=37875 rtx seq=305504970 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=38876 rtx seq=305532970 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=40316 drop! seq=305512944[0m
+[93m[ WARN] [tcp] t=40531 drop! seq=305540944[0m
+[93m[ WARN] [tcp] t=40757 drop! seq=305568944[0m
+[93m[ WARN] [tcp] t=41316 rtx seq=305512944 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=41465 drop! seq=305595279[0m
+[93m[ WARN] [tcp] t=42318 rtx seq=305540944 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=43319 rtx seq=305568944 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=44320 rtx seq=305595279 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=45712 drop! seq=305594665[0m
+[93m[ WARN] [tcp] t=45955 drop! seq=305622665[0m
+[93m[ WARN] [tcp] t=46179 drop! seq=305650665[0m
+[93m[ WARN] [tcp] t=46712 rtx seq=305594665 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=46884 drop! seq=305677000[0m
+[93m[ WARN] [tcp] t=47714 rtx seq=305622665 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=48731 rtx seq=305650665 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=49816 rtx seq=305677000 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=51190 drop! seq=305635381[0m
+[93m[ WARN] [tcp] t=51417 drop! seq=305663381[0m
+[93m[ WARN] [tcp] t=51652 drop! seq=305691381[0m
+[93m[ WARN] [tcp] t=52201 rtx seq=305635381 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=52360 drop! seq=305717716[0m
+[93m[ WARN] [tcp] t=53203 rtx seq=305663381 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=54204 rtx seq=305691381 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=55205 rtx seq=305717716 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=56909 drop! seq=305697431[0m
+[93m[ WARN] [tcp] t=57135 drop! seq=305725431[0m
+[93m[ WARN] [tcp] t=57384 drop! seq=305753431[0m
+[93m[ WARN] [tcp] t=57909 rtx seq=305697431 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=58061 drop! seq=305779766[0m
+[93m[ WARN] [tcp] t=58910 rtx seq=305725431 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=59913 rtx seq=305753431 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=60914 rtx seq=305779766 retry=1 rto=1000[0m

@@ -21,7 +21,7 @@ set -euo pipefail
 
 NAME="${1:?用法: ./scripts/tcp_exp.sh <实验名> [次数=5] [URL]}"
 RUNS="${2:-5}"
-URL="${3:-http://localhost:8080/random/big.bin}"
+URL="${3:-http://localhost:8080/random/256K.bin}"
 CONSOLE_LOG="${CONSOLE_LOG:-./logs/console.log}"
 OUTDIR="./logs/tcp"
 

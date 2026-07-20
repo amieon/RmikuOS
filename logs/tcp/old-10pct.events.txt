@@ -1,0 +1,82 @@
+[93m[ WARN] [tcp] t=32948 drop! seq=305421252[0m
+[93m[ WARN] [tcp] t=33071 drop! seq=305435252[0m
+[93m[ WARN] [tcp] t=33182 drop! seq=305449252[0m
+[93m[ WARN] [tcp] t=33302 drop! seq=305463252[0m
+[93m[ WARN] [tcp] t=33419 drop! seq=305477252[0m
+[93m[ WARN] [tcp] t=33948 rtx seq=305421252 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=33977 drop! seq=305489587[0m
+[93m[ WARN] [tcp] t=34950 rtx seq=305435252 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=34963 drop! seq=305502187[0m
+[93m[ WARN] [tcp] t=35951 rtx seq=305449252 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=36952 rtx seq=305463252 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=37956 drop! seq=305477252[0m
+[93m[ WARN] [tcp] t=37956 rtx seq=305477252 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=39956 rtx seq=305477252 retry=2 rto=2000[0m
+[93m[ WARN] [tcp] t=40957 rtx seq=305489587 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=41961 rtx seq=305502187 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=45492 drop! seq=305532449[0m
+[93m[ WARN] [tcp] t=45742 drop! seq=305546449[0m
+[93m[ WARN] [tcp] t=45983 drop! seq=305560449[0m
+[93m[ WARN] [tcp] t=46270 drop! seq=305574449[0m
+[93m[ WARN] [tcp] t=46508 rtx seq=305532449 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=46516 drop! seq=305587049[0m
+[93m[ WARN] [tcp] t=46814 drop! seq=305601049[0m
+[93m[ WARN] [tcp] t=47521 rtx seq=305546449 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=47556 drop! seq=305613384[0m
+[93m[ WARN] [tcp] t=48525 rtx seq=305560449 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=48528 drop! seq=305625984[0m
+[93m[ WARN] [tcp] t=49528 rtx seq=305574449 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=50531 rtx seq=305587049 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=51532 rtx seq=305601049 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=52533 rtx seq=305613384 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=53534 rtx seq=305625984 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=54988 drop! seq=305566377[0m
+[93m[ WARN] [tcp] t=55113 drop! seq=305580377[0m
+[93m[ WARN] [tcp] t=55224 drop! seq=305594377[0m
+[93m[ WARN] [tcp] t=55335 drop! seq=305608377[0m
+[93m[ WARN] [tcp] t=55447 drop! seq=305622377[0m
+[93m[ WARN] [tcp] t=55988 rtx seq=305566377 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=56019 drop! seq=305634712[0m
+[93m[ WARN] [tcp] t=56989 rtx seq=305580377 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=57004 drop! seq=305647312[0m
+[93m[ WARN] [tcp] t=57992 rtx seq=305594377 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=57993 drop! seq=305659912[0m
+[93m[ WARN] [tcp] t=58993 rtx seq=305608377 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=59994 rtx seq=305622377 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=60995 rtx seq=305634712 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=61996 rtx seq=305647312 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=62997 rtx seq=305659912 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=64358 drop! seq=305635422[0m
+[93m[ WARN] [tcp] t=64491 drop! seq=305648124[0m
+[93m[ WARN] [tcp] t=64608 drop! seq=305662124[0m
+[93m[ WARN] [tcp] t=64719 drop! seq=305676124[0m
+[93m[ WARN] [tcp] t=64832 drop! seq=305690124[0m
+[93m[ WARN] [tcp] t=65358 rtx seq=305635422 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=65375 drop! seq=305702357[0m
+[93m[ WARN] [tcp] t=66359 rtx seq=305648124 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=66360 drop! seq=305713659[0m
+[93m[ WARN] [tcp] t=67360 drop! seq=305662124[0m
+[93m[ WARN] [tcp] t=67360 rtx seq=305662124 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=69360 rtx seq=305662124 retry=2 rto=2000[0m
+[93m[ WARN] [tcp] t=70361 drop! seq=305676124[0m
+[93m[ WARN] [tcp] t=70361 rtx seq=305676124 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=72361 rtx seq=305676124 retry=2 rto=2000[0m
+[93m[ WARN] [tcp] t=73363 rtx seq=305690124 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=74364 rtx seq=305702357 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=75365 rtx seq=305713659 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=76721 drop! seq=305759825[0m
+[93m[ WARN] [tcp] t=76821 drop! seq=305773825[0m
+[93m[ WARN] [tcp] t=76926 drop! seq=305787825[0m
+[93m[ WARN] [tcp] t=77024 drop! seq=305801825[0m
+[93m[ WARN] [tcp] t=77139 drop! seq=305815825[0m
+[93m[ WARN] [tcp] t=77730 rtx seq=305759825 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=77753 drop! seq=305828160[0m
+[93m[ WARN] [tcp] t=78732 rtx seq=305773825 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=78741 drop! seq=305840760[0m
+[93m[ WARN] [tcp] t=79733 rtx seq=305787825 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=79735 drop! seq=305853360[0m
+[93m[ WARN] [tcp] t=80734 rtx seq=305801825 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=81735 rtx seq=305815825 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=82736 rtx seq=305828160 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=83737 rtx seq=305840760 retry=1 rto=1000[0m
+[93m[ WARN] [tcp] t=84738 rtx seq=305853360 retry=1 rto=1000[0m

@@ -1,4 +1,4 @@
-     Removed 760 files, 399.1MiB total
+     Removed 769 files, 401.0MiB total
 === 构建用户程序 (riscv64) ===
 warning: unused import: `core::ptr`
  --> /home/abcc/RmikuOS/user/tests/52_rust_fibonacci.rs:5:5
@@ -430,53 +430,6 @@ workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/abcc/RmikuOS/user/rust/programs/files/Cargo.toml
 workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
-warning: function `readline` is never used
-  --> programs/try_vec/src/utils.rs:23:8
-   |
-23 | pub fn readline(buf: &mut [u8]) -> usize {
-   |        ^^^^^^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: function `atoi` is never used
-  --> programs/try_vec/src/utils.rs:52:8
-   |
-52 | pub fn atoi(bytes: &[u8]) -> u64 {
-   |        ^^^^
-
-warning: function `result_filename` is never used
-  --> programs/try_vec/src/utils.rs:62:8
-   |
-62 | pub fn result_filename(pid: isize) -> [u8; 32] {
-   |        ^^^^^^^^^^^^^^^
-
-warning: function `u64_to_str` is never used
-  --> programs/try_vec/src/utils.rs:92:8
-   |
-92 | pub fn u64_to_str(mut x: u64, buf: &mut [u8]) -> usize {
-   |        ^^^^^^^^^^
-
-warning: `try_vec` (bin "try_vec") generated 4 warnings
-warning: method `len` is never used
-  --> programs/editor/src/buffer.rs:24:12
-   |
-16 | impl Buffer {
-   | ----------- method in this implementation
-...
-24 |     pub fn len(&self) -> usize {
-   |            ^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `put_str` is never used
-  --> programs/editor/src/terminal.rs:38:12
-   |
-17 | impl Frame {
-   | ---------- method in this implementation
-...
-38 |     pub fn put_str(&mut self, s: &str) {
-   |            ^^^^^^^
-
 warning: unused import: `copy_str_to_buf`
  --> programs/library_system/src/storage.rs:2:40
   |
@@ -534,7 +487,6 @@ warning: function `bytes_len` is never used
 223 | fn bytes_len(b: &[u8]) -> usize {
     |    ^^^^^^^^^
 
-warning: `editor` (bin "editor") generated 2 warnings
 warning: `library_system` (bin "library_system") generated 8 warnings (run `cargo fix --bin "library_system" -p library_system` to apply 1 suggestion)
 warning: method `len` is never used
   --> programs/files/src/buffer.rs:24:12
@@ -555,6 +507,42 @@ warning: method `put_str` is never used
 ...
 38 |     pub fn put_str(&mut self, s: &str) {
    |            ^^^^^^^
+
+warning: function `readline` is never used
+  --> programs/try_vec/src/utils.rs:23:8
+   |
+23 | pub fn readline(buf: &mut [u8]) -> usize {
+   |        ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `atoi` is never used
+  --> programs/try_vec/src/utils.rs:52:8
+   |
+52 | pub fn atoi(bytes: &[u8]) -> u64 {
+   |        ^^^^
+
+warning: function `result_filename` is never used
+  --> programs/try_vec/src/utils.rs:62:8
+   |
+62 | pub fn result_filename(pid: isize) -> [u8; 32] {
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `u64_to_str` is never used
+  --> programs/try_vec/src/utils.rs:92:8
+   |
+92 | pub fn u64_to_str(mut x: u64, buf: &mut [u8]) -> usize {
+   |        ^^^^^^^^^^
+
+warning: `files` (bin "files") generated 2 warnings
+warning: `try_vec` (bin "try_vec") generated 4 warnings
+warning: unused variable: `idx`
+  --> programs/my_math_constants/src/main.rs:39:10
+   |
+39 |     for (idx, (name, func)) in tasks.iter().enumerate() {
+   |          ^^^ help: if this is intentional, prefix it with an underscore: `_idx`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
 warning: variable `total` is assigned to, but never used
   --> programs/edit_past/src/main.rs:75:9
@@ -787,6 +775,26 @@ warning: creating a shared reference to mutable static
     = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
 
+warning: method `len` is never used
+  --> programs/editor/src/buffer.rs:24:12
+   |
+16 | impl Buffer {
+   | ----------- method in this implementation
+...
+24 |     pub fn len(&self) -> usize {
+   |            ^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `put_str` is never used
+  --> programs/editor/src/terminal.rs:38:12
+   |
+17 | impl Frame {
+   | ---------- method in this implementation
+...
+38 |     pub fn put_str(&mut self, s: &str) {
+   |            ^^^^^^^
+
 warning: unused import: `put_char`
  --> programs/bank_system/src/manager.rs:4:22
   |
@@ -851,17 +859,10 @@ warning: unused variable: `n`
 84 |             let n = read(fd as usize, &mut buf);
    |                 ^ help: if this is intentional, prefix it with an underscore: `_n`
 
-warning: `files` (bin "files") generated 2 warnings
+warning: `my_math_constants` (bin "my_math_constants") generated 1 warning (run `cargo fix --bin "my_math_constants" -p my_math_constants` to apply 1 suggestion)
 warning: `edit_past` (bin "edit_past") generated 26 warnings (run `cargo fix --bin "edit_past" -p edit_past` to apply 3 suggestions)
+warning: `editor` (bin "editor") generated 2 warnings
 warning: `bank_system` (bin "bank_system") generated 9 warnings (run `cargo fix --bin "bank_system" -p bank_system` to apply 9 suggestions)
-warning: unused variable: `idx`
-  --> programs/my_math_constants/src/main.rs:39:10
-   |
-39 |     for (idx, (name, func)) in tasks.iter().enumerate() {
-   |          ^^^ help: if this is intentional, prefix it with an underscore: `_idx`
-   |
-   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
 warning: unused import: `read`
  --> programs/try_args/src/main.rs:5:16
   |
@@ -870,9 +871,8 @@ warning: unused import: `read`
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-warning: `my_math_constants` (bin "my_math_constants") generated 1 warning (run `cargo fix --bin "my_math_constants" -p my_math_constants` to apply 1 suggestion)
 warning: `try_args` (bin "try_args") generated 1 warning (run `cargo fix --bin "try_args" -p try_args` to apply 1 suggestion)
-    Finished `release` profile [optimized] target(s) in 0.01s
+    Finished `release` profile [optimized] target(s) in 0.03s
 
 + riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/string.c -o /home/abcc/RmikuOS/user/build/riscv64/tests/56_57_cpp_runtime_string.o
 + riscv64-unknown-elf-g++ -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-riscv64.ld /home/abcc/RmikuOS/user/build/riscv64/tests/56_57_cpp_runtime_crt0.o /home/abcc/RmikuOS/user/build/riscv64/tests/56_57_cpp_runtime.o /home/abcc/RmikuOS/user/build/riscv64/tests/56_57_cpp_runtime_syscall.o /home/abcc/RmikuOS/user/build/riscv64/tests/56_57_cpp_runtime_cpprt.o /home/abcc/RmikuOS/user/build/riscv64/tests/56_57_cpp_runtime_string.o -o /home/abcc/RmikuOS/user/build/riscv64/tests/56_57_cpp_runtime.elf
@@ -1148,7 +1148,7 @@ warning: `try_args` (bin "try_args") generated 1 warning (run `cargo fix --bin "
 + riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -I /home/abcc/RmikuOS/user/cpp_runtime -I /home/abcc/RmikuOS/user/c/httpd -c /home/abcc/RmikuOS/user/c/httpd/pages.c -o /home/abcc/RmikuOS/user/build/riscv64/c/httpd/pages.o
 + riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-riscv64.ld /home/abcc/RmikuOS/user/build/riscv64/c/httpd/_crt0.o /home/abcc/RmikuOS/user/build/riscv64/c/httpd/httpd.o /home/abcc/RmikuOS/user/build/riscv64/c/httpd/_syscall.o /home/abcc/RmikuOS/user/build/riscv64/c/httpd/http.o /home/abcc/RmikuOS/user/build/riscv64/c/httpd/pages.o /home/abcc/RmikuOS/user/build/riscv64/c/httpd/_string.o -o /home/abcc/RmikuOS/user/build/riscv64/c/httpd/httpd.elf
 + riscv64-unknown-elf-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/riscv64/c/httpd/httpd.elf /home/abcc/RmikuOS/user/build/riscv64/c/httpd/httpd.bin
-[user] httpd/httpd: 26040 bytes
+[user] httpd/httpd: 26048 bytes
 + riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -I /home/abcc/RmikuOS/user/cpp_runtime -I /home/abcc/RmikuOS/user/c/math_demo -c /home/abcc/RmikuOS/user/lib/string.c -o /home/abcc/RmikuOS/user/build/riscv64/c/math_demo/_string.o
 + riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -I /home/abcc/RmikuOS/user/cpp_runtime -I /home/abcc/RmikuOS/user/c/math_demo -c /home/abcc/RmikuOS/user/lib/crt0_riscv64.S -o /home/abcc/RmikuOS/user/build/riscv64/c/math_demo/_crt0.o
 + riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -I /home/abcc/RmikuOS/user/cpp_runtime -I /home/abcc/RmikuOS/user/c/math_demo -c /home/abcc/RmikuOS/user/lib/syscall_riscv64.S -o /home/abcc/RmikuOS/user/build/riscv64/c/math_demo/_syscall.o
@@ -1240,6 +1240,15 @@ target/fsroot-riscv64/programs/try_args
 target/fsroot-riscv64/programs/try_vec
 target/fsroot-riscv64/programs/tsur_tsur
 target/fsroot-riscv64/random
+target/fsroot-riscv64/random/128K.bin
+target/fsroot-riscv64/random/16K.bin
+target/fsroot-riscv64/random/1M.bin
+target/fsroot-riscv64/random/256K.bin
+target/fsroot-riscv64/random/32K.bin
+target/fsroot-riscv64/random/4K.bin
+target/fsroot-riscv64/random/512K.bin
+target/fsroot-riscv64/random/64K.bin
+target/fsroot-riscv64/random/8K.bin
 target/fsroot-riscv64/random/big.bin
 target/fsroot-riscv64/scripts
 target/fsroot-riscv64/scripts/test1.sh
@@ -1334,16 +1343,16 @@ created target/fs-riscv64.img
 mkfs.fat 4.2 (2021-01-31)
 created target/fat-riscv64.img (fresh FAT16)
 === 编译内核 (riscv64, debug, LOG=warn) ===
-   Compiling find-msvc-tools v0.1.9
    Compiling shlex v1.3.0
-   Compiling crc-catalog v2.5.0
+   Compiling find-msvc-tools v0.1.9
    Compiling bitflags v2.11.1
+   Compiling crc-catalog v2.5.0
    Compiling crc v3.4.0
    Compiling cc v1.2.62
-   Compiling log v0.4.30
    Compiling spin v0.10.0
-   Compiling ext4-view v0.9.3
+   Compiling log v0.4.30
    Compiling buddy_system_allocator v0.13.0
+   Compiling ext4-view v0.9.3
    Compiling fatfs v0.4.0 (/home/abcc/RmikuOS/third_party/fatfs)
 warning: hiding a lifetime that's elided elsewhere is confusing
    --> third_party/fatfs/src/fs.rs:630:21
@@ -1702,9 +1711,9 @@ warning: unused import: `SocketAddr`
   |                                                         ^^^^^^^^^^
 
 warning: unused import: `crate::sync::spin::Mutex`
- --> kernel/src/drivers/net/tcp.rs:7:5
+ --> kernel/src/drivers/net/tcp.rs:8:5
   |
-7 | use crate::sync::spin::Mutex;
+8 | use crate::sync::spin::Mutex;
   |     ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: unused imports: `read_volatile` and `write_volatile`
@@ -3549,7 +3558,7 @@ warning: creating a shared reference to mutable static
    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
 
 warning: `RmikuOS` (bin "RmikuOS") generated 299 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 73 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.53s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.06s
 
 === 启动 QEMU (riscv64, mode=debug, net=user) ===
 KERNEL: target/riscv64gc-unknown-none-elf/debug/RmikuOS
@@ -3590,7 +3599,7 @@ Standard SBI Extensions     : ipi,pmu,srst,sse,hsm,rfnc,fwft,time,base,legacy,db
 Experimental SBI Extensions : none
 
 Domain0 Name                : root
-Domain0 Boot HART           : 3
+Domain0 Boot HART           : 6
 Domain0 HARTs               : 0*,1*,2*,3*,4*,5*,6*,7*
 Domain0 Region00            : 0x0000000080000000-0x000000008003ffff M: (F,R,X) S/U: ()
 Domain0 Region01            : 0x0000000080040000-0x000000008007ffff M: (F,R,W) S/U: ()
@@ -3606,7 +3615,7 @@ Domain0 Next Mode           : S-mode
 Domain0 SysReset            : yes
 Domain0 SysSuspend          : yes
 
-Boot HART ID                : 3
+Boot HART ID                : 6
 Boot HART Domain            : root
 Boot HART Priv Version      : v1.12
 Boot HART Base ISA          : rv64imafdch
@@ -3618,7 +3627,7 @@ Boot HART MHPM Info         : 16 (0x0007fff8)
 Boot HART Debug Triggers    : 2 triggers
 Boot HART MIDELEG           : 0x0000000000001666
 Boot HART MEDELEG           : 0x0000000000f4b509
-[CPU3] RISC-V trap initialized: stvec=0xffffffc080296b14
+[CPU6] RISC-V trap initialized: stvec=0xffffffc0802965e4
 主核初始化完毕。
 
      ____            _ _         ___  ____  
@@ -3629,21 +3638,21 @@ Boot HART MEDELEG           : 0x0000000000f4b509
 
         RmikuOS - Rusty tiny OS kernel
     
-主核初始化完成，从核可以进入了。[CPU6] RISC-V trap initialized: stvec=0xffffffc080296b14
+主核初始化完成，从核可以进入了。
+[CPU3] RISC-V trap initialized: stvec=0xffffffc0802965e4
+[CPU0] RISC-V trap initialized: stvec=0xffffffc0802965e4
+[CPU1] RISC-V trap initialized: stvec=0xffffffc0802965e4
+从核 0 就绪！从核 1 就绪！
 
-[CPU0] RISC-V trap initialized: stvec=0xffffffc080296b14
-从核 6 就绪！[CPU4] RISC-V trap initialized: stvec=0xffffffc080296b14
-
-[CPU5] RISC-V trap initialized: stvec=0xffffffc080296b14
-从核 4 就绪！
+[CPU5] RISC-V trap initialized: stvec=0xffffffc0802965e4
 从核 5 就绪！
-[CPU2] RISC-V trap initialized: stvec=0xffffffc080296b14
-[CPU1] RISC-V trap initialized: stvec=0xffffffc080296b14
-从核 2 就绪！从核 0 就绪！从核 1 就绪！
+[CPU4] RISC-V trap initialized: stvec=0xffffffc0802965e4
+[CPU2] RISC-V trap initialized: stvec=0xffffffc0802965e4
+从核 4 就绪！从核 2 就绪！
 
-
-[CPU7] RISC-V trap initialized: stvec=0xffffffc080296b14
+[CPU7] RISC-V trap initialized: stvec=0xffffffc0802965e4
 从核 7 就绪！
+从核 3 就绪！
 
 RmikuOS shell
 commands:
@@ -3662,226 +3671,457 @@ commands:
 external commands are in /bin:
   try: ls /bin
 
-/ $ 20  htt[2K/ $ httpd 
+/ $ htt[2K/ $ httpd 
 [httpd] RmikuOS httpd listening on 10.0.2.15:8080
-[93m[ WARN] [tcp] t=28547 rtt sample=8ms srtt=8ms rttvar=4ms rto=200ms[0m
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:54522 (fd=2)
-[httpd] #1 GET /random/big.bin
-[93m[ WARN] [tcp] t=29849 rtt sample=5ms srtt=7ms rttvar=3ms rto=200ms[0m
-[93m[ WARN] [tcp] t=29853 rtt sample=1ms srtt=6ms rttvar=4ms rto=200ms[0m
-[93m[ WARN] [tcp] t=29881 drop! seq=305416656[0m
-[93m[ WARN] [tcp] t=29882 rtt sample=20ms srtt=8ms rttvar=7ms rto=200ms[0m
-[93m[ WARN] [tcp] t=29885 rtt sample=15ms srtt=9ms rttvar=7ms rto=200ms[0m
-[93m[ WARN] [tcp] t=29940 drop! seq=305423656[0m
-[93m[ WARN] [tcp] t=30002 drop! seq=305430656[0m
-[93m[ WARN] [tcp] t=30053 drop! seq=305437656[0m
-[93m[ WARN] [tcp] t=30091 drop! seq=305416656[0m
-[93m[ WARN] [tcp] t=30090 rtx seq=305416656 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=30143 drop! seq=305450256[0m
-[93m[ WARN] [tcp] t=30191 drop! seq=305457256[0m
-[93m[ WARN] [tcp] t=30248 drop! seq=305464256[0m
-[93m[ WARN] [tcp] t=30307 drop! seq=305471256[0m
-[93m[ WARN] [tcp] t=30359 drop! seq=305478256[0m
-[93m[ WARN] [tcp] t=30490 rtx seq=305416656 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=30503 drop! seq=305483591[0m
-[93m[ WARN] [tcp] t=30691 rtx seq=305423656 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=30692 drop! seq=305489191[0m
-[93m[ WARN] [tcp] t=30892 drop! seq=305430656[0m
-[93m[ WARN] [tcp] t=30892 rtx seq=305430656 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=31292 rtx seq=305430656 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=31333 drop! seq=305500391[0m
-[93m[ WARN] [tcp] t=31494 rtx seq=305437656 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=31518 drop! seq=305505991[0m
-[93m[ WARN] [tcp] t=31581 drop! seq=305512991[0m
-[httpd] #1 served file /random/big.bin, fd=2
-[93m[ WARN] [tcp] t=31695 rtx seq=305450256 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=31896 rtx seq=305457256 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=32097 rtx seq=305464256 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=32298 drop! seq=305471256[0m
-[93m[ WARN] [tcp] t=32298 rtx seq=305471256 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=32698 rtx seq=305471256 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=32899 rtx seq=305478256 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=33100 rtx seq=305483591 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=33301 rtx seq=305489191 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=33502 drop! seq=305500391[0m
-[93m[ WARN] [tcp] t=33502 rtx seq=305500391 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=33902 rtx seq=305500391 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=34104 rtx seq=305505991 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=34305 rtx seq=305512991 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=34335 rtt sample=0ms srtt=0ms rttvar=0ms rto=200ms[0m
+[httpd] conn from 10.0.2.2:42184 (fd=2)
+[httpd] #1 GET /random/4K.bin
+[httpd] #1 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:42200 (fd=2)
+[httpd] #2 GET /random/4K.bin
+[httpd] #2 served file /random/4K.bin, fd=2
 [tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:50856 (fd=3)
-[httpd] #2 GET /random/big.bin
-[93m[ WARN] [tcp] t=35661 rtt sample=8ms srtt=1ms rttvar=2ms rto=200ms[0m
-[93m[ WARN] [tcp] t=35667 drop! seq=305516749[0m
-[93m[ WARN] [tcp] t=35732 drop! seq=305523749[0m
-[93m[ WARN] [tcp] t=35791 drop! seq=305530749[0m
-[93m[ WARN] [tcp] t=35844 drop! seq=305537749[0m
-[93m[ WARN] [tcp] t=35868 rtx seq=305516749 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=35896 drop! seq=305543349[0m
-[93m[ WARN] [tcp] t=35943 drop! seq=305550349[0m
-[93m[ WARN] [tcp] t=36007 drop! seq=305557349[0m
-[93m[ WARN] [tcp] t=36058 drop! seq=305564349[0m
-[93m[ WARN] [tcp] t=36074 rtx seq=305523749 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=36111 drop! seq=305569949[0m
-[93m[ WARN] [tcp] t=36159 drop! seq=305576949[0m
-[93m[ WARN] [tcp] t=36216 drop! seq=305583949[0m
-[93m[ WARN] [tcp] t=36263 drop! seq=305590949[0m
-[93m[ WARN] [tcp] t=36288 rtx seq=305530749 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=36297 drop! seq=305596284[0m
-[93m[ WARN] [tcp] t=36497 drop! seq=305537749[0m
-[93m[ WARN] [tcp] t=36497 rtx seq=305537749 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=36897 rtx seq=305537749 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=36937 drop! seq=305607484[0m
-[93m[ WARN] [tcp] t=37098 rtx seq=305543349 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=37135 drop! seq=305613084[0m
-[93m[ WARN] [tcp] t=37299 rtx seq=305550349 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=37323 drop! seq=305618684[0m
-[httpd] #2 served file /random/big.bin, fd=3
-[93m[ WARN] [tcp] t=37501 rtx seq=305557349 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=37702 rtx seq=305564349 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=37903 rtx seq=305569949 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=38104 rtx seq=305576949 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=38305 drop! seq=305583949[0m
-[93m[ WARN] [tcp] t=38305 rtx seq=305583949 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=38705 rtx seq=305583949 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=38906 rtx seq=305590949 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=39107 rtx seq=305596284 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=39308 rtx seq=305607484 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=39509 drop! seq=305613084[0m
-[93m[ WARN] [tcp] t=39509 rtx seq=305613084 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=39909 rtx seq=305613084 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=40110 rtx seq=305618684 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=40125 rtt sample=1ms srtt=1ms rttvar=0ms rto=200ms[0m
+[httpd] conn from 10.0.2.2:42202 (fd=3)
+[httpd] #3 GET /random/4K.bin
+[httpd] #3 served file /random/4K.bin, fd=3
 [tcp] fd 4 accepted (passive open)
-[httpd] conn from 10.0.2.2:53964 (fd=4)
-[httpd] #3 GET /random/big.bin
-[93m[ WARN] [tcp] t=41392 rtt sample=2ms srtt=1ms rttvar=0ms rto=200ms[0m
-[93m[ WARN] [tcp] t=41403 rtt sample=0ms srtt=1ms rttvar=1ms rto=200ms[0m
-[93m[ WARN] [tcp] t=41419 drop! seq=305582245[0m
-[93m[ WARN] [tcp] t=41484 drop! seq=305589245[0m
-[93m[ WARN] [tcp] t=41550 drop! seq=305596245[0m
-[93m[ WARN] [tcp] t=41612 drop! seq=305603245[0m
-[93m[ WARN] [tcp] t=41624 rtx seq=305582245 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=41659 drop! seq=305608845[0m
-[93m[ WARN] [tcp] t=41710 drop! seq=305615845[0m
-[93m[ WARN] [tcp] t=41763 drop! seq=305622845[0m
-[93m[ WARN] [tcp] t=41810 drop! seq=305629845[0m
-[93m[ WARN] [tcp] t=41834 rtx seq=305589245 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=41865 drop! seq=305635445[0m
-[93m[ WARN] [tcp] t=41920 drop! seq=305642445[0m
-[93m[ WARN] [tcp] t=41977 drop! seq=305649445[0m
-[93m[ WARN] [tcp] t=42031 drop! seq=305656445[0m
-[93m[ WARN] [tcp] t=42039 rtx seq=305596245 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=42080 drop! seq=305662045[0m
-[93m[ WARN] [tcp] t=42242 drop! seq=305603245[0m
-[93m[ WARN] [tcp] t=42242 rtx seq=305603245 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=42642 rtx seq=305603245 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=42682 drop! seq=305672980[0m
-[93m[ WARN] [tcp] t=42843 rtx seq=305608845 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=42883 drop! seq=305678580[0m
-[93m[ WARN] [tcp] t=43044 rtx seq=305615845 retry=1 rto=200[0m
-[httpd] #3 served file /random/big.bin, fd=4
-[93m[ WARN] [tcp] t=43245 drop! seq=305622845[0m
-[93m[ WARN] [tcp] t=43245 rtx seq=305622845 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=43645 rtx seq=305622845 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=43846 rtx seq=305629845 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=44046 rtx seq=305635445 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=44249 rtx seq=305642445 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=44449 drop! seq=305649445[0m
-[93m[ WARN] [tcp] t=44449 rtx seq=305649445 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=44849 rtx seq=305649445 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=45051 rtx seq=305656445 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=45252 rtx seq=305662045 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=45453 rtx seq=305672980 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=45654 drop! seq=305678580[0m
-[93m[ WARN] [tcp] t=45654 rtx seq=305678580 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=46054 rtx seq=305678580 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=46071 rtt sample=1ms srtt=1ms rttvar=0ms rto=200ms[0m
+[httpd] conn from 10.0.2.2:42210 (fd=4)
+[httpd] #4 GET /random/4K.bin
+[httpd] #4 served file /random/4K.bin, fd=4
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:42222 (fd=5)
+[httpd] #5 GET /random/4K.bin
+[httpd] #5 served file /random/4K.bin, fd=5
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:42224 (fd=5)
+[httpd] #6 GET /random/4K.bin
+[httpd] #6 served file /random/4K.bin, fd=5
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:42238 (fd=6)
+[httpd] #7 GET /random/4K.bin
+[httpd] #7 served file /random/4K.bin, fd=6
+[tcp] fd 7 accepted (passive open)
+[httpd] conn from 10.0.2.2:42240 (fd=7)
+[httpd] #8 GET /random/4K.bin
+[httpd] #8 served file /random/4K.bin, fd=7
+[tcp] fd 7 accepted (passive open)
+[httpd] conn from 10.0.2.2:42246 (fd=7)
+[httpd] #9 GET /random/4K.bin
+[httpd] #9 served file /random/4K.bin, fd=7
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:53974 (fd=2)
-[httpd] #4 GET /random/big.bin
-[93m[ WARN] [tcp] t=47180 rtt sample=8ms srtt=1ms rttvar=2ms rto=200ms[0m
-[93m[ WARN] [tcp] t=47181 rtt sample=1ms srtt=1ms rttvar=1ms rto=200ms[0m
-[93m[ WARN] [tcp] t=47204 rtt sample=6ms srtt=2ms rttvar=2ms rto=200ms[0m
-[93m[ WARN] [tcp] t=47210 drop! seq=305656036[0m
-[93m[ WARN] [tcp] t=47267 drop! seq=305663036[0m
-[93m[ WARN] [tcp] t=47332 drop! seq=305670036[0m
-[93m[ WARN] [tcp] t=47382 drop! seq=305677036[0m
-[93m[ WARN] [tcp] t=47411 rtx seq=305656036 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=47427 drop! seq=305682636[0m
-[93m[ WARN] [tcp] t=47484 drop! seq=305689636[0m
-[93m[ WARN] [tcp] t=47534 drop! seq=305696636[0m
-[93m[ WARN] [tcp] t=47594 drop! seq=305703636[0m
-[93m[ WARN] [tcp] t=47615 rtx seq=305663036 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=47647 drop! seq=305709236[0m
-[93m[ WARN] [tcp] t=47702 drop! seq=305716236[0m
-[93m[ WARN] [tcp] t=47757 drop! seq=305723236[0m
-[93m[ WARN] [tcp] t=47807 drop! seq=305730236[0m
-[93m[ WARN] [tcp] t=47832 rtx seq=305670036 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=47841 drop! seq=305735571[0m
-[93m[ WARN] [tcp] t=48034 drop! seq=305677036[0m
-[93m[ WARN] [tcp] t=48034 rtx seq=305677036 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=48434 rtx seq=305677036 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=48468 drop! seq=305746771[0m
-[93m[ WARN] [tcp] t=48635 rtx seq=305682636 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=48684 drop! seq=305752371[0m
-[93m[ WARN] [tcp] t=48836 rtx seq=305689636 retry=1 rto=200[0m
-[httpd] #4 served file /random/big.bin, fd=2
-[93m[ WARN] [tcp] t=49037 rtx seq=305696636 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=49237 drop! seq=305703636[0m
-[93m[ WARN] [tcp] t=49237 rtx seq=305703636 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=49637 rtx seq=305703636 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=49843 rtx seq=305709236 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=50047 rtx seq=305716236 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=50248 rtx seq=305723236 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=50450 drop! seq=305730236[0m
-[93m[ WARN] [tcp] t=50450 rtx seq=305730236 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=50850 rtx seq=305730236 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=51051 rtx seq=305735571 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=51252 rtx seq=305746771 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=51453 rtx seq=305752371 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=51468 rtt sample=1ms srtt=1ms rttvar=0ms rto=200ms[0m
+[httpd] conn from 10.0.2.2:42252 (fd=2)
+[httpd] #10 GET /random/4K.bin
+[httpd] #10 served file /random/4K.bin, fd=2
 [tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:41830 (fd=3)
-[httpd] #5 GET /random/big.bin
-[93m[ WARN] [tcp] t=52723 drop! seq=305700728[0m
-[93m[ WARN] [tcp] t=52784 drop! seq=305706430[0m
-[93m[ WARN] [tcp] t=52839 drop! seq=305713430[0m
-[93m[ WARN] [tcp] t=52897 drop! seq=305720430[0m
-[93m[ WARN] [tcp] t=52931 rtx seq=305700728 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=52949 drop! seq=305726030[0m
-[93m[ WARN] [tcp] t=53007 drop! seq=305733030[0m
-[93m[ WARN] [tcp] t=53059 drop! seq=305740030[0m
-[93m[ WARN] [tcp] t=53108 drop! seq=305747030[0m
-[93m[ WARN] [tcp] t=53139 rtx seq=305706430 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=53150 drop! seq=305752630[0m
-[93m[ WARN] [tcp] t=53211 drop! seq=305759630[0m
-[93m[ WARN] [tcp] t=53268 drop! seq=305766630[0m
-[93m[ WARN] [tcp] t=53321 drop! seq=305773630[0m
-[93m[ WARN] [tcp] t=53350 rtx seq=305713430 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=53368 drop! seq=305779230[0m
-[93m[ WARN] [tcp] t=53553 drop! seq=305720430[0m
-[93m[ WARN] [tcp] t=53553 rtx seq=305720430 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=53953 rtx seq=305720430 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=53994 drop! seq=305790165[0m
-[93m[ WARN] [tcp] t=54156 rtx seq=305726030 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=54198 drop! seq=305795765[0m
-[93m[ WARN] [tcp] t=54357 rtx seq=305733030 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=54382 drop! seq=305801365[0m
-[httpd] #5 served file /random/big.bin, fd=3
-[93m[ WARN] [tcp] t=54558 rtx seq=305740030 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=54759 rtx seq=305747030 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=54960 rtx seq=305752630 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=55162 drop! seq=305759630[0m
-[93m[ WARN] [tcp] t=55162 rtx seq=305759630 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=55562 rtx seq=305759630 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=55769 rtx seq=305766630 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=55970 rtx seq=305773630 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=56171 rtx seq=305779230 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=56372 drop! seq=305790165[0m
-[93m[ WARN] [tcp] t=56372 rtx seq=305790165 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=56772 rtx seq=305790165 retry=2 rto=400[0m
-[93m[ WARN] [tcp] t=56974 rtx seq=305795765 retry=1 rto=200[0m
-[93m[ WARN] [tcp] t=57177 rtx seq=305801365 retry=1 rto=200[0m
+[httpd] conn from 10.0.2.2:40818 (fd=3)
+[httpd] #11 GET /random/4K.bin
+[httpd] #11 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40832 (fd=3)
+[httpd] #12 GET /random/4K.bin
+[httpd] #12 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40840 (fd=3)
+[httpd] #13 GET /random/4K.bin
+[httpd] #13 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40850 (fd=3)
+[httpd] #14 GET /random/4K.bin
+[httpd] #14 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40852 (fd=3)
+[httpd] #15 GET /random/4K.bin
+[httpd] #15 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40866 (fd=3)
+[httpd] #16 GET /random/4K.bin
+[httpd] #16 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40874 (fd=3)
+[httpd] #17 GET /random/4K.bin
+[httpd] #17 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40890 (fd=3)
+[httpd] #18 GET /random/4K.bin
+[httpd] #18 served file /random/4K.bin, fd=3
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:40894 (fd=4)
+[httpd] #19 GET /random/4K.bin
+[httpd] #19 served file /random/4K.bin, fd=4
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:40896 (fd=4)
+[httpd] #20 GET /random/4K.bin
+[httpd] #20 served file /random/4K.bin, fd=4
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:40906 (fd=4)
+[httpd] #21 GET /random/4K.bin
+[httpd] #21 served file /random/4K.bin, fd=4
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:40918 (fd=4)
+[httpd] #22 GET /random/4K.bin
+[httpd] #22 served file /random/4K.bin, fd=4
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:40924 (fd=5)
+[httpd] #23 GET /random/4K.bin
+[httpd] #23 served file /random/4K.bin, fd=5
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:40930 (fd=5)
+[httpd] #24 GET /random/4K.bin
+[httpd] #24 served file /random/4K.bin, fd=5
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:40936 (fd=5)
+[httpd] #25 GET /random/4K.bin
+[httpd] #25 served file /random/4K.bin, fd=5
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:40942 (fd=6)
+[httpd] #26 GET /random/4K.bin
+[httpd] #26 served file /random/4K.bin, fd=6
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:40948 (fd=6)
+[httpd] #27 GET /random/4K.bin
+[httpd] #27 served file /random/4K.bin, fd=6
+[tcp] fd 7 accepted (passive open)
+[httpd] conn from 10.0.2.2:40956 (fd=7)
+[httpd] #28 GET /random/4K.bin
+[httpd] #28 served file /random/4K.bin, fd=7
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:40964 (fd=2)
+[httpd] #29 GET /random/4K.bin
+[httpd] #29 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:56098 (fd=2)
+[httpd] #30 GET /random/4K.bin
+[httpd] #30 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:56110 (fd=2)
+[httpd] #31 GET /random/4K.bin
+[httpd] #31 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:56124 (fd=2)
+[httpd] #32 GET /random/4K.bin
+[httpd] #32 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:56140 (fd=2)
+[httpd] #33 GET /random/4K.bin
+[httpd] #33 served file /random/4K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:56152 (fd=3)
+[httpd] #34 GET /random/4K.bin
+[httpd] #34 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:56154 (fd=3)
+[httpd] #35 GET /random/4K.bin
+[httpd] #35 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:56168 (fd=3)
+[httpd] #36 GET /random/4K.bin
+[httpd] #36 served file /random/4K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:56182 (fd=3)
+[httpd] #37 GET /random/4K.bin
+[httpd] #37 served file /random/4K.bin, fd=3
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:56190 (fd=4)
+[httpd] #38 GET /random/4K.bin
+[httpd] #38 served file /random/4K.bin, fd=4
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:56204 (fd=5)
+[httpd] #39 GET /random/4K.bin
+[httpd] #39 served file /random/4K.bin, fd=5
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:56206 (fd=5)
+[httpd] #40 GET /random/4K.bin
+[httpd] #40 served file /random/4K.bin, fd=5
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:56218 (fd=5)
+[httpd] #41 GET /random/4K.bin
+[httpd] #41 served file /random/4K.bin, fd=5
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:45162 (fd=6)
+[httpd] #42 GET /random/4K.bin
+[httpd] #42 served file /random/4K.bin, fd=6
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:45172 (fd=6)
+[httpd] #43 GET /random/4K.bin
+[httpd] #43 served file /random/4K.bin, fd=6
+[tcp] fd 7 accepted (passive open)
+[httpd] conn from 10.0.2.2:45180 (fd=7)
+[httpd] #44 GET /random/4K.bin
+[httpd] #44 served file /random/4K.bin, fd=7
+[tcp] fd 7 accepted (passive open)
+[httpd] conn from 10.0.2.2:45184 (fd=7)
+[httpd] #45 GET /random/4K.bin
+[httpd] #45 served file /random/4K.bin, fd=7
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:45190 (fd=2)
+[httpd] #46 GET /random/4K.bin
+[httpd] #46 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:45196 (fd=2)
+[httpd] #47 GET /random/4K.bin
+[httpd] #47 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:45210 (fd=2)
+[httpd] #48 GET /random/4K.bin
+[httpd] #48 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:45226 (fd=2)
+[httpd] #49 GET /random/4K.bin
+[httpd] #49 served file /random/4K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:45242 (fd=2)
+[httpd] #50 GET /random/4K.bin
+[httpd] #50 served file /random/4K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:45246 (fd=3)
+[httpd] #51 GET /random/4K.bin
+[httpd] #51 served file /random/4K.bin, fd=3
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:47738 (fd=4)
+[httpd] #52 GET /random/4K.bin
+[httpd] #52 served file /random/4K.bin, fd=4
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:47746 (fd=2)
+[httpd] #53 GET /random/4K.bin
+[httpd] #53 served file /random/4K.bin, fd=2
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:59780 (fd=4)
+[httpd] #54 GET /random/4K.bin
+[httpd] #54 served file /random/4K.bin, fd=4
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:59794 (fd=4)
+[httpd] #55 GET /random/4K.bin
+[httpd] #55 served file /random/4K.bin, fd=4
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:59806 (fd=3)
+[httpd] #56 GET /random/4K.bin
+[httpd] #56 served file /random/4K.bin, fd=3
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:59818 (fd=5)
+[httpd] #57 GET /random/4K.bin
+[httpd] #57 served file /random/4K.bin, fd=5
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:59834 (fd=2)
+[httpd] #58 GET /random/8K.bin
+[httpd] #58 served file /random/8K.bin, fd=2
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:48686 (fd=6)
+[httpd] #59 GET /random/8K.bin
+[httpd] #59 served file /random/8K.bin, fd=6
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:48702 (fd=4)
+[httpd] #60 GET /random/8K.bin
+[httpd] #60 served file /random/8K.bin, fd=4
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:48706 (fd=3)
+[httpd] #61 GET /random/8K.bin
+[httpd] #61 served file /random/8K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:48712 (fd=3)
+[httpd] #62 GET /random/8K.bin
+[httpd] #62 served file /random/8K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:51444 (fd=2)
+[httpd] #63 GET /random/8K.bin
+[httpd] #63 served file /random/8K.bin, fd=2
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:51456 (fd=5)
+[httpd] #64 GET /random/8K.bin
+[httpd] #64 served file /random/8K.bin, fd=5
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:51472 (fd=4)
+[httpd] #65 GET /random/16K.bin
+[httpd] #65 served file /random/16K.bin, fd=4
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:51474 (fd=6)
+[httpd] #66 GET /random/16K.bin
+[httpd] #66 served file /random/16K.bin, fd=6
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:47472 (fd=3)
+[httpd] #67 GET /random/16K.bin
+[httpd] #67 served file /random/16K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:47476 (fd=2)
+[httpd] #68 GET /random/16K.bin
+[httpd] #68 served file /random/16K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:47484 (fd=3)
+[httpd] #69 GET /random/16K.bin
+[httpd] #69 served file /random/16K.bin, fd=3
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:47496 (fd=4)
+[httpd] #70 GET /random/16K.bin
+[httpd] #70 served file /random/16K.bin, fd=4
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:47512 (fd=5)
+[httpd] #71 GET /random/16K.bin
+[httpd] #71 served file /random/16K.bin, fd=5
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:35480 (fd=5)
+[httpd] #72 GET /random/32K.bin
+[httpd] #72 served file /random/32K.bin, fd=5
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:35496 (fd=2)
+[httpd] #73 GET /random/32K.bin
+[httpd] #73 served file /random/32K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:35512 (fd=3)
+[httpd] #74 GET /random/32K.bin
+[httpd] #74 served file /random/32K.bin, fd=3
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:43174 (fd=4)
+[httpd] #75 GET /random/32K.bin
+[httpd] #75 served file /random/32K.bin, fd=4
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:43178 (fd=4)
+[httpd] #76 GET /random/32K.bin
+[httpd] #76 served file /random/32K.bin, fd=4
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:43192 (fd=2)
+[httpd] #77 GET /random/32K.bin
+[httpd] #77 served file /random/32K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:58664 (fd=3)
+[httpd] #78 GET /random/32K.bin
+[httpd] #78 served file /random/32K.bin, fd=3
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:58670 (fd=5)
+[httpd] #79 GET /random/64K.bin
+[httpd] #79 served file /random/64K.bin, fd=5
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:58672 (fd=4)
+[httpd] #80 GET /random/64K.bin
+[httpd] #80 served file /random/64K.bin, fd=4
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:34306 (fd=2)
+[httpd] #81 GET /random/64K.bin
+[httpd] #81 served file /random/64K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:34316 (fd=3)
+[httpd] #82 GET /random/64K.bin
+[httpd] #82 served file /random/64K.bin, fd=3
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:34326 (fd=5)
+[httpd] #83 GET /random/64K.bin
+[httpd] #83 served file /random/64K.bin, fd=5
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:59700 (fd=4)
+[httpd] #84 GET /random/64K.bin
+[httpd] #84 served file /random/64K.bin, fd=4
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:59706 (fd=2)
+[httpd] #85 GET /random/64K.bin
+[httpd] #85 served file /random/64K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:52884 (fd=3)
+[httpd] #86 GET /random/128K.bin
+[httpd] #86 served file /random/128K.bin, fd=3
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:52900 (fd=4)
+[httpd] #87 GET /random/128K.bin
+[httpd] #87 served file /random/128K.bin, fd=4
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:40866 (fd=2)
+[httpd] #88 GET /random/128K.bin
+[httpd] #88 served file /random/128K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:40882 (fd=3)
+[httpd] #89 GET /random/128K.bin
+[httpd] #89 served file /random/128K.bin, fd=3
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:51414 (fd=3)
+[httpd] #90 GET /random/128K.bin
+[httpd] #90 served file /random/128K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:60512 (fd=2)
+[httpd] #91 GET /random/128K.bin
+[httpd] #91 served file /random/128K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:60524 (fd=2)
+[httpd] #92 GET /random/128K.bin
+[httpd] #92 served file /random/128K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:51452 (fd=3)
+[httpd] #93 GET /random/256K.bin
+[httpd] #93 served file /random/256K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:55576 (fd=2)
+[httpd] #94 GET /random/256K.bin
+[httpd] #94 served file /random/256K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:36112 (fd=3)
+[httpd] #95 GET /random/256K.bin
+[httpd] #95 served file /random/256K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:39040 (fd=2)
+[httpd] #96 GET /random/256K.bin
+[httpd] #96 served file /random/256K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:58326 (fd=2)
+[httpd] #97 GET /random/256K.bin
+[httpd] #97 served file /random/256K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:45492 (fd=3)
+[httpd] #98 GET /random/256K.bin
+[httpd] #98 served file /random/256K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:52326 (fd=2)
+[httpd] #99 GET /random/256K.bin
+[httpd] #99 served file /random/256K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:47450 (fd=3)
+[httpd] #100 GET /random/512K.bin
+[httpd] #100 served file /random/512K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:52818 (fd=2)
+[httpd] #101 GET /random/512K.bin
+[httpd] #101 served file /random/512K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:56798 (fd=3)
+[httpd] #102 GET /random/512K.bin
+[httpd] #102 served file /random/512K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:35704 (fd=2)
+[httpd] #103 GET /random/512K.bin
+[httpd] #103 served file /random/512K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:44152 (fd=3)
+[httpd] #104 GET /random/512K.bin
+[httpd] #104 served file /random/512K.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:53424 (fd=2)
+[httpd] #105 GET /random/512K.bin
+[httpd] #105 served file /random/512K.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:39536 (fd=2)
+[httpd] #106 GET /random/512K.bin
+[httpd] #106 served file /random/512K.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:56474 (fd=3)
+[httpd] #107 GET /random/1M.bin
+[httpd] #107 served file /random/1M.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:52790 (fd=2)
+[httpd] #108 GET /random/1M.bin
+[httpd] #108 served file /random/1M.bin, fd=2
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:53296 (fd=3)
+[httpd] #109 GET /random/1M.bin
+[httpd] #109 served file /random/1M.bin, fd=3
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:42574 (fd=2)
+[httpd] #110 GET /random/1M.bin
+[httpd] #110 served file /random/1M.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:51278 (fd=2)
+[httpd] #111 GET /random/1M.bin
+[httpd] #111 served file /random/1M.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:55738 (fd=2)
+[httpd] #112 GET /random/1M.bin
+[httpd] #112 served file /random/1M.bin, fd=2
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:37320 (fd=2)
+[httpd] #113 GET /random/1M.bin
+[httpd] #113 served file /random/1M.bin, fd=2

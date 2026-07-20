@@ -3,7 +3,7 @@
 #define HTTPD_PORT   8080
 #define REQ_BUF_SIZE 4096
 #define HTTP_FILE_CAP 16384*4
-#define SERVE_CAP (200 * 1024)
+#define SERVE_CAP (1024 * 1024 + 1024) /* 1MB + 1KB,够装大文件和头部 */
 static char serve_buf[SERVE_CAP];
 
 extern char http_file_buf[HTTP_FILE_CAP];
