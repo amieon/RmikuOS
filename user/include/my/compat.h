@@ -76,6 +76,21 @@ namespace mv {
         T1 first; T2 second;
         Pair() = default;
         Pair(T1 a, T2 b) : first(a), second(b) {}
+        Pair(const Pair& other) : first(other.first), second(other.second) {}
+        Pair(Pair&& other) : first(move(other.first)), second(move(other.second)) {}
+
+        Pair& operator=(const Pair& other) {
+            if (this == &other) return *this;
+            first = other.first;
+            second = other.second;
+            return *this;
+        }
+        Pair& operator=(Pair&& other) {
+            if (this == &other) return *this;
+            first = move(other.first);
+            second = move(other.second);
+            return *this;
+        }
     };
 
     template <typename T>

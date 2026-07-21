@@ -13,6 +13,9 @@ public:
     bool empty() const { return m.empty(); }
     size_t size() const { return m.size(); }
     void clear() { m.clear(); }
+
+    typename map<K, char>::iterator begin() { return m.begin(); }
+    typename map<K, char>::iterator end() { return m.end(); }
 };
 
 } // namespace my

@@ -72,6 +72,30 @@ public:
     void clear() { clear(root); root = nullptr; n = 0; }
     bool empty() const { return n == 0; }
     size_t size() const { return n; }
+
+    struct iterator {
+        mv::Vector<Node*> stk;
+        Node* cur = nullptr;
+        iterator() = default;
+        iterator(Node* root) { push_left(stk, root); advance(); }
+
+        static void push_left(mv::Vector<Node*>& s, Node* p) {
+            while (p) { s.push_back(p); p = p->l; }
+        }
+        void advance() {
+            if (stk.empty()) { cur = nullptr; return; }
+            cur = stk.back(); stk.pop_back();
+            push_left(stk, cur->r);
+        }
+        iterator& operator++() { advance(); return *this; }
+        bool operator!=(const iterator& o) const { return cur != o.cur; }
+        bool operator==(const iterator& o) const { return cur == o.cur; }
+        mv::Pair<K&, V&> operator*() { return {cur->key, cur->val}; }
+        Node* operator->() { return cur; }
+    };
+
+    iterator begin() { return iterator(root); }
+    iterator end() { return iterator(); }
 };
 
 }

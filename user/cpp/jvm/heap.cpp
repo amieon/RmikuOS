@@ -52,7 +52,7 @@ void Heap::mark(VM& vm) {
     // 2. 标记当前正在执行的帧（不在 vm.frames 里，在 exec 的局部变量 f 里）
     //    这个由调用者保证：gc 只在 exec 返回后、frames 完整时触发
     // 3. 标记所有类的静态字段
-    for (auto& kv : vm.classes) {
+    for (auto kv : vm.classes) {
         for (auto& f : kv.second->fields) {
             if (f.is_static()) mark_value(f.static_value);
         }
