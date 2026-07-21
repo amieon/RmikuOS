@@ -40,6 +40,10 @@ pub struct ProcessControlBlock {
     pub effective_tickets: usize,
     pub ready_thread_count_snapshot: usize,
 
+    /// 可运行(Ready+Running)线程数缓存:由状态变迁点增量维护,
+    /// 供 pick 热路径 O(1) 读取,不再全表重扫。
+    pub runnable_count: usize,
+
     pub mmap_areas: Vec<MmapArea>,
     pub mmap_free_ranges: Vec<MmapFreeRange>,
     pub mmap_next: usize,
@@ -78,6 +82,7 @@ impl ProcessControlBlock {
             run_ticks: 0,
             effective_tickets: DEFAULT_TICKETS,
             ready_thread_count_snapshot: 0,
+            runnable_count: 0,
             
             mmap_areas: Vec::new(),
             mmap_free_ranges: Vec::new(),
@@ -130,6 +135,7 @@ impl ProcessControlBlock {
             run_ticks: 0,
             effective_tickets: tickets,
             ready_thread_count_snapshot: 1,
+            runnable_count: 1,
 
             mmap_areas,
             mmap_free_ranges,

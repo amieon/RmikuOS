@@ -26,6 +26,10 @@ pub struct TaskManager {
 
     scale_cache: Vec<usize>,
     cache_alpha: isize,
+
+    /// 睡眠唤醒早退缓存:所有睡眠线程里最早的到期时刻。
+    /// None = 没有睡眠线程(或尚未有线程睡过)。
+    next_wake_tick: Option<usize>,
 }
 
 pub enum WaitPidAction {
@@ -48,6 +52,7 @@ impl TaskManager {
 
             scale_cache: Vec::new(),
             cache_alpha: -1, // 哨兵：任何合法 alpha(0..=100) 都不等于它
+            next_wake_tick: None,
         }
     }
     pub fn alloc_pid(&mut self) -> Pid {
@@ -227,7 +232,9 @@ impl TaskManager {
     }
 
     pub fn update_process_stride_by_alpha(&mut self, pid: Pid) {
-        let runnable_threads = self.count_runnable_threads_in_process(pid);
+        // runnable_count 由状态变迁点增量维护(block/wake/ready/exit/reap/create),
+        // pick 热路径不再全表重扫。
+        let runnable_threads = self.process(pid).runnable_count;
 
         if runnable_threads == 0 {
             let process = self.process_mut(pid);
@@ -262,6 +269,14 @@ impl TaskManager {
             let Some(_) = self.processes[pid].as_ref() else {
                 continue;
             };
+
+            // 快速跳过没有任何可运行线程的进程(缓存值,O(1),借用即放)
+            if self.processes[pid]
+                .as_ref()
+                .map_or(true, |p| p.runnable_count == 0)
+            {
+                continue;
+            }
 
             if !self.process_has_ready_thread(pid) {
                 continue;
@@ -358,8 +373,11 @@ impl TaskManager {
     }
 
     pub fn mark_thread_ready(&mut self, tid: Tid) -> bool {
+        let pid = self.thread(tid).pid;
+        let was_blocking;
         let should_enqueue = {
             let thread = self.thread_mut(tid);
+            was_blocking = thread.status == ThreadStatus::Blocking;
 
             match thread.status {
                 ThreadStatus::Blocking => {
@@ -383,6 +401,11 @@ impl TaskManager {
             }
         };
 
+        // Blocking -> Ready:该线程重新变得可运行(Running->Ready 不变)
+        if was_blocking {
+            self.process_mut(pid).runnable_count += 1;
+        }
+
         if should_enqueue {
             self.enqueue_ready_thread(tid);
             true
@@ -394,14 +417,23 @@ impl TaskManager {
     pub fn mark_thread_zombie(&mut self, tid: Tid, exit_code: i32) {
         let pid = self.thread(tid).pid;
 
-        {
+        let was_runnable = {
             let thread = self.thread_mut(tid);
+            let r = matches!(
+                thread.status,
+                ThreadStatus::Ready | ThreadStatus::Running
+            );
             thread.status = ThreadStatus::Zombie;
             thread.block_reason = BlockReason::None;
             thread.exit_code = exit_code;
-        }
+            r
+        };
 
-        self.process_mut(pid).exit_code = exit_code;
+        let process = self.process_mut(pid);
+        if was_runnable {
+            process.runnable_count = process.runnable_count.saturating_sub(1);
+        }
+        process.exit_code = exit_code;
     }
 
     pub fn thread_cx_ptr(&mut self, tid: Tid) -> *mut TaskContext {
@@ -451,12 +483,46 @@ impl TaskManager {
     }
 
     pub fn block_thread(&mut self, tid: Tid, reason: BlockReason) {
-        let thread = self.thread_mut(tid);
-        thread.status = ThreadStatus::Blocking;
-        thread.block_reason = reason;
+        let pid = self.thread(tid).pid;
+
+        let sleep_tick = match reason {
+            BlockReason::Sleep { wake_tick } => Some(wake_tick),
+            _ => None,
+        };
+
+        let was_runnable = {
+            let thread = self.thread_mut(tid);
+            let r = matches!(
+                thread.status,
+                ThreadStatus::Ready | ThreadStatus::Running
+            );
+            thread.status = ThreadStatus::Blocking;
+            thread.block_reason = reason;
+            r
+        };
+
+        if was_runnable {
+            let process = self.process_mut(pid);
+            process.runnable_count = process.runnable_count.saturating_sub(1);
+        }
+
+        // 睡眠早退缓存:记录最早的到期时刻
+        if let Some(wake_tick) = sleep_tick {
+            self.next_wake_tick = Some(match self.next_wake_tick {
+                Some(t) => t.min(wake_tick),
+                None => wake_tick,
+            });
+        }
     }
 
     pub fn wake_sleeping_threads(&mut self, now: usize) {
+        // 早退:最早到期时刻还没到,本轮不必全表扫描
+        if let Some(t) = self.next_wake_tick {
+            if now < t {
+                return;
+            }
+        }
+
         let mut wake_list = Vec::new();
 
         for tid in 0..self.threads.len() {
@@ -491,6 +557,25 @@ impl TaskManager {
 
             self.wake_blocked_thread(tid);
         }
+
+        // 重建早退缓存:剩余睡眠者的最小到期时刻(含已死线程的残留
+        // 也无妨——最多多扫一次,下轮重建即自清)
+        let mut next: Option<usize> = None;
+        for tid in 0..self.threads.len() {
+            let Some(thread) = self.threads[tid].as_ref() else {
+                continue;
+            };
+            if thread.status != ThreadStatus::Blocking {
+                continue;
+            }
+            if let BlockReason::Sleep { wake_tick } = thread.block_reason {
+                next = Some(match next {
+                    Some(t) => t.min(wake_tick),
+                    None => wake_tick,
+                });
+            }
+        }
+        self.next_wake_tick = next;
     }
 
     pub fn read_current_user_bytes(&self, user_buf: usize, len: usize) -> Option<Vec<u8>> {
@@ -556,6 +641,7 @@ impl TaskManager {
     }
 
     pub fn wake_blocked_thread(&mut self, tid: Tid) -> bool {
+        let pid = self.thread(tid).pid;
         let should_enqueue = {
             let thread = self.thread_mut(tid);
 
@@ -570,6 +656,9 @@ impl TaskManager {
             // 不能现在入队，否则可能双核运行同一个 tid。
             thread.running_on.is_none()
         };
+
+        // Blocking -> Ready:该线程重新变得可运行
+        self.process_mut(pid).runnable_count += 1;
 
         if should_enqueue {
             self.enqueue_ready_thread(tid);
@@ -860,6 +949,7 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
             let process = self.process_mut(pid);
             process.threads.push(tid);
             process.ready_threads.push(tid);
+            process.runnable_count += 1;
         }
 
         log::info!(
@@ -969,6 +1059,12 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
     if let Some(process) = self.try_process_mut(pid) {
         process.threads.retain(|&x| x != tid);
         process.ready_threads.retain(|&x| x != tid);
+        if matches!(
+            thread.status,
+            ThreadStatus::Ready | ThreadStatus::Running
+        ) {
+            process.runnable_count = process.runnable_count.saturating_sub(1);
+        }
     }
 
 

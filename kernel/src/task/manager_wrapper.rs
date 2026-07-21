@@ -4,7 +4,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use log::logger;
 
-use crate::arch::{MAX_HARTS, ipi};                    // 新增：IPI 发送接口
+use crate::arch::{MAX_HARTS, ipi};                 
 use crate::{lock_detect, println};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
@@ -75,6 +75,7 @@ pub fn init() {
 
     process.threads.push(0);
     process.ready_threads.push(0);
+    process.runnable_count = 1;
 
     let mut manager = lock_detect!(TASK_MANAGER);
     manager.insert_process(process);
@@ -91,20 +92,18 @@ pub fn run_tasks() -> ! {
     let hart = processor::current_hart_id();
     loop {
         crate::drivers::net::maybe_poll();
-        let next_tid = {
+        // 合并取锁:唤醒睡眠者 + 选线程 + prepare 一次完成,
+        // 每轮调度少抢一次全局锁。
+        let next = {
             let mut manager = lock_detect!(TASK_MANAGER);  // lock 内部已 preempt_disable
             let now = crate::timer::ticks();
             manager.wake_sleeping_threads(now);
-            manager.find_next_ready_thread()
+            manager
+                .find_next_ready_thread()
+                .map(|tid| (tid, manager.prepare_thread(tid)))
         };  // 此处 drop guard → unlock → preempt_enable
 
-        //ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
-
-        if let Some(tid) = next_tid {
-            let (pid, root_ppn, kernel_stack_top, trap_cx_addr, task_cx_ptr) = {
-                let mut manager = lock_detect!(TASK_MANAGER);
-                manager.prepare_thread(tid)
-            };
+        if let Some((tid, (pid, root_ppn, kernel_stack_top, trap_cx_addr, task_cx_ptr))) = next {
 
             crate::task::processor::set_current_tid(Some(tid));
             crate::mm::activate_page_table(root_ppn);
@@ -832,17 +831,35 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
 
         manager.process_mut(current_pid).exit_code = exit_code;
 
+        // runnable_count 记账:把 Ready/Running -> Zombie/Dead 的线程数统计出来
+        let mut runnable_dec = 0usize;
         for tid in tids {
             if tid == current_tid {
                 let thread = manager.thread_mut(tid);
+                if matches!(
+                    thread.status,
+                    ThreadStatus::Ready | ThreadStatus::Running
+                ) {
+                    runnable_dec += 1;
+                }
                 thread.status = ThreadStatus::Zombie;
                 thread.block_reason = BlockReason::None;
                 thread.exit_code = exit_code;
             } else if let Some(thread) = manager.try_thread_mut(tid) {
+                if matches!(
+                    thread.status,
+                    ThreadStatus::Ready | ThreadStatus::Running
+                ) {
+                    runnable_dec += 1;
+                }
                 thread.status = ThreadStatus::Dead;
                 thread.block_reason = BlockReason::None;
                 thread.exit_code = exit_code;
             }
+        }
+        if runnable_dec > 0 {
+            let process = manager.process_mut(current_pid);
+            process.runnable_count = process.runnable_count.saturating_sub(runnable_dec);
         }
 
         let files: Vec<crate::fs::file::FileRef> = {
@@ -908,11 +925,20 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
             exit_code,
         );
 
-        {
+        let was_runnable = {
             let thread = manager.thread_mut(current_tid);
+            let r = matches!(
+                thread.status,
+                ThreadStatus::Ready | ThreadStatus::Running
+            );
             thread.status = ThreadStatus::Zombie;
             thread.block_reason = BlockReason::None;
             thread.exit_code = exit_code;
+            r
+        };
+        if was_runnable {
+            let process = manager.process_mut(pid);
+            process.runnable_count = process.runnable_count.saturating_sub(1);
         }
 
         //manager.wake_threads_joining(current_tid);
@@ -1352,6 +1378,21 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
         }
 
         let process = manager.process(pid);
+
+        // runnable_count 缓存漂移自检(仅 syscall 路径,代价可忽略):
+        // 若告警出现,说明某个状态变迁点漏记了账,请把 pid 和现场贴出来。
+        {
+            let cached = process.runnable_count;
+            let actual = manager.count_runnable_threads_in_process(pid);
+            if cached != actual {
+                log::warn!(
+                    "[sched] runnable_count drift: pid={} cached={} actual={}",
+                    pid,
+                    cached,
+                    actual,
+                );
+            }
+        }
 
         let runnable_threads = manager
             .count_sched_runnable_threads_in_process(pid)
