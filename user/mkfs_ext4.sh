@@ -24,7 +24,7 @@ else
 fi
 
 # 确保基础目录存在
-mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/fat" "$ROOT/gcn"
+mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/fat" "$ROOT/gcn" "$ROOT/jvm"
 
 # 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then
@@ -107,6 +107,22 @@ if [ -d "user/build/${ARCH}/gcn" ]; then
   done
   echo "  [gcn] -> /gcn/"
 fi
+
+# Java 字节码（JVM 项目）
+for proj_dir in user/java/*; do
+  [ -d "$proj_dir" ] || continue
+  proj_name="$(basename "$proj_dir")"
+  class_count=$(ls "$proj_dir"/*.class 2>/dev/null | wc -l)
+  if [ "$class_count" -eq 0 ]; then
+    continue
+  fi
+  mkdir -p "$ROOT/jvm/$proj_name"
+  for f in "$proj_dir"/*.class; do
+    [ -e "$f" ] || continue
+    cp "$f" "$ROOT/jvm/$proj_name/"
+  done
+  echo "  [jvm] $proj_name -> /jvm/$proj_name/"
+done
 
 
 # 简单展示 rootfs 内容

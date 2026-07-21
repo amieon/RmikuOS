@@ -419,6 +419,31 @@ def build_rust_workspace(arch: str):
     print(f"[user] rust workspace: {count} program(s) built")
 
 
+def build_java_projects(arch: str):
+    """编译 user/java/ 下的 Java 项目。
+    调用 javac 编译所有 .java 文件，产物 .class 留在原地，
+    由 mkfs_ext4.sh 打包进 /jvm/<project>/。
+    """
+    java_root = USER_DIR / "java"
+    if not java_root.exists():
+        print(f"[user] no java projects dir at {java_root}, skip")
+        return
+
+    for proj_dir in sorted(java_root.iterdir()):
+        if not proj_dir.is_dir():
+            continue
+        proj_name = proj_dir.name
+        java_files = sorted(proj_dir.glob("*.java"))
+        if not java_files:
+            continue
+
+        print(f"[user] javac {proj_name} ({len(java_files)} file(s)) ...")
+        cmd = ["javac", "-d", str(proj_dir)]
+        for f in java_files:
+            cmd.append(str(f))
+        run(cmd)
+        print(f"[user] java {proj_name} compiled")
+
 
 def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = False):
     """编译一个项目目录内的所有源文件（C 或 C++）。
@@ -617,6 +642,7 @@ def main():
     build_cpp_projects(args.arch)
     build_c_projects(args.arch)
     build_gcn(args.arch)
+    build_java_projects(args.arch)
 
     if args.objdump:
         cfg = ARCH_CONFIG[args.arch]
