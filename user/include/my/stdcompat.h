@@ -44,7 +44,7 @@ namespace std {
     template<> struct is_floating_point<double> : true_type {};
 }
 
-// ========== std::vector / pair / tuple 别名 ==========
+// ========== std::vector / pair / tuple / map / set 别名 ==========
 namespace std {
     template<typename T> using vector = mv::Vector<T>;
     template<typename T> using set = my::set<T>;
