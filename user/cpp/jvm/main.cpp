@@ -4,9 +4,19 @@
 #include "interp.h"
 #include "native.h"
 #include "my/stdcompat.h"
+
+extern "C" {
+    void* __dso_handle = nullptr;
+    int __cxa_atexit(void (*destructor)(void*), void* arg, void* dso) {
+        (void)destructor; (void)arg; (void)dso;
+        return 0;  // 直接忽略析构，裸机进程结束直接回收
+    }
+}
+
 static const int MAX_CLASSES = 32;
 static ClassFile g_class_storage[MAX_CLASSES];
 static int g_class_count = 0;
+
 
 static bool read_file(const char* path, uint8_t* buf, int* out_len) {
     FILE* f = fopen(path, "rb");
