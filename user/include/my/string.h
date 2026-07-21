@@ -3,7 +3,116 @@
 #include "../io.h"  
 #include "flag.h"  
 
+namespace my {
+    class string {
+        mv::Vector<char> buf;
+    public:
+        string() { buf.push_back('\0'); }
+        string(const char* s) {
+            if (s) { size_t n = mystr::strlen(s); for (size_t i = 0; i < n; i++) buf.push_back(s[i]); }
+            buf.push_back('\0');
+        }
+        string(const string& o) : buf(o.buf) {}
+        string(string&& o) : buf(mv::move(o.buf)) {}
+        
+        string& operator=(const char* s) {
+            buf.clear();
+            if (s) { size_t n = mystr::strlen(s); for (size_t i = 0; i < n; i++) buf.push_back(s[i]); }
+            buf.push_back('\0');
+            return *this;
+        }
+        string& operator=(const string& o) { buf = o.buf; return *this; }
+        
+        const char* c_str() const { return buf.data(); }
+        size_t size() const { return buf.empty() ? 0 : buf.size() - 1; }
+        bool empty() const { return size() == 0; }
+        
+        char& operator[](size_t i) { return buf[i]; }
+        char operator[](size_t i) const { return buf[i]; }
+        char& front() { return buf[0]; }
+        char& back() { return buf[size() - 1]; }   // 调用者保证非空
 
+        // 比较
+        bool operator>(const string& o) const { return mystr::strcmp(c_str(), o.c_str()) > 0; }
+        bool operator>(const char* s) const { return mystr::strcmp(c_str(), s) > 0; }
+        bool operator<=(const string& o) const { return !(*this > o); }
+        bool operator>=(const string& o) const { return !(*this < o); }
+
+        // 查找
+        size_t find(const char* s, size_t pos = 0) const {
+            if (!s || !*s) return 0;
+            size_t n = mystr::strlen(s);
+            size_t sz = size();
+            if (pos >= sz) return npos;
+            for (size_t i = pos; i + n <= sz; i++) {
+                if (mystr::strncmp(c_str() + i, s, n) == 0) return i;
+            }
+            return npos;
+        }
+        size_t find(char c, size_t pos = 0) const {
+            size_t sz = size();
+            for (size_t i = pos; i < sz; i++) if (buf[i] == c) return i;
+            return npos;
+        }
+
+        // 截取
+        string substr(size_t pos = 0, size_t len = npos) const {
+            size_t sz = size();
+            if (pos > sz) pos = sz;
+            size_t rlen = sz - pos;
+            if (len < rlen) rlen = len;
+            string res;
+            res.reserve(rlen);
+            for (size_t i = 0; i < rlen; i++) res.push_back(buf[pos + i]);
+            return res;
+        }
+        
+        void clear() { buf.clear(); buf.push_back('\0'); }
+        void reserve(size_t n) { buf.reserve(n + 1); }
+        void resize(size_t n) { buf.resize(n + 1); buf[n] = '\0'; }
+        
+        void push_back(char c) {
+            if (!buf.empty()) buf.pop_back();   // 弹掉旧的 '\0'
+            buf.push_back(c);
+            buf.push_back('\0');
+        }
+        
+        char pop_back() {
+            if (buf.size() <= 1) { clear(); return '\0'; }  
+            buf.pop_back();       
+            char ret = buf.back();  
+            buf.pop_back();         
+            buf.push_back('\0');    
+            return ret;
+        }
+        string& operator+=(const string& o) {
+            buf.pop_back();
+            for (size_t i = 0; i < o.size(); i++) buf.push_back(o[i]);
+            buf.push_back('\0');
+            return *this;
+        }
+        string& operator+=(const char* s) {
+            buf.pop_back();
+            size_t n = mystr::strlen(s);
+            for (size_t i = 0; i < n; i++) buf.push_back(s[i]);
+            buf.push_back('\0');
+            return *this;
+        }
+        string& operator+=(char c) {
+            buf.pop_back();
+            buf.push_back(c);
+            buf.push_back('\0');
+            return *this;
+        }
+        
+        bool operator==(const string& o) const { return mystr::strcmp(c_str(), o.c_str()) == 0; }
+        bool operator!=(const string& o) const { return !(*this == o); }
+        bool operator==(const char* s) const { return mystr::strcmp(c_str(), s) == 0; }
+        bool operator!=(const char* s) const { return !(*this == s); }
+    };
+    inline string operator+(const string& a, const string& b) { string r = a; r += b; return r; }
+    inline string operator+(const string& a, const char* b) { string r = a; r += b; return r; }
+}
 
 namespace mystr {
 

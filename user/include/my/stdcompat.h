@@ -44,8 +44,9 @@ namespace std {
     template<> struct is_floating_point<double> : true_type {};
 }
 
-// ========== std::vector / pair / tuple / map / set 别名 ==========
+// ========== std::vector / pair / tuple / map / set / string 别名 ==========
 namespace std {
+    using string = my::string;
     template<typename T> using vector = mv::Vector<T>;
     template<typename T> using set = my::set<T>;
     template<typename T1, typename T2> using map = my::map<T1, T2>;
@@ -58,85 +59,7 @@ namespace std {
     tuple<T1, T2, T3> make_tuple(T1 a, T2 b, T3 c) { return tuple<T1, T2, T3>(a, b, c); }
 }
 
-// ========== std::string ==========
-namespace std {
-    class string {
-        mv::Vector<char> buf;
-    public:
-        string() { buf.push_back('\0'); }
-        string(const char* s) {
-            if (s) { size_t n = mystr::strlen(s); for (size_t i = 0; i < n; i++) buf.push_back(s[i]); }
-            buf.push_back('\0');
-        }
-        string(const string& o) : buf(o.buf) {}
-        string(string&& o) : buf(mv::move(o.buf)) {}
-        
-        string& operator=(const char* s) {
-            buf.clear();
-            if (s) { size_t n = mystr::strlen(s); for (size_t i = 0; i < n; i++) buf.push_back(s[i]); }
-            buf.push_back('\0');
-            return *this;
-        }
-        string& operator=(const string& o) { buf = o.buf; return *this; }
-        
-        const char* c_str() const { return buf.data(); }
-        size_t size() const { return buf.empty() ? 0 : buf.size() - 1; }
-        bool empty() const { return size() == 0; }
-        
-        char& operator[](size_t i) { return buf[i]; }
-        char operator[](size_t i) const { return buf[i]; }
-        char& front() { return buf[0]; }
-        char& back() { return buf[size() - 1]; }   // 调用者保证非空
-        
-        bool operator<(const string& o) const { return mystr::strcmp(c_str(), o.c_str()) < 0; }
-        
-        void clear() { buf.clear(); buf.push_back('\0'); }
-        void reserve(size_t n) { buf.reserve(n + 1); }
-        void resize(size_t n) { buf.resize(n + 1); buf[n] = '\0'; }
-        
-        void push_back(char c) {
-            if (!buf.empty()) buf.pop_back();   // 弹掉旧的 '\0'
-            buf.push_back(c);
-            buf.push_back('\0');
-        }
-        
-        char pop_back() {
-            if (buf.size() <= 1) { clear(); return '\0'; }  // 空字符串，保持空
-            buf.pop_back();           // 弹掉 '\0'
-            char ret = buf.back();    // 取最后一个字符
-            buf.pop_back();           // 弹掉它
-            buf.push_back('\0');      // 恢复 '\0'
-            return ret;
-        }
-        
-        string& operator+=(const string& o) {
-            buf.pop_back();
-            for (size_t i = 0; i < o.size(); i++) buf.push_back(o[i]);
-            buf.push_back('\0');
-            return *this;
-        }
-        string& operator+=(const char* s) {
-            buf.pop_back();
-            size_t n = mystr::strlen(s);
-            for (size_t i = 0; i < n; i++) buf.push_back(s[i]);
-            buf.push_back('\0');
-            return *this;
-        }
-        string& operator+=(char c) {
-            buf.pop_back();
-            buf.push_back(c);
-            buf.push_back('\0');
-            return *this;
-        }
-        
-        bool operator==(const string& o) const { return mystr::strcmp(c_str(), o.c_str()) == 0; }
-        bool operator!=(const string& o) const { return !(*this == o); }
-        bool operator==(const char* s) const { return mystr::strcmp(c_str(), s) == 0; }
-        bool operator!=(const char* s) const { return !(*this == s); }
-    };
-    inline string operator+(const string& a, const string& b) { string r = a; r += b; return r; }
-    inline string operator+(const string& a, const char* b) { string r = a; r += b; return r; }
-}
+
 
 // ========== std::ifstream / istringstream ==========
 namespace std {
