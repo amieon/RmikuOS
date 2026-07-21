@@ -13,11 +13,17 @@ static int slot_count(const std::string& desc) {
     int n = 0;
     for (size_t i=1; i<desc.size() && desc[i]!=')'; ) {
         if (desc[i]=='[') { i++; while (desc[i]=='[') i++; }
-        if (desc[i]=='L') { while (desc[i]!=';' && desc[i]!=')') i++; i++; }
+        if (desc[i]=='L') { while (desc[i]!=';' && desc[i]!=')') i++; i++; n++; }
         else if (desc[i]=='J' || desc[i]=='D') { n+=2; i++; }
         else { n++; i++; }
     }
     return n;
+}
+
+// 类没找到时按 classpath 懒加载（load_class 定义在 main.cpp）
+static ClassFile* ensure_class(VM& vm, const std::string& name) {
+    if (vm.classes.count(name)) return vm.classes[name];
+    return load_class(vm, vm.classpath.empty() ? nullptr : vm.classpath.c_str(), name.c_str());
 }
 
 static Method* resolve_method(ClassFile* start, const std::string& name, const std::string& desc) {
@@ -188,7 +194,7 @@ Value VM::exec(Method* m, ClassFile* cf, std::vector<Value> args) {
             std::string clsname = cf->cp_class_name(fld.u.ref.class_idx);
             std::string fname = cf->cp_name_and_type(fld.u.ref.name_type_idx, true);
             std::string fdesc = cf->cp_name_and_type(fld.u.ref.name_type_idx, false);
-            ClassFile* target = classes.count(clsname) ? classes[clsname] : nullptr;
+            ClassFile* target = ensure_class(*this, clsname);
             if (!target) { fprintf(stderr,"class not found: %s\n",clsname.c_str()); _exit(1); }
             Field* field = target->find_field(fname, fdesc);
             if (!field) { fprintf(stderr,"field not found: %s.%s\n",clsname.c_str(),fname.c_str()); _exit(1); }
@@ -199,7 +205,7 @@ Value VM::exec(Method* m, ClassFile* cf, std::vector<Value> args) {
             std::string clsname = cf->cp_class_name(fld.u.ref.class_idx);
             std::string fname = cf->cp_name_and_type(fld.u.ref.name_type_idx, true);
             std::string fdesc = cf->cp_name_and_type(fld.u.ref.name_type_idx, false);
-            ClassFile* target = classes.count(clsname) ? classes[clsname] : nullptr;
+            ClassFile* target = ensure_class(*this, clsname);
             if (!target) { fprintf(stderr,"class not found: %s\n",clsname.c_str()); _exit(1); }
             Field* field = target->find_field(fname, fdesc);
             if (!field) { fprintf(stderr,"field not found: %s.%s\n",clsname.c_str(),fname.c_str()); _exit(1); }
@@ -230,7 +236,7 @@ Value VM::exec(Method* m, ClassFile* cf, std::vector<Value> args) {
             const CPInfo& mref = cf->cp[idx];
             std::string name = cf->cp_name_and_type(mref.u.ref.name_type_idx, true);
             std::string desc = cf->cp_name_and_type(mref.u.ref.name_type_idx, false);
-            int nargs = slot_count(desc);
+            int nargs = slot_count(desc) + 1;  // +1: args[0] 是 this
             std::vector<Value> args(nargs);
             for (int i=nargs-1;i>=0;i--) { args[i]=f.stack.back(); f.stack.pop_back(); }
             Object* obj = args[0].obj;
@@ -253,10 +259,11 @@ Value VM::exec(Method* m, ClassFile* cf, std::vector<Value> args) {
             std::string clsname = cf->cp_class_name(mref.u.ref.class_idx);
             std::string name = cf->cp_name_and_type(mref.u.ref.name_type_idx, true);
             std::string desc = cf->cp_name_and_type(mref.u.ref.name_type_idx, false);
-            int nargs = slot_count(desc);
+            int nargs = slot_count(desc) + 1;  // +1: args[0] 是 this
             std::vector<Value> args(nargs);
             for (int i=nargs-1;i>=0;i--) { args[i]=f.stack.back(); f.stack.pop_back(); }
-            ClassFile* target = classes.count(clsname) ? classes[clsname] : cf;
+            ClassFile* target = ensure_class(*this, clsname);
+            if (!target) { fprintf(stderr,"class not found: %s\n",clsname.c_str()); _exit(1); }
             Method* m = target->find_method(name, desc);
             if (!m) m = resolve_method(target, name, desc);
             if (!m) { fprintf(stderr,"special not found: %s.%s%s\n",clsname.c_str(),name.c_str(),desc.c_str()); _exit(1); }
@@ -276,7 +283,8 @@ Value VM::exec(Method* m, ClassFile* cf, std::vector<Value> args) {
             std::string clsname = cf->cp_class_name(mref.u.ref.class_idx);
             std::string name = cf->cp_name_and_type(mref.u.ref.name_type_idx, true);
             std::string desc = cf->cp_name_and_type(mref.u.ref.name_type_idx, false);
-            ClassFile* target = classes.count(clsname) ? classes[clsname] : cf;
+            ClassFile* target = ensure_class(*this, clsname);
+            if (!target) { fprintf(stderr,"class not found: %s\n",clsname.c_str()); _exit(1); }
             Method* m = target->find_method(name, desc);
             if (!m) m = resolve_method(target, name, desc);
             if (!m) { fprintf(stderr,"static not found: %s.%s%s\n",clsname.c_str(),name.c_str(),desc.c_str()); _exit(1); }
@@ -301,8 +309,9 @@ Value VM::exec(Method* m, ClassFile* cf, std::vector<Value> args) {
                 frames.pop_back();
             }
             uint16_t idx = s2();
-            std::string clsname = cf->cp_class_name(cf->cp[idx].u.class_name_idx);
-            ClassFile* target = classes.count(clsname) ? classes[clsname] : nullptr;
+            // cp[idx] 是 Class 项，cp_class_name 内部会自己再取 name_idx，不能传两次
+            std::string clsname = cf->cp_class_name(idx);
+            ClassFile* target = ensure_class(*this, clsname);
             if (!target) { fprintf(stderr,"new class not found: %s\n",clsname.c_str()); _exit(1); }
             pusho(f.stack, heap.alloc_object(target)); break; }
         case 0xbc: { // newarray

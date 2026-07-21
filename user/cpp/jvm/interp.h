@@ -17,9 +17,13 @@ struct VM {
     std::map<std::string, ClassFile*> classes;
     std::map<std::string, NativeFunc> natives;
     Object* exception_obj = nullptr;
+    std::string classpath;   // 懒加载用，空字符串 = 当前目录
     void maybe_gc();
 
     Value exec(Method* m, ClassFile* cf, std::vector<Value> args);
     Value invoke(Method* m, ClassFile* cf, std::vector<Value> args);
     void throw_ex(const std::string& name);
 };
+
+// 定义在 main.cpp；classpath 为 nullptr 表示当前目录
+ClassFile* load_class(VM& vm, const char* classpath, const char* classname);

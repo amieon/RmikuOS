@@ -37,7 +37,7 @@ void register_natives(VM& vm) {
     vm.natives["java/lang/Object.<init>()V"] = [](VM& vm, std::vector<Value>& args)->Value {
         return Value();
     };
-    vm.natives["printString(Ljava/lang/String;)V"] = [](VM& vm, std::vector<Value>& args)->Value {
+    auto println_string = [](VM& vm, std::vector<Value>& args)->Value {
         if (args[0].obj) {
             const std::string& s = args[0].obj->hack_str;
             write(1, s.c_str(), s.size());
@@ -47,6 +47,9 @@ void register_natives(VM& vm) {
         }
         return Value();
     };
+    vm.natives["printString(Ljava/lang/String;)V"] = println_string;
+    // 任意类里的 static native void println(String) 都会 fallback 到这个 key
+    vm.natives["println(Ljava/lang/String;)V"] = println_string;
 }
 
 Value call_native(VM& vm, const std::string& cls, const std::string& name,

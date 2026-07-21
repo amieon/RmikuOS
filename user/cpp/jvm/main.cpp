@@ -71,62 +71,67 @@ ClassFile* load_class(VM& vm, const char* classpath, const char* classname) {
     *cf = parse_class(buf);
     vm.classes[cf->cp_class_name(cf->this_class)] = cf;
 
-    // 递归加载父类
+    // 加载父类，并接上 super 链（resolve_method 要靠它向上找方法）
     if (cf->super_class != 0) {
         std::string sname = cf->cp_class_name(cf->super_class);
-        if (sname != "java/lang/Object" && !vm.classes.count(sname)) {
-            load_class(vm, classpath, sname.c_str());
+        if (sname == "java/lang/Object") {
+            // 合成一个最小的 java/lang/Object：只有一个 native <init>
+            if (!vm.classes.count(sname)) {
+                if (g_class_count >= MAX_CLASSES) { printf("Too many classes\n"); return nullptr; }
+                ClassFile* obj = &g_class_storage[g_class_count++];
+                *obj = ClassFile();
+                obj->cp.resize(3);
+                obj->cp[1].tag = 1; obj->cp[1].str = "java/lang/Object";
+                obj->cp[2].tag = 7; obj->cp[2].u.class_name_idx = 1;
+                obj->this_class = 2;
+                Method init;
+                init.flags = 0x0100; // native
+                init.name = "<init>";
+                init.desc = "()V";
+                obj->methods.push_back(init);
+                vm.classes[sname] = obj;
+            }
+            cf->super = vm.classes[sname];
+        } else {
+            cf->super = load_class(vm, classpath, sname.c_str());
         }
     }
     return cf;
 }
 
 int main(int argc, char** argv) {
-    // 用法：jvm <classpath> <MainClass>
-    // 或：jvm <MainClass.class>   （兼容旧用法）
-    const char* classpath = nullptr;
-    const char* main_name = "Main";
-
-    if (argc > 2) {
-        classpath = argv[1];
-        main_name = argv[2];
-    } else if (argc > 1) {
-        // 尝试判断是目录还是 .class 文件
-        int len = 0;
-        while (argv[1][len]) len++;
-        if (len > 6 && argv[1][len-6] == '.' && argv[1][len-5] == 'c' &&
-            argv[1][len-4] == 'l' && argv[1][len-3] == 'a' &&
-            argv[1][len-2] == 's' && argv[1][len-1] == 's') {
-            // 直接加载单个 .class 文件（旧模式）
-            static uint8_t buf[65536];
-            int flen = 0;
-            if (!read_file(argv[1], buf, &flen)) {
-                printf("Cannot open %s\n", argv[1]);
-                return 1;
-            }
-            VM vm;
-            ClassFile cf = parse_class(buf);
-            vm.main_class = &cf;
-            vm.classes[cf.cp_class_name(cf.this_class)] = &cf;
-            register_natives(vm);
-            Method* m = cf.find_method("main", "([Ljava/lang/String;)V");
-            if (!m) { printf("no main\n"); return 1; }
-            Object* args_arr = vm.heap.alloc_array(0, T_REF);
-            std::vector<Value> args;
-            args.push_back(Value::fromRef(args_arr));
-            vm.exec(m, &cf, args);
-            if (vm.exception_obj) {
-                printf("Uncaught exception\n");
-                return 1;
-            }
-            return 0;
-        } else {
-            // 当作 classpath，默认 Main 类
-            classpath = argv[1];
-        }
+    // 用法：jvm [classpath] <MainClass>
+    //   jvm Main          —— 从当前目录加载 Main.class（以及它引用的其他类）
+    //   jvm Main.class    —— 同上，兼容带后缀的写法
+    //   jvm /jvm demo.Main —— 指定 classpath，包名用 . 分隔
+    if (argc < 2) {
+        printf("usage: jvm [classpath] <MainClass>\n");
+        return 1;
     }
 
+    const char* classpath = nullptr;  // nullptr = 当前目录
+    char name_buf[256];
+    if (argc > 2) {
+        classpath = argv[1];
+        int i = 0;
+        while (argv[2][i] && i < 255) { name_buf[i] = argv[2][i]; i++; }
+        name_buf[i] = '\0';
+    } else {
+        int i = 0;
+        while (argv[1][i] && i < 255) { name_buf[i] = argv[1][i]; i++; }
+        name_buf[i] = '\0';
+        // 兼容 jvm Xxx.class：去掉 .class 后缀，统一走 load_class
+        int len = i;
+        if (len > 6 && name_buf[len-6] == '.' && name_buf[len-5] == 'c' &&
+            name_buf[len-4] == 'l' && name_buf[len-3] == 'a' &&
+            name_buf[len-2] == 's' && name_buf[len-1] == 's') {
+            name_buf[len-6] = '\0';
+        }
+    }
+    const char* main_name = name_buf;
+
     VM vm;
+    vm.classpath = classpath ? classpath : "";
     ClassFile* main_cf = load_class(vm, classpath, main_name);
     if (!main_cf) {
         printf("Cannot load main class: %s\n", main_name);
