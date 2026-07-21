@@ -5,14 +5,15 @@ namespace my {
 inline uint32_t treap_rand() {
     return (uint32_t)mymath::global_rng().next();
 }
+
 template<typename K, typename V>
 class map {
     struct Node {
-        K key;
-        V val;
+        K first;           // 标准命名：key
+        V second;          // 标准命名：val
         uint32_t pri;
         Node *l = nullptr, *r = nullptr;
-        Node(const K& k, const V& v) : key(k), val(v), pri(treap_rand()) {}
+        Node(const K& k, const V& v) : first(k), second(v), pri(treap_rand()) {}
     };
     Node* root = nullptr;
     size_t n = 0;
@@ -22,26 +23,26 @@ class map {
 
     void insert(Node*& p, const K& k, const V& v) {
         if (!p) { p = new Node(k, v); ++n; return; }
-        if (k < p->key) {
+        if (k < p->first) {
             insert(p->l, k, v);
             if (p->l->pri < p->pri) rot_r(p);
-        } else if (k > p->key) {
+        } else if (k > p->first) {
             insert(p->r, k, v);
             if (p->r->pri < p->pri) rot_l(p);
         } else {
-            p->val = v;
+            p->second = v;
         }
     }
-    Node* find(Node* p, const K& k) const {
+    Node* find_node(Node* p, const K& k) const {
         if (!p) return nullptr;
-        if (k < p->key) return find(p->l, k);
-        if (k > p->key) return find(p->r, k);
+        if (k < p->first) return find_node(p->l, k);
+        if (k > p->first) return find_node(p->r, k);
         return p;
     }
     void erase(Node*& p, const K& k) {
         if (!p) return;
-        if (k < p->key) erase(p->l, k);
-        else if (k > p->key) erase(p->r, k);
+        if (k < p->first) erase(p->l, k);
+        else if (k > p->first) erase(p->r, k);
         else {
             if (!p->l && !p->r) { delete p; p = nullptr; --n; }
             else if (!p->r || (p->l && p->l->pri < p->r->pri)) {
@@ -58,44 +59,76 @@ class map {
 
 public:
     ~map() { clear(root); }
+
+    // 迭代器需要访问 root 做 ++
+    struct iterator {
+        Node* cur = nullptr;
+        map* m = nullptr;
+
+        iterator() = default;
+        iterator(Node* c, map* mp) : cur(c), m(mp) {}
+
+        iterator& operator++() {
+            if (!cur || !m) return *this;
+            if (cur->r) {
+                cur = cur->r;
+                while (cur->l) cur = cur->l;
+            } else {
+                Node* anc = nullptr;
+                Node* n = m->root;
+                while (n && n != cur) {
+                    if (cur->first < n->first) {
+                        anc = n;
+                        n = n->l;
+                    } else {
+                        n = n->r;
+                    }
+                }
+                cur = anc;
+            }
+            return *this;
+        }
+        bool operator!=(const iterator& o) const { return cur != o.cur; }
+        bool operator==(const iterator& o) const { return cur == o.cur; }
+        Node& operator*() const { return *cur; }
+        Node* operator->() const { return cur; }
+    };
+
     void insert(const K& k, const V& v) { insert(root, k, v); }
-    V* find(const K& k) { return find(root, k) ? &find(root, k)->val : nullptr; }
-    const V* find(const K& k) const { return find(root, k) ? &find(root, k)->val : nullptr; }
-    bool count(const K& k) const { return find(root, k) != nullptr; }
-    V& operator[](const K& k) {
-        Node* p = find(root, k);
-        if (p) return p->val;
-        insert(root, k, V());
-        return find(root, k)->val;  
+
+    iterator find(const K& k) {
+        return iterator(find_node(root, k), this);
     }
+    iterator end() { return iterator(); }
+
+    bool count(const K& k) const { return find_node(root, k) != nullptr; }
+
+    V& operator[](const K& k) {
+        Node* p = find_node(root, k);
+        if (p) return p->second;
+        insert(root, k, V());
+        return find_node(root, k)->second;
+    }
+
     void erase(const K& k) { erase(root, k); }
     void clear() { clear(root); root = nullptr; n = 0; }
     bool empty() const { return n == 0; }
     size_t size() const { return n; }
 
-    struct iterator {
-        mv::Vector<Node*> stk;
-        Node* cur = nullptr;
-        iterator() = default;
-        iterator(Node* root) { push_left(stk, root); advance(); }
+    iterator begin() {
+        Node* p = root;
+        while (p && p->l) p = p->l;
+        return iterator(p, this);
+    }
 
-        static void push_left(mv::Vector<Node*>& s, Node* p) {
-            while (p) { s.push_back(p); p = p->l; }
-        }
-        void advance() {
-            if (stk.empty()) { cur = nullptr; return; }
-            cur = stk.back(); stk.pop_back();
-            push_left(stk, cur->r);
-        }
-        iterator& operator++() { advance(); return *this; }
-        bool operator!=(const iterator& o) const { return cur != o.cur; }
-        bool operator==(const iterator& o) const { return cur == o.cur; }
-        mv::Pair<K&, V&> operator*() { return {cur->key, cur->val}; }
-        Node* operator->() { return cur; }
-    };
-
-    iterator begin() { return iterator(root); }
-    iterator end() { return iterator(); }
+    V* find_ptr(const K& k) {
+        Node* p = find_node(root, k);
+        return p ? &p->second : nullptr;
+    }
+    const V* find_ptr(const K& k) const {
+        Node* p = find_node(root, k);
+        return p ? &p->second : nullptr;
+    }
 };
 
 }
