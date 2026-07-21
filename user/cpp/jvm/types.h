@@ -1,17 +1,24 @@
 #pragma once
 #include "my/stdcompat.h"
 
+inline void jvm_panic(const char* msg) {
+    exit(1);
+}
+
+template<typename T>
+inline T jvm_max(T a, T b) { return a > b ? a : b; }
+
 enum ValueType {
     T_INT = 0, T_LONG, T_FLOAT, T_DOUBLE, T_REF,
     T_BYTE, T_BOOL, T_CHAR, T_SHORT, T_VOID, T_DUMMY
 };
 
 struct Object;
-struct Heap;
 struct ClassFile;
 struct Method;
 struct Field;
 struct VM;
+struct Frame;
 
 struct Value {
     union {
@@ -95,4 +102,42 @@ struct ClassFile {
     Field* find_field(const std::string& n, const std::string& d);
 };
 
-using NativeFunc = std::function<Value(VM&, std::vector<Value>&)>;
+using NativeFunc = Value (*)(VM&, std::vector<Value>&);
+
+struct Heap {
+    std::vector<Object*> objects;
+    size_t gc_threshold = 256;
+    size_t total_alloc = 0;
+
+    Object* alloc_object(ClassFile* clazz);
+    Object* alloc_array(int32_t length, ValueType elem_type);
+    Object* alloc_string(const char* str);
+    void gc(VM& vm);
+private:
+    void mark(VM& vm);
+    void sweep();
+    void mark_object(Object* obj);
+    void mark_value(const Value& v);
+};
+
+struct Frame {
+    Method* method = nullptr;
+    ClassFile* clazz = nullptr;
+    std::vector<Value> locals;
+    std::vector<Value> stack;
+    uint32_t pc = 0;
+};
+
+struct VM {
+    Heap heap;
+    ClassFile* main_class = nullptr;
+    std::vector<Frame> frames;
+    std::map<std::string, ClassFile*> classes;
+    std::map<std::string, NativeFunc> natives;
+    Object* exception_obj = nullptr;
+
+    Value exec(Method* m, ClassFile* cf, std::vector<Value> args);
+    Value invoke(Method* m, ClassFile* cf, std::vector<Value> args);
+    void throw_ex(const std::string& name);
+    void maybe_gc();
+};
