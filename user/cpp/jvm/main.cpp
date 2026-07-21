@@ -4,6 +4,7 @@
 #include "interp.h"
 #include "native.h"
 #include "my/stdcompat.h"
+#include "lock.h"
 
 extern "C" {
     void* __dso_handle = nullptr;
@@ -48,7 +49,12 @@ static void build_path(char* out, const char* classpath, const char* classname) 
     out[i++] = 's'; out[i++] = 's'; out[i] = '\0';
 }
 
-ClassFile* load_class(VM& vm, const char* classpath, const char* classname) {
+// 类存储是全局共享的（g_class_storage/g_class_count），
+// 多线程各自跑独立 JVM 时会并发加载类，这里加锁保护。
+// 注意：递归加载父类要走 load_class_locked，不能再次拿锁。
+static mutex_t g_load_lock = MUTEX_INIT;
+
+static ClassFile* load_class_locked(VM& vm, const char* classpath, const char* classname) {
     // 已加载？
     std::string name = classname;
     if (vm.classes.count(name)) return vm.classes[name];
@@ -93,10 +99,17 @@ ClassFile* load_class(VM& vm, const char* classpath, const char* classname) {
             }
             cf->super = vm.classes[sname];
         } else {
-            cf->super = load_class(vm, classpath, sname.c_str());
+            cf->super = load_class_locked(vm, classpath, sname.c_str());
         }
     }
     return cf;
+}
+
+ClassFile* load_class(VM& vm, const char* classpath, const char* classname) {
+    mutex_lock(&g_load_lock);
+    ClassFile* r = load_class_locked(vm, classpath, classname);
+    mutex_unlock(&g_load_lock);
+    return r;
 }
 
 int main(int argc, char** argv) {
