@@ -6,6 +6,7 @@ extern "C" {
 
 #include "types.h"
 #include "syscall.h"
+#include "file.h"
 #include "io.h"
 #include "process.h"
 #include "fs.h"

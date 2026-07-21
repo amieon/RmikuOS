@@ -2,9 +2,9 @@
 
 #pragma once
 #include "../include/syscall.h"  
-#define stdin 0 
-#define stdout 1 
-#define stderr 2
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
 
 namespace io {
 

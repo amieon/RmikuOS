@@ -141,11 +141,12 @@ struct SimpleMap {
 
 } // namespace mystr
 
-static const size_t npos = (size_t)(-1);
+
 namespace my {
     class string {
         mv::Vector<char> buf;
     public:
+        static const size_t npos = (size_t)(-1);
         string() { buf.push_back('\0'); }
         string(const char* s) {
             if (s) { size_t n = mystr::strlen(s); for (size_t i = 0; i < n; i++) buf.push_back(s[i]); }

@@ -66,7 +66,7 @@ public:
         Node* p = find(root, k);
         if (p) return p->val;
         insert(root, k, V());
-        return *find(root, k);
+        return find(root, k)->val;  
     }
     void erase(const K& k) { erase(root, k); }
     void clear() { clear(root); root = nullptr; n = 0; }

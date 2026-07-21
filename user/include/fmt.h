@@ -3,6 +3,7 @@
 #include "syscall.h"
 #include "types.h"
 #include "io.h"
+#include "file.h"
 
 #ifndef UPRINTF_BUF_SIZE
 #define UPRINTF_BUF_SIZE 1024
@@ -46,7 +47,6 @@ static inline void uprintf_i64_dec(struct uprintf_buf *b, long long v) {
     }
 }
 
-// 修改：增加 upper 参数，0=小写 1=大写
 static inline void uprintf_u64_hex(struct uprintf_buf *b, unsigned long long v, int upper) {
     static const char digits_lower[] = "0123456789abcdef";
     static const char digits_upper[] = "0123456789ABCDEF";
@@ -57,7 +57,6 @@ static inline void uprintf_u64_hex(struct uprintf_buf *b, unsigned long long v, 
     while (n > 0) uprintf_putc(b, tmp[--n]);
 }
 
-// 新增：八进制
 static inline void uprintf_u64_oct(struct uprintf_buf *b, unsigned long long v) {
     char tmp[22]; int n = 0;
     if (v == 0) { uprintf_putc(b, '0'); return; }
@@ -65,7 +64,6 @@ static inline void uprintf_u64_oct(struct uprintf_buf *b, unsigned long long v) 
     while (n > 0) uprintf_putc(b, tmp[--n]);
 }
 
-// 辅助：打印 double，prec 位小数
 static inline void uprintf_float(struct uprintf_buf *b, double v, int prec) {
     if (v < 0) { uprintf_putc(b, '-'); v = -v; }
     unsigned long long ip = (unsigned long long)v;
@@ -293,17 +291,6 @@ static inline void uvprintf(const char *fmt, va_list ap) {
 
 static inline void uprintf(const char *fmt, ...) {
     va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
-}
-
-// C 风格 printf 桥接
-static inline int printf(const char* fmt, ...) {
-    va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
-    return 0;
-}
-static inline int fprintf(int fd, const char* fmt, ...) {
-    (void)fd;
-    va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
-    return 0;
 }
 
 
@@ -562,4 +549,25 @@ static inline int sprintf(char *str, const char *fmt, ...) {
     int r = vsnprintf(str, 0x7fffffff, fmt, ap); // 不限长，调用者保证缓冲区够大
     va_end(ap);
     return r;
+}
+
+
+
+static inline int fprintf(FILE* fp, const char* fmt, ...) {
+    if (!fp || fp->fd < 0) return -1;
+    va_list ap;
+    va_start(ap, fmt);
+    char buf[256];
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n > 0) write(fp->fd, buf, (size_t)n);
+    return n;
+}
+
+// 顺便把 printf 也改成走 fprintf，统一
+static inline int printf(const char* fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    uvprintf(fmt, ap); 
+    va_end(ap);
+    return 0;
 }
