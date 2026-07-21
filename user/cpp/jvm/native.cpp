@@ -37,6 +37,16 @@ void register_natives(VM& vm) {
     vm.natives["java/lang/Object.<init>()V"] = [](VM& vm, std::vector<Value>& args)->Value {
         return Value();
     };
+    vm.natives["printString(Ljava/lang/String;)V"] = [](VM& vm, std::vector<Value>& args)->Value {
+        if (args[0].obj) {
+            const std::string& s = args[0].obj->hack_str;
+            write(1, s.c_str(), s.size());
+            write(1, "\n", 1);
+        } else {
+            write(1, "null\n", 5);
+        }
+        return Value();
+    };
 }
 
 Value call_native(VM& vm, const std::string& cls, const std::string& name,
