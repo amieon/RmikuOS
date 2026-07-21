@@ -112,6 +112,7 @@ fi
 for proj_dir in user/java/*; do
   [ -d "$proj_dir" ] || continue
   proj_name="$(basename "$proj_dir")"
+  [ "$proj_name" = "rmiku" ] && continue   # 公共库目录，不单独打包
   class_count=$(ls "$proj_dir"/*.class 2>/dev/null | wc -l)
   if [ "$class_count" -eq 0 ]; then
     continue

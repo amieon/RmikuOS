@@ -423,15 +423,24 @@ def build_java_projects(arch: str):
     """编译 user/java/ 下的 Java 项目。
     调用 javac 编译所有 .java 文件，产物 .class 留在原地，
     由 mkfs_ext4.sh 打包进 /jvm/<project>/。
+
+    rmiku/ 是公共库（Rmiku.java），不参与单独打包，
+    但每个项目编译时都要带上它，否则 javac 找不到 Rmiku 类。
     """
     java_root = USER_DIR / "java"
     if not java_root.exists():
         print(f"[user] no java projects dir at {java_root}, skip")
         return
 
+    # 公共库源码（Rmiku.java）
+    lib_dir = java_root / "rmiku"
+    lib_files = sorted(lib_dir.glob("*.java")) if lib_dir.exists() else []
+
     for proj_dir in sorted(java_root.iterdir()):
         if not proj_dir.is_dir():
             continue
+        if proj_dir == lib_dir:
+            continue  # 库不单独作为一个项目编译/打包
         proj_name = proj_dir.name
         java_files = sorted(proj_dir.glob("*.java"))
         if not java_files:
@@ -439,7 +448,8 @@ def build_java_projects(arch: str):
 
         print(f"[user] javac {proj_name} ({len(java_files)} file(s)) ...")
         cmd = ["javac", "-d", str(proj_dir)]
-        for f in java_files:
+        # 先库后项目，Rmiku$XX.class 会一起生成到项目目录里
+        for f in lib_files + java_files:
             cmd.append(str(f))
         run(cmd)
         print(f"[user] java {proj_name} compiled")

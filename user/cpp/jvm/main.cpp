@@ -124,6 +124,7 @@ int main(int argc, char** argv) {
 
     const char* classpath = nullptr;  // nullptr = 当前目录
     char name_buf[256];
+    char dir_buf[256];
     if (argc > 2) {
         classpath = argv[1];
         int i = 0;
@@ -139,6 +140,20 @@ int main(int argc, char** argv) {
             name_buf[len-4] == 'l' && name_buf[len-3] == 'a' &&
             name_buf[len-2] == 's' && name_buf[len-1] == 's') {
             name_buf[len-6] = '\0';
+        }
+        // 带路径的写法（如 jvm mem_demo/MemDemo.class）：
+        // 目录部分当 classpath，否则它引用的同目录类会懒加载失败
+        int slash = -1;
+        for (int j = 0; name_buf[j]; j++) {
+            if (name_buf[j] == '/') slash = j;
+        }
+        if (slash >= 0) {
+            for (int j = 0; j < slash; j++) dir_buf[j] = name_buf[j];
+            dir_buf[slash] = '\0';
+            int k = 0;
+            for (int j = slash + 1; name_buf[j]; j++) name_buf[k++] = name_buf[j];
+            name_buf[k] = '\0';
+            classpath = dir_buf;
         }
     }
     const char* main_name = name_buf;
