@@ -2,7 +2,7 @@
 #include "my/stdcompat.h"
 
 inline void jvm_panic(const char* msg) {
-    exit(1);
+    io::exit(1);
 }
 
 template<typename T>

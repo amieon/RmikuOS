@@ -6,6 +6,8 @@
 #include "random.h"
 #include "string.h"
 #include "io.h"
+#include "map.h"
+#include "set.h"
 #include "../fmt.h"
 
 using usize = unsigned long;
@@ -45,7 +47,8 @@ namespace std {
 // ========== std::vector / pair / tuple 别名 ==========
 namespace std {
     template<typename T> using vector = mv::Vector<T>;
-
+    template<typename T> using set = my::set<T>;
+    template<typename T1, typename T2> using map = my::map<T1, T2>;
     template<typename T1, typename T2> using pair = mv::Pair<T1, T2>;
     template<typename T1, typename T2>
     pair<T1, T2> make_pair(T1 a, T2 b) { return pair<T1, T2>(a, b); }
