@@ -1,147 +1,151 @@
 use alloc::vec::Vec;
 
 use crate::sync::sync::SpinLock;
-use super::address::{PhysPageNum,PhysAddr};
+use super::address::{PhysPageNum, PhysAddr};
 
 pub trait FrameAllocator {
     fn alloc(&mut self) -> Option<PhysPageNum>;
     fn dealloc(&mut self, ppn: PhysPageNum);
 }
 
-pub struct StackFrameAllocator {
-    start: usize,
-    current: usize,
-    end: usize,
-    recycled: Vec<usize>,
+/// order 最大为 10，即最大连续块 2^10 = 1024 页（4KiB 页时是 4MiB）
+pub const MAX_ORDER: usize = 11;
+
+/// 把 pages 向上取整到 2^order
+const fn order_of(pages: usize) -> usize {
+    let mut order = 0;
+    let mut size = 1;
+    while size < pages {
+        size <<= 1;
+        order += 1;
+    }
+    order
 }
 
-impl StackFrameAllocator {
+pub struct BuddyAllocator {
+    start: usize,// 管理范围 [start, end)，单位 ppn
+    end: usize,
+    free_lists: [Vec<usize>; MAX_ORDER],
+}
+
+impl BuddyAllocator {
     pub const fn new() -> Self {
         Self {
             start: 0,
-            current: 0,
             end: 0,
-            recycled: Vec::new(),
+            free_lists: [
+                Vec::new(), Vec::new(), Vec::new(), Vec::new(),
+                Vec::new(), Vec::new(), Vec::new(), Vec::new(),
+                Vec::new(), Vec::new(), Vec::new(),
+            ],
         }
     }
 
     pub fn init(&mut self, start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
         self.start = start_ppn.0;
-        self.current = start_ppn.0;
         self.end = end_ppn.0;
-        self.recycled.clear();
+        for list in self.free_lists.iter_mut() {
+            list.clear();
+        }
+        self.add_range(self.start, self.end);
+    }
+
+    /// 把 [start, end) 切成一组对齐的 2^k 块挂进 free list
+    fn add_range(&mut self, start: usize, end: usize) {
+        let mut ppn = start;
+        while ppn < end {
+            let mut order = 0;
+            // 在「不越界 + 保持对齐」的前提下尽量放大块
+            while order + 1 < MAX_ORDER
+                && ppn % (1 << (order + 1)) == 0
+                && ppn + (1 << (order + 1)) <= end
+            {
+                order += 1;
+            }
+            self.free_lists[order].push(ppn);
+            ppn += 1 << order;
+        }
     }
 
     pub fn alloc_contiguous(&mut self, pages: usize) -> Option<PhysPageNum> {
         if pages == 0 {
             return None;
         }
-
-        
-        // 先从 recycled 中找连续页。
-        // KernelStack 这种大块连续分配会频繁创建/释放，
-        // 如果优先从 current 切新页，会导致重复实验时 current 单调增长，
-        // 很快吃到高物理地址甚至 direct map 外。
-        
-        if self.recycled.len() >= pages {
-            self.recycled.sort_unstable();
-
-            let mut run_start = 0usize;
-            let mut run_len = 0usize;
-
-            for i in 0..self.recycled.len() {
-                if i == 0 || self.recycled[i] != self.recycled[i - 1] + 1 {
-                    run_start = i;
-                    run_len = 1;
-                } else {
-                    run_len += 1;
-                }
-
-                if run_len >= pages {
-                    let pos = run_start;
-                    let base = self.recycled[pos];
-
-                    self.recycled.drain(pos..pos + pages);
-
-                    return Some(PhysPageNum(base));
-                }
-            }
+        let order = order_of(pages);
+        if order >= MAX_ORDER {
+            log::warn!("[mm] contiguous alloc too large: {} pages", pages);
+            return None;
         }
 
-        //recycled 找不到连续块时，再从 current 后面切新页。
-        if let Some(next) = self.current.checked_add(pages) {
-            if next <= self.end {
-                let base = self.current;
-                self.current = next;
+        // 从恰好够大的阶开始往上找第一个非空闲表
+        for k in order..MAX_ORDER {
+            if let Some(base) = self.free_lists[k].pop() {
+                // 逐级分裂，后半块挂回低阶链表
+                for j in (order..k).rev() {
+                    self.free_lists[j].push(base + (1 << j));
+                }
                 return Some(PhysPageNum(base));
             }
         }
-
         None
     }
 
     pub fn dealloc_contiguous(&mut self, base_ppn: PhysPageNum, pages: usize) {
-        let base = base_ppn.0;
-
-        for i in 0..pages {
-            let ppn = base + i;
-
-            if ppn < self.start || ppn >= self.current {
-                panic!(
-                    "[mm] invalid contiguous frame dealloc: ppn={:#x}, valid={:#x}..{:#x}",
-                    ppn,
-                    self.start,
-                    self.current,
-                );
-            }
-
-            if self.recycled.iter().any(|&x| x == ppn) {
-                panic!("[mm] contiguous frame double free: ppn={:#x}", ppn);
-            }
-
-            self.recycled.push(ppn);
+        if pages == 0 {
+            return;
         }
-    }
+        let mut order = order_of(pages);
+        let mut base = base_ppn.0;
 
+        assert!(
+            base >= self.start && base + (1 << order) <= self.end,
+            "[mm] invalid frame dealloc: ppn={:#x}, order={}, valid={:#x}..{:#x}",
+            base, order, self.start, self.end,
+        );
+
+        // debug 下查 double-free：释放区间不能和任何空闲块重叠
+        #[cfg(debug_assertions)]
+        {
+            let (lo, hi) = (base, base + (1 << order));
+            for k in 0..MAX_ORDER {
+                for &b in &self.free_lists[k] {
+                    let (blo, bhi) = (b, b + (1 << k));
+                    assert!(
+                        hi <= blo || bhi <= lo,
+                        "[mm] double free: {:#x}..{:#x} overlaps free block {:#x}..{:#x}",
+                        lo, hi, blo, bhi,
+                    );
+                }
+            }
+        }
+
+        // 伙伴空闲就合并，一路向上
+        while order + 1 < MAX_ORDER {
+            let buddy = base ^ (1 << order);
+            if let Some(pos) = self.free_lists[order].iter().position(|&b| b == buddy) {
+                self.free_lists[order].swap_remove(pos);
+                base = base.min(buddy);
+                order += 1;
+            } else {
+                break;
+            }
+        }
+        self.free_lists[order].push(base);
+    }
 }
 
-impl FrameAllocator for StackFrameAllocator {
+impl FrameAllocator for BuddyAllocator {
     fn alloc(&mut self) -> Option<PhysPageNum> {
-        if let Some(ppn) = self.recycled.pop() {
-            Some(PhysPageNum(ppn))
-        } else if self.current < self.end {
-            let ppn = PhysPageNum(self.current);
-            self.current += 1;
-            Some(ppn)
-        } else {
-            None
-        }
+        self.alloc_contiguous(1)
     }
 
     fn dealloc(&mut self, ppn: PhysPageNum) {
-        let ppn = ppn.0;
-
-        if ppn < self.start || ppn >= self.current {
-            panic!(
-                "[mm] invalid frame dealloc: ppn={:#x}, valid={:#x}..{:#x}",
-                ppn,
-                self.start,
-                self.current
-            );
-        }
-
-        if self.recycled.iter().any(|&x| x == ppn) {
-            panic!("[mm] frame double free: ppn={:#x}", ppn);
-        }
-
-        self.recycled.push(ppn);
+        self.dealloc_contiguous(ppn, 1)
     }
-
-    
 }
 
 static FRAME_ALLOCATOR_LOCK: SpinLock = SpinLock::new();
-static mut FRAME_ALLOCATOR: StackFrameAllocator = StackFrameAllocator::new();
+static mut FRAME_ALLOCATOR: BuddyAllocator = BuddyAllocator::new();
 
 
 pub fn init_frame_allocator(start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
