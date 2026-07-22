@@ -18,6 +18,11 @@ static inline isize getpid(void) {
     return syscall3(SYS_GETPID, 0, 0, 0);
 }
 
+static inline isize getppid(void) {
+    return syscall3(SYS_GETPPID, 0, 0, 0);
+}
+
+
 static inline isize fork(void) {
     return syscall3(SYS_FORK, 0, 0, 0);
 }

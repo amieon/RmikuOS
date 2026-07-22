@@ -465,8 +465,23 @@ pub fn current_pid() -> Pid {
     manager.pid_of_tid(tid)
 }
 
+pub fn current_ppid() -> Pid {
+    let tid = processor::current_tid();
+    let manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.pid_of_tid(tid);
+    if let Some(ppid) = manager.process(pid).parent {
+        ppid
+    }else {
+        0
+    }
+}
+
 pub fn current_task_id() -> usize {
     current_pid()
+}
+
+pub fn current_task_ppid() -> usize {
+    current_ppid()
 }
 
 pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {

@@ -10,6 +10,10 @@ pub fn sys_getpid() -> isize {
     crate::task::current_task_id() as isize
 }
 
+pub fn sys_getppid() -> isize {
+    crate::task::current_task_ppid() as isize
+}
+
 pub fn sys_sleep(ticks: usize) -> isize {
     crate::task::sleep_current_and_run_next(ticks)
 }

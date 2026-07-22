@@ -50,6 +50,7 @@ extern "C" {
 #define SYS_FCNTL                    41
 #define SYS_GET_TIME                 42
 #define SYS_HARTID                   43
+#define SYS_GETPPID                  44
 
 
 #define SYS_NET_SOCKET0              100

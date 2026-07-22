@@ -49,6 +49,7 @@ pub const SYSCALL_KILL: usize = 40;
 pub const SYSCALL_FCNTL: usize = 41;
 pub const SYSCALL_GET_TIME: usize = 42;
 pub const SYSCALL_HARTID: usize = 43;
+pub const SYSCALL_GETPPID: usize = 44;
 
 
 
@@ -125,6 +126,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_FCNTL => process::sys_fcntl(args[0], args[1], args[2]),
         SYSCALL_GET_TIME => arch::sys_arch_time(),
         SYSCALL_HARTID => arch::sys_hartid(),
+        SYSCALL_GETPPID => process::sys_getppid(),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),
