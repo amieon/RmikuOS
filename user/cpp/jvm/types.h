@@ -71,6 +71,10 @@ struct Method {
     std::vector<uint8_t> code;
     uint16_t max_stack = 0, max_locals = 0;
     std::vector<ExceptionEntry> exceptions;
+    // ---- AOT：装载期编译产物 ----
+    void* aot_entry = nullptr;      // 编译后入口 uint64_t (*)(AotFrame*)
+    void* aot_code_base = nullptr;  // 代码页基址（helper 表在代码之前的区域）
+    bool aot_failed = false;        // 编译失败，走解释器
     bool is_static() const { return flags & 0x0008; }
     bool is_native() const { return flags & 0x0100; }
     bool is_private() const { return flags & 0x0002; }
@@ -108,4 +112,3 @@ struct ClassFile {
 };
 
 using NativeFunc = Value (*)(VM&, std::vector<Value>&);
-

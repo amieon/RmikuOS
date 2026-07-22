@@ -5,6 +5,7 @@
 #include "native.h"
 #include "my/stdcompat.h"
 #include "lock.h"
+#include "aot.h"
 
 extern "C" {
     void* __dso_handle = nullptr;
@@ -102,6 +103,8 @@ static ClassFile* load_class_locked(VM& vm, const char* classpath, const char* c
             cf->super = load_class_locked(vm, classpath, sname.c_str());
         }
     }
+    // 装载期 AOT：把本类的方法编译成本机机器码（失败的方法走解释器）
+    aot_compile_class(cf);
     return cf;
 }
 
@@ -174,7 +177,7 @@ int main(int argc, char** argv) {
     Object* args_arr = vm.heap.alloc_array(0, T_REF);
     std::vector<Value> args;
     args.push_back(Value::fromRef(args_arr));
-    vm.exec(m, main_cf, args);
+    vm.invoke(m, main_cf, args);
 
     if (vm.exception_obj) {
         printf("Uncaught exception\n");

@@ -1,6 +1,7 @@
 #include "heap.h"
 #include "interp.h"
 #include "my/stdcompat.h"
+#include "aot.h"
 
 Object* Heap::alloc_object(ClassFile* clazz) {
     Object* o = new Object();
@@ -59,6 +60,23 @@ void Heap::mark(VM& vm) {
     }
     // 4. 标记异常对象
     if (vm.exception_obj) mark_object(vm.exception_obj);
+    // 5. 保守扫描 AOT 帧链：槽值若在 objects 表中即视为引用
+    for (AotFrame* fr = vm.aot_top; fr; fr = fr->parent) {
+        uint32_t nslots = fr->n_locals + fr->sp / 8;
+        for (uint32_t i = 0; i < fr->n_locals; i++) {
+            uint64_t v = fr->locals[i];
+            if (!v || (v & 7)) continue;
+            for (auto& o : objects)
+                if ((uint64_t)o == v) { mark_object(o); break; }
+        }
+        for (uint32_t i = 0; i < fr->sp / 8; i++) {
+            uint64_t v = fr->stack[i];
+            if (!v || (v & 7)) continue;
+            for (auto& o : objects)
+                if ((uint64_t)o == v) { mark_object(o); break; }
+        }
+        (void)nslots;
+    }
 }
 
 void Heap::sweep() {

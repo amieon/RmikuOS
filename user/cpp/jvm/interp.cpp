@@ -2,6 +2,7 @@
 #include "native.h"
 #include "heap.h"
 #include "my/stdcompat.h"
+#include "aot.h"
 
 // helpers
 static int32_t popi(std::vector<Value>& s) { Value v=s.back(); s.pop_back(); return v.asInt(); }
@@ -41,6 +42,7 @@ Value VM::invoke(Method* m, ClassFile* cf, std::vector<Value> args) {
         std::string clsname = cf->cp_class_name(cf->this_class);
         return call_native(*this, clsname, m->name, m->desc, args);
     }
+    if (m->aot_entry) return aot_exec(*this, m, cf, args);
     return exec(m, cf, args);
 }
 

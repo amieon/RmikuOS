@@ -105,7 +105,7 @@ static void jvm_thread_entry(void* p) {
         } else {
             std::vector<Value> args;
             args.push_back(Value::fromInt(b->arg));
-            vm.exec(m, cf, args);
+            vm.invoke(m, cf, args);
             if (vm.exception_obj) code = 1;
         }
     }
