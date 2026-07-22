@@ -134,7 +134,7 @@ fn primary_init(id: usize) -> ! {
     mm::init();
     mm::init_paging();
 
-    drivers::block::ext4_image::test_ext4_magic();
+
 
     let (ext4_dev, fat_dev) = drivers::block::discover_disks::discover_disks();
 
