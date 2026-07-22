@@ -163,6 +163,20 @@ Value VM::exec(Method* m, ClassFile* cf, std::vector<Value> args) {
         case 0x80: { int32_t b=popi(f.stack),a=popi(f.stack); pushi(f.stack,a|b); break; } // ior
         case 0x82: { int32_t b=popi(f.stack),a=popi(f.stack); pushi(f.stack,a^b); break; } // ixor
         case 0x84: { uint8_t idx=code[f.pc++]; f.locals[idx].i += (int8_t)code[f.pc++]; break; } // iinc
+        case 0xc4: { // wide 前缀（javac 对 |增量|>127 的 iinc 会生成 wide iinc）
+            uint8_t sub = code[f.pc++];
+            if (sub == 0x84) {          // wide iinc
+                uint16_t idx = (uint16_t)((code[f.pc] << 8) | code[f.pc+1]); f.pc += 2;
+                int16_t cst = s2();
+                f.locals[idx].i += cst;
+            } else if (sub == 0x15 || sub == 0x17 || sub == 0x19) {  // wide iload/fload/aload
+                uint16_t idx = (uint16_t)((code[f.pc] << 8) | code[f.pc+1]); f.pc += 2;
+                f.stack.push_back(f.locals[idx]);
+            } else if (sub == 0x36 || sub == 0x38 || sub == 0x3a) {  // wide istore/fstore/astore
+                uint16_t idx = (uint16_t)((code[f.pc] << 8) | code[f.pc+1]); f.pc += 2;
+                f.locals[idx] = f.stack.back(); f.stack.pop_back();
+            } else { char b[64]; int l=snprintf(b,64,"unimplemented wide opcode 0x%02x\n",sub); write(2,b,l); _exit(1); }
+            break; }
         // ----- conversions -----
         case 0x91: { int32_t v=popi(f.stack); pushi(f.stack,(int8_t)v); break; } // i2b
         case 0x92: { int32_t v=popi(f.stack); pushi(f.stack,(int16_t)v); break; } // i2c

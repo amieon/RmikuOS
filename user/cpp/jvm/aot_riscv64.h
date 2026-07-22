@@ -2,10 +2,11 @@
 #pragma once
 #include "aot_common.h"
 
-
+// ============================================================
+// 第 4 部分：RISC-V64 后端
 // 寄存器分工：s0=fr  s1=locals  s2=stack  s3=sp(字节偏移)  s5=code_base
 //             t0/t1/t2 临时，a0/a1 helper 参数，ra 调用
-
+// ============================================================
 
 struct Riscv64 {
     enum { X0=0, RA=1, SP=2, T0=5, T1=6, T2=7,
@@ -39,22 +40,30 @@ struct Riscv64 {
     static void add(Emit& e, int rd, int r1, int r2)     { rtype(e, 0, r2, r1, 0, rd, 0x33); }
     static void lui(Emit& e, int rd, int imm20)          { e.u32(((uint32_t)imm20 << 12) | ((uint32_t)rd << 7) | 0x37); }
     static void jalr(Emit& e, int rd, int rs1, int imm)  { itype(e, imm, rs1, 0, rd, 0x67); }
-    // 占位分支：先记偏移发 0，之后 patch_branch 回填
+    // 占位跳转：B-type 条件分支只有 ±4KB 范围，大方法（如 traceRay 8KB）会溢出回绕。
+    // 改为「反转条件分支 +8 跳过 / JAL 占位」双槽序列（JAL J-type ±1MB，必然可达），
+    // patch_branch 回填 JAL 槽；返回的 fixup 偏移指向 JAL 槽。
     static uint32_t branch(Emit& e, int f3, int rs1, int rs2) {
-        uint32_t at = e.len;
+        if (f3 == 0 && rs1 == X0 && rs2 == X0) {      // beq x0,x0：无条件跳，直接 JAL
+            uint32_t at = e.len;
+            e.u32(0x6f);                             // jal x0, 0（占位）
+            return at;
+        }
+        // 条件跳：b<f3^1> rs1,rs2,+8（跳过 JAL）/ jal x0, target
+        // f3^1：beq<->bne、blt<->bge；+8 的 B-type 编码即 imm[4:1]=4 -> 位[11:8]
         e.u32(((uint32_t)rs2 << 20) | ((uint32_t)rs1 << 15) |
-              ((uint32_t)f3 << 12) | 0x63);
+              ((uint32_t)(f3 ^ 1) << 12) | (4u << 8) | 0x63);
+        uint32_t at = e.len;
+        e.u32(0x6f);                                 // jal x0, 0（占位）
         return at;
     }
     static void patch_branch(Emit& e, uint32_t at, uint32_t target) {
-        int32_t rel = (int32_t)target - (int32_t)at;
-        uint32_t base = (uint32_t)e.buf[at] | ((uint32_t)e.buf[at+1] << 8) |
-                        ((uint32_t)e.buf[at+2] << 16) | ((uint32_t)e.buf[at+3] << 24);
-        uint32_t imm = (((uint32_t)(rel >> 1) & 0xf) << 8) |
-                       (((uint32_t)(rel >> 11) & 0x1) << 7) |
-                       (((uint32_t)(rel >> 5) & 0x3f) << 25) |
-                       (((uint32_t)(rel >> 12) & 0x1) << 31);
-        e.patch32(at, base | imm);
+        int32_t rel = (int32_t)target - (int32_t)at;  // JAL ±1MB；缓冲 16KB 内不会溢出
+        uint32_t imm = (((uint32_t)(rel >> 1)  & 0x3ff) << 21) |  // imm[10:1]
+                       (((uint32_t)(rel >> 11) & 0x1)   << 20) |  // imm[11]
+                       (((uint32_t)(rel >> 12) & 0xff)  << 12) |  // imm[19:12]
+                       (((uint32_t)(rel >> 20) & 0x1)   << 31);   // imm[20]
+        e.patch32(at, imm | 0x6f);                   // rd = x0
     }
     static void li32(Emit& e, int rd, int32_t v) {
         if (v >= -2048 && v <= 2047) { addi(e, rd, X0, v); return; }
@@ -128,7 +137,13 @@ struct Riscv64 {
         push_t0(e);
     }
     static void iinc(Emit& e, int n, int c) {
-        ld(e, T0, L, 8 * n); addi(e, T0, T0, c); sd(e, T0, L, 8 * n);
+        ld(e, T0, L, 8 * n);
+        if (c >= -2048 && c <= 2047) {
+            addi(e, T0, T0, c);
+        } else {  // wide iinc：常量超 addi 的 12 位立即数范围
+            li32(e, T1, c); add(e, T0, T0, T1);
+        }
+        sd(e, T0, L, 8 * n);
     }
     static void sext_byte(Emit& e)  { slli(e, T0, T0, 56); srai(e, T0, T0, 56); }
     static void zext_char(Emit& e)  { slli(e, T0, T0, 48); srli(e, T0, T0, 48); }

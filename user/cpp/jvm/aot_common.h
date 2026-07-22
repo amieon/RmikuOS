@@ -103,7 +103,7 @@ extern "C" void AOT_FREE(void*);
 static void* aot_drv_alloc(size_t n) { return AOT_MALLOC(n); }
 static void aot_drv_free(void* p) { AOT_FREE(p); }
 #else
-#include "mem.h"
+#include "my/stdcompat.h"
 static void* aot_drv_alloc(size_t n) { return malloc(n); }
 static void aot_drv_free(void* p) { free(p); }
 #endif
@@ -179,6 +179,20 @@ static bool aot_compile_generic(const uint8_t* code, uint32_t cl, Emit& E) {
         case 0x84: {                                                        // iinc
             uint8_t n = code[pc++]; int8_t c = (int8_t)code[pc++];
             B::iinc(E, n, c); break; }
+        case 0xc4: {                                                        // wide
+            uint8_t sub = code[pc++];
+            if (sub == 0x84) {                                              // wide iinc（javac 对 |增量|>127 会生成）
+                uint16_t n = (uint16_t)((code[pc] << 8) | code[pc+1]); pc += 2;
+                int16_t c = (int16_t)((code[pc] << 8) | code[pc+1]); pc += 2;
+                B::iinc(E, n, c);
+            } else if (sub == 0x15 || sub == 0x19) {                        // wide iload/aload
+                uint16_t n = (uint16_t)((code[pc] << 8) | code[pc+1]); pc += 2;
+                B::ld_local_t0(E, n); B::push_t0(E);
+            } else if (sub == 0x36 || sub == 0x3a) {                        // wide istore/astore
+                uint16_t n = (uint16_t)((code[pc] << 8) | code[pc+1]); pc += 2;
+                B::pop_t0(E); B::st_local_t0(E, n);
+            } else ok = false;
+            break; }
         // ---------- conversions ----------
         case 0x91: B::pop_t0(E); B::sext_byte(E); B::push_t0(E); break;     // i2b
         case 0x92: B::pop_t0(E); B::zext_char(E); B::push_t0(E); break;     // i2c
@@ -279,3 +293,4 @@ static bool aot_compile_generic(const uint8_t* code, uint32_t cl, Emit& E) {
     aot_drv_free(bc_off);
     return ok && !E.fail;
 }
+

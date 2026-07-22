@@ -132,7 +132,13 @@ struct LoongArch64 {
         push_t0(e);
     }
     static void iinc(Emit& e, int n, int c) {
-        ld_d(e, T0, L, 8 * n); addi_d(e, T0, T0, c); st_d(e, T0, L, 8 * n);
+        ld_d(e, T0, L, 8 * n);
+        if (c >= -2048 && c <= 2047) {
+            addi_d(e, T0, T0, c);
+        } else {  // wide iinc：常量超 addi.d 的 12 位立即数范围
+            li32(e, T1, c); add_d(e, T0, T0, T1);
+        }
+        st_d(e, T0, L, 8 * n);
     }
     static void sext_byte(Emit& e)  { slli_d(e, T0, T0, 56); srai_d(e, T0, T0, 56); }
     static void zext_char(Emit& e)  { slli_d(e, T0, T0, 48); srli_d(e, T0, T0, 48); }
