@@ -51,6 +51,8 @@ impl BuddyAllocator {
     }
 
     pub fn add_free_range(&mut self, start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
+        self.start = self.start.min(start_ppn.0);
+        self.end = self.end.max(end_ppn.0);
         self.add_range(start_ppn.0, end_ppn.0);
     }
 
