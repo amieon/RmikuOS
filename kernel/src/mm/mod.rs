@@ -64,10 +64,27 @@ pub fn init() {
 
     heap::init(heap_start_va);
 
-    let free_start = PhysAddr::from(heap_end_pa).ceil();
-    let free_end = PhysAddr::from(MEMORY_END).floor();
+    let heap_end = PhysAddr::from(heap_end_pa).ceil();
+    let ranges = crate::arch::RAM_RANGES;
 
-    frame_allocator::init_frame_allocator(free_start, free_end);
+    // 第一段：起点裁到 heap_end（内核镜像和堆在这里面）
+    frame_allocator::init_frame_allocator(
+        heap_end,
+        PhysAddr::from(ranges[0].1).floor(),
+    );
+
+    // 后续段：原样加入（龙芯要先保证 direct map 已覆盖，见上一条）
+    for &(s, e) in &ranges[1..] {
+        frame_allocator::add_free_frames(
+            PhysAddr::from(s).ceil(),
+            PhysAddr::from(e).floor(),
+        );
+    }
+
+    for (i, &(s, e)) in ranges.iter().enumerate() {
+        log::info!("[mm] RAM range {}: {:#x}..{:#x}", i, s, e);
+    }
+
 
     log::info!(
         "[mm] physical kernel: {:#x}..{:#x}",

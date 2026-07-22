@@ -48,7 +48,7 @@ use super::FrameTracker;
 /// VA[47:39] -> Dir3
 /// VA[38:30] -> Dir2
 /// VA[29:21] -> Dir1
-/// VA[20:12] -> PTE
+/// VA[20:12] -> PTEwalk
 /// VA[11:0]  -> page offset
 pub struct PageTable {
     root_ppn: PhysPageNum,
@@ -224,17 +224,22 @@ impl PageTable {
 
             if *entry == 0 {
                 let frame = alloc_frame()?;
+
+                // 页表页必须清零：alloc_frame 不保证返回干净页。
+                // 诊断打印（确认修复有效后可删）：看看到底有多少脏帧、脏在哪
+                let pa = frame.0 << PAGE_SIZE_BITS;
+                let va = crate::mm::kernel_phys_to_virt(pa);
+                let slice = unsafe { core::slice::from_raw_parts(va as *const usize, PAGE_SIZE / 8) };
+                if let Some((i, &v)) = slice.iter().enumerate().find(|(_, &v)| v != 0) {
+                    crate::println!("[la64 pt] dirty frame from alloc_frame: ppn={:#x} idx={} val={:#x}",
+                                    frame.0, i, v);
+                }
+                unsafe { core::ptr::write_bytes(va as *mut u8, 0, PAGE_SIZE); }
+
                 let tracker = FrameTracker::new(frame);
-
-                // Non-leaf directory entry:
-                // physical address of next-level table.
-                //
-                // Keep bit 6 clear, otherwise LDDIR treats it as a huge page.
                 *entry = frame.0 << PAGE_SIZE_BITS;
-
                 self.frames.push(tracker);
             }
-
             ppn = PhysPageNum(*entry >> PAGE_SIZE_BITS);
         }
 
@@ -275,6 +280,9 @@ impl PageTable {
 
         if *pte != 0 {
             let old = PageTableEntry::from_bits(*pte);
+            if old.ppn().0 == ppn.0 {
+                return;  // 同一映射重复建立，直接容忍（ELF 段重叠很常见）
+            }
             panic!(
                 "[la64 map] vpn {:?} already mapped: old_ppn={:?}, old_bits={:#x}, new_ppn={:?}, new_flags={:#x}",
                 vpn,

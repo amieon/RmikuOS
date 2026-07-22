@@ -8,11 +8,16 @@ pub const MAX_HARTS: usize = 8;
 /// QEMU virt DRAM starts at 0x8000_0000.
 pub const MEMORY_START: usize = 0x8000_0000;
 
-/// run.sh uses `-m 128M` for RISC-V.
-pub const MEMORY_SIZE: usize = 512 * 1024 * 1024;
-pub const KERNEL_DIRECT_MAP_SIZE: usize = 512 * 1024 * 1024;
+/// run.sh uses `-m 1G` for RISC-V.
+pub const MEMORY_SIZE: usize = 1024 * 1024 * 1024;
+pub const KERNEL_DIRECT_MAP_SIZE: usize = 1024 * 1024 * 1024;
 
 pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
+
+/// 物理 RAM 区间（以 dtb 为准）：单段连续
+pub const RAM_RANGES: &[(usize, usize)] = &[
+    (MEMORY_START, MEMORY_END),
+];
 
 
 

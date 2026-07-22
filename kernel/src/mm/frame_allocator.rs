@@ -50,6 +50,10 @@ impl BuddyAllocator {
         self.add_range(self.start, self.end);
     }
 
+    pub fn add_free_range(&mut self, start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
+        self.add_range(start_ppn.0, end_ppn.0);
+    }
+
     /// 把 [start, end) 切成一组对齐的 2^k 块挂进 free list
     fn add_range(&mut self, start: usize, end: usize) {
         let mut ppn = start;
@@ -194,6 +198,12 @@ pub fn init_frame_allocator(start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
         actual_start_ppn.0,
         end_ppn.0
     );
+}
+
+pub fn add_free_frames(start_ppn: PhysPageNum, end_ppn: PhysPageNum) {
+    FRAME_ALLOCATOR_LOCK.lock();
+    unsafe { FRAME_ALLOCATOR.add_free_range(start_ppn, end_ppn); }
+    FRAME_ALLOCATOR_LOCK.unlock();
 }
 
 pub fn alloc_frame() -> Option<PhysPageNum> {

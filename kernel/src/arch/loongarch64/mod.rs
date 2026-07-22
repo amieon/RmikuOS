@@ -5,14 +5,23 @@ pub use shutdown::shutdown;
 pub const NAME: &str = "LoongArch 64";
 pub const MAX_HARTS: usize = 8;
 
-/// The kernel is loaded at 0x0100_0000 by the QEMU loader in run.sh.
-pub const MEMORY_START: usize = 0x0100_0000;
+pub const MEMORY_START: usize = 0x0100_0000;   // 内核加载地址（低内存内）
+pub const MEMORY_SIZE: usize = 2 * 1024 * 1024 * 1024;  // -m 2G 总量
 
-/// run.sh uses `-m 2G` for LoongArch.
-pub const MEMORY_SIZE: usize = 2 * 1024 * 1024 * 1024;
+/// dtb memory@0：低内存 [0, 256MB)，之上是 IO/空洞
+pub const LOWMEM_END: usize = 0x1000_0000;
+/// dtb memory@80000000：高内存从 2GB 开始（不是真实硬件的 0x9000_0000！）
+pub const HIGHMEM_BASE: usize = 0x8000_0000;
+/// dtb reg size：1792MB
+pub const HIGHMEM_SIZE: usize = 0x7000_0000;
 
-pub const KERNEL_DIRECT_MAP_SIZE: usize = 2 * 1024 * 1024 * 1024;
+/// direct map 必须覆盖到高内存末尾 = 0xF000_0000（3.75GB）
+pub const KERNEL_DIRECT_MAP_SIZE: usize = HIGHMEM_BASE + HIGHMEM_SIZE;
 
+pub const RAM_RANGES: &[(usize, usize)] = &[
+    (MEMORY_START, LOWMEM_END),
+    (HIGHMEM_BASE, HIGHMEM_BASE + HIGHMEM_SIZE),
+];
 
 pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
 

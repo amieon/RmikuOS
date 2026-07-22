@@ -100,6 +100,14 @@ pub struct TcpSocket {
     pub accept_queue: VecDeque<usize>, // listen 用：已 established 的子连接 fd
     pub parent: Option<usize>,         // 子连接用：listener 的 fd
     pub rst: bool,                     // 被 RST/超时击毙标记，recv 返回 -1
+
+    // ---------- 实验打点 ----------
+    pub stat_start_ms: u64, // 进入 Established 的时刻;0 = 未建连(dump 时跳过)
+    pub stat_bytes: u64,    // 首次发送的应用层字节数(重传不计)
+    pub stat_segs: u32,     // 首次发送的数据段数
+    pub stat_rtx_rto: u32,  // RTO 超时重传次数
+    pub stat_rtx_fast: u32, // 快速重传次数(旧版恒 0)
+    pub stat_loss: u32,     // 拥塞降窗事件数(旧版恒 0)
 }
 
 impl TcpSocket {
@@ -124,6 +132,13 @@ impl TcpSocket {
             accept_queue: VecDeque::new(),
             parent: None,
             rst: false,
+
+            stat_start_ms: 0,
+            stat_bytes: 0,
+            stat_segs: 0,
+            stat_rtx_rto: 0,
+            stat_rtx_fast: 0,
+            stat_loss: 0,
         }
     }
 }
@@ -389,6 +404,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                                     TcpState::FinWait1 => TcpState::Closing,
                                     TcpState::FinWait2 => {
                                         t.time_wait_deadline = now_ms() + TIME_WAIT_MS;
+                                        dump_stats(i, t, "timewait");
                                         TcpState::TimeWait
                                     }
                                     s => s,
@@ -406,6 +422,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                         }
                         TcpState::Closing if t.snd_una == t.snd_nxt => {
                             t.time_wait_deadline = now_ms() + TIME_WAIT_MS;
+                            dump_stats(i, t, "timewait");
                             t.state = TcpState::TimeWait;
                         }
                         TcpState::LastAck if t.snd_una == t.snd_nxt => {
@@ -429,6 +446,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
         }
     }
     if free_slot {
+        if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) { dump_stats(i, t, "fin"); }
         table[i] = None;
     }
 }
@@ -475,6 +493,7 @@ pub fn tick() {
             }
         }
         if free {
+            if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) { dump_stats(i, t, "tick"); }
             table[i] = None;
         }
     }
@@ -674,7 +693,20 @@ pub fn close(fd: usize) -> isize {
         ok = false;
     }
     if free {
+        if let Some(t) = table[fd].as_mut().and_then(as_tcp_mut) { dump_stats(fd, t, "close"); }
         table[fd] = None;
     }
     if ok { 0 } else { -1 }
+}
+
+fn dump_stats(fd: usize, t: &mut TcpSocket, why: &str) {
+    if t.stat_start_ms == 0 {
+        return;
+    }
+    let dur = now_ms().saturating_sub(t.stat_start_ms);
+    println!(
+        "[tcp-stat] fd={} dur_ms={} bytes={} segs={} rtx_rto={} rtx_fast={} loss={} end={}",
+        fd, dur, t.stat_bytes, t.stat_segs, t.stat_rtx_rto, t.stat_rtx_fast, t.stat_loss, why
+    );
+    t.stat_start_ms = 0; // 防 TIME_WAIT 等后续路径重复 dump
 }
