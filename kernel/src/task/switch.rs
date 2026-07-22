@@ -19,7 +19,6 @@ pub unsafe fn switch_unlock_and_switch(to: *mut TaskContext) {
     // 关中断，防止切换过程中被抢占
     crate::arch::disable_interrupt();
     // 释放大内核锁，允许其他核进入调度
-    crate::syscall::bkl_unlock();
     // 获取当前核的 idle 上下文指针
     let idle_cx_ptr = super::processor::idle_task_cx_ptr();
     unsafe {

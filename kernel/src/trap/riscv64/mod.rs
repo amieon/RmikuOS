@@ -141,6 +141,10 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         CAUSE_ILLEGAL_INSTRUCTION => {
             
             if cx.is_from_user() {
+                trap_println!(
+                    "[trap] SIGILL from user: sepc={:#x}, stval={:#x}, hart={}, task=?",
+                    cx.sepc, cx.stval, crate::arch::current_hart_id()
+                );
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
                 panic!("SIGILL not fatal");  // 不应该到达
             } else {
