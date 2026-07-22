@@ -158,8 +158,7 @@ fn primary_init(id: usize) -> ! {
     }
 
 
-    log::info!("logger initialized");
-    log::info!("==== RmikuOS 多核启动 ====");
+    log::info!("==== RmikuOS 启动 ====");
     log::info!("架构: {}", arch::NAME);
     log::info!("最大支持核数: {}", arch::MAX_HARTS);
 
@@ -205,7 +204,7 @@ fn primary_init(id: usize) -> ! {
     HART_LOCALS[id].ready.store(true, Ordering::Release);
     MASTER_READY.store(true, Ordering::Release);
 
-    println!("主核初始化完成，从核可以进入了。");
+    //println!("主核初始化完成，从核可以进入了。");
 
     task::run_tasks();
 }
@@ -219,7 +218,7 @@ fn secondary_init(id: usize) -> ! {
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);
 
-    println!("从核 {} 就绪！", id);
+    //println!("从核 {} 就绪！", id);
 
     task::run_tasks();
 }
