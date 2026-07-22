@@ -76,56 +76,10 @@ fn hartid() -> usize {
     crate::task::current_hart_id()
 }
 
-#[inline]
-pub fn bkl_lock() {
-    let hart = hartid();
 
-    // 如果你确认不会递归进 syscall，这里可以直接 panic。
-    // 调试阶段建议 panic，能抓重入。
-    if BKL_OWNER.load(Ordering::Acquire) == hart {
-        panic!("[bkl] recursive lock on hart {}", hart);
-    }
 
-    while BKL_OWNER
-        .compare_exchange(NO_HART, hart, Ordering::Acquire, Ordering::Relaxed)
-        .is_err()
-    {
-        core::hint::spin_loop();
-    }
-}
-
-#[inline]
-pub fn bkl_unlock_if_held_by_current() {
-    let hart = hartid();
-
-    if BKL_OWNER.load(Ordering::Acquire) == hart {
-        BKL_OWNER.store(NO_HART, Ordering::Release);
-    }
-}
-
-#[inline]
-pub fn bkl_unlock() {
-    bkl_unlock_if_held_by_current();
-}
-
-#[inline]
-pub fn bkl_is_held_by_current() -> bool {
-    //BKL_OWNER.load(Ordering::Acquire) == hartid()
-    true
-}
 
 pub fn syscall(id: usize, args: [usize; 6]) -> isize {
-    //bkl_lock();
-
-    let ret = inner_syscall(id, args);
-
-    // 正常返回释放；如果中途 sleep/waitpid/exit 前已经释放过，这里 no-op
-    //bkl_unlock_if_held_by_current();
-
-    ret
-}
-
-pub fn inner_syscall(id: usize, args: [usize; 6]) -> isize {
     match id {
         SYSCALL_EXIT => process::sys_exit(args[0] as i32),
         SYSCALL_YIELD => process::sys_yield(),

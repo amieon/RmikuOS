@@ -260,7 +260,7 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-    crate::syscall::bkl_unlock_if_held_by_current();
+     
     // sleep 不会使其他线程就绪，无需 IPI
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
@@ -284,7 +284,7 @@ pub fn suspend_current_and_run_next() -> isize {
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
 
-    crate::syscall::bkl_unlock_if_held_by_current();
+     
     crate::arch::disable_interrupt();
 
     unsafe {
@@ -363,7 +363,7 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
         };
 
         let idle_cx_ptr = processor::idle_task_cx_ptr();
-        crate::syscall::bkl_unlock_if_held_by_current();
+         
         crate::arch::disable_interrupt();
 
         unsafe {
@@ -883,7 +883,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-    crate::syscall::bkl_unlock_if_held_by_current();
+     
 
     // 新增：进程退出可能唤醒父进程的 waitpid
     //ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
@@ -947,7 +947,7 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-    crate::syscall::bkl_unlock_if_held_by_current();
+     
 
     // 新增：退出并唤醒 joiners
     //ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
@@ -1013,7 +1013,7 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
         };
 
         let idle_cx_ptr = processor::idle_task_cx_ptr();
-        crate::syscall::bkl_unlock_if_held_by_current();
+         
         // join 阻塞自己，被唤醒时由目标线程的退出负责发 IPI，此处无需
         unsafe {
             __switch(task_cx_ptr, idle_cx_ptr);
@@ -1471,7 +1471,7 @@ pub fn block_current_on_pipe_read() -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-    crate::syscall::bkl_unlock_if_held_by_current();
+     
     // 阻塞自己，不需要 IPI
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
@@ -1500,7 +1500,7 @@ pub fn block_current_on_pipe_write() -> isize {
     };
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
-    crate::syscall::bkl_unlock_if_held_by_current();
+     
     // 阻塞自己
     unsafe {
         __switch(task_cx_ptr, idle_cx_ptr);
