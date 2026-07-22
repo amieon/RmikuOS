@@ -54,7 +54,7 @@ pub fn init() {
     unsafe {
         asm!("csrw sscratch, zero", options(nostack));
     }
-    trap_println!("RISC-V trap initialized: stvec={:#x}", entry);
+    //trap_println!("RISC-V trap initialized: stvec={:#x}", entry);
 }
 
 #[no_mangle]
