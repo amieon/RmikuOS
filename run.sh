@@ -168,7 +168,7 @@ case "$ARCH" in
       -cpu la464
       -m 2G
       -accel tcg,thread=multi
-      -smp 8,cores=8,threads=1,sockets=1
+      -smp 1,cores=1,threads=1,sockets=1
       -nographic
       -kernel "$KERNEL_ELF"
       -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"
