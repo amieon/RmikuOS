@@ -1,7 +1,7 @@
 // BenchObject.java —— 对象分配与字段访问
 public class BenchObject {
     static final int SCALE = 0;
-    static final int N = 5000000;
+    static final int N = 100000;
 
     static class Point {
         int x, y;
@@ -18,7 +18,8 @@ public class BenchObject {
             Point p = new Point(i, i * 3);
             acc = acc + p.getX() + p.getY();
         }
-        Rmiku.IO.printStr("iter=" + n);
+        Rmiku.IO.printStr("iter=");
+        Rmiku.IO.printInt(n);
         Rmiku.IO.printStr("checksum=");
         Rmiku.IO.printInt(acc);
         Rmiku.IO.printStr("[BENCH-END]");

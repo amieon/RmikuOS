@@ -3,7 +3,7 @@ public class BenchCall {
     static final int SCALE = 0;
     static final int N = 1000000;
     static final int FIB_N = 8;
-    static final int FIB_REP = 16;
+    static final int FIB_REP = 64;
 
     static int addmul(int a, int b, int c) {
         return a * b + c;
@@ -26,8 +26,11 @@ public class BenchCall {
         for (int r = 0; r < fr; r = r + 1) {
             f = f + fib(FIB_N);
         }
-        Rmiku.IO.printStr("call_iter=" + n + " fib_rep=" + fr);
-        Rmiku.IO.printStr("checksum=");
+        Rmiku.IO.printStr("call_iter=");
+        Rmiku.IO.printInt(n);
+        Rmiku.IO.printStr(" fib_rep=");
+        Rmiku.IO.printInt(fr);
+        Rmiku.IO.printStr(" checksum=");
         Rmiku.IO.printInt(acc + f);
         Rmiku.IO.printStr("[BENCH-END]");
     }

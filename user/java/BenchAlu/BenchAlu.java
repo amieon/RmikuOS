@@ -1,7 +1,7 @@
 // BenchAlu.java —— 位运算混合
 public class BenchAlu {
-    static final int SCALE = 0;
-    static final int N = 50000000; // 基准 5 千万，解释器约 5-10 秒
+    static final int SCALE = 1;
+    static final int N = 100000000;
 
     public static void main(String[] args) {
         Rmiku.IO.printStr("[BENCH-BEGIN] alu_mix");
@@ -13,7 +13,8 @@ public class BenchAlu {
             h ^= h << 5;
             h = h + i;
         }
-        Rmiku.IO.printStr("iter=" + n);
+        Rmiku.IO.printStr("iter=");
+        Rmiku.IO.printInt(n);
         Rmiku.IO.printStr("checksum=");
         Rmiku.IO.printInt(h);
         Rmiku.IO.printStr("[BENCH-END]");

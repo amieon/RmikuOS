@@ -1,8 +1,8 @@
 // BenchArray.java —— 数组读写
 public class BenchArray {
     static final int SCALE = 0;
-    static final int N = 100000;
-    static final int REP = 200;
+    static final int N = 1000000;
+    static final int REP = 30;
 
     public static void main(String[] args) {
         Rmiku.IO.printStr("[BENCH-BEGIN] array_rw");
@@ -18,8 +18,11 @@ public class BenchArray {
                 acc = acc + a[i];
             }
         }
-        Rmiku.IO.printStr("len=" + n + " rep=" + rep);
-        Rmiku.IO.printStr("checksum=");
+        Rmiku.IO.printStr("len=");
+        Rmiku.IO.printInt(n);
+        Rmiku.IO.printStr(" rep=");
+        Rmiku.IO.printInt(rep);
+        Rmiku.IO.printStr(" checksum=");
         Rmiku.IO.printInt(acc);
         Rmiku.IO.printStr("[BENCH-END]");
     }

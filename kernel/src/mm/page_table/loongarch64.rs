@@ -230,10 +230,10 @@ impl PageTable {
                 let pa = frame.0 << PAGE_SIZE_BITS;
                 let va = crate::mm::kernel_phys_to_virt(pa);
                 let slice = unsafe { core::slice::from_raw_parts(va as *const usize, PAGE_SIZE / 8) };
-                if let Some((i, &v)) = slice.iter().enumerate().find(|(_, &v)| v != 0) {
-                    crate::println!("[la64 pt] dirty frame from alloc_frame: ppn={:#x} idx={} val={:#x}",
-                                    frame.0, i, v);
-                }
+                // if let Some((i, &v)) = slice.iter().enumerate().find(|(_, &v)| v != 0) {
+                //     crate::println!("[la64 pt] dirty frame from alloc_frame: ppn={:#x} idx={} val={:#x}",
+                //                     frame.0, i, v);
+                // }
                 unsafe { core::ptr::write_bytes(va as *mut u8, 0, PAGE_SIZE); }
 
                 let tracker = FrameTracker::new(frame);

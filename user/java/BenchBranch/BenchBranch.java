@@ -26,7 +26,8 @@ public class BenchBranch {
             else if (v == 14) acc = acc + 15;
             else acc = acc + 16;
         }
-        Rmiku.IO.printStr("iter=" + n);
+        Rmiku.IO.printStr("iter=");
+        Rmiku.IO.printInt(n);
         Rmiku.IO.printStr("checksum=");
         Rmiku.IO.printInt(acc);
         Rmiku.IO.printStr("[BENCH-END]");
