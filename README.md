@@ -549,7 +549,7 @@ BlockDevice (读 + 写)
 
 ## Network Stack
 
-RmikuOS 自带一套从零实现的 TCP/IP 协议栈：自 virtio-net 驱动起，经 Ethernet / ARP / IPv4 / ICMP / UDP / TCP 与 DHCP，到一组专用的 socket 系统调用（号段 100–109），最终在用户态跑起一个真实的 HTTP 服务器与 TFTP 客户端——宿主机浏览器经 QEMU `hostfwd` 直接访问 guest 内的页面，两台 QEMU 经 socket pair 互 ping。协议栈每一层都是内核 `drivers/net/` 下的 Rust 代码，不依赖任何外部网络 crate。
+RmikuOS 自带一套 TCP/IP 协议栈：自 virtio-net 驱动起，经 Ethernet / ARP / IPv4 / ICMP / UDP / TCP 与 DHCP，到一组专用的 socket 系统调用（号段 100–109），最终在用户态跑起一个真实的 HTTP 服务器与 TFTP 客户端——宿主机浏览器经 QEMU `hostfwd` 直接访问 guest 内的页面，两台 QEMU 经 socket pair 互 ping。协议栈每一层都是内核 `drivers/net/` 下的 Rust 代码，不依赖任何外部网络 crate。
 
 ```text
 用户态   httpd(静态文件 + JSON API)   tftp(文件注入)   ping / udp_test / tcp_test
@@ -580,9 +580,8 @@ QEMU 侧使用 slirp 用户态网络（`-netdev user`）：无需宿主机 root 
 * 本机地址原子化（`MY_IP`）：DHCP 完成前用默认值，租约落地后 `set_my_ip` 热切换；
 * 按 protocol 字段分发到 UDP（17）/ TCP（6），未知协议打日志——漏写分发行曾导致 SYN-ACK 静默消失，这类坑必须能被一眼看见。
 
-### TCP：教学版「满血」实现
+### TCP：教学版实现
 
-「满血」指**连接管理完整**，而非性能特性齐全：
 
 * 11 态状态机（Closed → Listen → SynSent / SynReceived → Established → FinWait1 / 2 → CloseWait / Closing / LastAck → TimeWait），主动 open（connect）与被动 open（listen / accept）均支持；
 * 发送侧：`tx_unacked` 重传队列（SYN / FIN 各占一个序号），**Jacobson/Karn 自适应 RTO**（RFC 6298 定点 SRTT/RTTVAR，RTO = SRTT + max(G, 4·RTTVAR)，200ms–16s，指数退避，最多 8 次；详见 Network Experiments 一节）；
@@ -590,7 +589,48 @@ QEMU 侧使用 slirp 用户态网络（`-netdev user`）：无需宿主机 root 
 * 定时器不依赖硬件中断：RTO / TIME_WAIT 等全部期限由 socket 层 `poll()` 内嵌的 `tick()` 驱动；
 * 两条路径均已实机验证：主动 connect 经 slirp 访问宿主机 `nc -l`；被动 listen 经 hostfwd 接受宿主机浏览器连接。
 
-> **裁剪声明**：无拥塞控制（慢启动 / 拥塞避免）、无乱序重组（乱序即丢）、无 MSS 协商。QEMU slirp 链路几乎不丢包、不乱序，这些裁剪不影响当前正确性；它们在 Roadmap 的第一梯队。
+# TCP CUBIC 拥塞控制实验
+
+在 RmikuOS 教学 TCP 栈上实现 **CUBIC(RFC 9438)** 拥塞控制与快速重传,并与无拥塞控制版本在确定性丢包下做 A/B 对照。
+
+## 实验设计
+
+- **对照组**:old 版(无 cwnd,仅接收窗口流控 + RTO 重传)
+- **实验组**:CUBIC 版(慢启动 + 立方增长 + β=0.7 降窗 + 快速收敛 + 3-dupACK 快速重传)
+- **丢包装置**:发送侧每 `LOSS_EVERY` 个数据段丢 1 个(确定性、可复现),档位 {0, 20, 50, 100, 200, 500}
+- **负载**:guest 内 httpd 发文件,宿主机 curl 下载,尺寸 {64K, 256K, 1M},每格 7 次取中位数
+- **打点**:每连接一行 `[tcp-stat]`(字节/重传/降窗计数),`[cwnd]` 逐次变窗轨迹;宿主机按日志书签切片聚合
+
+## 结果
+
+![CUBIC 锯齿](logs/tcp/figs/fig1_cwnd_sawtooth.png)
+
+![恢复路径对比](logs/tcp/figs/fig2_recovery.png)
+
+- 相同丢包序列下两版**重传总量一致**(fig2 柱高),证明装置公平;差异全在恢复路径:**99.6% 的重传由快速重传完成**(l20@1M:fast=277, RTO=1),单次丢包恢复代价从 ≥200ms(RTO_MIN)降至约 0。
+- 实测降窗次数与理论丢包数(段数/LOSS)在全部档位吻合(见 fig3),丢包装置与打点计数自洽。
+- RTT 样本数随丢包率下降(fig5),符合 Karn 规则(重传段不采样)。
+
+## 复现
+
+```bash
+# 终端1: QEMU 输出落盘(每次重启先删旧日志)
+rm -f logs/console.log && ./run.sh riscv64 debug 2>&1 | tee logs/console.log
+# 终端2: 扫描(LOSS 标签需与内核编译的 LOSS_EVERY 一致)
+./scripts/tcp_loss_sweep.sh old   100 7
+./scripts/tcp_loss_sweep.sh cubic 100 7
+# 出图
+python3 scripts/plot_tcp.py
+```
+
+## 局限性
+
+- QEMU 内 RTT≈0,协议栈受 CPU/串口限制(~27KB/s),在途数据不足 1 段,cwnd 不构成瓶颈——**计时列仅作参考**,结论以机制计数为准;窗口瓶颈实验需关闭日志并加链路延迟(设计见实验记录)。
+- 耗时存在会话级漂移(每次换内核冷启动),跨行绝对值不可比。
+- 接收端原为 GBN 行为(乱序丢弃),已由后续的 SR 升级(重组缓存)解决;SACK 选项未实现。
+
+
+
 
 ### DHCP 客户端
 
@@ -1540,7 +1580,6 @@ User Programs (httpd / udp_test / tcp_test)
 
 virtio-net → Ethernet / ARP / IPv4 / UDP / TCP / DHCP / socket / httpd 已打通（见 Network Stack 一节），下一步：
 
-* TCP 补强：快重传 / SACK（动机见 Network Experiments 的串行修洞排队签名）、拥塞控制（慢启动 / 拥塞避免）、乱序重组、MSS 协商
 * RTO 实验补强：交错（interleaved）重复尺寸扫描，消除跨 session 漂移图中的「版本–顺序」混杂
 * socket 表扩容与 SYN 队列（当前 8 槽 + TIME_WAIT 10s，快速连发时 SYN 被静默丢弃，宿主侧表现为周期性 18s 停摆）
 * DHCP 租约续期（T1 / T2）
