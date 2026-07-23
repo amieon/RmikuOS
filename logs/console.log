@@ -1,4 +1,4 @@
-     Removed 848 files, 361.1MiB total
+     Removed 858 files, 443.4MiB total
 === 构建用户程序 (riscv64) ===
 warning: unused import: `core::ptr`
  --> /home/abcc/RmikuOS/user/tests/52_rust_fibonacci.rs:5:5
@@ -430,6 +430,165 @@ workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/abcc/RmikuOS/user/rust/programs/files/Cargo.toml
 workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
+warning: unused variable: `idx`
+  --> programs/my_math_constants/src/main.rs:39:10
+   |
+39 |     for (idx, (name, func)) in tasks.iter().enumerate() {
+   |          ^^^ help: if this is intentional, prefix it with an underscore: `_idx`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `my_math_constants` (bin "my_math_constants") generated 1 warning (run `cargo fix --bin "my_math_constants" -p my_math_constants` to apply 1 suggestion)
+warning: function `readline` is never used
+  --> programs/try_vec/src/utils.rs:23:8
+   |
+23 | pub fn readline(buf: &mut [u8]) -> usize {
+   |        ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `atoi` is never used
+  --> programs/try_vec/src/utils.rs:52:8
+   |
+52 | pub fn atoi(bytes: &[u8]) -> u64 {
+   |        ^^^^
+
+warning: function `result_filename` is never used
+  --> programs/try_vec/src/utils.rs:62:8
+   |
+62 | pub fn result_filename(pid: isize) -> [u8; 32] {
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `u64_to_str` is never used
+  --> programs/try_vec/src/utils.rs:92:8
+   |
+92 | pub fn u64_to_str(mut x: u64, buf: &mut [u8]) -> usize {
+   |        ^^^^^^^^^^
+
+warning: `try_vec` (bin "try_vec") generated 4 warnings
+warning: unused import: `copy_str_to_buf`
+ --> programs/library_system/src/storage.rs:2:40
+  |
+2 | use crate::utils::{bytes_to_str, atoi, copy_str_to_buf};
+  |                                        ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `history` is never read
+   --> programs/library_system/src/utils.rs:105:21
+    |
+105 |                     history[hist_count][copy_len] = 0;
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `hist_count` is never read
+   --> programs/library_system/src/utils.rs:106:21
+    |
+106 |                     hist_count += 1;
+    |                     ^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: constant `ESC` is never used
+  --> programs/library_system/src/utils.rs:77:11
+   |
+77 | pub const ESC: u8 = 0x1B;
+   |           ^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `HISTORY_MAX` is never used
+  --> programs/library_system/src/utils.rs:78:7
+   |
+78 | const HISTORY_MAX: usize = 10;
+   |       ^^^^^^^^^^^
+
+warning: constant `LINE_MAX` is never used
+  --> programs/library_system/src/utils.rs:79:7
+   |
+79 | const LINE_MAX: usize = 64;
+   |       ^^^^^^^^
+
+warning: function `readline_cmd` is never used
+  --> programs/library_system/src/utils.rs:83:8
+   |
+83 | pub fn readline_cmd(_prompt: &str) -> [u8; LINE_MAX] {
+   |        ^^^^^^^^^^^^
+
+warning: function `bytes_len` is never used
+   --> programs/library_system/src/utils.rs:223:4
+    |
+223 | fn bytes_len(b: &[u8]) -> usize {
+    |    ^^^^^^^^^
+
+warning: `library_system` (bin "library_system") generated 8 warnings (run `cargo fix --bin "library_system" -p library_system` to apply 1 suggestion)
+warning: unused import: `put_char`
+ --> programs/bank_system/src/manager.rs:4:22
+  |
+4 | use ulib::io::{puts, put_char};
+  |                      ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `open_create` and `write`
+ --> programs/bank_system/src/interest.rs:5:28
+  |
+5 | use ulib::io::{puts, open, open_create, close, read, write};
+  |                            ^^^^^^^^^^^               ^^^^^
+
+warning: unused import: `put_char`
+  --> programs/bank_system/src/main.rs:10:22
+   |
+10 | use ulib::io::{puts, put_char};
+   |                      ^^^^^^^^
+
+warning: unused import: `bytes_to_str`
+  --> programs/bank_system/src/main.rs:12:51
+   |
+12 | use utils::{get_key, wait_any_key, print_at, Key, bytes_to_str};
+   |                                                   ^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> programs/bank_system/src/interest.rs:77:9
+   |
+77 |     let mut new_accs = [Account::new(0, "", 0); MAX_ACCOUNTS];
+   |         ----^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> programs/bank_system/src/interest.rs:78:9
+   |
+78 |     let mut new_count = 0;
+   |         ----^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: unused variable: `new_accs`
+  --> programs/bank_system/src/interest.rs:77:9
+   |
+77 |     let mut new_accs = [Account::new(0, "", 0); MAX_ACCOUNTS];
+   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_accs`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `new_count`
+  --> programs/bank_system/src/interest.rs:78:9
+   |
+78 |     let mut new_count = 0;
+   |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_count`
+
+warning: unused variable: `n`
+  --> programs/bank_system/src/interest.rs:84:17
+   |
+84 |             let n = read(fd as usize, &mut buf);
+   |                 ^ help: if this is intentional, prefix it with an underscore: `_n`
+
+warning: `bank_system` (bin "bank_system") generated 9 warnings (run `cargo fix --bin "bank_system" -p bank_system` to apply 9 suggestions)
 warning: variable `total` is assigned to, but never used
   --> programs/edit_past/src/main.rs:75:9
    |
@@ -661,111 +820,13 @@ warning: creating a shared reference to mutable static
     = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
 
-warning: method `len` is never used
-  --> programs/files/src/buffer.rs:24:12
-   |
-16 | impl Buffer {
-   | ----------- method in this implementation
-...
-24 |     pub fn len(&self) -> usize {
-   |            ^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `put_str` is never used
-  --> programs/files/src/terminal.rs:38:12
-   |
-17 | impl Frame {
-   | ---------- method in this implementation
-...
-38 |     pub fn put_str(&mut self, s: &str) {
-   |            ^^^^^^^
-
-warning: unused import: `copy_str_to_buf`
- --> programs/library_system/src/storage.rs:2:40
+warning: unused import: `read`
+ --> programs/try_args/src/main.rs:5:16
   |
-2 | use crate::utils::{bytes_to_str, atoi, copy_str_to_buf};
-  |                                        ^^^^^^^^^^^^^^^
+5 | use ulib::io::{read,puts,puts_bytes,put_int};
+  |                ^^^^
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: value assigned to `history` is never read
-   --> programs/library_system/src/utils.rs:105:21
-    |
-105 |                     history[hist_count][copy_len] = 0;
-    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |
-    = help: maybe it is overwritten before being read?
-    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
-
-warning: value assigned to `hist_count` is never read
-   --> programs/library_system/src/utils.rs:106:21
-    |
-106 |                     hist_count += 1;
-    |                     ^^^^^^^^^^^^^^^
-    |
-    = help: maybe it is overwritten before being read?
-
-warning: constant `ESC` is never used
-  --> programs/library_system/src/utils.rs:77:11
-   |
-77 | pub const ESC: u8 = 0x1B;
-   |           ^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: constant `HISTORY_MAX` is never used
-  --> programs/library_system/src/utils.rs:78:7
-   |
-78 | const HISTORY_MAX: usize = 10;
-   |       ^^^^^^^^^^^
-
-warning: constant `LINE_MAX` is never used
-  --> programs/library_system/src/utils.rs:79:7
-   |
-79 | const LINE_MAX: usize = 64;
-   |       ^^^^^^^^
-
-warning: function `readline_cmd` is never used
-  --> programs/library_system/src/utils.rs:83:8
-   |
-83 | pub fn readline_cmd(_prompt: &str) -> [u8; LINE_MAX] {
-   |        ^^^^^^^^^^^^
-
-warning: function `bytes_len` is never used
-   --> programs/library_system/src/utils.rs:223:4
-    |
-223 | fn bytes_len(b: &[u8]) -> usize {
-    |    ^^^^^^^^^
-
-warning: `edit_past` (bin "edit_past") generated 26 warnings (run `cargo fix --bin "edit_past" -p edit_past` to apply 3 suggestions)
-warning: `files` (bin "files") generated 2 warnings
-warning: `library_system` (bin "library_system") generated 8 warnings (run `cargo fix --bin "library_system" -p library_system` to apply 1 suggestion)
-warning: function `readline` is never used
-  --> programs/try_vec/src/utils.rs:23:8
-   |
-23 | pub fn readline(buf: &mut [u8]) -> usize {
-   |        ^^^^^^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: function `atoi` is never used
-  --> programs/try_vec/src/utils.rs:52:8
-   |
-52 | pub fn atoi(bytes: &[u8]) -> u64 {
-   |        ^^^^
-
-warning: function `result_filename` is never used
-  --> programs/try_vec/src/utils.rs:62:8
-   |
-62 | pub fn result_filename(pid: isize) -> [u8; 32] {
-   |        ^^^^^^^^^^^^^^^
-
-warning: function `u64_to_str` is never used
-  --> programs/try_vec/src/utils.rs:92:8
-   |
-92 | pub fn u64_to_str(mut x: u64, buf: &mut [u8]) -> usize {
-   |        ^^^^^^^^^^
 
 warning: method `len` is never used
   --> programs/editor/src/buffer.rs:24:12
@@ -787,92 +848,31 @@ warning: method `put_str` is never used
 38 |     pub fn put_str(&mut self, s: &str) {
    |            ^^^^^^^
 
-warning: unused variable: `idx`
-  --> programs/my_math_constants/src/main.rs:39:10
-   |
-39 |     for (idx, (name, func)) in tasks.iter().enumerate() {
-   |          ^^^ help: if this is intentional, prefix it with an underscore: `_idx`
-   |
-   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: `try_vec` (bin "try_vec") generated 4 warnings
-warning: `editor` (bin "editor") generated 2 warnings
-warning: `my_math_constants` (bin "my_math_constants") generated 1 warning (run `cargo fix --bin "my_math_constants" -p my_math_constants` to apply 1 suggestion)
-warning: unused import: `read`
- --> programs/try_args/src/main.rs:5:16
-  |
-5 | use ulib::io::{read,puts,puts_bytes,put_int};
-  |                ^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused import: `put_char`
- --> programs/bank_system/src/manager.rs:4:22
-  |
-4 | use ulib::io::{puts, put_char};
-  |                      ^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused imports: `open_create` and `write`
- --> programs/bank_system/src/interest.rs:5:28
-  |
-5 | use ulib::io::{puts, open, open_create, close, read, write};
-  |                            ^^^^^^^^^^^               ^^^^^
-
-warning: unused import: `put_char`
-  --> programs/bank_system/src/main.rs:10:22
-   |
-10 | use ulib::io::{puts, put_char};
-   |                      ^^^^^^^^
-
-warning: unused import: `bytes_to_str`
-  --> programs/bank_system/src/main.rs:12:51
-   |
-12 | use utils::{get_key, wait_any_key, print_at, Key, bytes_to_str};
-   |                                                   ^^^^^^^^^^^^
-
-warning: variable does not need to be mutable
-  --> programs/bank_system/src/interest.rs:77:9
-   |
-77 |     let mut new_accs = [Account::new(0, "", 0); MAX_ACCOUNTS];
-   |         ----^^^^^^^^
-   |         |
-   |         help: remove this `mut`
-   |
-   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
-
-warning: variable does not need to be mutable
-  --> programs/bank_system/src/interest.rs:78:9
-   |
-78 |     let mut new_count = 0;
-   |         ----^^^^^^^^^
-   |         |
-   |         help: remove this `mut`
-
-warning: unused variable: `new_accs`
-  --> programs/bank_system/src/interest.rs:77:9
-   |
-77 |     let mut new_accs = [Account::new(0, "", 0); MAX_ACCOUNTS];
-   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_accs`
-   |
-   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused variable: `new_count`
-  --> programs/bank_system/src/interest.rs:78:9
-   |
-78 |     let mut new_count = 0;
-   |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_count`
-
-warning: unused variable: `n`
-  --> programs/bank_system/src/interest.rs:84:17
-   |
-84 |             let n = read(fd as usize, &mut buf);
-   |                 ^ help: if this is intentional, prefix it with an underscore: `_n`
-
+warning: `edit_past` (bin "edit_past") generated 26 warnings (run `cargo fix --bin "edit_past" -p edit_past` to apply 3 suggestions)
 warning: `try_args` (bin "try_args") generated 1 warning (run `cargo fix --bin "try_args" -p try_args` to apply 1 suggestion)
-warning: `bank_system` (bin "bank_system") generated 9 warnings (run `cargo fix --bin "bank_system" -p bank_system` to apply 9 suggestions)
-    Finished `release` profile [optimized] target(s) in 0.04s
+warning: `editor` (bin "editor") generated 2 warnings
+warning: method `len` is never used
+  --> programs/files/src/buffer.rs:24:12
+   |
+16 | impl Buffer {
+   | ----------- method in this implementation
+...
+24 |     pub fn len(&self) -> usize {
+   |            ^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `put_str` is never used
+  --> programs/files/src/terminal.rs:38:12
+   |
+17 | impl Frame {
+   | ---------- method in this implementation
+...
+38 |     pub fn put_str(&mut self, s: &str) {
+   |            ^^^^^^^
+
+warning: `files` (bin "files") generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 0.05s
 /home/abcc/RmikuOS/user/cpp/jvm/native.cpp: In function 'Value call_native(VM&, const std::string&, const std::string&, const std::string&, std::vector<Value>&)':
 /home/abcc/RmikuOS/user/cpp/jvm/native.cpp:376:1: warning: control reaches end of non-void function [-Wreturn-type]
   376 | }
@@ -1215,6 +1215,30 @@ warning: `bank_system` (bin "bank_system") generated 9 warnings (run `cargo fix 
 + riscv64-unknown-elf-g++ -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-riscv64.ld /home/abcc/RmikuOS/user/build/riscv64/gcn/_crt0.o /home/abcc/RmikuOS/user/build/riscv64/gcn/train_cora_GTA.o /home/abcc/RmikuOS/user/build/riscv64/gcn/_syscall.o /home/abcc/RmikuOS/user/build/riscv64/gcn/_string.o /home/abcc/RmikuOS/user/build/riscv64/gcn/_cpprt.o -o /home/abcc/RmikuOS/user/build/riscv64/gcn/train_cora_GTA.elf
 + riscv64-unknown-elf-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/riscv64/gcn/train_cora_GTA.elf /home/abcc/RmikuOS/user/build/riscv64/gcn/train_cora_GTA.bin
 [user] gcn/train_cora_GTA: 61988 bytes
+[user] javac BenchAlu (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchAlu /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchAlu/BenchAlu.java
+[user] java BenchAlu compiled
+[user] javac BenchArray (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchArray /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchArray/BenchArray.java
+[user] java BenchArray compiled
+[user] javac BenchBranch (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchBranch /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchBranch/BenchBranch.java
+[user] java BenchBranch compiled
+[user] javac BenchCall (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchCall /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchCall/BenchCall.java
+[user] java BenchCall compiled
+[user] javac BenchMul (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchMul /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchMul/BenchMul.java
+[user] java BenchMul compiled
+[user] javac BenchObject (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchObject /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchObject/BenchObject.java
+[user] java BenchObject compiled
+[user] javac BenchQuickSort (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchQuickSort /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchQuickSort/BenchQuickSort.java
+[user] java BenchQuickSort compiled
+[user] javac BenchString (1 file(s)) ...
++ javac -d /home/abcc/RmikuOS/user/java/BenchString /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/BenchString/BenchString.java
+[user] java BenchString compiled
 [user] javac bench (1 file(s)) ...
 + javac -d /home/abcc/RmikuOS/user/java/bench /home/abcc/RmikuOS/user/java/rmiku/Rmiku.java /home/abcc/RmikuOS/user/java/bench/Bench.java
 [user] java bench compiled
@@ -1257,6 +1281,14 @@ copy rootfs overlay: user/rootfs -> target/fsroot-riscv64
   [cpp] jvm -> /programs/jvm
   [gcn] -> /gcn/
   [jvm] bench -> /jvm/bench/
+  [jvm] BenchAlu -> /jvm/BenchAlu/
+  [jvm] BenchArray -> /jvm/BenchArray/
+  [jvm] BenchBranch -> /jvm/BenchBranch/
+  [jvm] BenchCall -> /jvm/BenchCall/
+  [jvm] BenchMul -> /jvm/BenchMul/
+  [jvm] BenchObject -> /jvm/BenchObject/
+  [jvm] BenchQuickSort -> /jvm/BenchQuickSort/
+  [jvm] BenchString -> /jvm/BenchString/
   [jvm] fibonacci_java -> /jvm/fibonacci_java/
   [jvm] file_demo -> /jvm/file_demo/
   [jvm] hello_java -> /jvm/hello_java/
@@ -1304,13 +1336,78 @@ target/fsroot-riscv64/home/miku/readme.txt
 target/fsroot-riscv64/home/miku/test_for_redirection.txt
 target/fsroot-riscv64/jvm
 target/fsroot-riscv64/jvm/bench
+target/fsroot-riscv64/jvm/BenchAlu
+target/fsroot-riscv64/jvm/BenchAlu/BenchAlu.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku.class
+target/fsroot-riscv64/jvm/BenchArray
+target/fsroot-riscv64/jvm/BenchArray/BenchArray.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku.class
 target/fsroot-riscv64/jvm/bench/Bench.class
+target/fsroot-riscv64/jvm/BenchBranch
+target/fsroot-riscv64/jvm/BenchBranch/BenchBranch.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku.class
+target/fsroot-riscv64/jvm/BenchCall
+target/fsroot-riscv64/jvm/BenchCall/BenchCall.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku.class
+target/fsroot-riscv64/jvm/BenchMul
+target/fsroot-riscv64/jvm/BenchMul/BenchMul.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku.class
+target/fsroot-riscv64/jvm/BenchObject
+target/fsroot-riscv64/jvm/BenchObject/BenchObject$Point.class
+target/fsroot-riscv64/jvm/BenchObject/BenchObject.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku.class
+target/fsroot-riscv64/jvm/BenchQuickSort
+target/fsroot-riscv64/jvm/BenchQuickSort/BenchQuickSort.class
+target/fsroot-riscv64/jvm/BenchQuickSort/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchQuickSort/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchQuickSort/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchQuickSort/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchQuickSort/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchQuickSort/Rmiku.class
 target/fsroot-riscv64/jvm/bench/Rmiku$IO.class
 target/fsroot-riscv64/jvm/bench/Rmiku$Mem.class
 target/fsroot-riscv64/jvm/bench/Rmiku$Net.class
 target/fsroot-riscv64/jvm/bench/Rmiku$Proc.class
 target/fsroot-riscv64/jvm/bench/Rmiku$Thread.class
 target/fsroot-riscv64/jvm/bench/Rmiku.class
+target/fsroot-riscv64/jvm/BenchString
+target/fsroot-riscv64/jvm/BenchString/BenchString.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku.class
 target/fsroot-riscv64/jvm/fibonacci_java
 target/fsroot-riscv64/jvm/fibonacci_java/fibonacci_java.class
 target/fsroot-riscv64/jvm/fibonacci_java/Rmiku$IO.class
@@ -1436,6 +1533,7 @@ target/fsroot-riscv64/random/64K.bin
 target/fsroot-riscv64/random/8K.bin
 target/fsroot-riscv64/random/big.bin
 target/fsroot-riscv64/scripts
+target/fsroot-riscv64/scripts/javabench.sh
 target/fsroot-riscv64/scripts/test1.sh
 target/fsroot-riscv64/share
 target/fsroot-riscv64/share/ascii
@@ -1530,17 +1628,17 @@ created target/fs-riscv64.img
 mkfs.fat 4.2 (2021-01-31)
 created target/fat-riscv64.img (fresh FAT16)
 === 编译内核 (riscv64, debug, LOG=warn) ===
-   Compiling find-msvc-tools v0.1.9
    Compiling shlex v1.3.0
-   Compiling crc-catalog v2.5.0
+   Compiling find-msvc-tools v0.1.9
    Compiling bitflags v2.11.1
+   Compiling crc-catalog v2.5.0
    Compiling crc v3.4.0
    Compiling cc v1.2.62
-   Compiling log v0.4.30
    Compiling spin v0.10.0
+   Compiling log v0.4.30
    Compiling buddy_system_allocator v0.13.0
-   Compiling fatfs v0.4.0 (/home/abcc/RmikuOS/third_party/fatfs)
    Compiling ext4-view v0.9.3
+   Compiling fatfs v0.4.0 (/home/abcc/RmikuOS/third_party/fatfs)
 warning: hiding a lifetime that's elided elsewhere is confusing
    --> third_party/fatfs/src/fs.rs:630:21
     |
@@ -1903,12 +2001,6 @@ warning: unused import: `SocketAddr`
 2 | use crate::drivers::net::socket::{SOCKET_TABLE, Socket, SocketAddr};
   |                                                         ^^^^^^^^^^
 
-warning: unused import: `crate::println`
- --> kernel/src/drivers/net/tcp.rs:6:5
-  |
-6 | use crate::println;
-  |     ^^^^^^^^^^^^^^
-
 warning: unused import: `crate::sync::spin::Mutex`
  --> kernel/src/drivers/net/tcp.rs:7:5
   |
@@ -2089,24 +2181,6 @@ warning: unused variable: `dst_ip`
    |
 82 | pub fn input(packet: &[u8], src_ip: u32, dst_ip: u32) {
    |                                          ^^^^^^ help: if this is intentional, prefix it with an underscore: `_dst_ip`
-
-warning: unused variable: `fd`
-   --> kernel/src/drivers/net/tcp.rs:167:15
-    |
-167 | fn dump_stats(fd: usize, t: &mut TcpSocket, why: &str) {
-    |               ^^ help: if this is intentional, prefix it with an underscore: `_fd`
-
-warning: unused variable: `why`
-   --> kernel/src/drivers/net/tcp.rs:167:45
-    |
-167 | fn dump_stats(fd: usize, t: &mut TcpSocket, why: &str) {
-    |                                             ^^^ help: if this is intentional, prefix it with an underscore: `_why`
-
-warning: unused variable: `dur`
-   --> kernel/src/drivers/net/tcp.rs:171:9
-    |
-171 |     let dur = now_ms().saturating_sub(t.stat_start_ms);
-    |         ^^^ help: if this is intentional, prefix it with an underscore: `_dur`
 
 warning: field `tick` is never read
   --> kernel/src/main.rs:33:5
@@ -3427,17 +3501,6 @@ warning: constant `EMPTY` is never used
 52 | const EMPTY: Option<PendingPkt> = None;
    |       ^^^^^
 
-warning: fields `stat_rtx_fast` and `stat_loss` are never read
-   --> kernel/src/drivers/net/tcp.rs:105:9
-    |
- 80 | pub struct TcpSocket {
-    |            --------- fields in this struct
-...
-105 |     pub stat_rtx_fast: u32, // 快速重传次数(旧版恒 0,只为对齐格式)
-    |         ^^^^^^^^^^^^^
-106 |     pub stat_loss: u32,     // 拥塞降窗事件数(旧版恒 0,只为对齐格式)
-    |         ^^^^^^^^^
-
 warning: field `remote` is never read
   --> kernel/src/drivers/net/socket.rs:22:9
    |
@@ -3791,8 +3854,8 @@ warning: creating a shared reference to mutable static
    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
 
-warning: `RmikuOS` (bin "RmikuOS") generated 305 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 77 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.59s
+warning: `RmikuOS` (bin "RmikuOS") generated 300 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 73 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.39s
 
 === 启动 QEMU (riscv64, mode=debug, net=user) ===
 KERNEL: target/riscv64gc-unknown-none-elf/debug/RmikuOS
@@ -3833,7 +3896,7 @@ Standard SBI Extensions     : ipi,pmu,srst,sse,hsm,rfnc,fwft,time,base,legacy,db
 Experimental SBI Extensions : none
 
 Domain0 Name                : root
-Domain0 Boot HART           : 2
+Domain0 Boot HART           : 6
 Domain0 HARTs               : 0*,1*,2*,3*,4*,5*,6*,7*
 Domain0 Region00            : 0x0000000080000000-0x000000008003ffff M: (F,R,X) S/U: ()
 Domain0 Region01            : 0x0000000080040000-0x000000008007ffff M: (F,R,W) S/U: ()
@@ -3849,7 +3912,7 @@ Domain0 Next Mode           : S-mode
 Domain0 SysReset            : yes
 Domain0 SysSuspend          : yes
 
-Boot HART ID                : 2
+Boot HART ID                : 6
 Boot HART Domain            : root
 Boot HART Priv Version      : v1.12
 Boot HART Base ISA          : rv64imafdch
@@ -3889,97 +3952,13 @@ commands:
 external commands are in /bin:
   try: ls /bin
 
-/ $ htt tpd
-[httpd] RmikuOS httpd listening on 10.0.2.15:8080
-[httpd] conn from 10.0.2.2:49834 (fd=2)
-[httpd] #1 GET /random/64K.bin
-[httpd] #1 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:49836 (fd=3)
-[httpd] #2 GET /random/64K.bin
-[httpd] #2 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:49846 (fd=4)
-[httpd] #3 GET /random/64K.bin
-[httpd] #3 served file /random/64K.bin, fd=4
-[httpd] conn from 10.0.2.2:41922 (fd=4)
-[httpd] #4 GET /random/64K.bin
-[httpd] #4 served file /random/64K.bin, fd=4
-[httpd] conn from 10.0.2.2:41932 (fd=2)
-[httpd] #5 GET /random/64K.bin
-[httpd] #5 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:41940 (fd=2)
-[httpd] #6 GET /random/64K.bin
-[httpd] #6 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:52740 (fd=2)
-[httpd] #7 GET /random/64K.bin
-[httpd] #7 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:52754 (fd=3)
-[httpd] #8 GET /random/64K.bin
-[httpd] #8 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:52758 (fd=4)
-[httpd] #9 GET /random/64K.bin
-[httpd] #9 served file /random/64K.bin, fd=4
-[httpd] conn from 10.0.2.2:53326 (fd=4)
-[httpd] #10 GET /random/64K.bin
-[httpd] #10 served file /random/64K.bin, fd=4
-[httpd] conn from 10.0.2.2:53338 (fd=4)
-[httpd] #11 GET /random/64K.bin
-[httpd] #11 served file /random/64K.bin, fd=4
-[httpd] conn from 10.0.2.2:53352 (fd=2)
-[httpd] #12 GET /random/64K.bin
-[httpd] #12 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:44242 (fd=3)
-[httpd] #13 GET /random/64K.bin
-[httpd] #13 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:44252 (fd=3)
-[httpd] #14 GET /random/64K.bin
-[httpd] #14 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:44266 (fd=3)
-[httpd] #15 GET /random/64K.bin
-[httpd] #15 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:60476 (fd=2)
-[httpd] #16 GET /random/64K.bin
-[httpd] #16 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:60490 (fd=3)
-[httpd] #17 GET /random/64K.bin
-[httpd] #17 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:44972 (fd=4)
-[httpd] #18 GET /random/64K.bin
-[httpd] #18 served file /random/64K.bin, fd=4
-[httpd] conn from 10.0.2.2:44986 (fd=5)
-[httpd] #19 GET /random/64K.bin
-[httpd] #19 served file /random/64K.bin, fd=5
-[httpd] conn from 10.0.2.2:44988 (fd=2)
-[httpd] #20 GET /random/64K.bin
-[httpd] #20 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:36062 (fd=2)
-[httpd] #21 GET /random/64K.bin
-[httpd] #21 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:57770 (fd=3)
-[httpd] #22 GET /random/64K.bin
-[httpd] #22 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:57780 (fd=3)
-[httpd] #23 GET /random/64K.bin
-[httpd] #23 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:60334 (fd=2)
-[httpd] #24 GET /random/64K.bin
-[httpd] #24 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:53658 (fd=2)
-[httpd] #25 GET /random/64K.bin
-[httpd] #25 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:53664 (fd=2)
-[httpd] #26 GET /random/64K.bin
-[httpd] #26 served file /random/64K.bin, fd=2
-[httpd] conn from 10.0.2.2:33436 (fd=3)
-[httpd] #27 GET /random/64K.bin
-[httpd] #27 served file /random/64K.bin, fd=3
-[httpd] conn from 10.0.2.2:33440 (fd=4)
-[httpd] #28 GET /random/256K.bin
-[httpd] #28 served file /random/256K.bin, fd=4
-[httpd] conn from 10.0.2.2:45744 (fd=2)
-[httpd] #29 GET /random/256K.bin
-[httpd] #29 served file /random/256K.bin, fd=2
-[httpd] conn from 10.0.2.2:50758 (fd=2)
-[httpd] #30 GET /random/256K.bin
-[http] STALLED at 165200/262144
-[httpd] #30 served file /random/256K.bin, fd=2
+/ $ ls sc[2K/ $ ls scripts
+file    345 javabench.sh
+file    1232 test1.sh
+/ $ . javabench.sh.javabench.sh/javabench.shsjavabench.shcjavabench.shrjavabench.shijavabench.shpjavabench.shtjavabench.shsjavabench.sh/javabench.sh
+Class not found: BenchAlu (tried ./jvm/BenchAlu.class)
+Cannot load main class: BenchAlu
+[tick] ./programs/jvm = 128 ticks, exit=1
 
+Class not found: BenchArray (tried ./jvm/BenchArray.class)
+Cannot load main class: BenchArray
