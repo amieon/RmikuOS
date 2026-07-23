@@ -1,0 +1,69 @@
+[BENCH-BEGIN] alu_mix
+iter=
+20000000
+checksum=
+308318067
+[BENCH-END]
+[tick] ./programs/jvm = 70 ticks
+[time] ./programs/jvm = 865770132 ns (865 ms)
+exit=0
+[BENCH-BEGIN] array_rw
+len=
+100000
+ rep=
+30
+ checksum=
+1816596032
+[BENCH-END]
+[tick] ./programs/jvm = 161 ticks
+[time] ./programs/jvm = 1084711265 ns (1084 ms)
+exit=0
+[BENCH-BEGIN] branch_heavy
+iter=
+10000000
+checksum=
+85000000
+[BENCH-END]
+[tick] ./programs/jvm = 58 ticks
+[time] ./programs/jvm = 886181563 ns (886 ms)
+exit=0
+[BENCH-BEGIN] static_call
+call_iter=
+1000000
+ fib_rep=
+1024
+ checksum=
+501245684
+[BENCH-END]
+[tick] ./programs/jvm = 1504 ticks
+[time] ./programs/jvm = -463855221 ns (3831 ms)
+exit=0
+[BENCH-BEGIN] mul_lcg
+iter=
+10000000
+checksum=
+612098306
+[BENCH-END]
+[tick] ./programs/jvm = 135 ticks
+[time] ./programs/jvm = 1023737599 ns (1023 ms)
+exit=0
+[BENCH-BEGIN] object_field
+iter=
+100000
+checksum=
+-1475036480
+[BENCH-END]
+[tick] ./programs/jvm = 1034 ticks
+[time] ./programs/jvm = -1429680659 ns (2865 ms)
+exit=0
+[BENCH-BEGIN] string_ldc
+iter=
+1000000
+checksum=
+3000000
+[BENCH-END]
+[tick] ./programs/jvm = 1665 ticks
+[time] ./programs/jvm = 407057863 ns (4702 ms)
+exit=0
+/ $ 
+

@@ -24,6 +24,7 @@ int main(int argc, char **argv) {
                 args.argv[i].len = 0;
             }
         }
+        t0 = get_time();
         exec_with_args(argv[1], &args);
         printf("[tick] exec failed\n");
         exit(127);
@@ -36,8 +37,8 @@ int main(int argc, char **argv) {
     printf("[time] ");
     printf(argv[1]);
     printf(" = ");
-    printf("%d", (int)(t1 - t0));
-    printf(" ns(%d ms), exit=", (int)((t1 - t0) / 1000000));
+    printf("%d", (long)(t1 - t0));
+    printf(" ns(%d ms), exit=", (long)((t1 - t0) / 1000000));
     printf("%d", status);
     printf("\n");
     return 0;

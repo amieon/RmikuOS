@@ -1,0 +1,284 @@
+riscv:
+/ $ . ./scripts/javabench.sh
+[BENCH-BEGIN] alu_mix
+iter=
+2000000
+checksum=
+2128410834
+[BENCH-END]
+[tick] ./programs/jvm = 260 ticks
+[time] ./programs/jvm = 134164707 ns (134 ms)
+exit=0
+[BENCH-BEGIN] array_rw
+len=
+10000
+ rep=
+30
+ checksum=
+656384928
+[BENCH-END]
+[tick] ./programs/jvm = 262 ticks
+[time] ./programs/jvm = 134612047 ns (134 ms)
+exit=0
+[BENCH-BEGIN] branch_heavy
+iter=
+1000000
+checksum=
+8500000
+[BENCH-END]
+[tick] ./programs/jvm = 121 ticks
+[time] ./programs/jvm = 129333953 ns (129 ms)
+exit=0
+[BENCH-BEGIN] static_call
+call_iter=
+10000
+ fib_rep=
+16
+ checksum=
+-521379404
+[BENCH-END]
+[tick] ./programs/jvm = 133 ticks
+[time] ./programs/jvm = 134445878 ns (134 ms)
+exit=0
+[BENCH-BEGIN] mul_lcg
+iter=
+1000000
+checksum=
+-779706226
+[BENCH-END]
+[tick] ./programs/jvm = 244 ticks
+[time] ./programs/jvm = 126739938 ns (126 ms)
+exit=0
+[BENCH-BEGIN] object_field
+iter=
+1000
+checksum=
+1998000
+[BENCH-END]
+[tick] ./programs/jvm = 138 ticks
+[time] ./programs/jvm = 136072076 ns (136 ms)
+exit=0
+[BENCH-BEGIN] string_ldc
+iter=
+10000
+checksum=
+30000
+[BENCH-END]
+[tick] ./programs/jvm = 172 ticks
+[time] ./programs/jvm = 174143370 ns (174 ms)
+exit=0
+/ $ 
+
+loongarch64:
+/ $ . ./scripts/javabench.sh
+[BENCH-BEGIN] alu_mix
+iter=
+2000000
+checksum=
+2128410834
+[BENCH-END]
+[tick] ./programs/jvm = 15 ticks
+[time] ./programs/jvm = 690524807 ns (690 ms)
+exit=0
+[BENCH-BEGIN] array_rw
+len=
+10000
+ rep=
+30
+ checksum=
+656384928
+[BENCH-END]
+[tick] ./programs/jvm = 23 ticks
+[time] ./programs/jvm = 712956101 ns (712 ms)
+exit=0
+[BENCH-BEGIN] branch_heavy
+iter=
+1000000
+checksum=
+8500000
+[BENCH-END]
+[tick] ./programs/jvm = 15 ticks
+[time] ./programs/jvm = 727928755 ns (727 ms)
+exit=0
+[BENCH-BEGIN] static_call
+call_iter=
+10000
+ fib_rep=
+16
+ checksum=
+-521379404
+[BENCH-END]
+[tick] ./programs/jvm = 23 ticks
+[time] ./programs/jvm = 721699658 ns (721 ms)
+exit=0
+[BENCH-BEGIN] mul_lcg
+iter=
+1000000
+checksum=
+-779706226
+[BENCH-END]
+[tick] ./programs/jvm = 20 ticks
+[time] ./programs/jvm = 852850555 ns (852 ms)
+exit=0
+[BENCH-BEGIN] object_field
+iter=
+1000
+checksum=
+1998000
+[BENCH-END]
+[tick] ./programs/jvm = 22 ticks
+[time] ./programs/jvm = 805290023 ns (805 ms)
+exit=0
+[BENCH-BEGIN] string_ldc
+iter=
+10000
+checksum=
+30000
+[BENCH-END]
+[tick] ./programs/jvm = 27 ticks
+[time] ./programs/jvm = 905917055 ns (905 ms)
+exit=0
+/ $ 
+
+
+riscv:
+/ $ . ./scripts/javabench.sh
+[BENCH-BEGIN] alu_mix
+iter=
+2000000
+checksum=
+2128410834
+[BENCH-END]
+[tick] ./programs/jvm = 1265 ticks
+[time] ./programs/jvm = 645845602 ns (645 ms)
+exit=0
+[BENCH-BEGIN] array_rw
+len=
+10000
+ rep=
+30
+ checksum=
+656384928
+[BENCH-END]
+[tick] ./programs/jvm = 381 ticks
+[time] ./programs/jvm = 195624306 ns (195 ms)
+exit=0
+[BENCH-BEGIN] branch_heavy
+iter=
+1000000
+checksum=
+8500000
+[BENCH-END]
+[tick] ./programs/jvm = 833 ticks
+[time] ./programs/jvm = 425846472 ns (425 ms)
+exit=0
+[BENCH-BEGIN] static_call
+call_iter=
+10000
+ fib_rep=
+16
+ checksum=
+-521379404
+[BENCH-END]
+[tick] ./programs/jvm = 284 ticks
+[time] ./programs/jvm = 148063282 ns (148 ms)
+exit=0
+[BENCH-BEGIN] mul_lcg
+iter=
+1000000
+checksum=
+-779706226
+[BENCH-END]
+[tick] ./programs/jvm = 524 ticks
+[time] ./programs/jvm = 344008712 ns (344 ms)
+exit=0
+[BENCH-BEGIN] object_field
+iter=
+1000
+checksum=
+1998000
+[BENCH-END]
+[tick] ./programs/jvm = 243 ticks
+[time] ./programs/jvm = 125353127 ns (125 ms)
+exit=0
+[BENCH-BEGIN] string_ldc
+iter=
+10000
+checksum=
+30000
+[BENCH-END]
+[tick] ./programs/jvm = 252 ticks
+[time] ./programs/jvm = 129202398 ns (129 ms)
+exit=0
+/ $ 
+
+loongarch:
+/ $ . ./scripts/javabench.sh
+[BENCH-BEGIN] alu_mix
+iter=
+2000000
+checksum=
+2128410834
+[BENCH-END]
+[tick] ./programs/jvm = 1661 ticks
+[time] ./programs/jvm = -271666383 ns (4023 ms)
+exit=0
+[BENCH-BEGIN] array_rw
+len=
+10000
+ rep=
+30
+ checksum=
+656384928
+[BENCH-END]
+[tick] ./programs/jvm = 249 ticks
+[time] ./programs/jvm = 1163456809 ns (1163 ms)
+exit=0
+[BENCH-BEGIN] branch_heavy
+iter=
+1000000
+checksum=
+8500000
+[BENCH-END]
+[tick] ./programs/jvm = 1031 ticks
+[time] ./programs/jvm = -1545913468 ns (2749 ms)
+exit=0
+[BENCH-BEGIN] static_call
+call_iter=
+10000
+ fib_rep=
+16
+ checksum=
+-521379404
+[BENCH-END]
+[tick] ./programs/jvm = 30 ticks
+[time] ./programs/jvm = 705185456 ns (705 ms)
+exit=0
+[BENCH-BEGIN] mul_lcg
+iter=
+1000000
+checksum=
+-779706226
+[BENCH-END]
+[tick] ./programs/jvm = 614 ticks
+[time] ./programs/jvm = 1890012066 ns (1890 ms)
+exit=0
+[BENCH-BEGIN] object_field
+iter=
+1000
+checksum=
+1998000
+[BENCH-END]
+[tick] ./programs/jvm = 21 ticks
+[time] ./programs/jvm = 675133998 ns (675 ms)
+exit=0
+[BENCH-BEGIN] string_ldc
+iter=
+10000
+checksum=
+30000
+[BENCH-END]
+[tick] ./programs/jvm = 28 ticks
+[time] ./programs/jvm = 711808017 ns (711 ms)
+exit=0
+/ $ 

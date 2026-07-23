@@ -1,7 +1,7 @@
 // BenchString.java —— 字符串常量加载（ldc String）
 public class BenchString {
     static final int SCALE = 0;
-    static final int N = 10000;
+    static final int N = 1000000;
 
     public static void main(String[] args) {
         Rmiku.IO.printStr("[BENCH-BEGIN] string_ldc");
