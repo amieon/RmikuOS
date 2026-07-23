@@ -21,6 +21,8 @@ rustflags = [
 [profile.release]
 codegen-units = 1
 
+[build]
+rustflags = ["-A", "warnings"]
 
 
 [source.crates-io]
