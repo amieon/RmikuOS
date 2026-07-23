@@ -589,48 +589,6 @@ QEMU 侧使用 slirp 用户态网络（`-netdev user`）：无需宿主机 root 
 * 定时器不依赖硬件中断：RTO / TIME_WAIT 等全部期限由 socket 层 `poll()` 内嵌的 `tick()` 驱动；
 * 两条路径均已实机验证：主动 connect 经 slirp 访问宿主机 `nc -l`；被动 listen 经 hostfwd 接受宿主机浏览器连接。
 
-# TCP CUBIC 拥塞控制实验
-
-在 RmikuOS 教学 TCP 栈上实现 **CUBIC(RFC 9438)** 拥塞控制与快速重传,并与无拥塞控制版本在确定性丢包下做 A/B 对照。
-
-## 实验设计
-
-- **对照组**:old 版(无 cwnd,仅接收窗口流控 + RTO 重传)
-- **实验组**:CUBIC 版(慢启动 + 立方增长 + β=0.7 降窗 + 快速收敛 + 3-dupACK 快速重传)
-- **丢包装置**:发送侧每 `LOSS_EVERY` 个数据段丢 1 个(确定性、可复现),档位 {0, 20, 50, 100, 200, 500}
-- **负载**:guest 内 httpd 发文件,宿主机 curl 下载,尺寸 {64K, 256K, 1M},每格 7 次取中位数
-- **打点**:每连接一行 `[tcp-stat]`(字节/重传/降窗计数),`[cwnd]` 逐次变窗轨迹;宿主机按日志书签切片聚合
-
-## 结果
-
-![CUBIC 锯齿](logs/tcp/figs/fig1_cwnd_sawtooth.png)
-
-![恢复路径对比](logs/tcp/figs/fig2_recovery.png)
-
-- 相同丢包序列下两版**重传总量一致**(fig2 柱高),证明装置公平;差异全在恢复路径:**99.6% 的重传由快速重传完成**(l20@1M:fast=277, RTO=1),单次丢包恢复代价从 ≥200ms(RTO_MIN)降至约 0。
-- 实测降窗次数与理论丢包数(段数/LOSS)在全部档位吻合(见 fig3),丢包装置与打点计数自洽。
-- RTT 样本数随丢包率下降(fig5),符合 Karn 规则(重传段不采样)。
-
-## 复现
-
-```bash
-# 终端1: QEMU 输出落盘(每次重启先删旧日志)
-rm -f logs/console.log && ./run.sh riscv64 debug 2>&1 | tee logs/console.log
-# 终端2: 扫描(LOSS 标签需与内核编译的 LOSS_EVERY 一致)
-./scripts/tcp_loss_sweep.sh old   100 7
-./scripts/tcp_loss_sweep.sh cubic 100 7
-# 出图
-python3 scripts/plot_tcp.py
-```
-
-## 局限性
-
-- QEMU 内 RTT≈0,协议栈受 CPU/串口限制(~27KB/s),在途数据不足 1 段,cwnd 不构成瓶颈——**计时列仅作参考**,结论以机制计数为准;窗口瓶颈实验需关闭日志并加链路延迟(设计见实验记录)。
-- 耗时存在会话级漂移(每次换内核冷启动),跨行绝对值不可比。
-- 接收端原为 GBN 行为(乱序丢弃),已由后续的 SR 升级(重组缓存)解决;SACK 选项未实现。
-
-
-
 
 ### DHCP 客户端
 
@@ -758,8 +716,49 @@ old:  固定 RTO = 1s,指数退避,封顶 16s(实现 Jacobson 之前的原版)
 
 * 0% 对照臂两版一致（1.03×），实验台自证干净；
 * old 耗时随丢包率近似线性爆炸（≈ 每 1% 丢包 +1.05s），正是固定 1s RTO「每洞罚一秒」的理论预期；new 的 RTO 收敛在 200ms 附近，曲线平缓；
-* 机制佐证：逐洞恢复耗时 new ≈ 200ms/洞、old ≈ 1s+/洞（恢复比 5–9×）；且 new 的恢复时间随洞序号线性爬升——这是串行修洞的排队签名，也是 Roadmap 中快重传 / SACK 的直接动机；
+* 机制佐证：逐洞恢复耗时 new ≈ 200ms/洞、old ≈ 1s+/洞（恢复比 5–9×）；且 new 的恢复时间随洞序号线性爬升——这是串行修洞的排队签名，也是 Roadmap 中快重[docs] readme更新cubic实验传 / SACK 的直接动机；
 * 采样规模：new 传 1M 采 5236 个 RTT 样本，old 全程 0 个（它没有估值器）——对照的本质浓缩在这一数字里。
+
+## TCP CUBIC 拥塞控制实验
+
+在 RmikuOS 教学 TCP 栈上实现 **CUBIC(RFC 9438)** 拥塞控制与快速重传,并与无拥塞控制版本在确定性丢包下做 A/B 对照。
+
+### 实验设计
+
+- **对照组**:old 版(无 cwnd,仅接收窗口流控 + RTO 重传)
+- **实验组**:CUBIC 版(慢启动 + 立方增长 + β=0.7 降窗 + 快速收敛 + 3-dupACK 快速重传)
+- **丢包装置**:发送侧每 `LOSS_EVERY` 个数据段丢 1 个(确定性、可复现),档位 {0, 20, 50, 100, 200, 500}
+- **负载**:guest 内 httpd 发文件,宿主机 curl 下载,尺寸 {64K, 256K, 1M},每格 7 次取中位数
+- **打点**:每连接一行 `[tcp-stat]`(字节/重传/降窗计数),`[cwnd]` 逐次变窗轨迹;宿主机按日志书签切片聚合
+
+### 结果
+
+![CUBIC 锯齿](logs/tcp/figs/fig1_cwnd_sawtooth.png)
+
+![恢复路径对比](logs/tcp/figs/fig2_recovery.png)
+
+- 相同丢包序列下两版**重传总量一致**(fig2 柱高),证明装置公平;差异全在恢复路径:**99.6% 的重传由快速重传完成**(l20@1M:fast=277, RTO=1),单次丢包恢复代价从 ≥200ms(RTO_MIN)降至约 0。
+- 实测降窗次数与理论丢包数(段数/LOSS)在全部档位吻合(见 fig3),丢包装置与打点计数自洽。
+- RTT 样本数随丢包率下降(fig5),符合 Karn 规则(重传段不采样)。
+
+### 复现
+
+```bash
+# 终端1: QEMU 输出落盘(每次重启先删旧日志)
+rm -f logs/console.log && ./run.sh riscv64 debug 2>&1 | tee logs/console.log
+# 终端2: 扫描(LOSS 标签需与内核编译的 LOSS_EVERY 一致)
+./scripts/tcp_loss_sweep.sh old   100 7
+./scripts/tcp_loss_sweep.sh cubic 100 7
+# 出图
+python3 scripts/plot_tcp.py
+```
+
+### 局限性
+
+- QEMU 内 RTT≈0,协议栈受 CPU/串口限制(~27KB/s),在途数据不足 1 段,cwnd 不构成瓶颈——**计时列仅作参考**,结论以机制计数为准;窗口瓶颈实验需关闭日志并加链路延迟(设计见实验记录)。
+- 耗时存在会话级漂移(每次换内核冷启动),跨行绝对值不可比。
+- 接收端原为 GBN 行为(乱序丢弃),已由后续的 SR 升级(重组缓存)解决;SACK 选项未实现。
+
 
 ---
 
