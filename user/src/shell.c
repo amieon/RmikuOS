@@ -1229,10 +1229,16 @@ static int run_pipeline(char *line) {
     }
     return last_status;
 }
-
 static int has_pipe_or_redirect(const char *s) {
+    char quote = 0;
     for (int i = 0; s[i]; i++) {
-        if (s[i] == '|' || s[i] == '<' || s[i] == '>') {
+        if (quote) {
+            if (s[i] == quote) quote = 0;
+            continue;
+        }
+        if (s[i] == '"' || s[i] == '\'') {
+            quote = s[i];
+        } else if (s[i] == '|' || s[i] == '<' || s[i] == '>') {
             return 1;
         }
     }
