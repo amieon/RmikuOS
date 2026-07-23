@@ -63,6 +63,13 @@ static int parse_int_prefix__(const char *s, int *out) {
     return n;
 }
 
+static int has_slash(const char *s) {
+    for (int i = 0; s[i]; i++) {
+        if (s[i] == '/') return 1;
+    }
+    return 0;
+}
+
 static void redraw_line(const char *prompt, const char *buf, int cursor) {
     int len = strlen_(buf);
     write(1, "\r", 1);
@@ -189,7 +196,23 @@ static int complete_path(const char *prefix, char matches[][LINE_SIZE], int max_
         copy_str(file_prefix, prefix, LINE_SIZE);
     }
 
-    return scan_dir(dir, file_prefix, matches, max_matches);
+    int count = scan_dir(dir, file_prefix, matches, max_matches);
+
+    /* 如果 prefix 带了目录前缀，匹配结果也要保留该前缀 */
+    if (last_slash >= 0) {
+        for (int i = 0; i < count; i++) {
+            char tmp[LINE_SIZE];
+            copy_str(tmp, matches[i], LINE_SIZE);
+            int dlen = strlen_(dir);
+            int nlen = strlen_(tmp);
+            if (dlen + nlen >= LINE_SIZE) continue;
+            for (int j = 0; j < dlen; j++) matches[i][j] = dir[j];
+            for (int j = 0; j < nlen; j++) matches[i][dlen + j] = tmp[j];
+            matches[i][dlen + nlen] = 0;
+        }
+    }
+
+    return count;
 }
 
 static int complete_command(const char *prefix, char matches[][LINE_SIZE], int max_matches) {
@@ -543,7 +566,8 @@ static int read_line(const char *prompt, char *buf, int max_len) {
             for (int i = 0; i < token_len; i++) prefix[i] = buf[token_start + i];
             prefix[token_len] = 0;
 
-            int is_cmd = is_first_token(buf, cursor);
+            /* 含 '/' 的 token 一律按路径补全，不按命令补全 */
+            int is_cmd = is_first_token(buf, cursor) && !has_slash(prefix);
             char matches[MAX_MATCHES][LINE_SIZE];
             int n = is_cmd ? complete_command(prefix, matches, MAX_MATCHES)
                            : complete_path(prefix, matches, MAX_MATCHES);
@@ -931,12 +955,7 @@ static void build_exec_path(const char *prefix, const char *cmd, char *out, int 
     out[pos] = 0;
 }
 
-static int has_slash(const char *s) {
-    for (int i = 0; s[i]; i++) {
-        if (s[i] == '/') return 1;
-    }
-    return 0;
-}
+
 
 static void run_exec(int argc, char *argv[]){
     struct exec_args args;
