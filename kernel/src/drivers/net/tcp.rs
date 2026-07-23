@@ -128,6 +128,13 @@ pub struct TcpSocket {
     pub cwnd_cnt: u32,    // ACK 计数器:攒够 cnt 个 ACK 才 +1 段
 
     pub ooo: BTreeMap<u32, (Vec<u8>, bool)>, // SR 重组缓存:seq -> (数据, 是否带FIN)
+
+    pub stat_start_ms: u64, // 进入 Established 的时刻;0 = 未建连(dump 跳过)
+    pub stat_bytes: u64,    // 首发应用层字节(重传不计)
+    pub stat_segs: u32,     // 首发段数
+    pub stat_rtx_rto: u32,  // RTO 重传次数
+    pub stat_rtx_fast: u32, // 快速重传次数(旧版恒 0)
+    pub stat_loss: u32,     // 降窗事件数(旧版恒 0)
 }
 
 impl TcpSocket {
@@ -163,6 +170,12 @@ impl TcpSocket {
             origin: 0,
             cwnd_cnt: 0,
             ooo: BTreeMap::new(),
+            stat_start_ms: 0,
+            stat_bytes: 0,
+            stat_segs: 0,
+            stat_rtx_rto: 0,
+            stat_rtx_fast: 0,
+            stat_loss: 0,
         }
     }
 }
@@ -189,6 +202,19 @@ fn rtt_update(t: &mut TcpSocket, r: u64) {
         "[tcp] t={} rtt sample={}ms srtt={}ms rttvar={}ms rto={}ms",
         now_ms(), r, t.srtt >> 3, t.rttvar >> 2, t.rto_ms
     );
+}
+/// 连接进入终态时打印统计(每连接只打一次:靠 stat_start_ms 置 0 去重)。
+/// 宿主脚本按行解析,字段顺序不许改。
+fn dump_stats(fd: usize, t: &mut TcpSocket, why: &str) {
+    if t.stat_start_ms == 0 {
+        return; // 未建连(listen/半开/SYN 失败)或已 dump 过
+    }
+    let dur = now_ms().saturating_sub(t.stat_start_ms);
+    println!(
+        "[tcp-stat] fd={} dur_ms={} bytes={} segs={} rtx_rto={} rtx_fast={} loss={} end={}",
+        fd, dur, t.stat_bytes, t.stat_segs, t.stat_rtx_rto, t.stat_rtx_fast, t.stat_loss, why
+    );
+    t.stat_start_ms = 0; // 防后续路径(tick/close)重复 dump
 }
 
 /// SR 接收:乱序段进缓存而不是丢弃,洞补上后顺序交付。
@@ -367,6 +393,7 @@ fn cubic_on_loss(t: &mut TcpSocket, why: &str) {
     t.cwnd = t.ssthresh;
     t.epoch_start = 0; // 下一个 ACK 重启 epoch 并算 K
     t.cwnd_cnt = 0;
+    t.stat_loss += 1;
     log::info!(
         "[cubic] t={} loss({}) cwnd {} -> {} (w_max={}, K on next ack)",
         now_ms(), why, old / CWND_SCALE, t.cwnd / CWND_SCALE, t.w_max / CWND_SCALE
@@ -561,6 +588,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                         let (sn, rn) = (t.snd_nxt, t.rcv_nxt);
                         send_segment(lp, r, sn, rn, ACK, &[]);
                         t.state = TcpState::Established;
+                        t.stat_start_ms = now_ms();
                         println!("[tcp] fd {} established", i);
                     }
                 }
@@ -568,6 +596,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                     if flags & ACK != 0 && ack == t.snd_nxt {
                         process_ack(t, ack);
                         t.state = TcpState::Established;
+                        t.stat_start_ms = now_ms();
                         push_accept = t.parent.map(|p| (p, i));
                         println!("[tcp] fd {} accepted (passive open)", i);
                     }
@@ -584,7 +613,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                                 TcpState::FinWait1 => TcpState::Closing,
                                 TcpState::FinWait2 => {
                                     t.time_wait_deadline = now_ms() + TIME_WAIT_MS;
-                                    //dump_stats(i, t, "timewait");
+                                    dump_stats(i, t, "timewait");
                                     TcpState::TimeWait
                                 }
                                 s => s,
@@ -593,14 +622,14 @@ pub fn input(segment: &[u8], src_ip: u32) {
                     }
                     let acked = process_ack(t, ack);
                     if acked > 0 {
-                        cubic_update(t, acked); // CUBIC:按新确认的段数增窗
+                        cubic_update(t, acked);
                     } else if flags & ACK != 0
                         && ack == t.snd_una
                         && payload.is_empty()
                         && flags & FIN == 0
                         && !t.tx_unacked.is_empty()
                     {
-                        // 重复 ACK(RFC 5681):第 3 个触发快速重传
+                        // 重复 ACK:第 3 个触发快速重传
                         t.dup_acks = t.dup_acks.saturating_add(1);
                         if t.dup_acks == DUPACK_THRESH {
                             let seg = t.tx_unacked.front_mut().unwrap();
@@ -608,11 +637,11 @@ pub fn input(segment: &[u8], src_ip: u32) {
                             seg.sent_ms = now_ms();
                             let (sq, fl, data) = (seg.seq, seg.flags, seg.data.clone());
                             let (lp, r, rn) = (t.local_port, t.remote.unwrap(), t.rcv_nxt);
-                            // 一个丢包 episode 只降一次窗
                             if t.loss_seq != t.snd_una {
                                 cubic_on_loss(t, "3dupACK");
                                 t.loss_seq = t.snd_una;
                             }
+                            t.stat_rtx_fast += 1;              // ← 就这一行,插在 send_segment 之前
                             send_segment(lp, r, sq, rn, fl, &data);
                         }
                     }
@@ -622,6 +651,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                         }
                         TcpState::Closing if t.snd_una == t.snd_nxt => {
                             t.time_wait_deadline = now_ms() + TIME_WAIT_MS;
+                            dump_stats(i, t, "timewait");
                             t.state = TcpState::TimeWait;
                         }
                         TcpState::LastAck if t.snd_una == t.snd_nxt => {
@@ -645,6 +675,9 @@ pub fn input(segment: &[u8], src_ip: u32) {
         }
     }
     if free_slot {
+        if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) {
+            dump_stats(i, t, "fin");
+        }
         table[i] = None;
     }
 }
@@ -675,6 +708,7 @@ pub fn tick() {
                     let (seq, flags, data) = (seg.seq, seg.flags, seg.data.clone());
                     let (lp, rn) = (t.local_port, t.rcv_nxt);
                     send_segment(lp, remote, seq, rn, flags, &data);
+                    t.stat_rtx_rto += 1;
                     t.retries = t.retries.saturating_add(1);
                     log::info!("[tcp] t={} rtx seq={} retry={} rto={}", now, seq, t.retries, t.rto_ms);
                     t.rto_ms = (t.rto_ms * 2).min(RTO_MAX_MS);
@@ -695,8 +729,12 @@ pub fn tick() {
             }
         }
         if free {
+            if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) {
+                dump_stats(i, t, "tick");
+            }
             table[i] = None;
         }
+
     }
 }
 
@@ -868,6 +906,8 @@ pub fn close(fd: usize) -> isize {
                 let seq = t.snd_nxt;
                 t.snd_nxt = t.snd_nxt.wrapping_add(1);
                 t.tx_unacked.push_back(TxSeg::new(seq, FIN | ACK, Vec::new()));
+                t.stat_bytes += len as u64;
+                t.stat_segs += 1;
                 if t.rto_deadline == 0 {
                     t.rto_deadline = now_ms() + t.rto_ms;
                 }
@@ -892,6 +932,9 @@ pub fn close(fd: usize) -> isize {
         ok = false;
     }
     if free {
+        if let Some(t) = table[fd].as_mut().and_then(as_tcp_mut) {
+            dump_stats(fd, t, "close");
+        }
         table[fd] = None;
     }
     if ok { 0 } else { -1 }
