@@ -1,0 +1,2189 @@
+[93m[ WARN] [tcp] t=142596 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=148099 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148102 cwnd=5 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148121 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148124 cwnd=6 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148149 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148159 cwnd=7 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148166 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148176 cwnd=8 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148191 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=148196 cwnd=9 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148214 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=148219 cwnd=10 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148262 rtt sample=17ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=148272 cwnd=11 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148278 rtt sample=20ms srtt=7ms rttvar=7ms rto=200ms[0m
+[cwnd] t=148285 cwnd=12 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148288 rtt sample=13ms srtt=8ms rttvar=7ms rto=200ms[0m
+[cwnd] t=148295 cwnd=13 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148307 rtt sample=4ms srtt=7ms rttvar=6ms rto=200ms[0m
+[cwnd] t=148321 cwnd=14 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148352 rtt sample=11ms srtt=8ms rttvar=6ms rto=200ms[0m
+[cwnd] t=148359 cwnd=15 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148383 rtt sample=3ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=148397 cwnd=16 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148412 rtt sample=7ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=148414 cwnd=17 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148445 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=148451 cwnd=18 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=148468 drop! seq=307085803[0m
+[93m[ WARN] [cubic] t=148531 loss(3dupACK) cwnd 18 -> 12 (w_max=18)[0m
+[cwnd] t=148534 cwnd=12 ssthresh=12 why=loss
+[93m[ WARN] [cubic] t=148561 epoch start cwnd=12 w_max=18 K=2320ms[0m
+[93m[ WARN] [tcp] t=148565 rtt sample=15ms srtt=8ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=148603 rtt sample=2ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=148606 cwnd=13 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148644 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=148658 rtt sample=1ms srtt=6ms rttvar=5ms rto=200ms[0m
+[cwnd] t=148661 cwnd=14 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148683 rtt sample=2ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=148689 cwnd=15 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148718 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=148725 cwnd=16 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148766 rtt sample=8ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=148768 cwnd=17 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148781 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=148785 cwnd=18 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148809 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=148816 cwnd=19 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148834 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=148839 cwnd=20 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148850 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=148855 cwnd=21 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148868 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148871 cwnd=22 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148913 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148922 cwnd=23 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148948 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148956 cwnd=24 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148970 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=148978 cwnd=25 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=148995 drop! seq=307112403[0m
+[93m[ WARN] [cubic] t=149048 loss(3dupACK) cwnd 25 -> 17 (w_max=25)[0m
+[cwnd] t=149051 cwnd=17 ssthresh=17 why=loss
+[93m[ WARN] [cubic] t=149064 epoch start cwnd=17 w_max=25 K=2596ms[0m
+[93m[ WARN] [tcp] t=149071 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149095 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149102 cwnd=18 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149143 rtt sample=10ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149165 rtt sample=7ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149177 cwnd=19 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149185 rtt sample=5ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149198 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149202 cwnd=20 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149217 rtt sample=6ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149231 cwnd=21 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149245 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=149253 cwnd=22 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149264 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=149266 cwnd=23 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149290 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=149294 cwnd=24 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149318 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=149335 cwnd=25 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149341 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149354 cwnd=26 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149381 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=149386 cwnd=27 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149412 rtt sample=12ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149420 cwnd=28 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149435 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149438 cwnd=29 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=149458 drop! seq=307139003[0m
+[93m[ WARN] [cubic] t=149507 loss(3dupACK) cwnd 29 -> 20 (w_max=29)[0m
+[cwnd] t=149509 cwnd=20 ssthresh=20 why=loss
+[93m[ WARN] [cubic] t=149524 epoch start cwnd=20 w_max=29 K=2823ms[0m
+[93m[ WARN] [tcp] t=149538 rtt sample=17ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149544 rtt sample=7ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149556 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=149567 cwnd=21 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=149591 rtt sample=20ms srtt=8ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149597 rtt sample=10ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149607 rtt sample=1ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149642 rtt sample=19ms srtt=9ms rttvar=7ms rto=200ms[0m
+[cwnd] t=149645 cwnd=22 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=149648 rtt sample=11ms srtt=9ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149656 rtt sample=1ms srtt=8ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149673 rtt sample=1ms srtt=7ms rttvar=7ms rto=200ms[0m
+[cwnd] t=149687 cwnd=23 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=149701 rtt sample=8ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149720 rtt sample=8ms srtt=8ms rttvar=4ms rto=200ms[0m
+[cwnd] t=149730 cwnd=24 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=149750 rtt sample=2ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=149758 cwnd=25 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=149791 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=149798 cwnd=26 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=149821 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=149828 cwnd=27 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=149862 drop! seq=307165603[0m
+[93m[ WARN] [cubic] t=149932 loss(3dupACK) cwnd 27 -> 19 (w_max=27)[0m
+[cwnd] t=149935 cwnd=19 ssthresh=19 why=loss
+[93m[ WARN] [cubic] t=149944 epoch start cwnd=19 w_max=27 K=2714ms[0m
+[93m[ WARN] [tcp] t=149969 rtt sample=7ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=149994 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=149996 cwnd=20 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150019 rtt sample=7ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150036 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150039 cwnd=21 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150059 rtt sample=6ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150074 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=150083 cwnd=22 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150101 rtt sample=10ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150108 cwnd=23 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150126 rtt sample=4ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150132 cwnd=24 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150150 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150153 cwnd=25 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150173 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150180 cwnd=26 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150203 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150212 cwnd=27 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150224 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150227 cwnd=28 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150242 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150246 cwnd=29 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150259 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150267 cwnd=30 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150293 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150294 cwnd=31 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=150307 drop! seq=307192203[0m
+[93m[ WARN] [cubic] t=150355 loss(3dupACK) cwnd 31 -> 21 (w_max=31)[0m
+[cwnd] t=150356 cwnd=21 ssthresh=21 why=loss
+[93m[ WARN] [cubic] t=150360 epoch start cwnd=21 w_max=31 K=2823ms[0m
+[93m[ WARN] [tcp] t=150373 rtt sample=1ms srtt=3ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150385 cwnd=22 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150395 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150442 rtt sample=19ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150452 rtt sample=3ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=150457 cwnd=23 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150474 rtt sample=1ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150490 rtt sample=4ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=150493 cwnd=24 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150508 rtt sample=1ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=150515 cwnd=25 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150536 rtt sample=9ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=150541 cwnd=26 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150553 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=150556 cwnd=27 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150584 rtt sample=2ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=150593 cwnd=28 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150602 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150625 cwnd=29 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150636 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150640 cwnd=30 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150656 rtt sample=2ms srtt=3ms rttvar=3ms rto=200ms[0m
+[cwnd] t=150664 cwnd=31 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150685 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=150691 cwnd=32 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150720 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=150731 cwnd=33 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=150763 drop! seq=307218803[0m
+[93m[ WARN] [cubic] t=150822 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=150827 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=150834 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=150837 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150860 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=150865 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=150892 rtt sample=19ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150927 rtt sample=5ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=150931 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=150955 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=150972 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=150979 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151002 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151022 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151041 rtt sample=6ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151049 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151059 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151068 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151089 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151098 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151119 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=151131 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151147 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=151158 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151176 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151183 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151213 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=151221 cwnd=34 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=151245 drop! seq=307245403[0m
+[93m[ WARN] [cubic] t=151292 loss(3dupACK) cwnd 34 -> 24 (w_max=34)[0m
+[cwnd] t=151298 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=151311 epoch start cwnd=24 w_max=34 K=2924ms[0m
+[93m[ WARN] [tcp] t=151322 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=151340 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151345 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151373 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=151404 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151414 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151441 rtt sample=16ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=151446 rtt sample=7ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=151448 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151475 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=151483 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151498 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=151510 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151528 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151533 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151549 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151556 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151573 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151580 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151596 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151605 cwnd=33 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151627 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151637 cwnd=34 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151655 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151661 cwnd=35 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151688 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=151691 cwnd=36 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=151712 drop! seq=307272003[0m
+[93m[ WARN] [cubic] t=151763 loss(3dupACK) cwnd 36 -> 25 (w_max=36)[0m
+[cwnd] t=151766 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=151773 epoch start cwnd=25 w_max=36 K=2924ms[0m
+[93m[ WARN] [tcp] t=151792 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=151819 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=151823 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=151848 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=151870 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151880 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=151886 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=151919 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151923 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=151941 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151947 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=151976 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=151984 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152015 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=152025 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152032 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=152039 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152073 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=152082 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152096 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=152102 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152130 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=152136 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152161 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=152168 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152179 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=152181 cwnd=37 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=152199 drop! seq=307298603[0m
+[93m[ WARN] [cubic] t=152253 loss(3dupACK) cwnd 37 -> 26 (w_max=37)[0m
+[cwnd] t=152260 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=152273 epoch start cwnd=26 w_max=37 K=3018ms[0m
+[93m[ WARN] [tcp] t=152283 rtt sample=2ms srtt=2ms rttvar=1ms rto=200ms[0m
+[cwnd] t=152291 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152307 rtt sample=8ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=152343 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=152357 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152375 rtt sample=9ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=152392 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=152401 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152408 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=152411 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152427 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=152437 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152449 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=152458 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152479 rtt sample=14ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=152486 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152494 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=152499 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152527 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=152540 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152558 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=152562 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152574 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=152593 cwnd=37 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152606 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=152612 cwnd=38 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152629 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=152637 cwnd=39 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=152651 drop! seq=307325203[0m
+[93m[ WARN] [cubic] t=152703 loss(3dupACK) cwnd 39 -> 27 (w_max=39)[0m
+[cwnd] t=152707 cwnd=27 ssthresh=27 why=loss
+[93m[ WARN] [cubic] t=152712 epoch start cwnd=27 w_max=39 K=3018ms[0m
+[tcp-stat] fd=2 dur_ms=10115 bytes=262246 segs=189 rtx_rto=0 rtx_fast=10 loss=10 end=timewait
+[93m[ WARN] [tcp] t=154757 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=159893 rtt sample=7ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=159901 cwnd=5 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=159908 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=159916 cwnd=6 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=159935 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=159949 cwnd=7 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=159977 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=159985 cwnd=8 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160023 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=160028 cwnd=9 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160040 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=160045 cwnd=10 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160060 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=160063 cwnd=11 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160086 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=160094 cwnd=12 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160114 rtt sample=10ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160115 cwnd=13 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160150 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160153 cwnd=14 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160185 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160188 cwnd=15 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160215 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160217 cwnd=16 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160241 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=160254 cwnd=17 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160266 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=160275 cwnd=18 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160297 rtt sample=13ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=160301 cwnd=19 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=160321 drop! seq=307386125[0m
+[93m[ WARN] [cubic] t=160385 loss(3dupACK) cwnd 19 -> 13 (w_max=19)[0m
+[cwnd] t=160387 cwnd=13 ssthresh=13 why=loss
+[93m[ WARN] [cubic] t=160393 epoch start cwnd=13 w_max=19 K=2320ms[0m
+[93m[ WARN] [tcp] t=160398 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=160412 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=160425 cwnd=14 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160455 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=160481 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=160489 cwnd=15 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160523 rtt sample=4ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=160532 cwnd=16 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160561 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160565 cwnd=17 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160588 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=160593 cwnd=18 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160610 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160615 cwnd=19 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160640 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160646 cwnd=20 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160657 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160676 cwnd=21 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160693 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160705 cwnd=22 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160740 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160742 cwnd=23 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160769 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=160776 cwnd=24 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160792 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=160800 cwnd=25 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160832 rtt sample=12ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=160842 cwnd=26 ssthresh=13 why=cubic
+[93m[ WARN] [tcp] t=160854 drop! seq=307412725[0m
+[93m[ WARN] [cubic] t=160911 loss(3dupACK) cwnd 26 -> 18 (w_max=26)[0m
+[cwnd] t=160913 cwnd=18 ssthresh=18 why=loss
+[93m[ WARN] [cubic] t=160924 epoch start cwnd=18 w_max=26 K=2596ms[0m
+[93m[ WARN] [tcp] t=160947 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=160959 cwnd=19 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=160974 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=160995 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161001 cwnd=20 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161021 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=161037 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161041 cwnd=21 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161063 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161070 cwnd=22 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161084 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161088 cwnd=23 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161127 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161137 cwnd=24 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161154 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161157 cwnd=25 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161186 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161198 cwnd=26 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161213 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=161220 cwnd=27 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161237 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=161242 cwnd=28 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161256 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=161260 cwnd=29 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161279 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=161288 cwnd=30 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=161299 drop! seq=307439325[0m
+[93m[ WARN] [cubic] t=161352 loss(3dupACK) cwnd 30 -> 21 (w_max=30)[0m
+[cwnd] t=161357 cwnd=21 ssthresh=21 why=loss
+[93m[ WARN] [cubic] t=161365 epoch start cwnd=21 w_max=30 K=2823ms[0m
+[93m[ WARN] [tcp] t=161383 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=161406 rtt sample=4ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=161412 cwnd=22 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161436 rtt sample=8ms srtt=5ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=161465 rtt sample=3ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=161471 cwnd=23 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161497 rtt sample=4ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=161502 cwnd=24 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161524 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=161532 cwnd=25 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161555 rtt sample=7ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=161561 cwnd=26 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161586 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=161603 cwnd=27 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161619 rtt sample=9ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=161627 cwnd=28 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161660 rtt sample=20ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=161667 cwnd=29 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161670 rtt sample=14ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=161691 rtt sample=5ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=161706 cwnd=30 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161718 rtt sample=2ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=161721 cwnd=31 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161750 rtt sample=7ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=161755 cwnd=32 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161776 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=161778 cwnd=33 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=161805 drop! seq=307465925[0m
+[93m[ WARN] [cubic] t=161882 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=161885 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=161887 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=161897 rtt sample=1ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=161919 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=161939 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=161942 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=161962 rtt sample=3ms srtt=4ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=161977 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=161983 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162009 rtt sample=4ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=162013 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162029 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=162032 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162051 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=162057 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162077 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=162080 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162100 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=162103 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162124 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=162127 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162143 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=162146 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162171 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=162178 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162211 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=162226 cwnd=34 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162244 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=162250 cwnd=35 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=162269 drop! seq=307492525[0m
+[93m[ WARN] [cubic] t=162323 loss(3dupACK) cwnd 35 -> 24 (w_max=35)[0m
+[cwnd] t=162333 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=162344 epoch start cwnd=24 w_max=35 K=2924ms[0m
+[93m[ WARN] [tcp] t=162368 rtt sample=26ms srtt=6ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162383 rtt sample=17ms srtt=8ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162391 rtt sample=2ms srtt=7ms rttvar=7ms rto=200ms[0m
+[cwnd] t=162401 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162419 rtt sample=9ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162447 rtt sample=12ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162476 rtt sample=18ms srtt=9ms rttvar=7ms rto=200ms[0m
+[cwnd] t=162479 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162487 rtt sample=13ms srtt=10ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162513 rtt sample=9ms srtt=9ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162528 rtt sample=1ms srtt=8ms rttvar=6ms rto=200ms[0m
+[cwnd] t=162533 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162579 rtt sample=14ms srtt=9ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162621 rtt sample=5ms srtt=9ms rttvar=5ms rto=200ms[0m
+[cwnd] t=162623 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162639 rtt sample=3ms srtt=8ms rttvar=5ms rto=200ms[0m
+[cwnd] t=162643 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162659 rtt sample=5ms srtt=8ms rttvar=5ms rto=200ms[0m
+[cwnd] t=162662 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162721 rtt sample=16ms srtt=9ms rttvar=6ms rto=200ms[0m
+[cwnd] t=162724 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162752 rtt sample=4ms srtt=8ms rttvar=5ms rto=200ms[0m
+[cwnd] t=162754 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=162765 drop! seq=307519125[0m
+[93m[ WARN] [cubic] t=162817 loss(3dupACK) cwnd 32 -> 22 (w_max=32)[0m
+[cwnd] t=162824 cwnd=22 ssthresh=22 why=loss
+[93m[ WARN] [cubic] t=162833 epoch start cwnd=22 w_max=32 K=2823ms[0m
+[93m[ WARN] [tcp] t=162836 rtt sample=4ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162853 rtt sample=3ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162875 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=162878 cwnd=23 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=162892 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162918 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162943 rtt sample=8ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=162945 cwnd=24 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=162954 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=162972 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=162977 cwnd=25 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163015 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163018 cwnd=26 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163037 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163048 cwnd=27 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163059 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163062 cwnd=28 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163085 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163094 cwnd=29 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163107 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163111 cwnd=30 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163128 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163131 cwnd=31 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163148 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163160 cwnd=32 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163165 drop! seq=307545725[0m
+[93m[ WARN] [cubic] t=163219 loss(3dupACK) cwnd 32 -> 22 (w_max=32)[0m
+[cwnd] t=163232 cwnd=22 ssthresh=22 why=loss
+[93m[ WARN] [cubic] t=163240 epoch start cwnd=22 w_max=32 K=2823ms[0m
+[93m[ WARN] [tcp] t=163249 rtt sample=11ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163259 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163287 rtt sample=8ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=163289 cwnd=23 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163305 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163323 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163326 cwnd=24 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163339 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163359 rtt sample=2ms srtt=3ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163363 cwnd=25 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163373 rtt sample=1ms srtt=3ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163377 cwnd=26 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163392 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163402 cwnd=27 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163418 rtt sample=6ms srtt=3ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163421 cwnd=28 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163440 rtt sample=6ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163447 cwnd=29 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163458 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163460 cwnd=30 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163478 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163485 cwnd=31 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163493 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163497 cwnd=32 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163519 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163524 cwnd=33 ssthresh=22 why=cubic
+[93m[ WARN] [tcp] t=163533 drop! seq=307572325[0m
+[93m[ WARN] [cubic] t=163595 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=163603 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=163622 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=163632 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163652 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=163659 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163680 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163701 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=163711 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163731 rtt sample=14ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163756 rtt sample=16ms srtt=6ms rttvar=5ms rto=200ms[0m
+[cwnd] t=163763 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163766 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=163786 rtt sample=1ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=163794 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163811 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=163817 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163829 rtt sample=2ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=163832 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163855 rtt sample=6ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=163868 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163889 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163891 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163917 rtt sample=13ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=163925 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163935 rtt sample=6ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=163939 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163960 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=163972 cwnd=34 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=163977 drop! seq=307598925[0m
+[93m[ WARN] [cubic] t=164053 loss(3dupACK) cwnd 34 -> 24 (w_max=34)[0m
+[cwnd] t=164064 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=164083 epoch start cwnd=24 w_max=34 K=2924ms[0m
+[93m[ WARN] [tcp] t=164095 rtt sample=20ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=164113 rtt sample=5ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=164134 rtt sample=3ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=164143 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164156 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=164186 rtt sample=2ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=164194 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164219 rtt sample=12ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=164241 rtt sample=5ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=164243 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164271 rtt sample=9ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=164287 rtt sample=9ms srtt=7ms rttvar=3ms rto=200ms[0m
+[cwnd] t=164304 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164316 rtt sample=6ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=164345 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=164347 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164364 rtt sample=7ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=164369 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164379 rtt sample=4ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=164385 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164404 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=164408 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164429 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=164433 cwnd=33 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=164455 drop! seq=307625525[0m
+[93m[ WARN] [cubic] t=164491 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=164494 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=164497 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[tcp-stat] fd=3 dur_ms=9745 bytes=262246 segs=189 rtx_rto=0 rtx_fast=10 loss=10 end=timewait
+[93m[ WARN] [tcp] t=166541 rtt sample=2ms srtt=2ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=171888 rtt sample=5ms srtt=2ms rttvar=1ms rto=200ms[0m
+[cwnd] t=171892 cwnd=5 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=171901 rtt sample=2ms srtt=2ms rttvar=1ms rto=200ms[0m
+[cwnd] t=171903 cwnd=6 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=171925 rtt sample=7ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=171938 cwnd=7 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=171947 rtt sample=2ms srtt=2ms rttvar=2ms rto=200ms[0m
+[cwnd] t=171949 cwnd=8 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=171977 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=171985 cwnd=9 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172008 rtt sample=7ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172014 cwnd=10 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172035 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172040 cwnd=11 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172056 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172059 cwnd=12 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172087 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=172090 cwnd=13 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172106 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172110 cwnd=14 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172118 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172127 cwnd=15 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172156 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172164 cwnd=16 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172177 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172186 cwnd=17 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172199 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172201 cwnd=18 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172219 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172225 cwnd=19 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172237 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=172240 cwnd=20 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=172255 drop! seq=307506829[0m
+[93m[ WARN] [cubic] t=172305 loss(3dupACK) cwnd 20 -> 14 (w_max=20)[0m
+[cwnd] t=172307 cwnd=14 ssthresh=14 why=loss
+[93m[ WARN] [cubic] t=172312 epoch start cwnd=14 w_max=20 K=2466ms[0m
+[93m[ WARN] [tcp] t=172331 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=172340 cwnd=15 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172366 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=172386 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=172400 cwnd=16 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172407 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=172409 cwnd=17 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172428 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=172433 cwnd=18 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172457 rtt sample=11ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=172463 cwnd=19 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172486 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=172488 cwnd=20 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172502 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=172510 cwnd=21 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172537 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=172546 cwnd=22 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172569 rtt sample=14ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=172572 cwnd=23 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172584 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=172594 cwnd=24 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172606 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=172613 cwnd=25 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172630 rtt sample=9ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=172638 cwnd=26 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172668 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=172681 cwnd=27 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172701 rtt sample=9ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=172703 cwnd=28 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=172719 drop! seq=307533429[0m
+[93m[ WARN] [cubic] t=172771 loss(3dupACK) cwnd 28 -> 19 (w_max=28)[0m
+[cwnd] t=172773 cwnd=19 ssthresh=19 why=loss
+[93m[ WARN] [cubic] t=172780 epoch start cwnd=19 w_max=28 K=2714ms[0m
+[93m[ WARN] [tcp] t=172786 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=172807 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=172816 cwnd=20 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=172847 rtt sample=13ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=172854 rtt sample=1ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=172858 cwnd=21 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=172878 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=172896 rtt sample=2ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=172909 cwnd=22 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=172947 rtt sample=29ms srtt=7ms rttvar=9ms rto=200ms[0m
+[cwnd] t=172953 cwnd=23 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=172966 rtt sample=2ms srtt=7ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=173004 rtt sample=2ms srtt=6ms rttvar=8ms rto=200ms[0m
+[cwnd] t=173010 cwnd=24 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=173042 rtt sample=2ms srtt=6ms rttvar=7ms rto=200ms[0m
+[cwnd] t=173059 cwnd=25 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=173122 rtt sample=4ms srtt=5ms rttvar=5ms rto=200ms[0m
+[cwnd] t=173125 cwnd=26 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=173166 rtt sample=6ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=173170 cwnd=27 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=173182 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=173187 cwnd=28 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=173223 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=173230 cwnd=29 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=173257 drop! seq=307560029[0m
+[93m[ WARN] [cubic] t=173322 loss(3dupACK) cwnd 29 -> 20 (w_max=29)[0m
+[cwnd] t=173329 cwnd=20 ssthresh=20 why=loss
+[93m[ WARN] [cubic] t=173334 epoch start cwnd=20 w_max=29 K=2714ms[0m
+[93m[ WARN] [tcp] t=173372 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=173385 cwnd=21 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173398 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=173440 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=173445 cwnd=22 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173474 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=173482 cwnd=23 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173500 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=173509 cwnd=24 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173522 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=173532 cwnd=25 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173551 rtt sample=10ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=173560 cwnd=26 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173569 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=173582 cwnd=27 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173589 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=173597 cwnd=28 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173618 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=173620 cwnd=29 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173641 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=173644 cwnd=30 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173671 rtt sample=15ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=173680 cwnd=31 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173692 rtt sample=7ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=173706 cwnd=32 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173728 rtt sample=15ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=173732 cwnd=33 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173780 rtt sample=5ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=173785 cwnd=34 ssthresh=20 why=cubic
+[93m[ WARN] [tcp] t=173802 drop! seq=307586629[0m
+[93m[ WARN] [cubic] t=173874 loss(3dupACK) cwnd 34 -> 24 (w_max=34)[0m
+[cwnd] t=173877 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=173890 epoch start cwnd=24 w_max=34 K=2924ms[0m
+[93m[ WARN] [tcp] t=173901 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=173935 rtt sample=10ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=173953 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=173955 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=173984 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174006 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=174007 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174026 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174043 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174050 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174082 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174090 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174101 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174104 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174136 rtt sample=10ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174146 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174176 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174182 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174203 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174210 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174222 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174224 cwnd=33 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174238 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174242 cwnd=34 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174265 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174271 cwnd=35 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174292 drop! seq=307613229[0m
+[93m[ WARN] [cubic] t=174365 loss(3dupACK) cwnd 35 -> 24 (w_max=35)[0m
+[cwnd] t=174386 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=174403 epoch start cwnd=24 w_max=35 K=2924ms[0m
+[93m[ WARN] [tcp] t=174408 rtt sample=8ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174438 rtt sample=11ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174458 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174462 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174482 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174507 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174510 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174535 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174548 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174551 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174577 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174581 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174605 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174607 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174622 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174624 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174636 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174641 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174668 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174673 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174691 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174703 cwnd=33 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174710 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=174719 cwnd=34 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174740 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174750 cwnd=35 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174769 drop! seq=307639829[0m
+[93m[ WARN] [cubic] t=174846 loss(3dupACK) cwnd 35 -> 24 (w_max=35)[0m
+[cwnd] t=174848 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=174854 epoch start cwnd=24 w_max=35 K=2924ms[0m
+[93m[ WARN] [tcp] t=174881 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=174883 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174907 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174934 rtt sample=11ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174936 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=174954 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=174982 rtt sample=8ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=174984 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175015 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175030 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175033 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175056 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175062 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175069 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175079 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175087 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175095 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175105 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175114 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175141 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175152 cwnd=33 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175175 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175179 cwnd=34 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175218 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175224 cwnd=35 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175241 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175245 cwnd=36 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=175251 drop! seq=307666429[0m
+[93m[ WARN] [cubic] t=175323 loss(3dupACK) cwnd 36 -> 25 (w_max=36)[0m
+[cwnd] t=175328 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=175336 epoch start cwnd=25 w_max=36 K=3018ms[0m
+[93m[ WARN] [tcp] t=175357 rtt sample=8ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175376 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=175382 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175394 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175416 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175421 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175443 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175472 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=175474 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175505 rtt sample=16ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=175508 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175513 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=175521 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175538 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=175543 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175560 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=175563 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175583 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=175598 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175614 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=175624 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175646 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=175652 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175660 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=175665 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175695 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=175705 cwnd=37 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=175712 drop! seq=307693029[0m
+[93m[ WARN] [cubic] t=175777 loss(3dupACK) cwnd 37 -> 26 (w_max=37)[0m
+[cwnd] t=175783 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=175801 epoch start cwnd=26 w_max=37 K=3018ms[0m
+[93m[ WARN] [tcp] t=175812 rtt sample=21ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175819 rtt sample=2ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175871 rtt sample=18ms srtt=7ms rttvar=7ms rto=200ms[0m
+[cwnd] t=175882 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=175892 rtt sample=4ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175923 rtt sample=11ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=175930 rtt sample=4ms srtt=7ms rttvar=5ms rto=200ms[0m
+[cwnd] t=175939 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=175973 rtt sample=9ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=176000 rtt sample=6ms srtt=7ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176010 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176040 rtt sample=4ms srtt=7ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176045 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176075 rtt sample=1ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=176083 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176105 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176110 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176128 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=176139 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176163 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176169 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176186 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176194 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176221 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176223 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=176249 drop! seq=307719629[0m
+[93m[ WARN] [cubic] t=176309 loss(3dupACK) cwnd 36 -> 25 (w_max=36)[0m
+[cwnd] t=176320 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=176329 epoch start cwnd=25 w_max=36 K=2924ms[0m
+[93m[ WARN] [tcp] t=176348 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=176380 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176388 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176412 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=176446 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176449 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176465 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176470 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176494 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176498 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176511 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176517 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176529 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176542 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176560 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176563 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176586 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=176592 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176617 rtt sample=13ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=176622 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176628 rtt sample=1ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=176631 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176650 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176652 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176665 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176671 cwnd=37 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176687 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=176693 cwnd=38 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=176717 drop! seq=307746229[0m
+[93m[ WARN] [cubic] t=176917 loss(RTO) cwnd 38 -> 26 (w_max=38)[0m
+[cwnd] t=176919 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [tcp] t=176917 rtx seq=307746229 retry=1 rto=200[0m
+[93m[ WARN] [cubic] t=176931 epoch start cwnd=26 w_max=38 K=3018ms[0m
+[tcp-stat] fd=2 dur_ms=10392 bytes=262246 segs=189 rtx_rto=1 rtx_fast=9 loss=10 end=timewait
+[93m[ WARN] [tcp] t=178970 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=184102 rtt sample=17ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=184114 cwnd=5 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184131 rtt sample=35ms srtt=8ms rttvar=11ms rto=200ms[0m
+[cwnd] t=184147 cwnd=7 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184183 rtt sample=5ms srtt=8ms rttvar=9ms rto=200ms[0m
+[cwnd] t=184193 cwnd=8 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184208 rtt sample=3ms srtt=7ms rttvar=8ms rto=200ms[0m
+[cwnd] t=184219 cwnd=9 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184251 rtt sample=23ms srtt=9ms rttvar=10ms rto=200ms[0m
+[cwnd] t=184256 cwnd=10 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184264 rtt sample=14ms srtt=10ms rttvar=9ms rto=200ms[0m
+[cwnd] t=184270 cwnd=11 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184277 rtt sample=5ms srtt=9ms rttvar=8ms rto=200ms[0m
+[cwnd] t=184286 cwnd=12 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184309 rtt sample=14ms srtt=10ms rttvar=7ms rto=200ms[0m
+[cwnd] t=184319 cwnd=13 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184327 rtt sample=5ms srtt=9ms rttvar=7ms rto=200ms[0m
+[cwnd] t=184341 cwnd=14 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184375 rtt sample=27ms srtt=11ms rttvar=9ms rto=200ms[0m
+[cwnd] t=184397 cwnd=15 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184403 rtt sample=35ms srtt=14ms rttvar=13ms rto=200ms[0m
+[cwnd] t=184410 cwnd=16 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184422 rtt sample=4ms srtt=13ms rttvar=12ms rto=200ms[0m
+[cwnd] t=184434 cwnd=17 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184483 rtt sample=3ms srtt=12ms rttvar=12ms rto=200ms[0m
+[cwnd] t=184503 cwnd=18 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184525 rtt sample=4ms srtt=11ms rttvar=11ms rto=200ms[0m
+[cwnd] t=184537 cwnd=19 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184555 rtt sample=1ms srtt=10ms rttvar=11ms rto=200ms[0m
+[cwnd] t=184566 cwnd=20 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184611 rtt sample=5ms srtt=9ms rttvar=9ms rto=200ms[0m
+[cwnd] t=184617 cwnd=21 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=184633 drop! seq=307316072[0m
+[93m[ WARN] [cubic] t=184691 loss(3dupACK) cwnd 21 -> 14 (w_max=21)[0m
+[cwnd] t=184699 cwnd=14 ssthresh=14 why=loss
+[93m[ WARN] [cubic] t=184721 epoch start cwnd=14 w_max=21 K=2466ms[0m
+[93m[ WARN] [tcp] t=184733 rtt sample=3ms srtt=8ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=184769 rtt sample=11ms srtt=9ms rttvar=7ms rto=200ms[0m
+[cwnd] t=184772 cwnd=15 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=184791 rtt sample=2ms srtt=8ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=184827 rtt sample=14ms srtt=9ms rttvar=7ms rto=200ms[0m
+[cwnd] t=184833 cwnd=16 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=184840 rtt sample=19ms srtt=10ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=184850 rtt sample=12ms srtt=10ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=184868 rtt sample=5ms srtt=9ms rttvar=6ms rto=200ms[0m
+[cwnd] t=184878 cwnd=17 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=184895 rtt sample=9ms srtt=9ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=184916 rtt sample=10ms srtt=10ms rttvar=4ms rto=200ms[0m
+[cwnd] t=184922 cwnd=18 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=184950 rtt sample=7ms srtt=9ms rttvar=3ms rto=200ms[0m
+[cwnd] t=184955 cwnd=19 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=184979 rtt sample=6ms srtt=9ms rttvar=3ms rto=200ms[0m
+[cwnd] t=184987 cwnd=20 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=185003 rtt sample=7ms srtt=9ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185009 cwnd=21 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=185034 rtt sample=5ms srtt=8ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185044 cwnd=22 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=185049 rtt sample=1ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=185051 cwnd=23 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=185068 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=185070 cwnd=24 ssthresh=14 why=cubic
+[93m[ WARN] [tcp] t=185081 drop! seq=307342672[0m
+[93m[ WARN] [cubic] t=185144 loss(3dupACK) cwnd 24 -> 17 (w_max=24)[0m
+[cwnd] t=185148 cwnd=17 ssthresh=17 why=loss
+[93m[ WARN] [cubic] t=185164 epoch start cwnd=17 w_max=24 K=2596ms[0m
+[93m[ WARN] [tcp] t=185171 rtt sample=5ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=185194 rtt sample=6ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=185215 rtt sample=3ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185226 cwnd=18 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185245 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=185266 cwnd=19 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185288 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185301 cwnd=20 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185319 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=185324 cwnd=21 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185347 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185353 cwnd=22 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185365 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=185383 cwnd=23 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185408 rtt sample=14ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=185414 cwnd=24 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185428 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185433 cwnd=25 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185458 rtt sample=8ms srtt=7ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185466 cwnd=26 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185489 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185497 cwnd=27 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185512 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185523 cwnd=28 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185552 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185557 cwnd=29 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185577 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=185581 cwnd=30 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=185605 drop! seq=307369272[0m
+[93m[ WARN] [cubic] t=185655 loss(3dupACK) cwnd 30 -> 21 (w_max=30)[0m
+[cwnd] t=185666 cwnd=21 ssthresh=21 why=loss
+[93m[ WARN] [cubic] t=185672 epoch start cwnd=21 w_max=30 K=2823ms[0m
+[93m[ WARN] [tcp] t=185681 rtt sample=10ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=185696 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185704 cwnd=22 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185733 rtt sample=13ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=185756 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=185774 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185776 cwnd=23 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185792 rtt sample=7ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=185814 rtt sample=6ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=185820 cwnd=24 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185837 rtt sample=8ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=185847 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185853 cwnd=25 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185866 rtt sample=5ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=185871 cwnd=26 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185887 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=185893 cwnd=27 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185918 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185924 cwnd=28 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185947 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185951 cwnd=29 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=185979 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=185986 cwnd=30 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186008 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186025 cwnd=31 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186032 drop! seq=307395872[0m
+[93m[ WARN] [cubic] t=186072 loss(3dupACK) cwnd 31 -> 21 (w_max=31)[0m
+[cwnd] t=186076 cwnd=21 ssthresh=21 why=loss
+[93m[ WARN] [cubic] t=186086 epoch start cwnd=21 w_max=31 K=2823ms[0m
+[93m[ WARN] [tcp] t=186093 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186119 rtt sample=11ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=186136 cwnd=22 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186153 rtt sample=9ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186178 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186184 cwnd=23 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186211 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186239 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186250 cwnd=24 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186270 rtt sample=7ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186283 cwnd=25 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186324 rtt sample=7ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186327 cwnd=26 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186342 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186346 cwnd=27 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186375 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186389 cwnd=28 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186408 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186412 cwnd=29 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186441 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=186446 cwnd=30 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186473 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=186481 cwnd=31 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186506 rtt sample=14ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186513 cwnd=32 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186535 rtt sample=7ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186540 cwnd=33 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=186564 drop! seq=307422472[0m
+[93m[ WARN] [cubic] t=186625 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=186630 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=186647 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=186652 rtt sample=1ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186678 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186699 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186709 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186740 rtt sample=14ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186759 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=186760 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186785 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186808 rtt sample=8ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=186812 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186824 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=186841 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186847 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186862 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186865 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186881 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186892 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186945 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=186950 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186970 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186973 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=186985 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=186992 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187020 rtt sample=16ms srtt=6ms rttvar=5ms rto=200ms[0m
+[cwnd] t=187029 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187034 drop! seq=307449072[0m
+[93m[ WARN] [cubic] t=187103 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=187108 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=187120 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=187125 rtt sample=7ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=187143 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=187170 rtt sample=11ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=187172 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187181 rtt sample=4ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=187208 rtt sample=3ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=187230 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187240 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187248 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187262 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187287 rtt sample=14ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=187297 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[cwnd] t=187307 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187331 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=187337 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187364 rtt sample=4ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=187369 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187387 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187388 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187410 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187416 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187452 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187457 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187488 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187494 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187504 drop! seq=307475672[0m
+[93m[ WARN] [cubic] t=187565 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=187567 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=187571 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=187601 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=187623 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187632 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187660 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=187691 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187695 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187725 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187734 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187745 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187754 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187771 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187777 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187790 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187794 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187809 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187812 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187824 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187826 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187838 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187842 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187855 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187858 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187878 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187884 cwnd=34 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187891 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=187893 cwnd=35 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187915 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=187919 cwnd=36 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=187934 drop! seq=307502272[0m
+[93m[ WARN] [cubic] t=187982 loss(3dupACK) cwnd 36 -> 25 (w_max=36)[0m
+[cwnd] t=187985 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=187999 epoch start cwnd=25 w_max=36 K=2924ms[0m
+[93m[ WARN] [tcp] t=188023 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=188050 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188053 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188079 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=188112 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188115 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188136 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188141 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188157 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188165 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188185 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188199 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188210 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188212 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188232 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188239 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188254 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188261 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188272 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188275 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188298 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=188302 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188327 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188334 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188345 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=188353 cwnd=37 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188379 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=188382 cwnd=38 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=188393 drop! seq=307528872[0m
+[93m[ WARN] [cubic] t=188447 loss(3dupACK) cwnd 38 -> 26 (w_max=38)[0m
+[cwnd] t=188450 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=188460 epoch start cwnd=26 w_max=38 K=3018ms[0m
+[93m[ WARN] [tcp] t=188464 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=188495 rtt sample=5ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=188499 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188510 rtt sample=1ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=188526 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188535 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188549 rtt sample=5ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188558 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188590 rtt sample=11ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=188602 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188606 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188627 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188630 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188649 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188653 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188670 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=188681 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188691 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188697 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188728 rtt sample=8ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=188735 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188743 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=188745 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188768 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188778 cwnd=37 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188786 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=188790 cwnd=38 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=188799 drop! seq=307555472[0m
+[93m[ WARN] [cubic] t=188999 loss(RTO) cwnd 38 -> 27 (w_max=38)[0m
+[cwnd] t=189002 cwnd=27 ssthresh=27 why=loss
+[93m[ WARN] [tcp] t=188999 rtx seq=307555472 retry=1 rto=200[0m
+[93m[ WARN] [cubic] t=189011 epoch start cwnd=27 w_max=38 K=3018ms[0m
+[tcp-stat] fd=3 dur_ms=10052 bytes=262246 segs=189 rtx_rto=1 rtx_fast=9 loss=10 end=timewait
+[93m[ WARN] [tcp] t=191056 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=196514 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196519 cwnd=5 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196540 rtt sample=10ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=196546 cwnd=6 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196557 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=196559 cwnd=7 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196581 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196585 cwnd=8 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196596 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196600 cwnd=9 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196617 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196624 cwnd=10 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196640 rtt sample=9ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196650 cwnd=11 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196663 rtt sample=8ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196670 cwnd=12 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196682 rtt sample=3ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=196692 cwnd=13 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196705 rtt sample=5ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196712 cwnd=14 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196728 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196736 cwnd=15 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196756 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=196765 cwnd=16 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196786 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=196790 cwnd=17 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196808 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=196815 cwnd=18 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196831 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196837 cwnd=19 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196857 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196865 cwnd=20 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196886 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=196891 cwnd=21 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196913 rtt sample=12ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=196927 cwnd=22 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=196931 drop! seq=307370557[0m
+[93m[ WARN] [cubic] t=196990 loss(3dupACK) cwnd 22 -> 15 (w_max=22)[0m
+[cwnd] t=196992 cwnd=15 ssthresh=15 why=loss
+[93m[ WARN] [cubic] t=197006 epoch start cwnd=15 w_max=22 K=2466ms[0m
+[93m[ WARN] [tcp] t=197016 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=197044 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197049 cwnd=16 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197066 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=197081 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197087 cwnd=17 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197103 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197110 cwnd=18 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197121 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197126 cwnd=19 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197139 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197142 cwnd=20 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197161 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197165 cwnd=21 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197175 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=197180 cwnd=22 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197205 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=197209 cwnd=23 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197233 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=197235 cwnd=24 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197262 rtt sample=15ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=197266 cwnd=25 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197280 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197287 cwnd=26 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197305 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197309 cwnd=27 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197334 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197339 cwnd=28 ssthresh=15 why=cubic
+[93m[ WARN] [tcp] t=197362 drop! seq=307397157[0m
+[93m[ WARN] [cubic] t=197406 loss(3dupACK) cwnd 28 -> 19 (w_max=28)[0m
+[cwnd] t=197407 cwnd=19 ssthresh=19 why=loss
+[93m[ WARN] [cubic] t=197416 epoch start cwnd=19 w_max=28 K=2714ms[0m
+[93m[ WARN] [tcp] t=197442 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197447 cwnd=20 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197483 rtt sample=11ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=197509 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=197514 cwnd=21 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197525 rtt sample=1ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=197529 cwnd=22 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197546 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197550 cwnd=23 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197575 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197583 cwnd=24 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197608 rtt sample=10ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=197612 cwnd=25 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197622 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=197635 cwnd=26 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197644 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197650 cwnd=27 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197678 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197681 cwnd=28 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197706 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197711 cwnd=29 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197733 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197735 cwnd=30 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197755 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197761 cwnd=31 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197780 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197791 cwnd=32 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197829 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=197833 cwnd=33 ssthresh=19 why=cubic
+[93m[ WARN] [tcp] t=197860 drop! seq=307423757[0m
+[93m[ WARN] [cubic] t=197918 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=197929 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=197942 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=197952 rtt sample=12ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=197987 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=197989 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198004 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=198037 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=198045 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198075 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198088 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198100 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198102 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198128 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198136 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198170 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198172 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198189 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198194 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198222 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198227 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198242 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198244 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198271 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198281 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198289 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198295 cwnd=34 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198325 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=198329 cwnd=35 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198344 rtt sample=8ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198349 cwnd=36 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=198363 drop! seq=307450357[0m
+[93m[ WARN] [cubic] t=198437 loss(3dupACK) cwnd 36 -> 25 (w_max=36)[0m
+[cwnd] t=198442 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=198460 epoch start cwnd=25 w_max=36 K=3018ms[0m
+[93m[ WARN] [tcp] t=198466 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=198505 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198517 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198531 rtt sample=10ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=198555 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198558 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198582 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198584 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198633 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198640 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198672 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198677 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198704 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=198712 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198751 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198758 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198786 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=198791 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198807 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198818 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198853 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198856 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198874 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=198881 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198904 rtt sample=10ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=198910 cwnd=37 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198925 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=198934 cwnd=38 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=198958 drop! seq=307476957[0m
+[93m[ WARN] [cubic] t=199008 loss(3dupACK) cwnd 38 -> 27 (w_max=38)[0m
+[cwnd] t=199009 cwnd=27 ssthresh=27 why=loss
+[93m[ WARN] [cubic] t=199017 epoch start cwnd=27 w_max=38 K=3018ms[0m
+[93m[ WARN] [tcp] t=199034 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=199089 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199098 cwnd=28 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199124 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199134 cwnd=29 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199154 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=199172 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199175 cwnd=30 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199213 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199233 cwnd=31 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199254 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199260 cwnd=32 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199284 rtt sample=8ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199289 cwnd=33 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199296 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199303 cwnd=34 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199324 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199328 cwnd=35 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199355 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199372 cwnd=36 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199390 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199393 cwnd=37 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199438 rtt sample=12ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=199447 cwnd=38 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199474 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199479 cwnd=39 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199540 rtt sample=12ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=199555 cwnd=40 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=199582 drop! seq=307503557[0m
+[93m[ WARN] [cubic] t=199690 loss(3dupACK) cwnd 40 -> 28 (w_max=40)[0m
+[cwnd] t=199705 cwnd=28 ssthresh=28 why=loss
+[93m[ WARN] [cubic] t=199722 epoch start cwnd=28 w_max=40 K=3107ms[0m
+[93m[ WARN] [tcp] t=199740 rtt sample=8ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=199769 rtt sample=3ms srtt=7ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199771 cwnd=29 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=199788 rtt sample=4ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=199817 rtt sample=3ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=199835 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199838 cwnd=30 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=199854 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=199885 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199892 cwnd=31 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=199930 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199944 cwnd=32 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=199958 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=199966 cwnd=33 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=199994 rtt sample=13ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=199996 cwnd=34 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=199999 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=200008 cwnd=35 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=200040 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=200046 cwnd=36 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=200070 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200078 cwnd=37 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=200103 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200106 cwnd=38 ssthresh=28 why=cubic
+[93m[ WARN] [tcp] t=200139 drop! seq=307530157[0m
+[93m[ WARN] [cubic] t=200196 loss(3dupACK) cwnd 38 -> 26 (w_max=38)[0m
+[cwnd] t=200203 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=200211 epoch start cwnd=26 w_max=38 K=3018ms[0m
+[93m[ WARN] [tcp] t=200227 rtt sample=18ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=200248 rtt sample=16ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=200262 rtt sample=4ms srtt=8ms rttvar=6ms rto=200ms[0m
+[cwnd] t=200267 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200293 rtt sample=4ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=200314 rtt sample=3ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=200341 rtt sample=3ms srtt=6ms rttvar=5ms rto=200ms[0m
+[cwnd] t=200350 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200369 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=200410 rtt sample=8ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=200416 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200429 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=200434 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200447 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=200459 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200482 rtt sample=9ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=200495 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200511 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=200513 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200530 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=200535 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200558 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=200562 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200591 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=200593 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=200610 drop! seq=307556757[0m
+[93m[ WARN] [cubic] t=200672 loss(3dupACK) cwnd 36 -> 25 (w_max=36)[0m
+[cwnd] t=200675 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=200689 epoch start cwnd=25 w_max=36 K=3018ms[0m
+[93m[ WARN] [tcp] t=200715 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200722 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200735 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=200751 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=200781 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200786 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200813 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=200820 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200846 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200848 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200872 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200875 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200893 rtt sample=5ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200906 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200917 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200934 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200941 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=200943 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200964 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=200968 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=200991 rtt sample=8ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201004 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=201017 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201026 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=201043 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=201055 cwnd=37 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=201076 drop! seq=307583357[0m
+[93m[ WARN] [cubic] t=201129 loss(3dupACK) cwnd 37 -> 26 (w_max=37)[0m
+[cwnd] t=201141 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=201149 epoch start cwnd=26 w_max=37 K=3018ms[0m
+[93m[ WARN] [tcp] t=201158 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=201176 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=201198 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201200 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201211 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=201232 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201239 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201254 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=201257 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201293 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=201299 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201315 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=201321 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201331 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=201336 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201362 rtt sample=6ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201370 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201378 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=201384 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201402 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201405 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201427 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=201432 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201450 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201460 cwnd=37 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201471 rtt sample=8ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=201475 cwnd=38 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=201490 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=201500 cwnd=39 ssthresh=26 why=cubic
+[tcp-stat] fd=2 dur_ms=10440 bytes=262246 segs=189 rtx_rto=0 rtx_fast=9 loss=9 end=fin
+[93m[ WARN] [tcp] t=203519 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=208930 drop! seq=307711073[0m
+[93m[ WARN] [cubic] t=208986 loss(3dupACK) cwnd 4 -> 2 (w_max=4)[0m
+[cwnd] t=208990 cwnd=2 ssthresh=2 why=loss
+[93m[ WARN] [cubic] t=209000 epoch start cwnd=2 w_max=4 K=1357ms[0m
+[93m[ WARN] [tcp] t=209009 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=209019 cwnd=3 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209028 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=209030 cwnd=4 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209050 rtt sample=9ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209053 cwnd=5 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209058 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209066 cwnd=6 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209075 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209079 cwnd=7 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209088 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209090 cwnd=8 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209103 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209111 cwnd=9 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209127 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209131 cwnd=10 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209152 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209159 cwnd=11 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209186 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209191 cwnd=12 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209203 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209205 cwnd=13 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209220 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209223 cwnd=14 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209250 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209254 cwnd=15 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209270 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209282 cwnd=16 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209299 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=209311 cwnd=17 ssthresh=2 why=cubic
+[93m[ WARN] [tcp] t=209323 drop! seq=307736375[0m
+[93m[ WARN] [cubic] t=209398 loss(3dupACK) cwnd 17 -> 12 (w_max=17)[0m
+[cwnd] t=209400 cwnd=12 ssthresh=12 why=loss
+[93m[ WARN] [cubic] t=209410 epoch start cwnd=12 w_max=17 K=2320ms[0m
+[93m[ WARN] [tcp] t=209423 rtt sample=15ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=209440 rtt sample=10ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=209442 cwnd=13 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209461 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=209491 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=209498 cwnd=14 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209516 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209519 cwnd=15 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209538 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209553 cwnd=16 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209561 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209566 cwnd=17 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209582 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209590 cwnd=18 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209621 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209627 cwnd=19 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209659 rtt sample=12ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209668 cwnd=20 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209690 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209699 cwnd=21 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209725 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=209732 cwnd=22 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209772 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209784 cwnd=23 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209812 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=209815 cwnd=24 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209828 rtt sample=6ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=209830 cwnd=25 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=209840 drop! seq=307762975[0m
+[93m[ WARN] [cubic] t=209891 loss(3dupACK) cwnd 25 -> 17 (w_max=25)[0m
+[cwnd] t=209895 cwnd=17 ssthresh=17 why=loss
+[93m[ WARN] [cubic] t=209909 epoch start cwnd=17 w_max=25 K=2596ms[0m
+[93m[ WARN] [tcp] t=209924 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=209951 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=209956 cwnd=18 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=209981 rtt sample=6ms srtt=5ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=210003 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210012 cwnd=19 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210023 rtt sample=4ms srtt=5ms rttvar=1ms rto=200ms[0m
+[cwnd] t=210033 cwnd=20 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210077 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210093 cwnd=21 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210111 rtt sample=9ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210116 cwnd=22 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210130 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=210143 cwnd=23 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210158 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=210168 cwnd=24 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210186 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210191 cwnd=25 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210224 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210227 cwnd=26 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210256 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210262 cwnd=27 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210274 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210290 cwnd=28 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210307 rtt sample=10ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210311 cwnd=29 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210328 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=210336 cwnd=30 ssthresh=17 why=cubic
+[93m[ WARN] [tcp] t=210362 drop! seq=307789575[0m
+[93m[ WARN] [cubic] t=210427 loss(3dupACK) cwnd 30 -> 21 (w_max=30)[0m
+[cwnd] t=210429 cwnd=21 ssthresh=21 why=loss
+[93m[ WARN] [cubic] t=210436 epoch start cwnd=21 w_max=30 K=2823ms[0m
+[93m[ WARN] [tcp] t=210454 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=210474 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210476 cwnd=22 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210491 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=210513 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210524 cwnd=23 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210542 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=210545 cwnd=24 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210550 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=210568 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210574 cwnd=25 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210589 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210592 cwnd=26 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210611 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210622 cwnd=27 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210631 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=210632 cwnd=28 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210651 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=210654 cwnd=29 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210673 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=210682 cwnd=30 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210695 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210703 cwnd=31 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210714 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=210722 cwnd=32 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210739 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=210747 cwnd=33 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=210757 drop! seq=307816175[0m
+[93m[ WARN] [cubic] t=210826 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=210828 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=210833 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=210858 rtt sample=11ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=210868 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=210884 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=210902 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=210908 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=210920 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=210926 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=210950 rtt sample=10ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=210961 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=210971 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=210974 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211002 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211009 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211020 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211028 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211036 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211038 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211057 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211060 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211081 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211101 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211110 rtt sample=6ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211113 cwnd=34 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211128 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211142 cwnd=35 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211150 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211156 cwnd=36 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211177 rtt sample=2ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211182 cwnd=37 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=211193 drop! seq=307842775[0m
+[93m[ WARN] [cubic] t=211252 loss(3dupACK) cwnd 37 -> 26 (w_max=37)[0m
+[cwnd] t=211254 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=211262 epoch start cwnd=26 w_max=37 K=3018ms[0m
+[93m[ WARN] [tcp] t=211270 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=211295 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211302 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211314 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=211330 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211350 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211357 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=211379 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211385 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211405 rtt sample=8ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=211432 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=211448 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211458 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211467 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211483 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211492 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211504 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211515 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211532 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211555 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211570 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211575 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211598 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211611 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211626 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211630 cwnd=37 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=211658 drop! seq=307869375[0m
+[93m[ WARN] [cubic] t=211714 loss(3dupACK) cwnd 37 -> 25 (w_max=37)[0m
+[cwnd] t=211718 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=211723 epoch start cwnd=25 w_max=37 K=3018ms[0m
+[93m[ WARN] [tcp] t=211747 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=211764 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211771 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=211791 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=211815 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211827 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=211845 rtt sample=2ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=211849 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=211875 rtt sample=8ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211882 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=211905 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211910 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=211927 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211931 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=211951 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211958 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=211984 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=211993 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=212017 rtt sample=13ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=212021 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=212036 rtt sample=6ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212038 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=212051 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212054 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=212078 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212083 cwnd=37 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=212095 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=212106 cwnd=38 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=212126 drop! seq=307895975[0m
+[93m[ WARN] [cubic] t=212179 loss(3dupACK) cwnd 38 -> 27 (w_max=38)[0m
+[cwnd] t=212184 cwnd=27 ssthresh=27 why=loss
+[93m[ WARN] [cubic] t=212186 epoch start cwnd=27 w_max=38 K=3018ms[0m
+[93m[ WARN] [tcp] t=212209 rtt sample=11ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212224 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212238 cwnd=28 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212250 rtt sample=9ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212277 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212324 rtt sample=7ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212334 cwnd=29 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212352 rtt sample=1ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212376 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212379 cwnd=30 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212395 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212405 cwnd=31 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212419 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=212430 cwnd=32 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212442 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212444 cwnd=33 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212463 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=212479 cwnd=34 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212491 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=212494 cwnd=35 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212521 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212524 cwnd=36 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212533 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212535 cwnd=37 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212552 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212559 cwnd=38 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=212569 drop! seq=307922575[0m
+[93m[ WARN] [cubic] t=212623 loss(3dupACK) cwnd 38 -> 26 (w_max=38)[0m
+[cwnd] t=212626 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=212632 epoch start cwnd=26 w_max=38 K=3018ms[0m
+[93m[ WARN] [tcp] t=212649 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212669 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=212670 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212699 rtt sample=16ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212718 rtt sample=13ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212731 rtt sample=5ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=212743 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212747 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212769 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=212777 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212795 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=212816 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212822 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212834 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212839 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212862 rtt sample=5ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212868 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212891 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212893 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212904 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212909 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212935 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=212943 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212971 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=212973 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=212983 drop! seq=307949175[0m
+[93m[ WARN] [cubic] t=213034 loss(3dupACK) cwnd 36 -> 25 (w_max=36)[0m
+[cwnd] t=213049 cwnd=25 ssthresh=25 why=loss
+[93m[ WARN] [cubic] t=213059 epoch start cwnd=25 w_max=36 K=3018ms[0m
+[93m[ WARN] [tcp] t=213064 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=213093 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213103 cwnd=26 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213115 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=213143 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213153 cwnd=27 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213170 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213181 cwnd=28 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213194 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213200 cwnd=29 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213219 rtt sample=11ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=213226 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=213234 cwnd=30 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213254 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213265 cwnd=31 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213294 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213295 cwnd=32 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213312 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213316 cwnd=33 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213335 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213343 cwnd=34 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213357 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213360 cwnd=35 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213370 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=213377 cwnd=36 ssthresh=25 why=cubic
+[93m[ WARN] [tcp] t=213387 rtt sample=18ms srtt=6ms rttvar=5ms rto=200ms[0m
+[tcp-stat] fd=2 dur_ms=9867 bytes=262246 segs=189 rtx_rto=0 rtx_fast=10 loss=10 end=timewait
+[93m[ WARN] [tcp] t=215441 rtt sample=1ms srtt=1ms rttvar=0ms rto=200ms[0m
+[93m[ WARN] [tcp] t=221051 rtt sample=3ms srtt=1ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221058 cwnd=5 ssthresh=536870911 why=ss
+[93m[ WARN] [tcp] t=221080 drop! seq=307634032[0m
+[93m[ WARN] [cubic] t=221137 loss(3dupACK) cwnd 5 -> 3 (w_max=5)[0m
+[cwnd] t=221140 cwnd=3 ssthresh=3 why=loss
+[93m[ WARN] [cubic] t=221144 epoch start cwnd=3 w_max=5 K=1357ms[0m
+[93m[ WARN] [tcp] t=221157 rtt sample=2ms srtt=1ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221163 cwnd=4 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221190 rtt sample=3ms srtt=1ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221195 cwnd=5 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221226 rtt sample=2ms srtt=1ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221231 cwnd=6 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221253 rtt sample=2ms srtt=1ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221256 cwnd=7 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221273 rtt sample=2ms srtt=2ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221280 cwnd=8 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221290 rtt sample=2ms srtt=2ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221295 cwnd=9 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221318 rtt sample=4ms srtt=2ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221322 cwnd=10 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221351 rtt sample=10ms srtt=3ms rttvar=3ms rto=200ms[0m
+[cwnd] t=221357 cwnd=11 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221369 rtt sample=5ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221378 cwnd=12 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221392 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=221397 cwnd=13 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221450 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=221459 cwnd=14 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221476 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=221482 cwnd=15 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221495 rtt sample=6ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=221502 cwnd=16 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221510 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221517 cwnd=17 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221547 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221550 cwnd=18 ssthresh=3 why=cubic
+[93m[ WARN] [tcp] t=221562 drop! seq=307660632[0m
+[93m[ WARN] [cubic] t=221620 loss(3dupACK) cwnd 18 -> 12 (w_max=18)[0m
+[cwnd] t=221623 cwnd=12 ssthresh=12 why=loss
+[93m[ WARN] [cubic] t=221628 epoch start cwnd=12 w_max=18 K=2320ms[0m
+[93m[ WARN] [tcp] t=221645 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221651 cwnd=13 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221663 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=221686 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221687 cwnd=14 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221708 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221711 cwnd=15 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221724 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221728 cwnd=16 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221755 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221756 cwnd=17 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221778 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221782 cwnd=18 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221816 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221823 cwnd=19 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221846 rtt sample=6ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221850 cwnd=20 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221867 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221872 cwnd=21 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221894 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221926 cwnd=22 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221940 rtt sample=6ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=221950 cwnd=23 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=221964 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=221966 cwnd=24 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=222004 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222009 cwnd=25 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=222028 rtt sample=8ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222038 cwnd=26 ssthresh=12 why=cubic
+[93m[ WARN] [tcp] t=222042 drop! seq=307687232[0m
+[93m[ WARN] [cubic] t=222095 loss(3dupACK) cwnd 26 -> 18 (w_max=26)[0m
+[cwnd] t=222098 cwnd=18 ssthresh=18 why=loss
+[93m[ WARN] [cubic] t=222106 epoch start cwnd=18 w_max=26 K=2714ms[0m
+[93m[ WARN] [tcp] t=222111 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=222146 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222150 cwnd=19 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222172 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=222188 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222193 cwnd=20 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222214 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=222257 rtt sample=8ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222264 cwnd=21 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222283 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222287 cwnd=22 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222305 rtt sample=8ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222313 cwnd=23 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222329 rtt sample=9ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222332 cwnd=24 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222344 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222356 cwnd=25 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222404 rtt sample=5ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222409 cwnd=26 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222436 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222444 cwnd=27 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222467 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222476 cwnd=28 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222493 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222498 cwnd=29 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222524 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222535 cwnd=30 ssthresh=18 why=cubic
+[93m[ WARN] [tcp] t=222549 drop! seq=307713832[0m
+[93m[ WARN] [cubic] t=222626 loss(3dupACK) cwnd 30 -> 21 (w_max=30)[0m
+[cwnd] t=222634 cwnd=21 ssthresh=21 why=loss
+[93m[ WARN] [cubic] t=222652 epoch start cwnd=21 w_max=30 K=2823ms[0m
+[93m[ WARN] [tcp] t=222672 rtt sample=11ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=222696 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222699 cwnd=22 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222723 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=222747 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222749 cwnd=23 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222768 rtt sample=9ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=222788 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222791 cwnd=24 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222812 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222820 cwnd=25 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222846 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=222859 cwnd=26 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222869 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222879 cwnd=27 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222912 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=222929 cwnd=28 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222955 rtt sample=15ms srtt=7ms rttvar=4ms rto=200ms[0m
+[cwnd] t=222973 cwnd=29 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=222977 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[cwnd] t=222988 cwnd=30 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=223001 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=223013 cwnd=31 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=223020 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=223026 cwnd=32 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=223044 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=223049 cwnd=33 ssthresh=21 why=cubic
+[93m[ WARN] [tcp] t=223058 drop! seq=307740432[0m
+[93m[ WARN] [cubic] t=223124 loss(3dupACK) cwnd 33 -> 23 (w_max=33)[0m
+[cwnd] t=223127 cwnd=23 ssthresh=23 why=loss
+[93m[ WARN] [cubic] t=223135 epoch start cwnd=23 w_max=33 K=2924ms[0m
+[93m[ WARN] [tcp] t=223142 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223165 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=223173 cwnd=24 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223186 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223214 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223239 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223244 cwnd=25 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223260 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223300 rtt sample=10ms srtt=6ms rttvar=3ms rto=200ms[0m
+[cwnd] t=223303 cwnd=26 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223324 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=223326 cwnd=27 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223348 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223354 cwnd=28 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223373 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223376 cwnd=29 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223391 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223394 cwnd=30 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223426 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223427 cwnd=31 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223450 rtt sample=1ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223455 cwnd=32 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223474 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=223476 cwnd=33 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223499 rtt sample=10ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=223506 cwnd=34 ssthresh=23 why=cubic
+[93m[ WARN] [tcp] t=223509 drop! seq=307767032[0m
+[93m[ WARN] [cubic] t=223566 loss(3dupACK) cwnd 34 -> 24 (w_max=34)[0m
+[cwnd] t=223568 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=223579 epoch start cwnd=24 w_max=34 K=2924ms[0m
+[93m[ WARN] [tcp] t=223592 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223611 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223630 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223636 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223643 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223663 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223671 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223678 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=223696 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223707 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223717 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223725 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223758 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223767 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223788 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223795 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223808 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223814 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223837 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223840 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223864 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223868 cwnd=33 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223891 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223900 cwnd=34 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223916 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=223919 cwnd=35 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=223942 drop! seq=307793632[0m
+[93m[ WARN] [cubic] t=223994 loss(3dupACK) cwnd 35 -> 24 (w_max=35)[0m
+[cwnd] t=223997 cwnd=24 ssthresh=24 why=loss
+[93m[ WARN] [cubic] t=224001 epoch start cwnd=24 w_max=35 K=2924ms[0m
+[93m[ WARN] [tcp] t=224013 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224046 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=224052 cwnd=25 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224070 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224099 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224112 cwnd=26 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224126 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224132 cwnd=27 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224153 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224158 cwnd=28 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224174 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224187 cwnd=29 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224207 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224223 cwnd=30 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224238 rtt sample=5ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224243 cwnd=31 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224272 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=224279 cwnd=32 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224314 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224316 cwnd=33 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224329 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224334 cwnd=34 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224354 rtt sample=8ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224360 cwnd=35 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224372 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224387 cwnd=36 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224393 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224396 cwnd=37 ssthresh=24 why=cubic
+[93m[ WARN] [tcp] t=224411 drop! seq=307820232[0m
+[93m[ WARN] [cubic] t=224484 loss(3dupACK) cwnd 37 -> 26 (w_max=37)[0m
+[cwnd] t=224489 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=224496 epoch start cwnd=26 w_max=37 K=3018ms[0m
+[93m[ WARN] [tcp] t=224517 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[cwnd] t=224527 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224537 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224574 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=224580 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224606 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=224617 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224651 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=224660 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224686 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=224690 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224708 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[cwnd] t=224715 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224750 rtt sample=17ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=224755 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224759 rtt sample=2ms srtt=4ms rttvar=4ms rto=200ms[0m
+[cwnd] t=224767 cwnd=34 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224800 rtt sample=8ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=224805 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224831 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[cwnd] t=224833 cwnd=36 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224884 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=224892 cwnd=37 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224915 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=224921 cwnd=38 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224942 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=224958 cwnd=39 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=224965 drop! seq=307846832[0m
+[93m[ WARN] [cubic] t=225025 loss(3dupACK) cwnd 39 -> 27 (w_max=39)[0m
+[cwnd] t=225034 cwnd=27 ssthresh=27 why=loss
+[93m[ WARN] [cubic] t=225041 epoch start cwnd=27 w_max=39 K=3018ms[0m
+[93m[ WARN] [tcp] t=225055 rtt sample=15ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225068 rtt sample=4ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225100 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=225105 cwnd=28 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225142 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225155 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=225158 cwnd=29 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225181 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225200 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225206 cwnd=30 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225224 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225232 cwnd=31 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225250 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225253 cwnd=32 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225274 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225277 cwnd=33 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225302 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225306 cwnd=34 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225319 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225326 cwnd=35 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225343 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=225350 cwnd=36 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225364 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[cwnd] t=225376 cwnd=37 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225394 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225396 cwnd=38 ssthresh=27 why=cubic
+[93m[ WARN] [tcp] t=225420 drop! seq=307873432[0m
+[93m[ WARN] [cubic] t=225479 loss(3dupACK) cwnd 38 -> 26 (w_max=38)[0m
+[cwnd] t=225481 cwnd=26 ssthresh=26 why=loss
+[93m[ WARN] [cubic] t=225487 epoch start cwnd=26 w_max=38 K=3018ms[0m
+[93m[ WARN] [tcp] t=225493 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225518 rtt sample=8ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225522 cwnd=27 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225545 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225565 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225585 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225591 cwnd=28 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225624 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225654 rtt sample=9ms srtt=6ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225660 cwnd=29 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225666 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=225670 cwnd=30 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225694 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=225705 cwnd=31 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225724 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225727 cwnd=32 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225752 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[cwnd] t=225763 cwnd=33 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225804 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[cwnd] t=225812 cwnd=34 ssthresh=26 why=cubic
+[httpd] #34 served file /random/256K.[93m[ WARN] [tcp] t=225828 rtt sample=5ms srtt=4ms rttvar=2ms rto=bin, fd=3
+[cwnd] t=225838 cwnd=35 ssthresh=26 why=cubic
+[93m[ WARN] [tcp] t=225843 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[cwnd] t=225847 cwnd=36 ssthresh=26 why=cubic
+[tcp-stat] fd=3 dur_ms=10404 bytes=262246 segs=189 rtx_rto=0 rtx_fast=10 loss=10 end=timewait

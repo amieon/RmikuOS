@@ -1,0 +1,698 @@
+[93m[ WARN] [tcp] t=218368 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224600 rtt sample=23ms srtt=5ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224610 rtt sample=23ms srtt=7ms rttvar=9ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224682 rtt sample=7ms srtt=7ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224699 rtt sample=2ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224727 rtt sample=4ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224747 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224767 rtt sample=1ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224803 rtt sample=6ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224836 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224859 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224873 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224915 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224927 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224963 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=224995 drop! seq=306990949[0m
+[93m[ WARN] [tcp] t=225199 rtx seq=306990949 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=225223 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225241 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225260 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225276 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225299 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225311 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225342 rtt sample=6ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225370 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225397 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225430 rtt sample=5ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225444 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225465 drop! seq=307017549[0m
+[93m[ WARN] [tcp] t=225665 rtx seq=307017549 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=225687 rtt sample=10ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225696 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225711 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225729 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225752 rtt sample=10ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225766 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225788 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=225805 drop! seq=307044149[0m
+[93m[ WARN] [tcp] t=226009 rtx seq=307044149 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=226062 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226103 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226120 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226151 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226171 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226202 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226231 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226252 drop! seq=307070749[0m
+[93m[ WARN] [tcp] t=226454 rtx seq=307070749 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=226463 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226489 rtt sample=5ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226519 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226547 rtt sample=14ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226559 rtt sample=1ms srtt=4ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226578 rtt sample=2ms srtt=4ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226594 drop! seq=307097349[0m
+[93m[ WARN] [tcp] t=226794 rtx seq=307097349 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=226827 rtt sample=6ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226843 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226861 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226884 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226913 rtt sample=12ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226924 rtt sample=2ms srtt=4ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=226939 drop! seq=307123949[0m
+[93m[ WARN] [tcp] t=227139 rtx seq=307123949 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=227171 rtt sample=6ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227233 rtt sample=15ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227268 rtt sample=8ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227301 rtt sample=11ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227333 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227363 drop! seq=307150549[0m
+[93m[ WARN] [tcp] t=227565 rtx seq=307150549 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=227592 rtt sample=7ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227614 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227643 rtt sample=4ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227660 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227689 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227720 drop! seq=307177149[0m
+[93m[ WARN] [tcp] t=227923 rtx seq=307177149 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=227941 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227970 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=227986 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228017 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228044 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228056 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228080 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228104 rtt sample=9ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228124 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228160 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228179 drop! seq=307203749[0m
+[93m[ WARN] [tcp] t=228384 rtx seq=307203749 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=228407 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228436 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228451 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228479 rtt sample=9ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228490 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228524 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=228539 drop! seq=307230349[0m
+[93m[ WARN] [tcp] t=228739 rtx seq=307230349 retry=1 rto=200[0m
+[tcp-stat] fd=3 dur_ms=10374 bytes=262246 segs=189 rtx_rto=10 rtx_fast=0 loss=0 end=timewait
+[93m[ WARN] [tcp] t=230804 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236361 rtt sample=2ms srtt=2ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236394 rtt sample=2ms srtt=2ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236444 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236472 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236495 rtt sample=10ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236520 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236552 rtt sample=8ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236575 rtt sample=6ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236610 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236648 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236668 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236709 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236734 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236768 rtt sample=9ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236807 rtt sample=22ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=236816 drop! seq=307504499[0m
+[93m[ WARN] [tcp] t=236827 rtt sample=27ms srtt=9ms rttvar=10ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237027 rtx seq=307504499 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=237041 rtt sample=2ms srtt=8ms rttvar=9ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237080 rtt sample=13ms srtt=9ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237087 rtt sample=6ms srtt=9ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237132 rtt sample=7ms srtt=8ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237163 rtt sample=8ms srtt=8ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237179 rtt sample=1ms srtt=8ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237200 rtt sample=2ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237219 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237238 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237265 drop! seq=307531099[0m
+[93m[ WARN] [tcp] t=237465 rtx seq=307531099 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=237477 rtt sample=5ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237502 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237525 rtt sample=9ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237534 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237554 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237580 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237594 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237636 rtt sample=11ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237666 rtt sample=11ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237684 rtt sample=9ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237696 drop! seq=307557699[0m
+[93m[ WARN] [tcp] t=237896 rtx seq=307557699 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=237917 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237939 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=237968 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238013 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238036 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238064 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238102 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238125 drop! seq=307584299[0m
+[93m[ WARN] [tcp] t=238329 rtx seq=307584299 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=238345 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238370 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238392 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238408 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238434 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238451 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238480 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238509 drop! seq=307610899[0m
+[93m[ WARN] [tcp] t=238711 rtx seq=307610899 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=238731 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238744 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238765 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238785 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238804 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=238817 drop! seq=307637499[0m
+[93m[ WARN] [tcp] t=239018 rtx seq=307637499 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=239050 rtt sample=10ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239073 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239084 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239106 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239120 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239148 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239168 drop! seq=307664099[0m
+[93m[ WARN] [tcp] t=239370 rtx seq=307664099 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=239388 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239410 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239432 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239457 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239475 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239498 drop! seq=307690699[0m
+[93m[ WARN] [tcp] t=239702 rtx seq=307690699 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=239713 rtt sample=2ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239730 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239769 rtt sample=9ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239799 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239822 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239846 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=239864 drop! seq=307717299[0m
+[93m[ WARN] [tcp] t=240072 rtx seq=307717299 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=240101 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=240116 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=240141 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=240164 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=240182 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=240212 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=240230 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=240292 drop! seq=307743899[0m
+[93m[ WARN] [tcp] t=240492 rtx seq=307743899 retry=1 rto=200[0m
+[tcp-stat] fd=2 dur_ms=9686 bytes=262246 segs=189 rtx_rto=10 rtx_fast=0 loss=0 end=timewait
+[93m[ WARN] [tcp] t=242542 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248733 rtt sample=8ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248755 rtt sample=10ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248769 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248795 rtt sample=7ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248824 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248853 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248868 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248890 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248928 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248963 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=248983 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249017 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249043 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249091 rtt sample=15ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249115 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249151 rtt sample=9ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249194 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249217 drop! seq=307445221[0m
+[93m[ WARN] [tcp] t=249430 rtx seq=307445221 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=249464 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249524 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249562 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249606 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249626 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249647 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249672 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249702 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249716 drop! seq=307471821[0m
+[93m[ WARN] [tcp] t=249916 rtx seq=307471821 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=249934 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249986 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=249999 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250030 rtt sample=12ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250043 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250067 rtt sample=4ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250084 drop! seq=307498421[0m
+[93m[ WARN] [tcp] t=250287 rtx seq=307498421 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=250315 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250358 rtt sample=18ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250380 rtt sample=5ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250431 rtt sample=10ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250450 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250479 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250507 drop! seq=307525021[0m
+[93m[ WARN] [tcp] t=250707 rtx seq=307525021 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=250724 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250744 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250778 rtt sample=12ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250784 rtt sample=1ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250804 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=250825 drop! seq=307551621[0m
+[93m[ WARN] [tcp] t=251025 rtx seq=307551621 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=251044 rtt sample=2ms srtt=4ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251066 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251085 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251110 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251130 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251153 drop! seq=307578221[0m
+[93m[ WARN] [tcp] t=251357 rtx seq=307578221 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=251386 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251405 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251430 rtt sample=6ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251446 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251461 drop! seq=307604821[0m
+[93m[ WARN] [tcp] t=251670 rtx seq=307604821 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=251698 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251739 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251760 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251781 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251809 rtt sample=8ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251842 rtt sample=17ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251870 rtt sample=5ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=251885 drop! seq=307631421[0m
+[93m[ WARN] [tcp] t=252088 rtx seq=307631421 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=252111 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252141 rtt sample=18ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252147 rtt sample=1ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252164 rtt sample=5ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252181 drop! seq=307658021[0m
+[93m[ WARN] [tcp] t=252661 rtx seq=307658021 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=252714 rtt sample=10ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252743 rtt sample=12ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252763 rtt sample=1ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252797 rtt sample=2ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252825 rtt sample=4ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252848 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252870 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=252881 drop! seq=307684621[0m
+[93m[ WARN] [tcp] t=253081 rtx seq=307684621 retry=1 rto=200[0m
+[tcp-stat] fd=3 dur_ms=10543 bytes=262246 segs=189 rtx_rto=10 rtx_fast=0 loss=0 end=timewait
+[93m[ WARN] [tcp] t=255125 rtt sample=1ms srtt=1ms rttvar=0ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260459 rtt sample=11ms srtt=2ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260469 rtt sample=2ms srtt=2ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260489 rtt sample=7ms srtt=2ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260515 rtt sample=9ms srtt=3ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260520 rtt sample=2ms srtt=3ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260547 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260581 rtt sample=17ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260596 rtt sample=6ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260637 rtt sample=7ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260671 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260688 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260722 rtt sample=10ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260735 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260782 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260813 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260837 rtt sample=8ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260863 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260886 rtt sample=8ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=260909 drop! seq=307367780[0m
+[93m[ WARN] [tcp] t=261120 rtx seq=307367780 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=261149 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261165 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261180 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261201 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261236 rtt sample=14ms srtt=5ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261250 rtt sample=8ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261281 drop! seq=307394380[0m
+[93m[ WARN] [tcp] t=261488 rtx seq=307394380 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=261514 rtt sample=13ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261535 rtt sample=4ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261557 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261572 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261588 drop! seq=307420980[0m
+[93m[ WARN] [tcp] t=261788 rtx seq=307420980 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=261805 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261833 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261863 rtt sample=1ms srtt=4ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261888 rtt sample=9ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261899 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261924 rtt sample=9ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261937 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=261952 drop! seq=307447580[0m
+[93m[ WARN] [tcp] t=262154 rtx seq=307447580 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=262169 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262186 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262204 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262240 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262258 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262280 drop! seq=307474180[0m
+[93m[ WARN] [tcp] t=262484 rtx seq=307474180 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=262504 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262518 rtt sample=8ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262540 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262576 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262599 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262634 drop! seq=307500780[0m
+[93m[ WARN] [tcp] t=262835 rtx seq=307500780 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=262848 rtt sample=10ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262861 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262891 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262913 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262937 rtt sample=6ms srtt=5ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262966 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=262987 rtt sample=6ms srtt=5ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263009 rtt sample=8ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263027 drop! seq=307527380[0m
+[93m[ WARN] [tcp] t=263228 rtx seq=307527380 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=263244 rtt sample=8ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263263 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263304 rtt sample=6ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263326 rtt sample=8ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263349 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263372 drop! seq=307553980[0m
+[93m[ WARN] [tcp] t=263578 rtx seq=307553980 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=263593 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263623 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263647 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263695 rtt sample=25ms srtt=7ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263715 rtt sample=2ms srtt=6ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263734 rtt sample=1ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263765 rtt sample=6ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263781 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263801 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=263814 drop! seq=307580580[0m
+[93m[ WARN] [tcp] t=264015 rtx seq=307580580 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=264039 rtt sample=17ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=264048 rtt sample=14ms srtt=7ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=264070 rtt sample=5ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=264106 rtt sample=5ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=264128 rtt sample=14ms srtt=8ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=264136 rtt sample=17ms srtt=9ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=264149 rtt sample=1ms srtt=8ms rttvar=7ms rto=200ms[0m
+[tcp-stat] fd=2 dur_ms=9021 bytes=262246 segs=189 rtx_rto=9 rtx_fast=0 loss=0 end=fin
+[93m[ WARN] [tcp] t=266177 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=271922 drop! seq=307714346[0m
+[93m[ WARN] [tcp] t=272124 rtx seq=307714346 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=272176 rtt sample=5ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272233 rtt sample=6ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272255 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272280 rtt sample=6ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272325 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272358 rtt sample=10ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272381 rtt sample=8ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272408 rtt sample=11ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272447 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272468 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272493 drop! seq=307739648[0m
+[93m[ WARN] [tcp] t=272698 rtx seq=307739648 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=272726 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272746 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272788 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272812 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272883 rtt sample=21ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272911 rtt sample=5ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=272974 rtt sample=6ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273009 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273038 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273085 rtt sample=4ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273130 drop! seq=307766248[0m
+[93m[ WARN] [tcp] t=273562 rtx seq=307766248 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=273701 rtt sample=15ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273758 rtt sample=18ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273779 rtt sample=3ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273821 rtt sample=4ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273848 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273869 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273916 rtt sample=8ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273944 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273970 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=273990 rtt sample=7ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274007 rtt sample=4ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274026 rtt sample=1ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274049 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274067 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274092 rtt sample=12ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274107 rtt sample=9ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274122 drop! seq=307792848[0m
+[93m[ WARN] [tcp] t=274322 rtx seq=307792848 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=274352 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274393 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274424 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274466 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274499 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274540 rtt sample=13ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274575 rtt sample=3ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274625 rtt sample=9ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274663 rtt sample=7ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274709 rtt sample=9ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=274732 drop! seq=307819448[0m
+[93m[ WARN] [tcp] t=274932 rtx seq=307819448 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=274995 rtt sample=6ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275041 rtt sample=16ms srtt=8ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275112 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275264 rtt sample=31ms srtt=10ms rttvar=9ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275340 rtt sample=28ms srtt=13ms rttvar=11ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275398 rtt sample=31ms srtt=15ms rttvar=13ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275443 rtt sample=26ms srtt=16ms rttvar=13ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275507 rtt sample=6ms srtt=15ms rttvar=12ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275567 rtt sample=7ms srtt=14ms rttvar=11ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275602 rtt sample=4ms srtt=13ms rttvar=11ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275648 drop! seq=307846048[0m
+[93m[ WARN] [tcp] t=275850 rtx seq=307846048 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=275896 rtt sample=12ms srtt=13ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275916 rtt sample=4ms srtt=11ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275948 rtt sample=6ms srtt=11ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=275989 rtt sample=10ms srtt=11ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276013 rtt sample=3ms srtt=10ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276058 rtt sample=7ms srtt=9ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276082 rtt sample=4ms srtt=9ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276131 rtt sample=3ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276181 rtt sample=3ms srtt=7ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276215 rtt sample=16ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276255 rtt sample=8ms srtt=8ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276312 rtt sample=9ms srtt=9ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276346 drop! seq=307872648[0m
+[93m[ WARN] [tcp] t=276547 rtx seq=307872648 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=276561 rtt sample=1ms srtt=8ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276592 rtt sample=9ms srtt=8ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276609 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276635 rtt sample=3ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276659 rtt sample=5ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276693 rtt sample=3ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276714 rtt sample=5ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276746 rtt sample=13ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276780 rtt sample=1ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=276812 drop! seq=307899248[0m
+[93m[ WARN] [tcp] t=277019 rtx seq=307899248 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=277033 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277060 rtt sample=5ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277079 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277107 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277159 rtt sample=35ms srtt=9ms rttvar=9ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277187 rtt sample=6ms srtt=8ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277216 rtt sample=5ms srtt=8ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277238 drop! seq=307925848[0m
+[93m[ WARN] [tcp] t=277440 rtx seq=307925848 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=277494 rtt sample=4ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277531 rtt sample=8ms srtt=8ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277572 rtt sample=10ms srtt=8ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277638 rtt sample=4ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277675 rtt sample=11ms srtt=8ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277696 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277731 rtt sample=5ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277765 rtt sample=5ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277794 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277828 rtt sample=1ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277876 rtt sample=17ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=277917 drop! seq=307952448[0m
+[93m[ WARN] [tcp] t=278117 rtx seq=307952448 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=278162 rtt sample=6ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278223 rtt sample=5ms srtt=7ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278256 rtt sample=8ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278282 rtt sample=5ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278315 rtt sample=3ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278356 rtt sample=6ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278381 rtt sample=4ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278422 rtt sample=11ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278426 rtt sample=10ms srtt=7ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=278433 rtt sample=12ms srtt=8ms rttvar=4ms rto=200ms[0m
+[tcp-stat] fd=2 dur_ms=12254 bytes=262246 segs=189 rtx_rto=10 rtx_fast=0 loss=0 end=timewait
+[93m[ WARN] [tcp] t=280494 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287120 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287133 drop! seq=307237286[0m
+[93m[ WARN] [tcp] t=287342 rtx seq=307237286 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=287373 rtt sample=12ms srtt=4ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287399 rtt sample=6ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287418 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287441 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287464 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287483 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287510 rtt sample=3ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287529 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287548 drop! seq=307263886[0m
+[93m[ WARN] [tcp] t=287759 rtx seq=307263886 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=287769 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287793 rtt sample=4ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287810 rtt sample=4ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287826 rtt sample=3ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287845 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287874 rtt sample=14ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287891 rtt sample=4ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287925 rtt sample=18ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=287938 drop! seq=307290486[0m
+[93m[ WARN] [tcp] t=288141 rtx seq=307290486 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=288163 rtt sample=7ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288197 rtt sample=3ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288217 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288243 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288265 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288294 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288316 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288363 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288386 rtt sample=7ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288404 drop! seq=307317086[0m
+[93m[ WARN] [tcp] t=288607 rtx seq=307317086 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=288646 rtt sample=4ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288684 rtt sample=7ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288714 rtt sample=2ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288748 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288775 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288803 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288825 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288856 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=288870 drop! seq=307343686[0m
+[93m[ WARN] [tcp] t=289073 rtx seq=307343686 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=289098 rtt sample=18ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289103 rtt sample=6ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289128 rtt sample=1ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289157 rtt sample=8ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289169 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289185 drop! seq=307370286[0m
+[93m[ WARN] [tcp] t=289386 rtx seq=307370286 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=289407 rtt sample=6ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289424 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289445 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289470 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289491 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289513 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289544 rtt sample=5ms srtt=5ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289558 drop! seq=307396886[0m
+[93m[ WARN] [tcp] t=289768 rtx seq=307396886 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=289789 rtt sample=3ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289809 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289824 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289851 rtt sample=5ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289875 rtt sample=11ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=289888 drop! seq=307423486[0m
+[93m[ WARN] [tcp] t=290090 rtx seq=307423486 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=290110 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290128 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290152 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290173 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290189 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290209 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290230 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290245 drop! seq=307450086[0m
+[93m[ WARN] [tcp] t=290445 rtx seq=307450086 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=290466 rtt sample=7ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290503 rtt sample=20ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290519 rtt sample=5ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290548 rtt sample=1ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290577 rtt sample=3ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290601 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290633 drop! seq=307476686[0m
+[93m[ WARN] [tcp] t=290833 rtx seq=307476686 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=290859 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290891 rtt sample=6ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290922 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290949 rtt sample=3ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290972 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=290990 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=291022 rtt sample=4ms srtt=4ms rttvar=1ms rto=200ms[0m
+[tcp-stat] fd=3 dur_ms=10539 bytes=262246 segs=189 rtx_rto=10 rtx_fast=0 loss=0 end=fin
+[93m[ WARN] [tcp] t=293046 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=298863 rtt sample=27ms srtt=7ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=298881 drop! seq=307311623[0m
+[93m[ WARN] [tcp] t=298892 rtt sample=41ms srtt=12ms rttvar=14ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299095 rtx seq=307311623 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=299111 rtt sample=6ms srtt=11ms rttvar=12ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299131 rtt sample=4ms srtt=10ms rttvar=11ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299160 rtt sample=11ms srtt=10ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299176 rtt sample=5ms srtt=9ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299210 rtt sample=19ms srtt=11ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299235 rtt sample=17ms srtt=11ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299246 rtt sample=2ms srtt=10ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299266 rtt sample=4ms srtt=10ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299283 drop! seq=307338223[0m
+[93m[ WARN] [tcp] t=299491 rtx seq=307338223 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=299533 rtt sample=3ms srtt=9ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299594 rtt sample=10ms srtt=9ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299619 rtt sample=1ms srtt=8ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299657 rtt sample=21ms srtt=9ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299693 rtt sample=36ms srtt=13ms rttvar=13ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299713 rtt sample=2ms srtt=11ms rttvar=12ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299745 rtt sample=2ms srtt=10ms rttvar=12ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299778 rtt sample=15ms srtt=11ms rttvar=10ms rto=200ms[0m
+[93m[ WARN] [tcp] t=299800 drop! seq=307364823[0m
+[93m[ WARN] [tcp] t=300018 rtx seq=307364823 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=300035 rtt sample=3ms srtt=10ms rttvar=9ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300055 rtt sample=2ms srtt=9ms rttvar=9ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300073 rtt sample=5ms srtt=8ms rttvar=8ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300092 rtt sample=3ms srtt=8ms rttvar=7ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300124 rtt sample=4ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300142 drop! seq=307391423[0m
+[93m[ WARN] [tcp] t=300345 rtx seq=307391423 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=300368 rtt sample=4ms srtt=7ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300392 rtt sample=3ms srtt=6ms rttvar=5ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300414 rtt sample=5ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300436 rtt sample=2ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300455 rtt sample=2ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300474 rtt sample=5ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300496 rtt sample=5ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300529 rtt sample=6ms srtt=5ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300543 drop! seq=307418023[0m
+[93m[ WARN] [tcp] t=300748 rtx seq=307418023 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=300791 rtt sample=13ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300815 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300841 rtt sample=4ms srtt=6ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300857 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300884 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300911 rtt sample=10ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300918 rtt sample=2ms srtt=6ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=300952 drop! seq=307444623[0m
+[93m[ WARN] [tcp] t=301155 rtx seq=307444623 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=301180 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301198 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301219 rtt sample=2ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301239 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301257 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301277 rtt sample=1ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301298 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301311 drop! seq=307471223[0m
+[93m[ WARN] [tcp] t=301514 rtx seq=307471223 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=301523 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301540 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301565 rtt sample=10ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301583 rtt sample=3ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301600 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301618 rtt sample=3ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301634 drop! seq=307497823[0m
+[93m[ WARN] [tcp] t=301840 rtx seq=307497823 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=301870 rtt sample=14ms srtt=5ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301910 rtt sample=4ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301930 rtt sample=3ms srtt=5ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301951 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=301980 rtt sample=2ms srtt=4ms rttvar=3ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302008 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302025 rtt sample=1ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302040 drop! seq=307524423[0m
+[93m[ WARN] [tcp] t=302242 rtx seq=307524423 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=302264 rtt sample=4ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302301 rtt sample=5ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302325 rtt sample=1ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302357 rtt sample=6ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302369 rtt sample=2ms srtt=4ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302386 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302405 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302431 rtt sample=2ms srtt=3ms rttvar=2ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302455 rtt sample=2ms srtt=3ms rttvar=1ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302470 drop! seq=307551023[0m
+[93m[ WARN] [tcp] t=302685 rtx seq=307551023 retry=1 rto=200[0m
+[93m[ WARN] [tcp] t=302721 rtt sample=22ms srtt=5ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302730 rtt sample=12ms srtt=6ms rttvar=6ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302757 rtt sample=2ms srtt=6ms rttvar=6ms rto=200ms[0m
+[httpd] #34 serve[93m[ WARN] [tcp] t=302773 rtt sample=6ms srtt=6ms rttvar=4ms rto=200ms[0m
+[93m[ WARN] [tcp] t=302791 rtt sample=6ms srtt=6ms rttvar=3ms rto=200ms[0m
+[tcp-stat] fd=2 dur_ms=9761 bytes=262246 segs=189 rtx_rto=10 rtx_fast=0 loss=0 end=fin

@@ -19,16 +19,26 @@ pub const PSH: u8 = 0x08;
 pub const ACK: u8 = 0x10;
 
 // ---------- RTO 常量(RFC 6298 / Jacobson) ----------
-const INITIAL_RTO_MS: u64 = 1_000; // RFC 6298 §2.1:无样本时的初始 RTO
-const RTO_MIN_MS: u64 = 200;       // RFC 建议 1s;QEMU 近零 RTT 场景取 200ms
-const RTO_MAX_MS: u64 = 16_000;    // 退避上限(RFC 为 60s,教学版收紧)
-const RTT_G_MS: u64 = 10;          // G:时钟粒度余量
+const INITIAL_RTO_MS: u64 = 1_000;
+const RTO_MIN_MS: u64 = 200;
+const RTO_MAX_MS: u64 = 16_000;
+const RTT_G_MS: u64 = 10;
 const MAX_RETRIES: u8 = 8;
-const TIME_WAIT_MS: u64 = 10_000; // 标准是 2MSL=60s,教学版取 10s
+const TIME_WAIT_MS: u64 = 10_000;
 const MAX_PAYLOAD: usize = 1460;
 
+// ---------- CUBIC 常量(RFC 9438) ----------
+const CWND_SCALE: u32 = 8;                    // 定点:1 段 = 8,便于表示 β 等小数
+const INIT_CWND: u32 = 4 * CWND_SCALE;        // 初始拥塞窗口 4 段(RFC 5681 上限)
+const INIT_SSTHRESH: u32 = u32::MAX;          // 首次丢包前一直慢启动
+const BETA_NUM: u32 = 7;                      // β = 0.7:丢包后 cwnd *= 0.7
+const BETA_DEN: u32 = 10;
+const C_NUM: u64 = 4;                         // C = 0.4,决定凸区探测激进程度(段/秒³)
+const C_DEN: u64 = 10;
+const FAST_CONV: bool = true;                 // 快速收敛开关(RFC 9438 §4.6)
+const DUPACK_THRESH: u8 = 3;                  // 快速重传阈值(RFC 5681)
+
 // ---- 实验装置:每发 LOSS_EVERY 个数据段丢 1 个;0 = 关闭 ----
-// 确定性丢包(非随机),保证实验可复现;A/B 两组用同一个值。
 const LOSS_EVERY: u32 = 0;
 
 #[repr(C, packed)]
@@ -37,7 +47,7 @@ pub struct TcpHeader {
     pub dst_port: u16,
     pub seq: u32,
     pub ack: u32,
-    pub data_off: u8, // 高 4 位：头长（32 位字）
+    pub data_off: u8,
     pub flags: u8,
     pub window: u16,
     pub checksum: u16,
@@ -59,13 +69,12 @@ pub enum TcpState {
     TimeWait,
 }
 
-/// 已发未确认段（重传队列元素）。flags 按「重传时要用的」存。
 pub struct TxSeg {
     pub seq: u32,
     pub flags: u8,
     pub data: Vec<u8>,
-    pub sent_ms: u64,        // 最近一次发出的时间戳(Karn:仅未重传时用于采样)
-    pub retransmitted: bool, // Karn 规则一:重传过的段不采样
+    pub sent_ms: u64,
+    pub retransmitted: bool,
 }
 
 impl TxSeg {
@@ -92,22 +101,25 @@ pub struct TcpSocket {
     pub rto_deadline: u64,
     pub rto_ms: u64,
     pub retries: u8,
-    // --- Jacobson 估值器(定点):srtt 放大 8 倍、rttvar 放大 4 倍存储 ---
     pub srtt: u64,
     pub rttvar: u64,
     pub has_rtt: bool,
     pub time_wait_deadline: u64,
-    pub accept_queue: VecDeque<usize>, // listen 用：已 established 的子连接 fd
-    pub parent: Option<usize>,         // 子连接用：listener 的 fd
-    pub rst: bool,                     // 被 RST/超时击毙标记，recv 返回 -1
-
-    // ---------- 实验打点 ----------
-    pub stat_start_ms: u64, // 进入 Established 的时刻;0 = 未建连(dump 时跳过)
-    pub stat_bytes: u64,    // 首次发送的应用层字节数(重传不计)
-    pub stat_segs: u32,     // 首次发送的数据段数
-    pub stat_rtx_rto: u32,  // RTO 超时重传次数
-    pub stat_rtx_fast: u32, // 快速重传次数(旧版恒 0)
-    pub stat_loss: u32,     // 拥塞降窗事件数(旧版恒 0)
+    pub accept_queue: VecDeque<usize>,
+    pub parent: Option<usize>,
+    pub rst: bool,
+    // ---------- 拥塞控制(CUBIC) ----------
+    pub cwnd: u32,        // 拥塞窗口,单位:段 × CWND_SCALE(定点)
+    pub ssthresh: u32,    // 慢启动阈值,同单位
+    pub dup_acks: u8,     // 连续重复 ACK 计数(快速重传用)
+    pub loss_seq: u32,    // 本 episode 已降窗标记:= 触发降窗时的 snd_una
+    // --- CUBIC 状态机(RFC 9438 §4) ---
+    pub epoch_start: u64, // 当前 epoch 起点(ms);0 = 丢包后尚未重启计时
+    pub w_max: u32,       // 上次丢包时的 cwnd(段 × SCALE)
+    pub last_max: u32,    // 上上次 w_max,快速收敛用
+    pub k_ms: u64,        // K:W_cubic 凹区爬回 w_max 所需时长(ms)
+    pub origin: u32,      // 曲线原点 = epoch 起点处的 max(w_max, cwnd)
+    pub cwnd_cnt: u32,    // ACK 计数器:攒够 cnt 个 ACK 才 +1 段
 }
 
 impl TcpSocket {
@@ -132,28 +144,22 @@ impl TcpSocket {
             accept_queue: VecDeque::new(),
             parent: None,
             rst: false,
-
-            stat_start_ms: 0,
-            stat_bytes: 0,
-            stat_segs: 0,
-            stat_rtx_rto: 0,
-            stat_rtx_fast: 0,
-            stat_loss: 0,
+            cwnd: INIT_CWND,
+            ssthresh: INIT_SSTHRESH,
+            dup_acks: 0,
+            loss_seq: u32::MAX,
+            epoch_start: 0,
+            w_max: 0,
+            last_max: 0,
+            k_ms: 0,
+            origin: 0,
+            cwnd_cnt: 0,
         }
     }
 }
 
-// ---------- RTT 估计:Jacobson 算法(RFC 6298),定点整数实现 ----------
-//
-// SRTT   = (1-α)·SRTT + α·R,        α = 1/8  → 除法即右移 3 位
-// RTTVAR = (1-β)·RTTVAR + β·|SRTT−R|, β = 1/4 → 右移 2 位
-// RTO    = SRTT + max(G, K·RTTVAR), K = 4(rttvar 已 ×4 存储,天然满足)
-//
-// Karn 算法两条:
-//   1. 重传过的段不产生 RTT 样本(ACK 歧义:无法区分是对原发还是重传的确认);
-//   2. 退避后的 RTO 要保持到下一个「干净样本」出现才允许回落。
+// ---------- RTT 估计:Jacobson(RFC 6298) ----------
 
-/// 由当前估值器算 RTO:SRTT + max(G, 4·RTTVAR),钳位到 [MIN, MAX]
 fn compute_rto(t: &TcpSocket) -> u64 {
     ((t.srtt >> 3) + core::cmp::max(RTT_G_MS, t.rttvar))
         .clamp(RTO_MIN_MS, RTO_MAX_MS)
@@ -161,20 +167,136 @@ fn compute_rto(t: &TcpSocket) -> u64 {
 
 fn rtt_update(t: &mut TcpSocket, r: u64) {
     if !t.has_rtt {
-        // RFC 6298 §2.2:首个样本 SRTT=R, RTTVAR=R/2
         t.has_rtt = true;
-        t.srtt = r << 3;   // ×8
-        t.rttvar = r << 1; // R/2 再 ×4 = 2R
+        t.srtt = r << 3;
+        t.rttvar = r << 1;
     } else {
-        // RFC 6298 §2.3
         let delta = (r as i64 - (t.srtt >> 3) as i64).unsigned_abs();
         t.rttvar = t.rttvar + delta - (t.rttvar >> 2);
         t.srtt = (t.srtt as i64 + (r as i64 - (t.srtt >> 3) as i64)) as u64;
     }
     t.rto_ms = compute_rto(t);
-    log::warn!(
+    log::info!(
         "[tcp] t={} rtt sample={}ms srtt={}ms rttvar={}ms rto={}ms",
         now_ms(), r, t.srtt >> 3, t.rttvar >> 2, t.rto_ms
+    );
+}
+
+// ---------- CUBIC 核心(RFC 9438) ----------
+//
+// W_cubic(t) = C·(t − K)³ + W_max
+//   t   : 距上次丢包(epoch 起点)的真实时间 —— 注意 CUBIC 基于时间而非 RTT,
+//         这正是它相对 Reno 的 RTT 公平性卖点(高 RTT 流不再吃亏)。
+//   K   : ∛((W_max − cwnd_epoch)/C),凹区爬回 W_max 所需时间。
+//   凹区(t < K):快速逼近 W_max —— 上次丢包点附近大概率仍有容量,先冲;
+//   凸区(t > K):越过 W_max 后缓慢立方探测 —— 前面是未知领域,谨慎。
+//
+// TCP 友好区(§4.2):W_est = W_max·β + [3(1−β)/(1+β)]·t/RTT
+//   若 W_est 比 W_cubic 涨得快(低带宽场景),按 W_est 涨,避免被 Reno 流饿死。
+
+/// 整数立方根:最大的 r 使 r³ ≤ v(二分)
+fn icbrt(v: u64) -> u64 {
+    let (mut lo, mut hi) = (0u64, 1u64);
+    while hi * hi * hi <= v && hi < (1 << 21) { hi <<= 1; }
+    while lo + 1 < hi {
+        let mid = (lo + hi) / 2;
+        if mid * mid * mid <= v { lo = mid; } else { hi = mid; }
+    }
+    lo
+}
+
+/// C·(d_ms/1000)³,返回 段×CWND_SCALE;d 限幅防爆
+fn cubic_term(d_ms: u64) -> u64 {
+    let d = d_ms.min(30_000);
+    (C_NUM * d * d * d * CWND_SCALE as u64 / C_DEN) / 1_000_000_000
+}
+
+/// 每收到 acked 个新确认的段,推进一次拥塞窗口
+fn cubic_update(t: &mut TcpSocket, acked: u32) {
+    let now = now_ms();
+
+    // 慢启动(RFC 5681):cwnd < ssthresh 时每 ACK +1 段,指数爬升
+    if t.cwnd < t.ssthresh {
+        t.cwnd = t.cwnd.saturating_add(acked * CWND_SCALE);
+        return;
+    }
+
+    // epoch 起点:丢包降窗后的第一个 ACK 才正式开始 CUBIC 计时,
+    // 此时根据「cwnd 与 w_max 的差距」确定 K 和原点
+    if t.epoch_start == 0 {
+        t.epoch_start = now;
+        if t.cwnd < t.w_max {
+            // K_s = ∛((w_max − cwnd)/C) 秒 → 换算 ms:∛(x·C_DEN·1e9/C_NUM)
+            let delta_segs = ((t.w_max - t.cwnd) / CWND_SCALE) as u64;
+            t.k_ms = icbrt(delta_segs * C_DEN * 1_000_000_000 / C_NUM);
+            t.origin = t.w_max;
+        } else {
+            t.k_ms = 0;
+            t.origin = t.cwnd;
+        }
+        t.cwnd_cnt = 0;
+        log::info!(
+            "[cubic] t={} epoch start cwnd={} w_max={} K={}ms",
+            now, t.cwnd / CWND_SCALE, t.w_max / CWND_SCALE, t.k_ms
+        );
+    }
+
+    // W_cubic:凹区 = origin − C·(K−t)³,凸区 = origin + C·(t−K)³
+    let t_since = now - t.epoch_start;
+    let w_cubic = if t_since < t.k_ms {
+        t.origin.saturating_sub(cubic_term(t.k_ms - t_since) as u32)
+    } else {
+        t.origin.saturating_add(cubic_term(t_since - t.k_ms) as u32)
+    };
+    let mut target = core::cmp::max(w_cubic, t.cwnd);
+
+    // TCP 友好区:W_est = w_max·β + (9/17)·(t/RTT) 段
+    let rtt = core::cmp::max(t.srtt >> 3, 1); // QEMU RTT≈0,钳到 1ms
+    let w_est = t.w_max * BETA_NUM / BETA_DEN
+        + (9 * (t_since / rtt) * CWND_SCALE as u64 / 17) as u32;
+    if t.cwnd < w_est {
+        target = core::cmp::max(target, w_est);
+    }
+
+    // 把「目标窗口 − 当前窗口」摊薄到 ACK 流上:每 cnt 个 ACK +1 段,
+    // 其中 cnt = cwnd/(target − cwnd),实现逐 ACK 平滑逼近目标曲线
+    if target == t.cwnd {
+        // 平台期(刚起步):极慢探测
+        t.cwnd_cnt += acked;
+        if t.cwnd_cnt >= 100 {
+            t.cwnd += CWND_SCALE;
+            t.cwnd_cnt = 0;
+        }
+    } else {
+        let cnt = (t.cwnd / (target - t.cwnd)).clamp(1, 1000);
+        t.cwnd_cnt += acked;
+        if t.cwnd_cnt >= cnt {
+            t.cwnd += CWND_SCALE;
+            t.cwnd_cnt = 0;
+        }
+    }
+}
+
+/// 丢包事件:乘性减窗 β=0.7 + 快速收敛,重启 epoch
+/// 教学版不区分 RTO 与快速重传的降窗;真实 Linux 在 RTO 后会把
+/// cwnd 打到 1 段重走慢启动,想更真实可在 tick 的 RTO 分支里加:
+///     t.cwnd = CWND_SCALE; t.ssthresh 保持 cubic_on_loss 的结果。
+fn cubic_on_loss(t: &mut TcpSocket, why: &str) {
+    let old = t.cwnd;
+    // 快速收敛:这次低谷比上次还低,说明瓶颈容量在缩,last_max 再压一档
+    if FAST_CONV && t.cwnd < t.last_max {
+        t.last_max = t.cwnd * (BETA_DEN + BETA_NUM) / (2 * BETA_DEN); // ×0.85
+    } else {
+        t.last_max = t.cwnd;
+    }
+    t.w_max = t.cwnd;
+    t.ssthresh = core::cmp::max(t.cwnd * BETA_NUM / BETA_DEN, 2 * CWND_SCALE);
+    t.cwnd = t.ssthresh;
+    t.epoch_start = 0; // 下一个 ACK 重启 epoch 并算 K
+    t.cwnd_cnt = 0;
+    log::info!(
+        "[cubic] t={} loss({}) cwnd {} -> {} (w_max={}, K on next ack)",
+        now_ms(), why, old / CWND_SCALE, t.cwnd / CWND_SCALE, t.w_max / CWND_SCALE
     );
 }
 
@@ -194,15 +316,13 @@ fn next_isn() -> u32 { ISN_SEQ.fetch_add(0x10001, Ordering::Relaxed) ^ (now_ms()
 // ---------- 线上发送 ----------
 
 fn tcp_checksum(src_ip: u32, dst_ip: u32, pkt: &[u8]) -> u16 {
-    // 伪头部：saddr(4) daddr(4) zero(1) proto=6(1) tcp_len(2)，网络字节序
     let mut pseudo = Vec::with_capacity(12);
     pseudo.extend_from_slice(&src_ip.to_be_bytes());
     pseudo.extend_from_slice(&dst_ip.to_be_bytes());
     pseudo.push(0);
     pseudo.push(6);
     pseudo.extend_from_slice(&(pkt.len() as u16).to_be_bytes());
-    let mut sum: u32 = ip_checksum(&pseudo) as u32 ^ 0xFFFF; // 先求伪头部和（不取反）
-    // ip_checksum 返回的是取反后的值，异或 0xFFFF 还原成和
+    let mut sum: u32 = ip_checksum(&pseudo) as u32 ^ 0xFFFF;
     sum += ip_checksum(pkt) as u32 ^ 0xFFFF;
     while (sum >> 16) != 0 {
         sum = (sum & 0xFFFF) + (sum >> 16);
@@ -211,12 +331,11 @@ fn tcp_checksum(src_ip: u32, dst_ip: u32, pkt: &[u8]) -> u16 {
 }
 
 fn send_segment(local_port: u16, remote: SocketAddr, seq: u32, ack: u32, flags: u8, payload: &[u8]) {
-    // --- 实验装置:只丢数据段,不动 SYN/FIN(避免干扰建连与挥手) ---
     if LOSS_EVERY > 0 && flags & (SYN | FIN) == 0 && !payload.is_empty() {
         static SEND_CNT: AtomicU32 = AtomicU32::new(0);
         if SEND_CNT.fetch_add(1, Ordering::Relaxed) % LOSS_EVERY == LOSS_EVERY - 1 {
-            log::warn!("[tcp] t={} drop! seq={}", now_ms(), seq);
-            return; // 段不上线,模拟链路丢包
+            log::info!("[tcp] t={} drop! seq={}", now_ms(), seq);
+            return;
         }
     }
     let tcp_len = 20 + payload.len();
@@ -229,7 +348,7 @@ fn send_segment(local_port: u16, remote: SocketAddr, seq: u32, ack: u32, flags: 
     h.ack = ack.to_be();
     h.data_off = 5 << 4;
     h.flags = flags;
-    h.window = 65535u16.to_be(); // 教学版：接收窗口固定拉满
+    h.window = 65535u16.to_be();
     h.checksum = 0;
     h.urgent = 0;
     pkt.extend_from_slice(payload);
@@ -242,43 +361,41 @@ fn alloc_slot(table: &[Option<Socket>; 8]) -> Option<usize> {
     table.iter().position(|s| s.is_none())
 }
 
-fn process_ack(t: &mut TcpSocket, ack: u32) {
+/// 处理累积 ACK,返回本次新确认的段数(供 CUBIC 增窗)
+fn process_ack(t: &mut TcpSocket, ack: u32) -> u32 {
     let now = now_ms();
     let mut progress = false;
     let mut clean_sample: Option<u64> = None;
+    let mut acked = 0u32;
     let mut first = true;
     while let Some(seg) = t.tx_unacked.front() {
-        if ack >= seg.end_seq() {   // 教学简化：不考虑序号绕回
+        if ack >= seg.end_seq() {
             t.snd_una = seg.end_seq();
             let seg = t.tx_unacked.pop_front().unwrap();
-            // 防陈旧样本:只有「ACK 到达时的队首段」才允许采样。
-            // 孔洞修复后累积 ACK 会连跳多段,后续段的 now-sent_ms 混入了
-            // 修洞等待,不是真实 RTT;队首段若是干净的,说明它发出至今未
-            // 满一个 RTO(否则已被重传标记),样本必然新鲜。
             if first && !seg.retransmitted {
                 clean_sample = Some(now.saturating_sub(seg.sent_ms));
             }
             first = false;
             progress = true;
+            acked += 1;
         } else {
             break;
         }
     }
     if progress {
         t.retries = 0;
+        t.dup_acks = 0; // 前向进展:重复 ACK 计数清零
         if let Some(r) = clean_sample {
-            rtt_update(t, r); // 干净样本:更新估值并重算 RTO
+            rtt_update(t, r);
         } else {
-            // 无干净样本但有前向进展:把 RTO 恢复到估值(参考 Linux RTO-restore)。
-            // 严格 Karn 的「退避保持到干净样本」在排水阶段(数据已发完、只剩重传)
-            // 会让 RTO 棘轮式翻倍——连续孔洞各翻一倍直达封顶,实验日志已证实。
             t.rto_ms = compute_rto(t);
         }
         t.rto_deadline = if t.tx_unacked.is_empty() { 0 } else { now + t.rto_ms };
     }
+    acked
 }
 
-// ---------- 接收路径（ip.rs 的 proto 6 分发到这里） ----------
+// ---------- 接收路径 ----------
 
 pub fn input(segment: &[u8], src_ip: u32) {
     if segment.len() < 20 {
@@ -300,7 +417,6 @@ pub fn input(segment: &[u8], src_ip: u32) {
 
     let mut table = SOCKET_TABLE.lock();
 
-    // 1) 四元组精确匹配已有连接
     let mut idx: Option<usize> = None;
     for (i, s) in table.iter().enumerate() {
         if let Some(Socket::Tcp(t)) = s {
@@ -310,7 +426,6 @@ pub fn input(segment: &[u8], src_ip: u32) {
             }
         }
     }
-    // 2) LISTEN 匹配新连接
     if idx.is_none() {
         for (i, s) in table.iter().enumerate() {
             if let Some(Socket::Tcp(t)) = s {
@@ -323,9 +438,8 @@ pub fn input(segment: &[u8], src_ip: u32) {
     }
     let i = match idx {
         Some(i) => i,
-        None => return, // 无人监听，丢（教学版不回 RST）
+        None => return,
     };
-    // ---- LISTEN：SYN 建子连接 ----
     let is_listener = matches!(&table[i], Some(Socket::Tcp(t)) if t.state == TcpState::Listen);
     if is_listener {
         if flags & SYN == 0 {
@@ -351,8 +465,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
         return;
     }
 
-    // ---- 已有连接的状态机 ----
-    let mut push_accept: Option<(usize, usize)> = None; // (listener_fd, child_fd)
+    let mut push_accept: Option<(usize, usize)> = None;
     let mut free_slot = false;
     {
         let t = match table[i].as_mut().and_then(as_tcp_mut) {
@@ -363,14 +476,14 @@ pub fn input(segment: &[u8], src_ip: u32) {
         if flags & RST != 0 {
             t.state = TcpState::Closed;
             t.rst = true;
-            t.rx_queue.push_back(Vec::new()); // 哨兵：唤醒阻塞中的 recv
+            t.rx_queue.push_back(Vec::new());
         } else {
             t.snd_wnd = wnd;
             match t.state {
                 TcpState::SynSent => {
                     if flags & (SYN | ACK) == SYN | ACK && ack == t.snd_nxt {
                         t.rcv_nxt = seq.wrapping_add(1);
-                        process_ack(t, ack); // SYN 的 RTT 即首个样本
+                        process_ack(t, ack);
                         let (lp, r) = (t.local_port, t.remote.unwrap());
                         let (sn, rn) = (t.snd_nxt, t.rcv_nxt);
                         send_segment(lp, r, sn, rn, ACK, &[]);
@@ -404,29 +517,50 @@ pub fn input(segment: &[u8], src_ip: u32) {
                                     TcpState::FinWait1 => TcpState::Closing,
                                     TcpState::FinWait2 => {
                                         t.time_wait_deadline = now_ms() + TIME_WAIT_MS;
-                                        dump_stats(i, t, "timewait");
                                         TcpState::TimeWait
                                     }
                                     s => s,
                                 };
                             }
                         } else {
-                            ack_now = true; // 乱序：丢弃 + 重 ACK（TODO: 重组缓存）
+                            ack_now = true; // 乱序:丢弃 + 重 ACK(即对端的 dup ACK 源)
                         }
                     }
-                    process_ack(t, ack);
-                    // 我方 FIN 被确认后的状态推进
+                    let acked = process_ack(t, ack);
+                    if acked > 0 {
+                        cubic_update(t, acked); // CUBIC:按新确认的段数增窗
+                    } else if flags & ACK != 0
+                        && ack == t.snd_una
+                        && payload.is_empty()
+                        && flags & FIN == 0
+                        && !t.tx_unacked.is_empty()
+                    {
+                        // 重复 ACK(RFC 5681):第 3 个触发快速重传
+                        t.dup_acks = t.dup_acks.saturating_add(1);
+                        if t.dup_acks == DUPACK_THRESH {
+                            let seg = t.tx_unacked.front_mut().unwrap();
+                            seg.retransmitted = true;
+                            seg.sent_ms = now_ms();
+                            let (sq, fl, data) = (seg.seq, seg.flags, seg.data.clone());
+                            let (lp, r, rn) = (t.local_port, t.remote.unwrap(), t.rcv_nxt);
+                            // 一个丢包 episode 只降一次窗
+                            if t.loss_seq != t.snd_una {
+                                cubic_on_loss(t, "3dupACK");
+                                t.loss_seq = t.snd_una;
+                            }
+                            send_segment(lp, r, sq, rn, fl, &data);
+                        }
+                    }
                     match t.state {
                         TcpState::FinWait1 if t.snd_una == t.snd_nxt => {
                             t.state = TcpState::FinWait2;
                         }
                         TcpState::Closing if t.snd_una == t.snd_nxt => {
                             t.time_wait_deadline = now_ms() + TIME_WAIT_MS;
-                            dump_stats(i, t, "timewait");
                             t.state = TcpState::TimeWait;
                         }
                         TcpState::LastAck if t.snd_una == t.snd_nxt => {
-                            free_slot = true; // 挥手完成，释放
+                            free_slot = true;
                         }
                         _ => {}
                     }
@@ -446,12 +580,11 @@ pub fn input(segment: &[u8], src_ip: u32) {
         }
     }
     if free_slot {
-        if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) { dump_stats(i, t, "fin"); }
         table[i] = None;
     }
 }
 
-// ---------- tick：超时重传 + TIME_WAIT 回收（poll() 里调用） ----------
+// ---------- tick ----------
 
 pub fn tick() {
     let now = now_ms();
@@ -466,21 +599,25 @@ pub fn tick() {
             } else if t.state != TcpState::Closed && t.rto_deadline != 0 && now >= t.rto_deadline {
                 if t.remote.is_some() && !t.tx_unacked.is_empty() {
                     let remote = t.remote.unwrap();
+                    // RTO 也是丢包事件:同一个 episode 只降一次窗
+                    if t.loss_seq != t.snd_una {
+                        cubic_on_loss(t, "RTO");
+                        t.loss_seq = t.snd_una;
+                    }
                     let seg = t.tx_unacked.front_mut().unwrap();
-                    seg.retransmitted = true; // Karn:此段此后不再贡献 RTT 样本
+                    seg.retransmitted = true;
                     seg.sent_ms = now;
-                    // clone 一份避免借用冲突，段很小，教学可接受
                     let (seq, flags, data) = (seg.seq, seg.flags, seg.data.clone());
                     let (lp, rn) = (t.local_port, t.rcv_nxt);
                     send_segment(lp, remote, seq, rn, flags, &data);
                     t.retries = t.retries.saturating_add(1);
-                    log::warn!("[tcp] t={} rtx seq={} retry={} rto={}", now, seq, t.retries, t.rto_ms);
-                    t.rto_ms = (t.rto_ms * 2).min(RTO_MAX_MS); // 指数退避
+                    log::info!("[tcp] t={} rtx seq={} retry={} rto={}", now, seq, t.retries, t.rto_ms);
+                    t.rto_ms = (t.rto_ms * 2).min(RTO_MAX_MS);
                     t.rto_deadline = now + t.rto_ms;
                     if t.retries > MAX_RETRIES {
                         t.rto_deadline = 0;
                         if t.state == TcpState::SynReceived {
-                            free = true; // 半开子连接直接回收
+                            free = true;
                         } else {
                             t.state = TcpState::Closed;
                             t.rst = true;
@@ -493,13 +630,12 @@ pub fn tick() {
             }
         }
         if free {
-            if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) { dump_stats(i, t, "tick"); }
             table[i] = None;
         }
     }
 }
 
-// ---------- 对外 API（syscall 层调用） ----------
+// ---------- 对外 API ----------
 
 pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
     {
@@ -525,9 +661,7 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
         let lp = t.local_port;
         drop(table);
         send_segment(lp, SocketAddr { ip, port }, isn, 0, SYN, &[]);
-        // println!("[tcp] SYN sent");
     }
-    // 阻塞等握手完成
     let mut spins = 0usize;
     loop {
         crate::drivers::net::poll();
@@ -543,12 +677,10 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
         spins += 1;
         if spins > 30_000_000 {
             close(fd);
-            log::warn!("[tcp] connect timeout");
+            log::info!("[tcp] connect timeout");
             return -1;
         }
-
     }
-
 }
 
 pub fn listen(fd: usize) -> isize {
@@ -562,7 +694,6 @@ pub fn listen(fd: usize) -> isize {
     }
 }
 
-/// 阻塞等一个已 established 的子连接，返回 (child_fd, remote)
 pub fn accept(fd: usize) -> Option<(usize, SocketAddr)> {
     let mut spins = 0usize;
     loop {
@@ -602,13 +733,18 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
                 TcpState::Established | TcpState::CloseWait => {}
                 _ => return -1,
             }
-            // 流量控制:在途字节数不得越过对端通告的接收窗口。
-            // 不跟踪在途就灌 1MB,宿主机的 64KB rcvbuf 会被打爆造成真实丢包。
+            // 有效发送窗口 = min(对端接收窗口, 拥塞窗口)。
+            // cwnd 以段为单位管理,换算成字节再与在途量比较。
+            let cwnd_bytes = (t.cwnd / CWND_SCALE) as usize * MAX_PAYLOAD;
+            let eff_wnd = (t.snd_wnd as usize).min(cwnd_bytes);
             let in_flight = t.snd_nxt.wrapping_sub(t.snd_una) as usize;
-            if in_flight < t.snd_wnd as usize {
+            if in_flight < eff_wnd {
                 let len = data.len()
                     .min(MAX_PAYLOAD)
-                    .min(t.snd_wnd as usize - in_flight);
+                    .min(eff_wnd - in_flight);
+                if len == 0 {
+                    return -1;
+                }
                 let seq = t.snd_nxt;
                 t.snd_nxt = t.snd_nxt.wrapping_add(len as u32);
                 t.tx_unacked.push_back(TxSeg::new(seq, ACK | PSH, data[..len].to_vec()));
@@ -619,17 +755,16 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
                 send_segment(lp, r, seq, rn, ACK | PSH, &data[..len]);
                 return len as isize;
             }
-            // 窗口满:解锁 poll,等 ACK 推进 snd_una 后再试
+            // 窗口满:解锁 poll,等 ACK 推进或 CUBIC 开窗
         }
         crate::drivers::net::poll();
         spins += 1;
         if spins > 50_000_000 {
-            return -1; // 对端长久不开窗,放弃
+            return -1;
         }
     }
 }
 
-/// 返回 n / 0(EOF，对端已关) / -1(RST 或错误)
 pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
     loop {
         crate::drivers::net::poll();
@@ -639,7 +774,7 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
                 Some(t) => {
                     if let Some(chunk) = t.rx_queue.pop_front() {
                         if chunk.is_empty() && t.rst {
-                            return -1; // RST 哨兵
+                            return -1;
                         }
                         let n = chunk.len().min(out.len());
                         out[..n].copy_from_slice(&chunk[..n]);
@@ -686,27 +821,13 @@ pub fn close(fd: usize) -> isize {
                 send_segment(lp, r, seq, rn, FIN | ACK, &[]);
                 t.state = TcpState::LastAck;
             }
-            // Listen / Closed / SynSent 放弃 / TimeWait 等：直接释放
             _ => free = true,
         }
     } else {
         ok = false;
     }
     if free {
-        if let Some(t) = table[fd].as_mut().and_then(as_tcp_mut) { dump_stats(fd, t, "close"); }
         table[fd] = None;
     }
     if ok { 0 } else { -1 }
-}
-
-fn dump_stats(fd: usize, t: &mut TcpSocket, why: &str) {
-    if t.stat_start_ms == 0 {
-        return;
-    }
-    let dur = now_ms().saturating_sub(t.stat_start_ms);
-    println!(
-        "[tcp-stat] fd={} dur_ms={} bytes={} segs={} rtx_rto={} rtx_fast={} loss={} end={}",
-        fd, dur, t.stat_bytes, t.stat_segs, t.stat_rtx_rto, t.stat_rtx_fast, t.stat_loss, why
-    );
-    t.stat_start_ms = 0; // 防 TIME_WAIT 等后续路径重复 dump
 }

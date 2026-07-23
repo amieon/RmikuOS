@@ -16,15 +16,15 @@ public class Bench {
     // 全局规模旋钮：实际迭代数 = 基准值 << SCALE
     static final int SCALE = 1;
 
-    static final int N_ALU   = 5000000;   // K1 基准迭代
-    static final int N_MUL   = 5000000;   // K2 基准迭代
-    static final int N_ARR   = 100000;    // K3 数组长度
-    static final int REP_ARR = 20;        // K3 重复轮数
-    static final int N_CALL  = 1000000;   // K4 静态调用次数
-    static final int FIB_N   = 24;        // K4b 递归规模
-    static final int FIB_REP = 8;         // K4b 重复轮数
-    static final int N_SORT  = 256;       // K5 数组长度
-    static final int REP_SORT = 40;       // K5 重复轮数
+    static final int N_ALU   = 50000000;    // K1 基准迭代
+    static final int N_MUL   = 50000000;    // K2 基准迭代
+    static final int N_ARR   = 100000;      // K3 数组长度
+    static final int REP_ARR = 200;         // K3 重复轮数
+    static final int N_CALL  = 100000;      // K4 静态调用次数
+    static final int FIB_N   = 8;           // K4b 递归规模
+    static final int FIB_REP = 16;          // K4b 重复轮数
+    static final int N_SORT  = 2048;        // K5 数组长度
+    static final int REP_SORT = 10;         // K5 重复轮数
 
     public static void main(String[] args) {
         Rmiku.IO.printStr("[BENCH-BEGIN]");

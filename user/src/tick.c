@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
     long t0 = get_ticks();
     int pid = fork();
     if (pid == 0) {
-                struct exec_args args;
+        struct exec_args args;
         int n = argc - 1;
         if (n > EXEC_MAX_ARGS) {
             n = EXEC_MAX_ARGS;

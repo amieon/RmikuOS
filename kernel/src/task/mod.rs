@@ -35,6 +35,7 @@ pub use manager_wrapper::{
     fork_current,
 
     current_task_id,
+    current_task_ppid,
     read_current_user_bytes,
     write_current_user_bytes,
     wake_sleeping_tasks,
