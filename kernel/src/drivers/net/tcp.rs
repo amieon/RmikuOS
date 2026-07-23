@@ -851,6 +851,8 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
                 let seq = t.snd_nxt;
                 t.snd_nxt = t.snd_nxt.wrapping_add(len as u32);
                 t.tx_unacked.push_back(TxSeg::new(seq, ACK | PSH, data[..len].to_vec()));
+                t.stat_bytes += len as u64;
+                t.stat_segs += 1;
                 if t.rto_deadline == 0 {
                     t.rto_deadline = now_ms() + t.rto_ms;
                 }
@@ -906,8 +908,6 @@ pub fn close(fd: usize) -> isize {
                 let seq = t.snd_nxt;
                 t.snd_nxt = t.snd_nxt.wrapping_add(1);
                 t.tx_unacked.push_back(TxSeg::new(seq, FIN | ACK, Vec::new()));
-                t.stat_bytes += len as u64;
-                t.stat_segs += 1;
                 if t.rto_deadline == 0 {
                     t.rto_deadline = now_ms() + t.rto_ms;
                 }
