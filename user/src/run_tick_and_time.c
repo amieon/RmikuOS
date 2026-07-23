@@ -43,8 +43,8 @@ int main(int argc, char **argv) {
     printf("[time] ");
     printf(argv[1]);
     printf(" = ");
-    printf("%d", (int)(time1 - time0));
-    printf(" ns\n exit=");
+    printf("%d ns (%d ms)\n", (int)(time1 - time0), (int)((time1 - time0) / 1000000));
+    printf("exit=");
     printf("%d", status);
     printf("\n");
     return 0;

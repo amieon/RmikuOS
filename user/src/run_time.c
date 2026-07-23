@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
     printf(argv[1]);
     printf(" = ");
     printf("%d", (int)(t1 - t0));
-    printf(" ns, exit=");
+    printf(" ns(%d ms), exit=", (int)((t1 - t0) / 1000000));
     printf("%d", status);
     printf("\n");
     return 0;
