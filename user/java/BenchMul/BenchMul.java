@@ -1,7 +1,7 @@
 // BenchMul.java —— 乘加 LCG
 public class BenchMul {
     static final int SCALE = 0;
-    static final int N = 100000000;
+    static final int N = 1000000;
 
     public static void main(String[] args) {
         Rmiku.IO.printStr("[BENCH-BEGIN] mul_lcg");

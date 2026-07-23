@@ -1,7 +1,7 @@
 // BenchArray.java —— 数组读写
 public class BenchArray {
     static final int SCALE = 0;
-    static final int N = 1000000;
+    static final int N = 10000;
     static final int REP = 30;
 
     public static void main(String[] args) {

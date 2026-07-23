@@ -1,7 +1,7 @@
-tick ./programs/jvm ./jvm/BenchAlu/BenchAlu.class
-tick ./programs/jvm ./jvm/BenchArray/BenchArray.class
-tick ./programs/jvm ./jvm/BenchBranch/BenchBranch.class
-tick ./programs/jvm ./jvm/BenchCall/BenchCall.class
-tick ./programs/jvm ./jvm/BenchMul/BenchMul.class
-tick ./programs/jvm ./jvm/BenchObject/BenchObject.class
-tick ./programs/jvm ./jvm/BenchString/BenchString.class
+run_time ./programs/jvm ./jvm/BenchAlu/BenchAlu.class
+run_time ./programs/jvm ./jvm/BenchArray/BenchArray.class
+run_time ./programs/jvm ./jvm/BenchBranch/BenchBranch.class
+run_time ./programs/jvm ./jvm/BenchCall/BenchCall.class
+run_time ./programs/jvm ./jvm/BenchMul/BenchMul.class
+run_time ./programs/jvm ./jvm/BenchObject/BenchObject.class
+run_time ./programs/jvm ./jvm/BenchString/BenchString.class

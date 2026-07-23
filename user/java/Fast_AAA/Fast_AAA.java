@@ -1,5 +1,5 @@
 // BenchAlu.java —— 位运算混合
-public class BenchAlu {
+public class Fast_AAA {
     static final int SCALE = 1;
     static final int N = 1000000;
 

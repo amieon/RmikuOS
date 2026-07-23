@@ -1,7 +1,7 @@
 // BenchObject.java —— 对象分配与字段访问
 public class BenchObject {
     static final int SCALE = 0;
-    static final int N = 100000;
+    static final int N = 1000;
 
     static class Point {
         int x, y;

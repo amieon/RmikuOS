@@ -1,7 +1,7 @@
 // BenchBranch.java —— 分支预测密集
 public class BenchBranch {
     static final int SCALE = 0;
-    static final int N = 100000000;
+    static final int N = 1000000;
 
     public static void main(String[] args) {
         Rmiku.IO.printStr("[BENCH-BEGIN] branch_heavy");

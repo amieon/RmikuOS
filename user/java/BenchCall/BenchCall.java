@@ -1,9 +1,9 @@
 // BenchCall.java —— 静态调用 + 递归
 public class BenchCall {
     static final int SCALE = 0;
-    static final int N = 1000000;
+    static final int N = 10000;
     static final int FIB_N = 8;
-    static final int FIB_REP = 64;
+    static final int FIB_REP = 16;
 
     static int addmul(int a, int b, int c) {
         return a * b + c;
