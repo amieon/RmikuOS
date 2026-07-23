@@ -647,7 +647,7 @@ def build_rust_workspace(arch: str):
         flags += ["-C", f"link-arg={la}"]
 
     env = os.environ.copy()
-    env["RUSTFLAGS"] = " ".join(flags)
+    env["RUSTFLAGS"] = " ".join(flags) + " -A warnings"
 
     print(f"[user] building rust workspace ({arch}) ...")
     run_env(
