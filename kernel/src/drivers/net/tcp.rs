@@ -41,11 +41,11 @@ const DUPACK_THRESH: u8 = 3;                  // 快速重传阈值(RFC 5681)
 
 
 /// SR 重组缓存上限(字节),与接收窗口对齐
-const OOO_CAP: usize = 65536;
+const OOO_CAP: usize = 16384;
 
 
 // ---- 实验装置:每发 LOSS_EVERY 个数据段丢 1 个;0 = 关闭 ----
-const LOSS_EVERY: u32 = 0;
+const LOSS_EVERY: u32 = 500;
 
 #[repr(C, packed)]
 pub struct TcpHeader {
@@ -146,7 +146,7 @@ impl TcpSocket {
             snd_una: 0,
             snd_nxt: 0,
             rcv_nxt: 0,
-            snd_wnd: 65535,
+            snd_wnd: 16384,
             tx_unacked: VecDeque::new(),
             rx_queue: VecDeque::new(),
             rto_deadline: 0,
@@ -448,7 +448,7 @@ fn send_segment(local_port: u16, remote: SocketAddr, seq: u32, ack: u32, flags: 
     h.ack = ack.to_be();
     h.data_off = 5 << 4;
     h.flags = flags;
-    h.window = 65535u16.to_be();
+    h.window = 16384u16.to_be();
     h.checksum = 0;
     h.urgent = 0;
     pkt.extend_from_slice(payload);

@@ -1,4 +1,4 @@
-     Removed 917 files, 404.4MiB total
+     Removed 724 files, 310.0MiB total
 === 构建用户程序 (riscv64) ===
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/abcc/RmikuOS/user/rust/programs/editor/Cargo.toml
@@ -6,543 +6,19 @@ workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/abcc/RmikuOS/user/rust/programs/files/Cargo.toml
 workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
-warning: method `len` is never used
-  --> programs/editor/src/buffer.rs:24:12
-   |
-16 | impl Buffer {
-   | ----------- method in this implementation
-...
-24 |     pub fn len(&self) -> usize {
-   |            ^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `put_str` is never used
-  --> programs/editor/src/terminal.rs:38:12
-   |
-17 | impl Frame {
-   | ---------- method in this implementation
-...
-38 |     pub fn put_str(&mut self, s: &str) {
-   |            ^^^^^^^
-
-warning: `editor` (bin "editor") generated 2 warnings
-warning: unused import: `read`
- --> programs/try_args/src/main.rs:5:16
-  |
-5 | use ulib::io::{read,puts,puts_bytes,put_int};
-  |                ^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: function `readline` is never used
-  --> programs/try_vec/src/utils.rs:23:8
-   |
-23 | pub fn readline(buf: &mut [u8]) -> usize {
-   |        ^^^^^^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: function `atoi` is never used
-  --> programs/try_vec/src/utils.rs:52:8
-   |
-52 | pub fn atoi(bytes: &[u8]) -> u64 {
-   |        ^^^^
-
-warning: function `result_filename` is never used
-  --> programs/try_vec/src/utils.rs:62:8
-   |
-62 | pub fn result_filename(pid: isize) -> [u8; 32] {
-   |        ^^^^^^^^^^^^^^^
-
-warning: function `u64_to_str` is never used
-  --> programs/try_vec/src/utils.rs:92:8
-   |
-92 | pub fn u64_to_str(mut x: u64, buf: &mut [u8]) -> usize {
-   |        ^^^^^^^^^^
-
-warning: `try_args` (bin "try_args") generated 1 warning (run `cargo fix --bin "try_args" -p try_args` to apply 1 suggestion)
-warning: `try_vec` (bin "try_vec") generated 4 warnings
-warning: unused variable: `idx`
-  --> programs/my_math_constants/src/main.rs:39:10
-   |
-39 |     for (idx, (name, func)) in tasks.iter().enumerate() {
-   |          ^^^ help: if this is intentional, prefix it with an underscore: `_idx`
-   |
-   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused import: `put_char`
- --> programs/bank_system/src/manager.rs:4:22
-  |
-4 | use ulib::io::{puts, put_char};
-  |                      ^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused imports: `open_create` and `write`
- --> programs/bank_system/src/interest.rs:5:28
-  |
-5 | use ulib::io::{puts, open, open_create, close, read, write};
-  |                            ^^^^^^^^^^^               ^^^^^
-
-warning: unused import: `put_char`
-  --> programs/bank_system/src/main.rs:10:22
-   |
-10 | use ulib::io::{puts, put_char};
-   |                      ^^^^^^^^
-
-warning: unused import: `bytes_to_str`
-  --> programs/bank_system/src/main.rs:12:51
-   |
-12 | use utils::{get_key, wait_any_key, print_at, Key, bytes_to_str};
-   |                                                   ^^^^^^^^^^^^
-
-warning: variable does not need to be mutable
-  --> programs/bank_system/src/interest.rs:77:9
-   |
-77 |     let mut new_accs = [Account::new(0, "", 0); MAX_ACCOUNTS];
-   |         ----^^^^^^^^
-   |         |
-   |         help: remove this `mut`
-   |
-   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
-
-warning: variable does not need to be mutable
-  --> programs/bank_system/src/interest.rs:78:9
-   |
-78 |     let mut new_count = 0;
-   |         ----^^^^^^^^^
-   |         |
-   |         help: remove this `mut`
-
-warning: unused variable: `new_accs`
-  --> programs/bank_system/src/interest.rs:77:9
-   |
-77 |     let mut new_accs = [Account::new(0, "", 0); MAX_ACCOUNTS];
-   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_accs`
-   |
-   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused variable: `new_count`
-  --> programs/bank_system/src/interest.rs:78:9
-   |
-78 |     let mut new_count = 0;
-   |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_count`
-
-warning: unused variable: `n`
-  --> programs/bank_system/src/interest.rs:84:17
-   |
-84 |             let n = read(fd as usize, &mut buf);
-   |                 ^ help: if this is intentional, prefix it with an underscore: `_n`
-
-warning: `my_math_constants` (bin "my_math_constants") generated 1 warning (run `cargo fix --bin "my_math_constants" -p my_math_constants` to apply 1 suggestion)
-warning: `bank_system` (bin "bank_system") generated 9 warnings (run `cargo fix --bin "bank_system" -p bank_system` to apply 9 suggestions)
-warning: variable `total` is assigned to, but never used
-  --> programs/edit_past/src/main.rs:75:9
-   |
-75 |     let mut total = 0;
-   |         ^^^^^^^^^
-   |
-   = note: consider using `_total` instead
-   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: value assigned to `total` is never read
-  --> programs/edit_past/src/main.rs:85:9
-   |
-85 |         total += n as usize;
-   |         ^^^^^^^^^^^^^^^^^^^
-   |
-   = help: maybe it is overwritten before being read?
-   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
-
-warning: value assigned to `pos` is never read
-   --> programs/edit_past/src/main.rs:152:17
-    |
-152 |                 pos = line_end;
-    |                 ^^^^^^^^^^^^^^
-    |
-    = help: maybe it is overwritten before being read?
-
-warning: unnecessary `unsafe` block
-   --> programs/edit_past/src/main.rs:221:16
-    |
-213 |     unsafe {
-    |     ------ because it's nested under this `unsafe` block
-...
-221 |             if unsafe { BUFFER[pos] } == b'\n' { line += 1; }
-    |                ^^^^^^ unnecessary `unsafe` block
-    |
-    = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
-
-warning: unnecessary `unsafe` block
-   --> programs/edit_past/src/main.rs:234:16
-    |
-213 |     unsafe {
-    |     ------ because it's nested under this `unsafe` block
-...
-234 |             if unsafe { BUFFER[pos2] } == b'\n' { current_line += 1; }
-    |                ^^^^^^ unnecessary `unsafe` block
-
-warning: variable does not need to be mutable
-   --> programs/edit_past/src/main.rs:230:13
-    |
-230 |         let mut new_display = 0;
-    |             ----^^^^^^^^^^^
-    |             |
-    |             help: remove this `mut`
-    |
-    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused variable: `new_display`
-   --> programs/edit_past/src/main.rs:230:13
-    |
-230 |         let mut new_display = 0;
-    |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_display`
-
-warning: unused variable: `line`
-   --> programs/edit_past/src/main.rs:355:22
-    |
-355 |                 let (line, col) = get_cursor_line_col();
-    |                      ^^^^ help: if this is intentional, prefix it with an underscore: `_line`
-
-warning: creating a mutable reference to mutable static
-  --> programs/edit_past/src/main.rs:77:9
-   |
-77 |         BUFFER.clear();
-   |         ^^^^^^^^^^^^^^ mutable reference to mutable static
-   |
-   = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-   = note: `#[warn(static_mut_refs)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
-
-warning: creating a mutable reference to mutable static
-  --> programs/edit_past/src/main.rs:83:13
-   |
-83 |             BUFFER.extend_from_slice(&buf[..n as usize]);
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-   |
-   = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:131:43
-    |
-131 |         while row < content_rows && pos < BUFFER.len() {
-    |                                           ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:135:30
-    |
-135 | ...ine_end < BUFFER.len() && BUFFER[line_end] != b'\n' && col < content...
-    |              ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:149:27
-    |
-149 |             if line_end < BUFFER.len() && BUFFER[line_end] == b'\n' {
-    |                           ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:187:25
-    |
-187 | ...   while end < BUFFER.len() && BUFFER[end] != b'\n' && cols < conten...
-    |                   ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:197:22
-    |
-197 |             if end < BUFFER.len() && BUFFER[end] == b'\n' {
-    |                      ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:214:25
-    |
-214 |         if new_offset > BUFFER.len() { return; }
-    |                         ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:233:22
-    |
-233 |         while pos2 < BUFFER.len() && current_line < start_line {
-    |                      ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:244:28
-    |
-244 |         if CURSOR_OFFSET > BUFFER.len() { return; }
-    |                            ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a mutable reference to mutable static
-   --> programs/edit_past/src/main.rs:245:9
-    |
-245 |         BUFFER.insert(CURSOR_OFFSET, ch);
-    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-    |
-    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:253:50
-    |
-253 |         if CURSOR_OFFSET == 0 || CURSOR_OFFSET > BUFFER.len() { return; }
-    |                                                  ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a mutable reference to mutable static
-   --> programs/edit_past/src/main.rs:254:9
-    |
-254 |         BUFFER.remove(CURSOR_OFFSET - 1);
-    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-    |
-    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:346:49
-    |
-346 | ... unsafe { BUFFER.len() } && unsafe { BUFFER[target] } != b'\n' && cn...
-    |              ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:358:42
-    |
-358 | ... unsafe { BUFFER.len() } && unsafe { BUFFER[new_pos] } != b'\n' {
-    |              ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:361:39
-    |
-361 |                 if new_pos < unsafe { BUFFER.len() } {
-    |                                       ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:365:45
-    |
-365 | ... unsafe { BUFFER.len() } && unsafe { BUFFER[target] } != b'\n' && cn...
-    |              ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: creating a shared reference to mutable static
-   --> programs/edit_past/src/main.rs:378:56
-    |
-378 |                 if unsafe { CURSOR_OFFSET } < unsafe { BUFFER.len() } {
-    |                                                        ^^^^^^^^^^^^ shared reference to mutable static
-    |
-    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
-    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-
-warning: unused import: `copy_str_to_buf`
- --> programs/library_system/src/storage.rs:2:40
-  |
-2 | use crate::utils::{bytes_to_str, atoi, copy_str_to_buf};
-  |                                        ^^^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: value assigned to `history` is never read
-   --> programs/library_system/src/utils.rs:105:21
-    |
-105 |                     history[hist_count][copy_len] = 0;
-    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |
-    = help: maybe it is overwritten before being read?
-    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
-
-warning: value assigned to `hist_count` is never read
-   --> programs/library_system/src/utils.rs:106:21
-    |
-106 |                     hist_count += 1;
-    |                     ^^^^^^^^^^^^^^^
-    |
-    = help: maybe it is overwritten before being read?
-
-warning: constant `ESC` is never used
-  --> programs/library_system/src/utils.rs:77:11
-   |
-77 | pub const ESC: u8 = 0x1B;
-   |           ^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: constant `HISTORY_MAX` is never used
-  --> programs/library_system/src/utils.rs:78:7
-   |
-78 | const HISTORY_MAX: usize = 10;
-   |       ^^^^^^^^^^^
-
-warning: constant `LINE_MAX` is never used
-  --> programs/library_system/src/utils.rs:79:7
-   |
-79 | const LINE_MAX: usize = 64;
-   |       ^^^^^^^^
-
-warning: function `readline_cmd` is never used
-  --> programs/library_system/src/utils.rs:83:8
-   |
-83 | pub fn readline_cmd(_prompt: &str) -> [u8; LINE_MAX] {
-   |        ^^^^^^^^^^^^
-
-warning: function `bytes_len` is never used
-   --> programs/library_system/src/utils.rs:223:4
-    |
-223 | fn bytes_len(b: &[u8]) -> usize {
-    |    ^^^^^^^^^
-
-warning: method `len` is never used
-  --> programs/files/src/buffer.rs:24:12
-   |
-16 | impl Buffer {
-   | ----------- method in this implementation
-...
-24 |     pub fn len(&self) -> usize {
-   |            ^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `put_str` is never used
-  --> programs/files/src/terminal.rs:38:12
-   |
-17 | impl Frame {
-   | ---------- method in this implementation
-...
-38 |     pub fn put_str(&mut self, s: &str) {
-   |            ^^^^^^^
-
-warning: `edit_past` (bin "edit_past") generated 26 warnings (run `cargo fix --bin "edit_past" -p edit_past` to apply 3 suggestions)
-warning: `library_system` (bin "library_system") generated 8 warnings (run `cargo fix --bin "library_system" -p library_system` to apply 1 suggestion)
-warning: `files` (bin "files") generated 2 warnings
-    Finished `release` profile [optimized] target(s) in 0.05s
-[user] cache hit app0: 01_busy.c, 3292 bytes
-[user] cache hit app1: 02_raw.S, 224 bytes
-[user] cache hit app2: 03_hello.c, 3324 bytes
-[user] cache hit app3: 04_fork_wait.c, 4276 bytes
-[user] cache hit app4: 05_getpid_sleep.c, 3796 bytes
-[user] cache hit app5: 06_estimate_pi.c, 6404 bytes
-[user] cache hit app6: 07_fibonacci.c, 6748 bytes
-[user] cache hit app7: 08_cat_motd.c, 3604 bytes
-[user] cache hit app8: 09_fs_stress.c, 6188 bytes
-[user] cache hit app9: 10_fs_stress2.c, 10252 bytes
-[user] cache hit app10: 11_open_exec.c, 3980 bytes
-[user] cache hit app11: 12_stat_test.c, 4212 bytes
-[user] cache hit app12: 13_fork_stride_test.c, 5060 bytes
-[user] cache hit app13: 14_thread_test.c, 6220 bytes
-[user] cache hit app14: 15_mmap_test.c, 3564 bytes
-[user] cache hit app15: 16_mmap_stress.c, 4652 bytes
-[user] cache hit app16: 17_malloc_test.c, 6404 bytes
-[user] cache hit app17: 18_elf_bss_test.c, 3572 bytes
-[user] cache hit app18: 19_little_stress.c, 8660 bytes
-[user] cache hit app19: 20_little_stress2.c, 11149 bytes
-[user] cache hit app20: 21_malloc_test.c, 8388 bytes
-[user] cache hit app21: 22_lock_test.c, 5972 bytes
-[user] cache hit app22: 23_thread_malloc_test.c, 5932 bytes
-[user] cache hit app23: 24_mmap_reuse_test.c, 4228 bytes
-[user] cache hit app24: 25_thread_stack_reuse_test.c, 6004 bytes
-[user] cache hit app25: 26_sqrt_schedule_test.c, 7652 bytes
-[user] cache hit app26: 27_thread_stride_test.c, 6796 bytes
-[user] cache hit app27: 28_mixed_workload_sched_test.c, 8436 bytes
-[user] cache hit app28: 29_ticket_syscall_test.c, 6820 bytes
-[user] cache hit app29: 30_alpha_sched_test.c, 8940 bytes
-[user] cache hit app30: 31_reset_sched_test.c, 4172 bytes
-[user] cache hit app31: 32_sched_stat_test.c, 4228 bytes
-[user] cache hit app32: 33_alpha_sched_stat_test.c, 10436 bytes
-[user] cache hit app33: 34_edge_deadline_test.c, 12508 bytes
-[user] cache hit app34: 35_alpha_arg_test.c, 10060 bytes
-[user] cache hit app35: 36_edge_deadline_arg_test.c, 13676 bytes
-[user] cache hit app36: 37_adaptive_alpha_test.c, 20436 bytes
-[user] cache hit app37: 38_stride_ticket_test.c, 7964 bytes
-[user] cache hit app38: 39_smoother_adaptive_alpha_test.c, 22580 bytes
-[user] cache hit app39: 40_dynamic_load_exp.c, 23388 bytes
-[user] cache hit app40: 41_pipe_test.c, 9444 bytes
-[user] cache hit app41: 42_pipe_stress.c, 11060 bytes
-[user] cache hit app42: 43_directly_return.c, 256 bytes
-[user] cache hit app43: 44_pipe_writer.c, 3188 bytes
-[user] cache hit app44: 45_pipe_reader.c, 3348 bytes
-[user] cache hit app45: 46_test_tmpfs_rw.c, 3516 bytes
-[user] cache hit app46: 47_crud_test.c, 7548 bytes
-[user] cache hit app47: 48_echo_args.c, 3236 bytes
-[user] cache hit app48: 49_cat_stdin.c, 3156 bytes
-[user] cache hit app49: 50_tick_time.c, 3604 bytes
-[user] cache hit app50: 51_hello_rust.rs, 136 bytes
-[user] cache hit app51: 52_rust_fibonacci.rs, 8144 bytes
-[user] cache hit app52: 53_rust_estimate_pi.rs, 8112 bytes
-[user] cache hit app53: 54_open_test.c, 5100 bytes
-[user] cache hit app54: 55_open_test2.c, 5852 bytes
-[user] cache hit app55: 56_cpp_test.cpp, 3296 bytes
-[user] cache hit app56: 57_cpp_runtime.cpp, 3296 bytes
-[user] cache hit app57: 58_vector_test.cpp, 7576 bytes
-[user] cache hit app58: 59_cpp_test2.cpp, 3704 bytes
-[user] cache hit app59: 60_matmul_test.cpp, 10848 bytes
-[user] cache hit app60: 61_cmath_test.cpp, 8800 bytes
-[user] cache hit app61: 62_fp_test.cpp, 4408 bytes
-[user] cache hit app62: 63_cmath_test2.cpp, 20992 bytes
-[user] cache hit app63: 64_test_cmath_fdlibm.cpp, 9728 bytes
-[user] cache hit app64: 65_cpp_compat_test.cpp, 15588 bytes
-[user] cache hit app65: 66_cpp_vector_test.cpp, 18916 bytes
-[user] cache hit app66: 67_cpp_random_test.cpp, 15324 bytes
-[user] cache hit app67: 68_cpp_string_test.cpp, 21076 bytes
-[user] cache hit app68: 69_cpp_printf_test.cpp, 11996 bytes
-[user] cache hit app69: 70_cpp_std_bridge_test.cpp, 25948 bytes
-[user] cache hit app70: 71_cpp_ifstream.cpp, 16140 bytes
-[user] cache hit app71: 72_kill_oneself_test.c, 8412 bytes
-[user] cache hit app72: 73_loop_forever.c, 8268 bytes
-[user] cache hit app73: 74_illegal_insn.c, 8292 bytes
-[user] cache hit app74: 75_smp_cpu_bench.c, 9852 bytes
-[user] cache hit app75: 76_smp_syscall_bench.c, 9196 bytes
-[user] cache hit app76: 77_smp_fork_wait_bench.c, 9004 bytes
-[user] cache hit app77: 78_smp_cpu_probe.c, 10452 bytes
-[user] cache hit app78: 79_udp_test.c, 10100 bytes
-[user] cache hit app79: 80_tcp_test.c, 9772 bytes
-[user] cache hit app80: 81_schedlab_demo.c, 17060 bytes
-[user] cache hit app81: 82_schedlab.c, 18820 bytes
-[user] cache hit app82: cat.c, 3852 bytes
-[user] cache hit app83: echo.c, 3292 bytes
-[user] cache hit app84: getip.c, 8396 bytes
-[user] cache hit app85: grep.c, 3724 bytes
-[user] cache hit app86: ls.c, 5156 bytes
-[user] cache hit app87: ping.c, 10908 bytes
-[user] cache hit app88: run_tick.c, 9108 bytes
-[user] cache hit app89: run_tick_and_time.c, 9348 bytes
-[user] cache hit app90: run_time.c, 9156 bytes
-[user] cache hit app91: setip.c, 8828 bytes
-[user] cache hit app92: shell.c, 34840 bytes
-[user] cache hit app93: tftp.c, 11036 bytes
+    Finished `release` profile [optimized] target(s) in 0.04s
+[user] cache hit app0: cat.c, 3852 bytes
+[user] cache hit app1: echo.c, 3292 bytes
+[user] cache hit app2: getip.c, 8396 bytes
+[user] cache hit app3: grep.c, 3724 bytes
+[user] cache hit app4: ls.c, 5156 bytes
+[user] cache hit app5: ping.c, 10908 bytes
+[user] cache hit app6: run_tick.c, 9108 bytes
+[user] cache hit app7: run_tick_and_time.c, 9348 bytes
+[user] cache hit app8: run_time.c, 9156 bytes
+[user] cache hit app9: setip.c, 8828 bytes
+[user] cache hit app10: shell.c, 34952 bytes
+[user] cache hit app11: tftp.c, 11036 bytes
 [user] building rust workspace (riscv64) ...
 + cargo build --release --target riscv64gc-unknown-none-elf
 [user] rust workspace program -> bank_system
@@ -943,15 +419,15 @@ created target/fat-riscv64.img (fresh FAT16)
 === 编译内核 (riscv64, debug, LOG=warn) ===
    Compiling find-msvc-tools v0.1.9
    Compiling shlex v1.3.0
-   Compiling crc-catalog v2.5.0
    Compiling bitflags v2.11.1
+   Compiling crc-catalog v2.5.0
    Compiling crc v3.4.0
+   Compiling log v0.4.30
    Compiling cc v1.2.62
    Compiling spin v0.10.0
-   Compiling log v0.4.30
-   Compiling ext4-view v0.9.3
-   Compiling buddy_system_allocator v0.13.0
    Compiling fatfs v0.4.0 (/home/abcc/RmikuOS/third_party/fatfs)
+   Compiling buddy_system_allocator v0.13.0
+   Compiling ext4-view v0.9.3
 warning: hiding a lifetime that's elided elsewhere is confusing
    --> third_party/fatfs/src/fs.rs:630:21
     |
@@ -3168,7 +2644,7 @@ warning: creating a shared reference to mutable static
    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
 
 warning: `RmikuOS` (bin "RmikuOS") generated 300 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 73 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.51s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.74s
 
 === 启动 QEMU (riscv64, mode=debug, net=user) ===
 KERNEL: target/riscv64gc-unknown-none-elf/debug/RmikuOS
@@ -3209,7 +2685,7 @@ Standard SBI Extensions     : ipi,pmu,srst,sse,hsm,rfnc,fwft,time,base,legacy,db
 Experimental SBI Extensions : none
 
 Domain0 Name                : root
-Domain0 Boot HART           : 6
+Domain0 Boot HART           : 7
 Domain0 HARTs               : 0*,1*,2*,3*,4*,5*,6*,7*
 Domain0 Region00            : 0x0000000080000000-0x000000008003ffff M: (F,R,X) S/U: ()
 Domain0 Region01            : 0x0000000080040000-0x000000008007ffff M: (F,R,W) S/U: ()
@@ -3225,7 +2701,7 @@ Domain0 Next Mode           : S-mode
 Domain0 SysReset            : yes
 Domain0 SysSuspend          : yes
 
-Boot HART ID                : 6
+Boot HART ID                : 7
 Boot HART Domain            : root
 Boot HART Priv Version      : v1.12
 Boot HART Base ISA          : rv64imafdch
@@ -3268,135 +2744,152 @@ external commands are in /bin:
 / $ httpd
 [httpd] RmikuOS httpd listening on 10.0.2.15:8080
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:45026 (fd=2)
+[httpd] conn from 10.0.2.2:49594 (fd=2)
 [httpd] #1 GET /random/64K.bin
 [httpd] #1 served file /random/64K.bin, fd=2
-[tcp-stat] fd=2 dur_ms=1950 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:45032 (fd=2)
-[httpd] #2 GET /random/64K.bin
-[httpd] #2 served file /random/64K.bin, fd=2
-[tcp-stat] fd=2 dur_ms=2205 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:45048 (fd=2)
-[httpd] #3 GET /random/64K.bin
-[httpd] #3 served file /random/64K.bin, fd=2
-[tcp-stat] fd=2 dur_ms=1699 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:45064 (fd=2)
-[httpd] #4 GET /random/64K.bin
-[httpd] #4 served file /random/64K.bin, fd=2
-[tcp-stat] fd=2 dur_ms=1847 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[tcp-stat] fd=2 dur_ms=1841 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
 [tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:45074 (fd=3)
+[httpd] conn from 10.0.2.2:49600 (fd=3)
+[httpd] #2 GET /random/64K.bin
+[httpd] #2 served file /random/64K.bin, fd=3
+[tcp-stat] fd=3 dur_ms=1479 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:49614 (fd=3)
+[httpd] #3 GET /random/64K.bin
+[httpd] #3 served file /random/64K.bin, fd=3
+[tcp-stat] fd=3 dur_ms=1961 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:49628 (fd=3)
+[httpd] #4 GET /random/64K.bin
+[httpd] #4 served file /random/64K.bin, fd=3
+[tcp-stat] fd=3 dur_ms=1770 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:49644 (fd=3)
 [httpd] #5 GET /random/64K.bin
 [httpd] #5 served file /random/64K.bin, fd=3
-[tcp-stat] fd=3 dur_ms=1651 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[tcp-stat] fd=3 dur_ms=1673 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
 [tcp] fd 4 accepted (passive open)
-[httpd] conn from 10.0.2.2:45082 (fd=4)
+[httpd] conn from 10.0.2.2:32778 (fd=4)
 [httpd] #6 GET /random/64K.bin
 [httpd] #6 served file /random/64K.bin, fd=4
-[tcp-stat] fd=4 dur_ms=1586 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 5 accepted (passive open)
-[httpd] conn from 10.0.2.2:43512 (fd=5)
+[tcp-stat] fd=4 dur_ms=1634 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:32788 (fd=4)
 [httpd] #7 GET /random/64K.bin
-[httpd] #7 served file /random/64K.bin, fd=5
-[tcp-stat] fd=5 dur_ms=1800 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 6 accepted (passive open)
-[httpd] conn from 10.0.2.2:43514 (fd=6)
+[httpd] #7 served file /random/64K.bin, fd=4
+[tcp-stat] fd=4 dur_ms=1622 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:32800 (fd=2)
 [httpd] #8 GET /random/64K.bin
-[httpd] #8 served file /random/64K.bin, fd=6
-[tcp-stat] fd=6 dur_ms=1626 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 6 accepted (passive open)
-[httpd] conn from 10.0.2.2:43530 (fd=6)
+[httpd] #8 served file /random/64K.bin, fd=2
+[tcp-stat] fd=2 dur_ms=1577 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:32806 (fd=4)
 [httpd] #9 GET /random/64K.bin
-[httpd] #9 served file /random/64K.bin, fd=6
-[tcp-stat] fd=6 dur_ms=1577 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 7 accepted (passive open)
-[httpd] conn from 10.0.2.2:43540 (fd=7)
+[httpd] #9 served file /random/64K.bin, fd=4
+[tcp-stat] fd=4 dur_ms=1613 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:32812 (fd=5)
 [httpd] #10 GET /random/64K.bin
-[httpd] #10 served file /random/64K.bin, fd=7
-[tcp-stat] fd=7 dur_ms=1729 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:58274 (fd=2)
-[httpd] #11 GET /random/1M.bin
-[httpd] #11 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=34601 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[httpd] #10 served file /random/64K.bin, fd=5
+[tcp-stat] fd=5 dur_ms=1572 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
 [tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:58440 (fd=3)
+[httpd] conn from 10.0.2.2:47612 (fd=3)
+[httpd] #11 GET /random/1M.bin
+[httpd] #11 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=28336 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=timewait
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:42130 (fd=2)
 [httpd] #12 GET /random/1M.bin
-[httpd] #12 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=37595 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:51398 (fd=2)
+[httpd] #12 served file /random/1M.bin, fd=2
+[tcp-stat] fd=2 dur_ms=28833 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:55414 (fd=3)
 [httpd] #13 GET /random/1M.bin
-[httpd] #13 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=44452 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[httpd] #13 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=27788 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=timewait
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:55340 (fd=2)
+[httpd] conn from 10.0.2.2:42266 (fd=2)
 [httpd] #14 GET /random/1M.bin
 [httpd] #14 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=37434 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:48564 (fd=2)
+[tcp-stat] fd=2 dur_ms=28082 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:60116 (fd=3)
 [httpd] #15 GET /random/1M.bin
-[httpd] #15 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=52837 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[httpd] #15 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=27883 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=timewait
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:42886 (fd=2)
+[httpd] conn from 10.0.2.2:39548 (fd=2)
 [httpd] #16 GET /random/1M.bin
 [httpd] #16 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=51739 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp-stat] fd=2 dur_ms=46365 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=fin
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:43446 (fd=2)
+[httpd] conn from 10.0.2.2:35584 (fd=2)
 [httpd] #17 GET /random/1M.bin
 [httpd] #17 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=43366 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp-stat] fd=2 dur_ms=55754 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=fin
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:35238 (fd=2)
+[httpd] conn from 10.0.2.2:57310 (fd=2)
 [httpd] #18 GET /random/1M.bin
 [httpd] #18 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=41455 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:48384 (fd=2)
+[tcp-stat] fd=2 dur_ms=27718 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:56534 (fd=3)
 [httpd] #19 GET /random/1M.bin
-[httpd] #19 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=42802 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:51828 (fd=3)
+[httpd] #19 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=28519 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=fin
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:54050 (fd=2)
 [httpd] #20 GET /random/1M.bin
-[httpd] #20 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=40796 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:43580 (fd=2)
-[httpd] #21 GET /random/1M.bin
-[httpd] #21 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=43466 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[httpd] #20 served file /random/1M.bin, fd=2
+[tcp-stat] fd=2 dur_ms=28832 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=timewait
 [tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:34842 (fd=3)
+[httpd] conn from 10.0.2.2:41768 (fd=3)
+[httpd] #21 GET /random/1M.bin
+[httpd] #21 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=28720 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=timewait
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:57782 (fd=2)
 [httpd] #22 GET /random/1M.bin
-[httpd] #22 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=41811 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:51486 (fd=2)
+[httpd] #22 served file /random/1M.bin, fd=2
+[tcp-stat] fd=2 dur_ms=28458 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:58240 (fd=3)
 [httpd] #23 GET /random/1M.bin
-[httpd] #23 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=39919 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[httpd] #23 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=29626 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=timewait
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:41414 (fd=2)
+[httpd] conn from 10.0.2.2:40810 (fd=2)
 [httpd] #24 GET /random/1M.bin
 [httpd] #24 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=38464 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:52764 (fd=2)
+[tcp-stat] fd=2 dur_ms=29921 bytes=1048679 segs=750 rtx_rto=1 rtx_fast=1 loss=2 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:50644 (fd=3)
 [httpd] #25 GET /random/1M.bin
-[httpd] #25 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=35444 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[httpd] #25 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=30643 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=fin
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:53966 (fd=2)
+[httpd] conn from 10.0.2.2:54286 (fd=2)
 [httpd] #26 GET /random/1M.bin
 [httpd] #26 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=36589 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:50766 (fd=3)
+[tcp-stat] fd=2 dur_ms=30094 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=fin
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:49386 (fd=2)
 [httpd] #27 GET /random/1M.bin
+[httpd] #27 served file /random/1M.bin, fd=2
+[tcp-stat] fd=2 dur_ms=30645 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=fin
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:42568 (fd=2)
+[httpd] #28 GET /random/1M.bin
+[httpd] #28 served file /random/1M.bin, fd=2
+[tcp-stat] fd=2 dur_ms=32839 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=fin
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:41852 (fd=2)
+[httpd] #29 GET /random/1M.bin
+[httpd] #29 served file /random/1M.bin, fd=2
+[tcp-stat] fd=2 dur_ms=33955 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=1 loss=1 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:41848 (fd=3)
+[httpd] #30 GET /random/1M.bin
+[httpd] #30 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=31641 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=2 loss=2 end=timewait
