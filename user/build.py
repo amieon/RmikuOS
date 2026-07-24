@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 USER_DIR = ROOT / "user"
 SRC_DIR = USER_DIR / "src"
 TESTS_DIR = USER_DIR / "tests"
+SAMPLES_DIR = USER_DIR / "samples"
 BUILD_DIR = USER_DIR / "build"
 INCLUDE_DIR = USER_DIR / "include"
 LIB_DIR = USER_DIR / "lib"
@@ -152,6 +153,8 @@ def collect_sources():
             sources.append((p, "system"))
         for p in TESTS_DIR.glob(ext):
             sources.append((p, "test"))
+        for p in SAMPLES_DIR.glob(ext):
+            sources.append((p, "sample"))
     sources.sort(key=lambda x: x[0].name)
     return sources
 
@@ -162,8 +165,10 @@ def build_one(arch: str, source: Path, app_id: int, category):
     stem = source.stem
     if category == "system":
         out_dir = BUILD_DIR / arch / "bin"
-    else:
+    elif category == "test":
         out_dir = BUILD_DIR / arch / "tests"
+    elif category == "sample":
+        out_dir = BUILD_DIR / arch / "samples"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     bin_path = out_dir / f"{app_id}_{stem}.bin"
