@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-LOSSES_ORDER = [0, 5, 10, 20, 50, 100, 200, 500]
+LOSSES_ORDER = [0, 5, 6, 7, 10, 20, 50, 100, 200, 500]
 COLORS = {"gbn": "#d62728", "sr": "#2ca02c"}
 
 
