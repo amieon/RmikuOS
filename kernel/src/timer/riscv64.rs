@@ -11,8 +11,8 @@ static TIMEKEEPER_HART: AtomicUsize = AtomicUsize::new(NO_HART);
 static LOCAL_TICKS: [AtomicUsize; MAX_HARTS] =
     [const { AtomicUsize::new(0) }; MAX_HARTS];
 
-const INTERVAL: usize = 500_000;
-const TICKS_PER_SLICE: usize = 15;
+const INTERVAL: usize = 10_000;
+const TICKS_PER_SLICE: usize = 5;
 
 pub fn init() {
     let hart = crate::arch::hartid();

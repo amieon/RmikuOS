@@ -24,7 +24,8 @@ else
 fi
 
 # 确保基础目录存在
-mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/samples" "$ROOT/fat" "$ROOT/gcn" "$ROOT/jvm"
+mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/sched" \
+"$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/samples" "$ROOT/fat" "$ROOT/gcn" "$ROOT/jvm"
 
 # 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then
@@ -48,6 +49,15 @@ for f in user/build/${ARCH}/samples/*.elf; do
   clean="$(printf "%s" "$base" | sed -E 's/^([0-9]+_)+//')"  
   cp "$f" "$ROOT/samples/$clean"
 done
+
+# 把编译出来的程序放进 /sched
+for f in user/build/${ARCH}/sched/*.elf; do
+  [ -e "$f" ] || continue
+  base="$(basename "$f" .elf)"        
+  clean="$(printf "%s" "$base" | sed -E 's/^([0-9]+_)+//')"  
+  cp "$f" "$ROOT/sched/$clean"
+done
+
 
 # 把编译出来的测试程序放进 /tests
 for f in user/build/${ARCH}/tests/*.elf; do
