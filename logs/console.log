@@ -2980,3 +2980,5 @@ external commands are in /bin:
 [tcp] fd 3 accepted (passive open)
 [httpd] conn from 10.0.2.2:33496 (fd=3)
 [httpd] #15 GET /random/1M.bin
+[httpd] #15 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=42013 bytes=1048679 segs=770 rtx_rto=0 rtx_fast=128 loss=128 end=fin

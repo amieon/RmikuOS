@@ -45,7 +45,7 @@ const OOO_CAP: usize = 16384;
 
 
 // ---- 实验装置:每发 LOSS_EVERY 个数据段丢 1 个;0 = 关闭 ----
-const LOSS_EVERY: u32 = 500;
+const LOSS_EVERY: u32 = 0;
 
 #[repr(C, packed)]
 pub struct TcpHeader {
