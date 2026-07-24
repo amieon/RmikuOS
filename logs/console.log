@@ -1,4 +1,4 @@
-     Removed 803 files, 310.0MiB total
+     Removed 805 files, 312.6MiB total
 === 构建用户程序 (riscv64) ===
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/abcc/RmikuOS/user/rust/programs/editor/Cargo.toml
@@ -6,7 +6,7 @@ workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/abcc/RmikuOS/user/rust/programs/files/Cargo.toml
 workspace: /home/abcc/RmikuOS/user/rust/Cargo.toml
-    Finished `release` profile [optimized] target(s) in 0.04s
+    Finished `release` profile [optimized] target(s) in 0.03s
 [user] cache hit app0: 01_busy.c, 3292 bytes
 [user] cache hit app1: 02_raw.S, 224 bytes
 [user] cache hit app2: 03_hello.c, 3324 bytes
@@ -583,15 +583,15 @@ created target/fat-riscv64.img (fresh FAT16)
 === 编译内核 (riscv64, debug, LOG=warn) ===
    Compiling find-msvc-tools v0.1.9
    Compiling shlex v1.3.0
-   Compiling crc-catalog v2.5.0
    Compiling bitflags v2.11.1
+   Compiling crc-catalog v2.5.0
    Compiling crc v3.4.0
    Compiling cc v1.2.62
-   Compiling spin v0.10.0
    Compiling log v0.4.30
-   Compiling buddy_system_allocator v0.13.0
+   Compiling spin v0.10.0
    Compiling ext4-view v0.9.3
    Compiling fatfs v0.4.0 (/home/abcc/RmikuOS/third_party/fatfs)
+   Compiling buddy_system_allocator v0.13.0
 warning: hiding a lifetime that's elided elsewhere is confusing
    --> third_party/fatfs/src/fs.rs:630:21
     |
@@ -955,9 +955,9 @@ warning: unused import: `SocketAddr`
   |                                                         ^^^^^^^^^^
 
 warning: unused import: `crate::sync::spin::Mutex`
- --> kernel/src/drivers/net/tcp.rs:7:5
+ --> kernel/src/drivers/net/tcp.rs:8:5
   |
-7 | use crate::sync::spin::Mutex;
+8 | use crate::sync::spin::Mutex;
   |     ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: unused imports: `read_volatile` and `write_volatile`
@@ -2808,7 +2808,7 @@ warning: creating a shared reference to mutable static
    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
 
 warning: `RmikuOS` (bin "RmikuOS") generated 300 warnings (run `cargo fix --bin "RmikuOS" -p RmikuOS` to apply 73 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.61s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.15s
 
 === 启动 QEMU (riscv64, mode=debug, net=user) ===
 KERNEL: target/riscv64gc-unknown-none-elf/debug/RmikuOS
@@ -2849,7 +2849,7 @@ Standard SBI Extensions     : ipi,pmu,srst,sse,hsm,rfnc,fwft,time,base,legacy,db
 Experimental SBI Extensions : none
 
 Domain0 Name                : root
-Domain0 Boot HART           : 0
+Domain0 Boot HART           : 3
 Domain0 HARTs               : 0*,1*,2*,3*,4*,5*,6*,7*
 Domain0 Region00            : 0x0000000080000000-0x000000008003ffff M: (F,R,X) S/U: ()
 Domain0 Region01            : 0x0000000080040000-0x000000008007ffff M: (F,R,W) S/U: ()
@@ -2865,7 +2865,7 @@ Domain0 Next Mode           : S-mode
 Domain0 SysReset            : yes
 Domain0 SysSuspend          : yes
 
-Boot HART ID                : 0
+Boot HART ID                : 3
 Boot HART Domain            : root
 Boot HART Priv Version      : v1.12
 Boot HART Base ISA          : rv64imafdch
@@ -2908,152 +2908,75 @@ external commands are in /bin:
 / $ httpd
 [httpd] RmikuOS httpd listening on 10.0.2.15:8080
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:40918 (fd=2)
+[httpd] conn from 10.0.2.2:45636 (fd=2)
 [httpd] #1 GET /random/64K.bin
 [httpd] #1 served file /random/64K.bin, fd=2
-[tcp-stat] fd=2 dur_ms=1785 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:40922 (fd=2)
+[tcp-stat] fd=2 dur_ms=2493 bytes=65637 segs=50 rtx_rto=1 rtx_fast=7 loss=8 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:45644 (fd=3)
 [httpd] #2 GET /random/64K.bin
-[httpd] #2 served file /random/64K.bin, fd=2
-[tcp-stat] fd=2 dur_ms=1856 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:40932 (fd=3)
-[httpd] #3 GET /random/64K.bin
-[httpd] #3 served file /random/64K.bin, fd=3
-[tcp-stat] fd=3 dur_ms=1613 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:54960 (fd=3)
-[httpd] #4 GET /random/64K.bin
-[httpd] #4 served file /random/64K.bin, fd=3
-[tcp-stat] fd=3 dur_ms=1980 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:54970 (fd=3)
-[httpd] #5 GET /random/64K.bin
-[httpd] #5 served file /random/64K.bin, fd=3
-[tcp-stat] fd=3 dur_ms=1668 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[httpd] #2 served file /random/64K.bin, fd=3
+[tcp-stat] fd=3 dur_ms=2210 bytes=65637 segs=48 rtx_rto=1 rtx_fast=7 loss=8 end=timewait
 [tcp] fd 4 accepted (passive open)
-[httpd] conn from 10.0.2.2:54974 (fd=4)
+[httpd] conn from 10.0.2.2:43888 (fd=4)
+[httpd] #3 GET /random/64K.bin
+[httpd] #3 served file /random/64K.bin, fd=4
+[tcp-stat] fd=4 dur_ms=2456 bytes=65637 segs=48 rtx_rto=1 rtx_fast=7 loss=8 end=timewait
+[tcp] fd 5 accepted (passive open)
+[httpd] conn from 10.0.2.2:43892 (fd=5)
+[httpd] #4 GET /random/64K.bin
+[httpd] #4 served file /random/64K.bin, fd=5
+[tcp-stat] fd=5 dur_ms=2336 bytes=65637 segs=49 rtx_rto=0 rtx_fast=8 loss=8 end=timewait
+[tcp] fd 6 accepted (passive open)
+[httpd] conn from 10.0.2.2:43908 (fd=6)
+[httpd] #5 GET /random/64K.bin
+[httpd] #5 served file /random/64K.bin, fd=6
+[tcp-stat] fd=6 dur_ms=1714 bytes=65637 segs=49 rtx_rto=0 rtx_fast=8 loss=8 end=timewait
+[tcp] fd 7 accepted (passive open)
+[httpd] conn from 10.0.2.2:43914 (fd=7)
 [httpd] #6 GET /random/64K.bin
-[httpd] #6 served file /random/64K.bin, fd=4
-[tcp-stat] fd=4 dur_ms=1758 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 5 accepted (passive open)
-[httpd] conn from 10.0.2.2:54982 (fd=5)
-[httpd] #7 GET /random/64K.bin
-[httpd] #7 served file /random/64K.bin, fd=5
-[tcp-stat] fd=5 dur_ms=1836 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 5 accepted (passive open)
-[httpd] conn from 10.0.2.2:54990 (fd=5)
-[httpd] #8 GET /random/64K.bin
-[httpd] #8 served file /random/64K.bin, fd=5
-[tcp-stat] fd=5 dur_ms=1835 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[httpd] #6 served file /random/64K.bin, fd=7
+[tcp-stat] fd=7 dur_ms=1715 bytes=65637 segs=50 rtx_rto=0 rtx_fast=8 loss=8 end=timewait
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:55002 (fd=2)
+[httpd] conn from 10.0.2.2:43928 (fd=2)
+[httpd] #7 GET /random/64K.bin
+[httpd] #7 served file /random/64K.bin, fd=2
+[tcp-stat] fd=2 dur_ms=2049 bytes=65637 segs=50 rtx_rto=1 rtx_fast=8 loss=9 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:34536 (fd=3)
+[httpd] #8 GET /random/64K.bin
+[httpd] #8 served file /random/64K.bin, fd=3
+[tcp-stat] fd=3 dur_ms=1720 bytes=65637 segs=49 rtx_rto=0 rtx_fast=8 loss=8 end=timewait
+[tcp] fd 4 accepted (passive open)
+[httpd] conn from 10.0.2.2:34544 (fd=4)
 [httpd] #9 GET /random/64K.bin
-[httpd] #9 served file /random/64K.bin, fd=2
-[tcp-stat] fd=2 dur_ms=1683 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[httpd] #9 served file /random/64K.bin, fd=4
+[tcp-stat] fd=4 dur_ms=1995 bytes=65637 segs=48 rtx_rto=0 rtx_fast=8 loss=8 end=timewait
 [tcp] fd 5 accepted (passive open)
-[httpd] conn from 10.0.2.2:57758 (fd=5)
+[httpd] conn from 10.0.2.2:34496 (fd=5)
 [httpd] #10 GET /random/64K.bin
 [httpd] #10 served file /random/64K.bin, fd=5
-[tcp-stat] fd=5 dur_ms=1645 bytes=65637 segs=48 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:57770 (fd=3)
+[tcp-stat] fd=5 dur_ms=1551 bytes=65637 segs=50 rtx_rto=0 rtx_fast=8 loss=8 end=fin
+[tcp] fd 2 accepted (passive open)
+[httpd] conn from 10.0.2.2:34510 (fd=2)
 [httpd] #11 GET /random/1M.bin
-[httpd] #11 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=29940 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:51318 (fd=2)
+[httpd] #11 served file /random/1M.bin, fd=2
+[tcp-stat] fd=2 dur_ms=35456 bytes=1048679 segs=764 rtx_rto=2 rtx_fast=126 loss=128 end=timewait
+[tcp] fd 3 accepted (passive open)
+[httpd] conn from 10.0.2.2:54804 (fd=3)
 [httpd] #12 GET /random/1M.bin
-[httpd] #12 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=30500 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[httpd] #12 served file /random/1M.bin, fd=3
+[tcp-stat] fd=3 dur_ms=34833 bytes=1048679 segs=763 rtx_rto=1 rtx_fast=126 loss=127 end=timewait
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:36136 (fd=2)
+[httpd] conn from 10.0.2.2:58170 (fd=2)
 [httpd] #13 GET /random/1M.bin
 [httpd] #13 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=30360 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
+[tcp-stat] fd=2 dur_ms=38089 bytes=1048679 segs=772 rtx_rto=0 rtx_fast=128 loss=128 end=fin
 [tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:54894 (fd=2)
+[httpd] conn from 10.0.2.2:35544 (fd=2)
 [httpd] #14 GET /random/1M.bin
 [httpd] #14 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=29245 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
+[tcp-stat] fd=2 dur_ms=38754 bytes=1048679 segs=760 rtx_rto=0 rtx_fast=127 loss=127 end=timewait
 [tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:47660 (fd=3)
+[httpd] conn from 10.0.2.2:33496 (fd=3)
 [httpd] #15 GET /random/1M.bin
-[httpd] #15 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=29439 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:35218 (fd=2)
-[httpd] #16 GET /random/1M.bin
-[httpd] #16 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=30554 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:53028 (fd=2)
-[httpd] #17 GET /random/1M.bin
-[httpd] #17 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=29934 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:35040 (fd=3)
-[httpd] #18 GET /random/1M.bin
-[httpd] #18 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=29835 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:35952 (fd=2)
-[httpd] #19 GET /random/1M.bin
-[httpd] #19 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=29323 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:58896 (fd=2)
-[httpd] #20 GET /random/1M.bin
-[httpd] #20 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=29710 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:47614 (fd=3)
-[httpd] #21 GET /random/1M.bin
-[httpd] #21 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=31874 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:55558 (fd=2)
-[httpd] #22 GET /random/1M.bin
-[httpd] #22 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=30521 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:44330 (fd=2)
-[httpd] #23 GET /random/1M.bin
-[httpd] #23 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=29089 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:46158 (fd=2)
-[httpd] #24 GET /random/1M.bin
-[httpd] #24 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=30158 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:57058 (fd=2)
-[httpd] #25 GET /random/1M.bin
-[httpd] #25 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=28796 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:41270 (fd=2)
-[httpd] #26 GET /random/1M.bin
-[httpd] #26 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=34307 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:52918 (fd=2)
-[httpd] #27 GET /random/1M.bin
-[httpd] #27 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=31945 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=timewait
-[tcp] fd 3 accepted (passive open)
-[httpd] conn from 10.0.2.2:54856 (fd=3)
-[httpd] #28 GET /random/1M.bin
-[httpd] #28 served file /random/1M.bin, fd=3
-[tcp-stat] fd=3 dur_ms=39597 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:60984 (fd=2)
-[httpd] #29 GET /random/1M.bin
-[httpd] #29 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=42099 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin
-[tcp] fd 2 accepted (passive open)
-[httpd] conn from 10.0.2.2:51660 (fd=2)
-[httpd] #30 GET /random/1M.bin
-[httpd] #30 served file /random/1M.bin, fd=2
-[tcp-stat] fd=2 dur_ms=44674 bytes=1048679 segs=750 rtx_rto=0 rtx_fast=0 loss=0 end=fin

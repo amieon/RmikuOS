@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-VALUES=(5 10 20 50 100 200 500 0)
+VALUES=(6 7)
 TARGET_FILE="./kernel/src/drivers/net/tcp.rs"
 TEST_SCRIPT="./scripts/sr_run.sh"
 LOG_DIR="logs"
@@ -21,7 +21,7 @@ for X in "${VALUES[@]}"; do
     sleep 1
 
     # 1. 改代码
-    sed -i "42s/const LOSS_EVERY: u32 = [0-9]\+;/const LOSS_EVERY: u32 = $X;/" "$TARGET_FILE"
+    sed -i "48s/const LOSS_EVERY: u32 = [0-9]\+;/const LOSS_EVERY: u32 = $X;/" "$TARGET_FILE"
     echo "代码: $(head -n 48 "$TARGET_FILE" | tail -n 1)"
 
     # 2. 准备标记文件
@@ -51,7 +51,7 @@ puts "httpd 已启动"
 
 # 后台启动测试脚本（带 &，system 立即返回，不阻塞 expect）
 # 输出同时显示在终端并保存到文件，跑完 touch done 文件
-system "bash __TEST_SCRIPT__ gbn __X__ 20 1M 2>&1 | tee __LOG_DIR__/gbn_test___X__.log; touch __DONE_FILE__" &
+system "bash __TEST_SCRIPT__ sr __X__ 20 1M 2>&1 | tee __LOG_DIR__/sr_test___X__.log; touch __DONE_FILE__" &
 
 puts "测试脚本已后台启动，等待完成中..."
 
@@ -91,7 +91,7 @@ EXPECT_EOF
 
     echo "✅ 实验 $X 完成"
     echo "   控制台日志: logs/console.log"
-    echo "   测试日志:   ${LOG_DIR}/gbn_test_${X}.log"
+    echo "   测试日志:   ${LOG_DIR}/sr_test_${X}.log"
     sleep 2
 done
 
