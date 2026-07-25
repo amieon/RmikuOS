@@ -85,6 +85,58 @@ ARCH_CONFIG = {
 
 # ==================== 缓存工具 ====================
 
+# ==================== 缓存工具 ====================
+
+def shared_deps_hash(arch: str) -> str:
+    """
+    计算所有共享依赖的联合 hash。
+    任何一个文件变动 → 所有用户态二进制缓存失效。
+    覆盖:
+      - include/ 下所有头文件 (user.h 等)
+      - lib/ 下 string.c, cpp_runtime.cpp, crt0, runtime syscall
+      - 链接脚本
+      - user/cpp_runtime/ 下头文件 (C++ 项目用)
+    """
+    cfg = ARCH_CONFIG[arch]
+    h = hashlib.sha256()
+
+    dep_paths = []
+
+    # 1) 公共头文件
+    if INCLUDE_DIR.exists():
+        dep_paths += sorted(INCLUDE_DIR.glob("*.h"))
+
+    # 2) 公共 C/C++ 库源文件
+    if LIB_DIR.exists():
+        for pat in ("*.c", "*.cpp", "*.S", "*.h"):
+            dep_paths += sorted(LIB_DIR.glob(pat))
+
+    # 3) crt0 / runtime (架构相关,已在 ARCH_CONFIG 里)
+    for key in ("crt0", "runtime"):
+        p = cfg.get(key)
+        if p and Path(p).exists():
+            dep_paths.append(Path(p))
+
+    # 4) 链接脚本
+    linker = cfg.get("linker")
+    if linker and Path(linker).exists():
+        dep_paths.append(Path(linker))
+
+    # 5) C++ runtime 头文件
+    cpp_rt_dir = USER_DIR / "cpp_runtime"
+    if cpp_rt_dir.exists():
+        dep_paths += sorted(cpp_rt_dir.glob("*.h"))
+
+    # 去重 + 排序,保证顺序稳定
+    seen = set()
+    for p in sorted(set(dep_paths)):
+        rp = str(p.resolve())
+        if rp not in seen:
+            seen.add(rp)
+            h.update(file_sha256(p).encode())
+
+    return h.hexdigest()
+
 def load_cache():
     if CACHE_FILE.exists():
         try:
@@ -182,7 +234,14 @@ def build_one(arch: str, source: Path, app_id: int, category):
     arch_cache = get_arch_cache(arch)
     single_cache = arch_cache.get("single", {})
     src_key = str(source.resolve())
-    current_hash = file_sha256(source)
+
+    h = hashlib.sha256()
+    h.update(file_sha256(source).encode())
+    for hdr in sorted(source.parent.glob("*.h")):
+        h.update(file_sha256(hdr).encode())
+    h.update(shared_deps_hash(arch).encode()) 
+    current_hash = h.hexdigest()
+
 
     if single_cache.get(src_key) == current_hash and bin_path.exists():
         data = bin_path.read_bytes()
@@ -441,6 +500,8 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
     # 保守策略：如果 src_dir 自身有 .h 也计入
     for h in sorted(src_dir.glob("*.h")):
         files_hash[str(h.resolve())] = file_sha256(h)
+
+    files_hash["__shared_deps__"] = shared_deps_hash(arch)
 
     cached_entry = proj_cache.get(proj_key)
     if cached_entry and cached_entry.get("files") == files_hash:
