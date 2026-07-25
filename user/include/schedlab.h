@@ -503,11 +503,14 @@ static int sl_run(const sl_cfg *cfg) {
     sl_t0 = get_ticks();
     sl_t_end = sl_t0 + cfg->total_ticks;
 
-    for (int i = 0; i < sl_ngroups; i++) {
-        prev_run[i] = prev_jobs[i] = prev_miss[i] = prev_late[i] = 0;
-    }
 
-    /* 拉起负载组;in-parent jobs 组在监控进程内直接起线程 */
+    unsigned long prev_run[SL_MAX_GROUPS]  = {0};
+    unsigned long prev_jobs[SL_MAX_GROUPS] = {0};
+    unsigned long prev_miss[SL_MAX_GROUPS] = {0};
+    unsigned long prev_late[SL_MAX_GROUPS] = {0};
+    printf("# prev_baseline_reset ngroups=%d\n", sl_ngroups);  /* 哨兵,见下 */
+
+
     for (int i = 0; i < sl_ngroups; i++) {
         sl_group_t *g = &sl_groups[i];
         if (g->flags & SL_F_IN_PARENT) {
@@ -525,22 +528,18 @@ static int sl_run(const sl_cfg *cfg) {
         g->pid = pid;
     }
 
-    /* 起始对齐:等 start_delay 再进第一个窗口 */
+
     long d0 = (long)(sl_t0 + start_delay) - (long)get_ticks();
     if (d0 > 0) sleep((usize)d0);
 
     printf("# schedlab win=%d total=%lu groups=%d\n",
            sl_window, cfg->total_ticks, sl_ngroups);
 
-    static unsigned long prev_run[SL_MAX_GROUPS];
-    static unsigned long prev_jobs[SL_MAX_GROUPS];
-    static unsigned long prev_miss[SL_MAX_GROUPS];
-    static unsigned long prev_late[SL_MAX_GROUPS];
     int win = 0;
     while (get_ticks() < sl_t_end) {
         sleep((usize)sl_window);
         win++;
-        static sl_window_t w;
+        static sl_window_t w;          /* 这个 static 留着无所谓,w 每窗口被整体重写 */
         w.remain_windows = (int)((sl_t_end > get_ticks()
             ? sl_t_end - get_ticks() : 0) / (unsigned long)sl_window);
         sl_measure_window(&w, win, alpha, prev_run, prev_jobs, prev_miss, prev_late);
