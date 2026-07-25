@@ -503,6 +503,10 @@ static int sl_run(const sl_cfg *cfg) {
     sl_t0 = get_ticks();
     sl_t_end = sl_t0 + cfg->total_ticks;
 
+    for (int i = 0; i < sl_ngroups; i++) {
+        prev_run[i] = prev_jobs[i] = prev_miss[i] = prev_late[i] = 0;
+    }
+
     /* 拉起负载组;in-parent jobs 组在监控进程内直接起线程 */
     for (int i = 0; i < sl_ngroups; i++) {
         sl_group_t *g = &sl_groups[i];
