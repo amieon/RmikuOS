@@ -1,0 +1,1552 @@
+=== 构建用户程序 (riscv64) ===
+[user] cache hit app0: 01_busy.c, 3292 bytes
+[user] cache hit app1: 02_raw.S, 224 bytes
+[user] cache hit app2: 03_hello.c, 3324 bytes
+[user] cache hit app3: 04_fork_wait.c, 4276 bytes
+[user] cache hit app4: 05_getpid_sleep.c, 3796 bytes
+[user] cache hit app5: 06_estimate_pi.c, 6404 bytes
+[user] cache hit app6: 07_fibonacci.c, 6748 bytes
+[user] cache hit app7: 08_cat_motd.c, 3604 bytes
+[user] cache hit app8: 09_fs_stress.c, 6188 bytes
+[user] cache hit app9: 10_fs_stress2.c, 10252 bytes
+[user] cache hit app10: 11_open_exec.c, 3980 bytes
+[user] cache hit app11: 12_stat_test.c, 4212 bytes
+[user] cache hit app12: 13_fork_stride_test.c, 5060 bytes
+[user] cache hit app13: 14_thread_test.c, 6220 bytes
+[user] cache hit app14: 15_mmap_test.c, 3564 bytes
+[user] cache hit app15: 16_mmap_stress.c, 4652 bytes
+[user] cache hit app16: 17_malloc_test.c, 6404 bytes
+[user] cache hit app17: 18_elf_bss_test.c, 3572 bytes
+[user] cache hit app18: 19_little_stress.c, 8660 bytes
+[user] cache hit app19: 20_little_stress2.c, 11149 bytes
+[user] cache hit app20: 21_malloc_test.c, 8388 bytes
+[user] cache hit app21: 22_lock_test.c, 5972 bytes
+[user] cache hit app22: 23_thread_malloc_test.c, 5932 bytes
+[user] cache hit app23: 24_mmap_reuse_test.c, 4228 bytes
+[user] cache hit app24: 25_thread_stack_reuse_test.c, 6004 bytes
+[user] cache hit app25: 26_sqrt_schedule_test.c, 7652 bytes
+[user] cache hit app26: 27_thread_stride_test.c, 6796 bytes
+[user] cache hit app27: 28_mixed_workload_sched_test.c, 8436 bytes
+[user] cache hit app28: 29_ticket_syscall_test.c, 6820 bytes
+[user] cache hit app29: 30_alpha_sched_test.c, 8940 bytes
+[user] cache hit app30: 31_reset_sched_test.c, 4172 bytes
+[user] cache hit app31: 32_sched_stat_test.c, 4228 bytes
+[user] cache hit app32: 33_alpha_sched_stat_test.c, 10436 bytes
+[user] cache hit app33: 34_edge_deadline_test.c, 12508 bytes
+[user] cache hit app34: 35_alpha_arg_test.c, 10060 bytes
+[user] cache hit app35: 36_edge_deadline_arg_test.c, 13676 bytes
+[user] cache hit app36: 37_adaptive_alpha_test.c, 20436 bytes
+[user] cache hit app37: 38_stride_ticket_test.c, 7964 bytes
+[user] cache hit app38: 39_smoother_adaptive_alpha_test.c, 22580 bytes
+[user] cache hit app39: 40_dynamic_load_exp.c, 23388 bytes
+[user] cache hit app40: 41_pipe_test.c, 9444 bytes
+[user] cache hit app41: 42_pipe_stress.c, 11060 bytes
+[user] cache hit app42: 43_directly_return.c, 256 bytes
+[user] cache hit app43: 44_pipe_writer.c, 3188 bytes
+[user] cache hit app44: 45_pipe_reader.c, 3348 bytes
+[user] cache hit app45: 46_test_tmpfs_rw.c, 3516 bytes
+[user] cache hit app46: 47_crud_test.c, 7548 bytes
+[user] cache hit app47: 48_echo_args.c, 3236 bytes
+[user] cache hit app48: 49_cat_stdin.c, 3156 bytes
+[user] cache hit app49: 50_tick_time.c, 3604 bytes
+[user] cache hit app50: 51_hello_rust.rs, 136 bytes
+[user] cache hit app51: 52_rust_fibonacci.rs, 8144 bytes
+[user] cache hit app52: 53_rust_estimate_pi.rs, 8112 bytes
+[user] cache hit app53: 54_open_test.c, 5100 bytes
+[user] cache hit app54: 55_open_test2.c, 5852 bytes
+[user] cache hit app55: 56_cpp_test.cpp, 3296 bytes
+[user] cache hit app56: 57_cpp_runtime.cpp, 3296 bytes
+[user] cache hit app57: 58_vector_test.cpp, 7576 bytes
+[user] cache hit app58: 59_cpp_test2.cpp, 3704 bytes
+[user] cache hit app59: 60_matmul_test.cpp, 10848 bytes
+[user] cache hit app60: 61_cmath_test.cpp, 8800 bytes
+[user] cache hit app61: 62_fp_test.cpp, 4408 bytes
+[user] cache hit app62: 63_cmath_test2.cpp, 20992 bytes
+[user] cache hit app63: 64_test_cmath_fdlibm.cpp, 9728 bytes
+[user] cache hit app64: 65_cpp_compat_test.cpp, 15588 bytes
+[user] cache hit app65: 66_cpp_vector_test.cpp, 18916 bytes
+[user] cache hit app66: 67_cpp_random_test.cpp, 15324 bytes
+[user] cache hit app67: 68_cpp_string_test.cpp, 21076 bytes
+[user] cache hit app68: 69_cpp_printf_test.cpp, 11996 bytes
+[user] cache hit app69: 70_cpp_std_bridge_test.cpp, 25948 bytes
+[user] cache hit app70: 71_cpp_ifstream.cpp, 16140 bytes
+[user] cache hit app71: 72_kill_oneself_test.c, 8412 bytes
+[user] cache hit app72: 73_loop_forever.c, 8268 bytes
+[user] cache hit app73: 74_illegal_insn.c, 8292 bytes
+[user] cache hit app74: 75_smp_cpu_bench.c, 9852 bytes
+[user] cache hit app75: 76_smp_syscall_bench.c, 9196 bytes
+[user] cache hit app76: 77_smp_fork_wait_bench.c, 9004 bytes
+[user] cache hit app77: 78_smp_cpu_probe.c, 10452 bytes
+[user] cache hit app78: 79_udp_test.c, 10100 bytes
+[user] cache hit app79: 80_tcp_test.c, 9772 bytes
+[user] cache hit app80: 81_schedlab_demo.c, 17244 bytes
+[user] cache hit app81: calibrate.c, 22516 bytes
+[user] cache hit app82: cat.c, 3852 bytes
+[user] cache hit app83: echo.c, 3292 bytes
+[user] cache hit app84: getip.c, 8396 bytes
+[user] cache hit app85: grep.c, 3724 bytes
+[user] cache hit app86: ls.c, 5156 bytes
+[user] cache hit app87: ping.c, 10908 bytes
+[user] cache hit app88: run_tick.c, 9108 bytes
+[user] cache hit app89: run_tick_and_time.c, 9348 bytes
+[user] cache hit app90: run_time.c, 9156 bytes
+[user] cache hit app91: schedlab.c, 20004 bytes
+[user] cache hit app92: setip.c, 8828 bytes
+[user] cache hit app93: sexp1_mech.c, 17828 bytes
++ riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/crt0_riscv64.S -o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge_crt0.o
++ riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/sched/sexp2_edge.c -o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge.o
++ riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/syscall_riscv64.S -o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge_runtime.o
++ riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -nostdlib -nostartfiles -static -I /home/abcc/RmikuOS/user/include -c /home/abcc/RmikuOS/user/lib/string.c -o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge_string.o
++ riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64 -nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none -Wl,--no-relax -T /home/abcc/RmikuOS/user/linker-riscv64.ld /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge_crt0.o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge.o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge_runtime.o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge_string.o -o /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge.elf
++ riscv64-unknown-elf-objcopy -O binary -j .text /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge.elf /home/abcc/RmikuOS/user/build/riscv64/sched/94_sexp2_edge.bin
+[user] built app94: sexp2_edge.c, 18356 bytes
+[user] cache hit app95: sexp3_aimd.c, 18564 bytes
+[user] cache hit app96: shell.c, 34952 bytes
+[user] cache hit app97: tftp.c, 11036 bytes
+[user] building rust workspace (riscv64) ...
++ cargo build --release --target riscv64gc-unknown-none-elf
+[user] rust workspace program -> bank_system
+[user] rust workspace program -> edit_past
+[user] rust workspace program -> editor
+[user] rust workspace program -> files
+[user] rust workspace program -> float_test
+[user] rust workspace program -> library_system
+[user] rust workspace program -> my_math_constants
+[user] rust workspace program -> rust_hello
+[user] rust workspace program -> rust_rust
+[user] rust workspace program -> try_args
+[user] rust workspace program -> try_vec
+[user] rust workspace program -> tsur_tsur
+[user] rust workspace: 12 program(s) built
+[user] cache hit project: container_demo
+[user] cache hit project: jvm
+[user] cache hit project: httpd
+[user] cache hit project: math_demo
+[user] cache hit project: gcn
+[user] cache hit java: BenchAlu
+[user] cache hit java: BenchArray
+[user] cache hit java: BenchBranch
+[user] cache hit java: BenchCall
+[user] cache hit java: BenchMul
+[user] cache hit java: BenchObject
+[user] cache hit java: BenchString
+[user] cache hit java: Fast_AAA
+[user] cache hit java: bench
+[user] cache hit java: fibonacci_java
+[user] cache hit java: file_demo
+[user] cache hit java: hello_java
+[user] cache hit java: input_demo
+[user] cache hit java: mem_demo
+[user] cache hit java: net_demo
+[user] cache hit java: proc_demo
+[user] cache hit java: ray
+[user] cache hit java: series_demo
+[user] cache hit java: thread_demo
+=== 构建 ext4 rootfs (riscv64) ===
+=== 构建 ext4 rootfs (riscv64) ===
+copy rootfs overlay: user/rootfs -> target/fsroot-riscv64
+  [c] httpd -> /programs/httpd
+  [c] math_demo -> /programs/math_demo
+  [cpp] container_demo -> /programs/container_demo
+  [cpp] jvm -> /programs/jvm
+  [gcn] -> /gcn/
+  [jvm] bench -> /jvm/bench/
+  [jvm] BenchAlu -> /jvm/BenchAlu/
+  [jvm] BenchArray -> /jvm/BenchArray/
+  [jvm] BenchBranch -> /jvm/BenchBranch/
+  [jvm] BenchCall -> /jvm/BenchCall/
+  [jvm] BenchMul -> /jvm/BenchMul/
+  [jvm] BenchObject -> /jvm/BenchObject/
+  [jvm] BenchString -> /jvm/BenchString/
+  [jvm] Fast_AAA -> /jvm/Fast_AAA/
+  [jvm] fibonacci_java -> /jvm/fibonacci_java/
+  [jvm] file_demo -> /jvm/file_demo/
+  [jvm] hello_java -> /jvm/hello_java/
+  [jvm] input_demo -> /jvm/input_demo/
+  [jvm] mem_demo -> /jvm/mem_demo/
+  [jvm] net_demo -> /jvm/net_demo/
+  [jvm] proc_demo -> /jvm/proc_demo/
+  [jvm] ray -> /jvm/ray/
+  [jvm] rmiku_classes -> /jvm/rmiku_classes/
+  [jvm] series_demo -> /jvm/series_demo/
+  [jvm] thread_demo -> /jvm/thread_demo/
+rootfs content:
+target/fsroot-riscv64
+target/fsroot-riscv64/bin
+target/fsroot-riscv64/bin/cat
+target/fsroot-riscv64/bin/echo
+target/fsroot-riscv64/bin/getip
+target/fsroot-riscv64/bin/grep
+target/fsroot-riscv64/bin/ls
+target/fsroot-riscv64/bin/ping
+target/fsroot-riscv64/bin/run_tick
+target/fsroot-riscv64/bin/run_tick_and_time
+target/fsroot-riscv64/bin/run_time
+target/fsroot-riscv64/bin/setip
+target/fsroot-riscv64/bin/shell
+target/fsroot-riscv64/bin/tftp
+target/fsroot-riscv64/bin/tick
+target/fsroot-riscv64/dev
+target/fsroot-riscv64/etc
+target/fsroot-riscv64/etc/motd
+target/fsroot-riscv64/etc/path
+target/fsroot-riscv64/fat
+target/fsroot-riscv64/gcn
+target/fsroot-riscv64/gcn/cora
+target/fsroot-riscv64/gcn/cora/cora.cites
+target/fsroot-riscv64/gcn/cora/cora.content
+target/fsroot-riscv64/gcn/cora/README
+target/fsroot-riscv64/gcn/gradcheck
+target/fsroot-riscv64/gcn/main
+target/fsroot-riscv64/gcn/train_cora
+target/fsroot-riscv64/gcn/train_cora_GTA
+target/fsroot-riscv64/home
+target/fsroot-riscv64/home/learn
+target/fsroot-riscv64/home/learn/learn_pci.md
+target/fsroot-riscv64/home/learn/learn_virtio-blk.md
+target/fsroot-riscv64/home/miku
+target/fsroot-riscv64/home/miku/readme.txt
+target/fsroot-riscv64/home/miku/test_for_redirection.txt
+target/fsroot-riscv64/jvm
+target/fsroot-riscv64/jvm/bench
+target/fsroot-riscv64/jvm/BenchAlu
+target/fsroot-riscv64/jvm/BenchAlu/BenchAlu.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchAlu/Rmiku.class
+target/fsroot-riscv64/jvm/BenchArray
+target/fsroot-riscv64/jvm/BenchArray/BenchArray.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchArray/Rmiku.class
+target/fsroot-riscv64/jvm/bench/Bench.class
+target/fsroot-riscv64/jvm/BenchBranch
+target/fsroot-riscv64/jvm/BenchBranch/BenchBranch.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchBranch/Rmiku.class
+target/fsroot-riscv64/jvm/BenchCall
+target/fsroot-riscv64/jvm/BenchCall/BenchCall.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchCall/Rmiku.class
+target/fsroot-riscv64/jvm/BenchMul
+target/fsroot-riscv64/jvm/BenchMul/BenchMul.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchMul/Rmiku.class
+target/fsroot-riscv64/jvm/BenchObject
+target/fsroot-riscv64/jvm/BenchObject/BenchObject$Point.class
+target/fsroot-riscv64/jvm/BenchObject/BenchObject.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchObject/Rmiku.class
+target/fsroot-riscv64/jvm/bench/Rmiku$IO.class
+target/fsroot-riscv64/jvm/bench/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/bench/Rmiku$Net.class
+target/fsroot-riscv64/jvm/bench/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/bench/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/bench/Rmiku.class
+target/fsroot-riscv64/jvm/BenchString
+target/fsroot-riscv64/jvm/BenchString/BenchString.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$IO.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Net.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/BenchString/Rmiku.class
+target/fsroot-riscv64/jvm/Fast_AAA
+target/fsroot-riscv64/jvm/Fast_AAA/Fast_AAA.class
+target/fsroot-riscv64/jvm/Fast_AAA/Rmiku$IO.class
+target/fsroot-riscv64/jvm/Fast_AAA/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/Fast_AAA/Rmiku$Net.class
+target/fsroot-riscv64/jvm/Fast_AAA/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/Fast_AAA/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/Fast_AAA/Rmiku.class
+target/fsroot-riscv64/jvm/fibonacci_java
+target/fsroot-riscv64/jvm/fibonacci_java/fibonacci_java.class
+target/fsroot-riscv64/jvm/fibonacci_java/Rmiku$IO.class
+target/fsroot-riscv64/jvm/fibonacci_java/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/fibonacci_java/Rmiku$Net.class
+target/fsroot-riscv64/jvm/fibonacci_java/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/fibonacci_java/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/fibonacci_java/Rmiku.class
+target/fsroot-riscv64/jvm/file_demo
+target/fsroot-riscv64/jvm/file_demo/FileDemo.class
+target/fsroot-riscv64/jvm/file_demo/Rmiku$IO.class
+target/fsroot-riscv64/jvm/file_demo/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/file_demo/Rmiku$Net.class
+target/fsroot-riscv64/jvm/file_demo/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/file_demo/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/file_demo/Rmiku.class
+target/fsroot-riscv64/jvm/hello_java
+target/fsroot-riscv64/jvm/hello_java/hello_java.class
+target/fsroot-riscv64/jvm/hello_java/Rmiku$IO.class
+target/fsroot-riscv64/jvm/hello_java/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/hello_java/Rmiku$Net.class
+target/fsroot-riscv64/jvm/hello_java/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/hello_java/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/hello_java/Rmiku.class
+target/fsroot-riscv64/jvm/input_demo
+target/fsroot-riscv64/jvm/input_demo/InputDemo.class
+target/fsroot-riscv64/jvm/input_demo/Rmiku$IO.class
+target/fsroot-riscv64/jvm/input_demo/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/input_demo/Rmiku$Net.class
+target/fsroot-riscv64/jvm/input_demo/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/input_demo/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/input_demo/Rmiku.class
+target/fsroot-riscv64/jvm/mem_demo
+target/fsroot-riscv64/jvm/mem_demo/MemDemo.class
+target/fsroot-riscv64/jvm/mem_demo/Rmiku$IO.class
+target/fsroot-riscv64/jvm/mem_demo/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/mem_demo/Rmiku$Net.class
+target/fsroot-riscv64/jvm/mem_demo/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/mem_demo/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/mem_demo/Rmiku.class
+target/fsroot-riscv64/jvm/net_demo
+target/fsroot-riscv64/jvm/net_demo/NetDemo.class
+target/fsroot-riscv64/jvm/net_demo/Rmiku$IO.class
+target/fsroot-riscv64/jvm/net_demo/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/net_demo/Rmiku$Net.class
+target/fsroot-riscv64/jvm/net_demo/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/net_demo/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/net_demo/Rmiku.class
+target/fsroot-riscv64/jvm/proc_demo
+target/fsroot-riscv64/jvm/proc_demo/ProcDemo.class
+target/fsroot-riscv64/jvm/proc_demo/Rmiku$IO.class
+target/fsroot-riscv64/jvm/proc_demo/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/proc_demo/Rmiku$Net.class
+target/fsroot-riscv64/jvm/proc_demo/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/proc_demo/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/proc_demo/Rmiku.class
+target/fsroot-riscv64/jvm/ray
+target/fsroot-riscv64/jvm/ray/Ray.class
+target/fsroot-riscv64/jvm/ray/RayWorker.class
+target/fsroot-riscv64/jvm/ray/Rmiku$IO.class
+target/fsroot-riscv64/jvm/ray/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/ray/Rmiku$Net.class
+target/fsroot-riscv64/jvm/ray/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/ray/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/ray/Rmiku.class
+target/fsroot-riscv64/jvm/rmiku_classes
+target/fsroot-riscv64/jvm/rmiku_classes/Rmiku$IO.class
+target/fsroot-riscv64/jvm/rmiku_classes/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/rmiku_classes/Rmiku$Net.class
+target/fsroot-riscv64/jvm/rmiku_classes/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/rmiku_classes/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/rmiku_classes/Rmiku.class
+target/fsroot-riscv64/jvm/series_demo
+target/fsroot-riscv64/jvm/series_demo/Main.class
+target/fsroot-riscv64/jvm/series_demo/Rmiku$IO.class
+target/fsroot-riscv64/jvm/series_demo/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/series_demo/Rmiku$Net.class
+target/fsroot-riscv64/jvm/series_demo/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/series_demo/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/series_demo/Rmiku.class
+target/fsroot-riscv64/jvm/series_demo/Series.class
+target/fsroot-riscv64/jvm/thread_demo
+target/fsroot-riscv64/jvm/thread_demo/Rmiku$IO.class
+target/fsroot-riscv64/jvm/thread_demo/Rmiku$Mem.class
+target/fsroot-riscv64/jvm/thread_demo/Rmiku$Net.class
+target/fsroot-riscv64/jvm/thread_demo/Rmiku$Proc.class
+target/fsroot-riscv64/jvm/thread_demo/Rmiku$Thread.class
+target/fsroot-riscv64/jvm/thread_demo/Rmiku.class
+target/fsroot-riscv64/jvm/thread_demo/ThreadDemo.class
+target/fsroot-riscv64/jvm/thread_demo/Worker.class
+target/fsroot-riscv64/pages
+target/fsroot-riscv64/pages/39beats.html
+target/fsroot-riscv64/pages/39gallery.html
+target/fsroot-riscv64/pages/wow.html
+target/fsroot-riscv64/proc
+target/fsroot-riscv64/proc/pipe_redirection_test_cmds.txt
+target/fsroot-riscv64/programs
+target/fsroot-riscv64/programs/bank_system
+target/fsroot-riscv64/programs/container_demo
+target/fsroot-riscv64/programs/editor
+target/fsroot-riscv64/programs/edit_past
+target/fsroot-riscv64/programs/files
+target/fsroot-riscv64/programs/float_test
+target/fsroot-riscv64/programs/httpd
+target/fsroot-riscv64/programs/jvm
+target/fsroot-riscv64/programs/library_system
+target/fsroot-riscv64/programs/math_demo
+target/fsroot-riscv64/programs/my_math_constants
+target/fsroot-riscv64/programs/rust_hello
+target/fsroot-riscv64/programs/rust_rust
+target/fsroot-riscv64/programs/try_args
+target/fsroot-riscv64/programs/try_vec
+target/fsroot-riscv64/programs/tsur_tsur
+target/fsroot-riscv64/random
+target/fsroot-riscv64/random/128K.bin
+target/fsroot-riscv64/random/16K.bin
+target/fsroot-riscv64/random/1M.bin
+target/fsroot-riscv64/random/256K.bin
+target/fsroot-riscv64/random/32K.bin
+target/fsroot-riscv64/random/4K.bin
+target/fsroot-riscv64/random/512K.bin
+target/fsroot-riscv64/random/64K.bin
+target/fsroot-riscv64/random/8K.bin
+target/fsroot-riscv64/random/big.bin
+target/fsroot-riscv64/samples
+target/fsroot-riscv64/samples/adaptive_alpha_test
+target/fsroot-riscv64/samples/alpha_arg_test
+target/fsroot-riscv64/samples/alpha_sched_stat_test
+target/fsroot-riscv64/samples/alpha_sched_test
+target/fsroot-riscv64/samples/busy
+target/fsroot-riscv64/samples/cat_motd
+target/fsroot-riscv64/samples/cat_stdin
+target/fsroot-riscv64/samples/cmath_test
+target/fsroot-riscv64/samples/cmath_test2
+target/fsroot-riscv64/samples/cpp_compat_test
+target/fsroot-riscv64/samples/cpp_ifstream
+target/fsroot-riscv64/samples/cpp_printf_test
+target/fsroot-riscv64/samples/cpp_random_test
+target/fsroot-riscv64/samples/cpp_runtime
+target/fsroot-riscv64/samples/cpp_std_bridge_test
+target/fsroot-riscv64/samples/cpp_string_test
+target/fsroot-riscv64/samples/cpp_test
+target/fsroot-riscv64/samples/cpp_test2
+target/fsroot-riscv64/samples/cpp_vector_test
+target/fsroot-riscv64/samples/crud_test
+target/fsroot-riscv64/samples/directly_return
+target/fsroot-riscv64/samples/dynamic_load_exp
+target/fsroot-riscv64/samples/echo_args
+target/fsroot-riscv64/samples/edge_deadline_arg_test
+target/fsroot-riscv64/samples/edge_deadline_test
+target/fsroot-riscv64/samples/elf_bss_test
+target/fsroot-riscv64/samples/estimate_pi
+target/fsroot-riscv64/samples/fibonacci
+target/fsroot-riscv64/samples/fork_stride_test
+target/fsroot-riscv64/samples/fork_wait
+target/fsroot-riscv64/samples/fp_test
+target/fsroot-riscv64/samples/fs_stress
+target/fsroot-riscv64/samples/fs_stress2
+target/fsroot-riscv64/samples/getpid_sleep
+target/fsroot-riscv64/samples/hello
+target/fsroot-riscv64/samples/hello_rust
+target/fsroot-riscv64/samples/illegal_insn
+target/fsroot-riscv64/samples/kill_oneself_test
+target/fsroot-riscv64/samples/little_stress
+target/fsroot-riscv64/samples/little_stress2
+target/fsroot-riscv64/samples/lock_test
+target/fsroot-riscv64/samples/loop_forever
+target/fsroot-riscv64/samples/malloc_test
+target/fsroot-riscv64/samples/matmul_test
+target/fsroot-riscv64/samples/mixed_workload_sched_test
+target/fsroot-riscv64/samples/mmap_reuse_test
+target/fsroot-riscv64/samples/mmap_stress
+target/fsroot-riscv64/samples/mmap_test
+target/fsroot-riscv64/samples/open_exec
+target/fsroot-riscv64/samples/open_test
+target/fsroot-riscv64/samples/open_test2
+target/fsroot-riscv64/samples/pipe_reader
+target/fsroot-riscv64/samples/pipe_stress
+target/fsroot-riscv64/samples/pipe_test
+target/fsroot-riscv64/samples/pipe_writer
+target/fsroot-riscv64/samples/raw
+target/fsroot-riscv64/samples/reset_sched_test
+target/fsroot-riscv64/samples/rust_estimate_pi
+target/fsroot-riscv64/samples/rust_fibonacci
+target/fsroot-riscv64/samples/schedlab
+target/fsroot-riscv64/samples/schedlab_demo
+target/fsroot-riscv64/samples/sched_stat_test
+target/fsroot-riscv64/samples/smoother_adaptive_alpha_test
+target/fsroot-riscv64/samples/smp_cpu_bench
+target/fsroot-riscv64/samples/smp_cpu_probe
+target/fsroot-riscv64/samples/smp_fork_wait_bench
+target/fsroot-riscv64/samples/smp_syscall_bench
+target/fsroot-riscv64/samples/sqrt_schedule_test
+target/fsroot-riscv64/samples/stat_test
+target/fsroot-riscv64/samples/stride_ticket_test
+target/fsroot-riscv64/samples/tcp_test
+target/fsroot-riscv64/samples/test_cmath_fdlibm
+target/fsroot-riscv64/samples/test_tmpfs_rw
+target/fsroot-riscv64/samples/thread_malloc_test
+target/fsroot-riscv64/samples/thread_stack_reuse_test
+target/fsroot-riscv64/samples/thread_stride_test
+target/fsroot-riscv64/samples/thread_test
+target/fsroot-riscv64/samples/ticket_syscall_test
+target/fsroot-riscv64/samples/tick_time
+target/fsroot-riscv64/samples/udp_test
+target/fsroot-riscv64/samples/vector_test
+target/fsroot-riscv64/sched
+target/fsroot-riscv64/sched/calibrate
+target/fsroot-riscv64/sched/schedlab
+target/fsroot-riscv64/sched/sexp1_mech
+target/fsroot-riscv64/sched/sexp2_edge
+target/fsroot-riscv64/sched/sexp3_aimd
+target/fsroot-riscv64/scripts
+target/fsroot-riscv64/scripts/javabench.sh
+target/fsroot-riscv64/scripts/test1.sh
+target/fsroot-riscv64/share
+target/fsroot-riscv64/share/ascii
+target/fsroot-riscv64/share/ascii/miku.txt
+target/fsroot-riscv64/share/docs
+target/fsroot-riscv64/share/docs/hello.txt
+target/fsroot-riscv64/tests
+target/fsroot-riscv64/tests/adaptive_alpha_test
+target/fsroot-riscv64/tests/alpha_arg_test
+target/fsroot-riscv64/tests/alpha_sched_stat_test
+target/fsroot-riscv64/tests/alpha_sched_test
+target/fsroot-riscv64/tests/busy
+target/fsroot-riscv64/tests/cat_motd
+target/fsroot-riscv64/tests/cat_stdin
+target/fsroot-riscv64/tests/cmath_test
+target/fsroot-riscv64/tests/cmath_test2
+target/fsroot-riscv64/tests/cpp_compat_test
+target/fsroot-riscv64/tests/cpp_ifstream
+target/fsroot-riscv64/tests/cpp_printf_test
+target/fsroot-riscv64/tests/cpp_random_test
+target/fsroot-riscv64/tests/cpp_runtime
+target/fsroot-riscv64/tests/cpp_std_bridge_test
+target/fsroot-riscv64/tests/cpp_string_test
+target/fsroot-riscv64/tests/cpp_test
+target/fsroot-riscv64/tests/cpp_test2
+target/fsroot-riscv64/tests/cpp_vector_test
+target/fsroot-riscv64/tests/crud_test
+target/fsroot-riscv64/tests/directly_return
+target/fsroot-riscv64/tests/dynamic_load_exp
+target/fsroot-riscv64/tests/echo_args
+target/fsroot-riscv64/tests/edge_deadline_arg_test
+target/fsroot-riscv64/tests/edge_deadline_test
+target/fsroot-riscv64/tests/elf_bss_test
+target/fsroot-riscv64/tests/estimate_pi
+target/fsroot-riscv64/tests/fibonacci
+target/fsroot-riscv64/tests/fork_stride_test
+target/fsroot-riscv64/tests/fork_wait
+target/fsroot-riscv64/tests/fp_test
+target/fsroot-riscv64/tests/fs_stress
+target/fsroot-riscv64/tests/fs_stress2
+target/fsroot-riscv64/tests/getpid_sleep
+target/fsroot-riscv64/tests/hello
+target/fsroot-riscv64/tests/hello_rust
+target/fsroot-riscv64/tests/illegal_insn
+target/fsroot-riscv64/tests/kill_oneself_test
+target/fsroot-riscv64/tests/little_stress
+target/fsroot-riscv64/tests/little_stress2
+target/fsroot-riscv64/tests/lock_test
+target/fsroot-riscv64/tests/loop_forever
+target/fsroot-riscv64/tests/malloc_test
+target/fsroot-riscv64/tests/matmul_test
+target/fsroot-riscv64/tests/mixed_workload_sched_test
+target/fsroot-riscv64/tests/mmap_reuse_test
+target/fsroot-riscv64/tests/mmap_stress
+target/fsroot-riscv64/tests/mmap_test
+target/fsroot-riscv64/tests/open_exec
+target/fsroot-riscv64/tests/open_test
+target/fsroot-riscv64/tests/open_test2
+target/fsroot-riscv64/tests/pipe_reader
+target/fsroot-riscv64/tests/pipe_stress
+target/fsroot-riscv64/tests/pipe_test
+target/fsroot-riscv64/tests/pipe_writer
+target/fsroot-riscv64/tests/raw
+target/fsroot-riscv64/tests/reset_sched_test
+target/fsroot-riscv64/tests/rust_estimate_pi
+target/fsroot-riscv64/tests/rust_fibonacci
+target/fsroot-riscv64/tests/schedlab
+target/fsroot-riscv64/tests/schedlab_demo
+target/fsroot-riscv64/tests/sched_stat_test
+target/fsroot-riscv64/tests/smoother_adaptive_alpha_test
+target/fsroot-riscv64/tests/smp_cpu_bench
+target/fsroot-riscv64/tests/smp_cpu_probe
+target/fsroot-riscv64/tests/smp_fork_wait_bench
+target/fsroot-riscv64/tests/smp_syscall_bench
+target/fsroot-riscv64/tests/sqrt_schedule_test
+target/fsroot-riscv64/tests/stat_test
+target/fsroot-riscv64/tests/stride_ticket_test
+target/fsroot-riscv64/tests/tcp_test
+target/fsroot-riscv64/tests/test_cmath_fdlibm
+target/fsroot-riscv64/tests/test_tmpfs_rw
+target/fsroot-riscv64/tests/thread_malloc_test
+target/fsroot-riscv64/tests/thread_stack_reuse_test
+target/fsroot-riscv64/tests/thread_stride_test
+target/fsroot-riscv64/tests/thread_test
+target/fsroot-riscv64/tests/ticket_syscall_test
+target/fsroot-riscv64/tests/tick_time
+target/fsroot-riscv64/tests/udp_test
+target/fsroot-riscv64/tests/vector_test
+target/fsroot-riscv64/tmp
+created target/fs-riscv64.img
+=== 构建 FAT 镜像 (riscv64) ===
+mkfs.fat 4.2 (2021-01-31)
+created target/fat-riscv64.img (fresh FAT16)
+=== 编译内核 (riscv64, debug, LOG=warn) ===
+
+=== 启动 QEMU (riscv64, mode=debug, net=user) ===
+KERNEL: target/riscv64gc-unknown-none-elf/debug/RmikuOS
+
+
+OpenSBI v1.8
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name               : riscv-virtio,qemu
+Platform Features           : medeleg
+Platform HART Count         : 1
+Platform HART Protection    : pmp
+Platform IPI Device         : aclint-mswi
+Platform Timer Device       : aclint-mtimer @ 10000000Hz
+Platform Console Device     : uart8250
+Platform HSM Device         : ---
+Platform PMU Device         : ---
+Platform Reboot Device      : syscon-reboot
+Platform Shutdown Device    : syscon-poweroff
+Platform Suspend Device     : ---
+Platform CPPC Device        : ---
+Firmware Base               : 0x80000000
+Firmware Size               : 321 KB
+Firmware RW Offset          : 0x40000
+Firmware RW Size            : 65 KB
+Firmware Heap Offset        : 0x47000
+Firmware Heap Size          : 37 KB (total), 0 KB (reserved), 12 KB (used), 23 KB (free)
+Firmware Scratch Size       : 4096 B (total), 1464 B (used), 2632 B (free)
+Runtime SBI Version         : 3.0
+Standard SBI Extensions     : ipi,pmu,srst,sse,hsm,rfnc,fwft,time,base,legacy,dbcn,dbtr
+Experimental SBI Extensions : none
+
+Domain0 Name                : root
+Domain0 Boot HART           : 0
+Domain0 HARTs               : 0*
+Domain0 Region00            : 0x0000000080040000-0x000000008005ffff M: (F,R,W) S/U: ()
+Domain0 Region01            : 0x0000000080000000-0x000000008003ffff M: (F,R,X) S/U: ()
+Domain0 Region02            : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region03            : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region04            : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region05            : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06            : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07            : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address        : 0x0000000080200000
+Domain0 Next Arg1           : 0x00000000bfe00000
+Domain0 Next Mode           : S-mode
+Domain0 SysReset            : yes
+Domain0 SysSuspend          : yes
+
+Boot HART ID                : 0
+Boot HART Domain            : root
+Boot HART Priv Version      : v1.12
+Boot HART Base ISA          : rv64imafdch
+Boot HART ISA Extensions    : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count         : 16
+Boot HART PMP Granularity   : 2 bits
+Boot HART PMP Address Bits  : 54
+Boot HART MHPM Info         : 16 (0x0007fff8)
+Boot HART Debug Triggers    : 2 triggers
+Boot HART MIDELEG           : 0x0000000000001666
+Boot HART MEDELEG           : 0x0000000000f4b509
+主核初始化完毕。
+
+     ____            _ _         ___  ____  
+    |  _ \ _ __ ___ (_) | ___   / _ \/ ___| 
+    | |_) | '_ ` _ \| | |/ / | | | | \___ \ 
+    |  _ <| | | | | | |   <| |_| |_| |___) |
+    |_| \_\_| |_| |_|_|_|\_\\___/___/|____/ 
+
+        RmikuOS - Rusty tiny OS kernel
+    
+[93m[ WARN] [smp] failed to start hart 1[0m
+[93m[ WARN] [smp] failed to start hart 2[0m
+[93m[ WARN] [smp] failed to start hart 3[0m
+[93m[ WARN] [smp] failed to start hart 4[0m
+[93m[ WARN] [smp] failed to start hart 5[0m
+[93m[ WARN] [smp] failed to start hart 6[0m
+[93m[ WARN] [smp] failed to start hart 7[0m
+
+RmikuOS shell
+commands:
+  help
+  exit
+  pwd
+  cd <path>
+  mkdir <path>
+  touch <path>
+  rm [-r] <path>
+  rmdir <path>
+  jobs
+  clear
+  shutdown
+
+external commands are in /bin:
+  try: ls /bin
+
+/ $ 。/  ./se ch       ./sch[2K/ $ ./sched/se[2K/ $ ./sched/sexp2[2K/ $ ./sched/sexp2_edge
+# sexp2_multi: 1 configs x 2 alphas x (1w+3r), total=3600
+
+# === CONFIG extreme ai=225 log=50 ===
+# WARMUP config=extreme alpha=90
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,90,1,ctrl,43,300,2
+D,1,90,17,2,7
+W,1,90,2,ai,95,1000,14
+W,1,90,3,log,55,500,14
+S,1,90,739,1128
+W,2,90,1,ctrl,19,300,2
+D,2,90,6,6,282
+W,2,90,2,ai,70,1400,19
+W,2,90,3,log,30,500,14
+S,2,90,888,1081
+W,3,90,1,ctrl,16,300,2
+D,3,90,4,4,527
+W,3,90,2,ai,93,1600,22
+W,3,90,3,log,34,500,14
+S,3,90,897,1126
+W,4,90,1,ctrl,13,300,2
+D,4,90,5,5,1037
+W,4,90,2,ai,77,1600,22
+W,4,90,3,log,30,700,19
+S,4,90,829,1076
+W,5,90,1,ctrl,15,300,2
+D,5,90,4,4,1380
+W,5,90,2,ai,120,1800,26
+W,5,90,3,log,44,700,19
+S,5,90,781,1289
+W,6,90,1,ctrl,10,300,2
+D,6,90,2,2,954
+W,6,90,2,ai,99,2100,31
+W,6,90,3,log,40,850,24
+S,6,90,835,1373
+W,7,90,1,ctrl,13,300,2
+D,7,90,5,5,2822
+W,7,90,2,ai,107,2400,35
+W,7,90,3,log,40,850,24
+S,7,90,831,1037
+W,8,90,1,ctrl,9,300,2
+D,8,90,2,2,1365
+W,8,90,2,ai,80,2400,35
+W,8,90,3,log,30,850,24
+S,8,90,847,1120
+W,9,90,1,ctrl,9,300,2
+D,9,90,3,3,2331
+W,9,90,2,ai,80,2700,40
+W,9,90,3,log,25,850,24
+S,9,90,666,1004
+W,10,90,1,ctrl,9,300,2
+D,10,90,2,2,1744
+W,10,90,2,ai,90,2700,40
+W,10,90,3,log,34,1000,29
+S,10,90,725,1119
+W,11,90,1,ctrl,9,300,2
+D,11,90,3,3,2931
+W,11,90,2,ai,85,3000,45
+W,11,90,3,log,30,1000,29
+S,11,90,820,1017
+W,12,90,1,ctrl,9,300,2
+D,12,90,1,1,1092
+W,12,90,2,ai,99,3000,45
+W,12,90,3,log,31,1000,29
+S,12,90,846,1078
+W,13,90,1,ctrl,10,300,2
+D,13,90,2,2,2574
+W,13,90,2,ai,153,3300,49
+W,13,90,3,log,49,1000,29
+S,13,90,805,1382
+W,14,90,1,ctrl,11,300,2
+D,14,90,3,3,4476
+W,14,90,2,ai,163,3300,49
+W,14,90,3,log,55,1150,33
+S,14,90,743,1312
+W,15,90,1,ctrl,10,300,2
+D,15,90,2,2,3404
+W,15,90,2,ai,175,3600,54
+W,15,90,3,log,57,1150,33
+S,15,90,896,1439
+W,16,90,1,ctrl,10,300,2
+D,16,90,3,3,5534
+W,16,90,2,ai,179,3900,59
+W,16,90,3,log,55,1250,37
+S,16,90,807,1375
+W,17,90,1,ctrl,8,300,2
+D,17,90,2,2,4145
+W,17,90,2,ai,127,3900,59
+W,17,90,3,log,45,1250,37
+S,17,90,888,1250
+W,18,90,1,ctrl,11,300,2
+D,18,90,2,2,4634
+W,18,90,2,ai,197,4100,63
+W,18,90,3,log,60,1250,37
+S,18,90,774,1292
+W,19,90,1,ctrl,7,300,2
+D,19,90,3,3,7431
+W,19,90,2,ai,133,4100,63
+W,19,90,3,log,45,1250,37
+S,19,90,855,1432
+W,20,90,1,ctrl,9,300,2
+D,20,90,2,2,5275
+W,20,90,2,ai,136,4400,67
+W,20,90,3,log,40,1400,41
+S,20,90,714,1060
+W,21,90,1,ctrl,2,300,2
+D,21,90,0,0,0
+W,21,90,2,ai,75,4400,67
+W,21,90,3,log,25,1400,41
+S,21,90,887,2578
+W,22,90,1,ctrl,6,300,1
+D,22,90,1,1,2859
+W,22,90,2,ai,46,200,3
+W,22,90,3,log,12,50,1
+S,22,90,801,5860
+J,1,ctrl,1,74,59,56804,2859,57440,98138102,1,2869
+# done
+# RUN config=extreme alpha=90 rep=1/3
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,90,1,ctrl,40,300,2
+D,1,90,18,4,31
+W,1,90,2,ai,95,1000,14
+W,1,90,3,log,56,350,10
+S,1,90,823,1219
+W,2,90,1,ctrl,19,300,2
+D,2,90,6,6,138
+W,2,90,2,ai,66,1400,19
+W,2,90,3,log,25,550,15
+S,2,90,884,1074
+W,3,90,1,ctrl,15,300,2
+D,3,90,4,4,501
+W,3,90,2,ai,95,1600,23
+W,3,90,3,log,40,550,15
+S,3,90,888,1220
+W,4,90,1,ctrl,15,300,2
+D,4,90,5,5,1190
+W,4,90,2,ai,104,2000,28
+W,4,90,3,log,35,700,19
+S,4,90,857,1030
+W,5,90,1,ctrl,14,300,2
+D,5,90,5,5,1613
+W,5,90,2,ai,96,2000,28
+W,5,90,3,log,35,700,19
+S,5,90,888,1041
+W,6,90,1,ctrl,10,300,2
+D,6,90,2,2,911
+W,6,90,2,ai,110,2300,33
+W,6,90,3,log,35,700,19
+S,6,90,888,1406
+W,7,90,1,ctrl,11,300,2
+D,7,90,2,2,1192
+W,7,90,2,ai,118,2600,38
+W,7,90,3,log,40,850,24
+S,7,90,857,1230
+W,8,90,1,ctrl,10,300,2
+D,8,90,2,2,1522
+W,8,90,2,ai,130,2600,38
+W,8,90,3,log,44,850,24
+S,8,90,888,1481
+W,9,90,1,ctrl,10,300,2
+D,9,90,3,3,2763
+W,9,90,2,ai,131,2800,42
+W,9,90,3,log,40,850,24
+S,9,90,820,1363
+W,10,90,1,ctrl,8,300,2
+D,10,90,2,2,2042
+W,10,90,2,ai,91,2800,42
+W,10,90,3,log,30,1000,29
+S,10,90,875,1177
+W,11,90,1,ctrl,9,300,2
+D,11,90,2,2,2149
+W,11,90,2,ai,100,3000,45
+W,11,90,3,log,34,1000,29
+S,11,90,837,1112
+W,12,90,1,ctrl,9,300,2
+D,12,90,3,3,3767
+W,12,90,2,ai,96,3000,45
+W,12,90,3,log,35,1000,29
+S,12,90,828,1078
+W,13,90,1,ctrl,8,300,2
+D,13,90,3,3,4100
+W,13,90,2,ai,101,3300,50
+W,13,90,3,log,30,1000,29
+S,13,90,807,1140
+W,14,90,1,ctrl,10,300,2
+D,14,90,2,2,2993
+W,14,90,2,ai,110,3300,50
+W,14,90,3,log,34,1150,33
+S,14,90,696,1100
+W,15,90,1,ctrl,10,300,2
+D,15,90,2,2,3413
+W,15,90,2,ai,165,3600,55
+W,15,90,3,log,60,1150,33
+S,15,90,859,1404
+W,16,90,1,ctrl,9,300,2
+D,16,90,2,2,3864
+W,16,90,2,ai,184,3900,59
+W,16,90,3,log,53,1150,33
+S,16,90,699,1555
+W,17,90,1,ctrl,8,300,2
+D,17,90,2,2,4174
+W,17,90,2,ai,125,3900,59
+W,17,90,3,log,39,1300,38
+S,17,90,901,1173
+W,18,90,1,ctrl,9,300,2
+D,18,90,1,1,2245
+W,18,90,2,ai,124,3900,59
+W,18,90,3,log,40,1300,38
+S,18,90,837,1038
+W,19,90,1,ctrl,11,300,2
+D,19,90,2,2,5011
+W,19,90,2,ai,199,4100,62
+W,19,90,3,log,63,1300,38
+S,19,90,770,1300
+W,20,90,1,ctrl,9,300,2
+D,20,90,3,3,7998
+W,20,90,2,ai,140,4400,67
+W,20,90,3,log,41,1300,38
+S,20,90,859,1063
+W,21,90,1,ctrl,9,300,2
+D,21,90,2,2,5653
+W,21,90,2,ai,97,3900,59
+W,21,90,3,log,30,1150,33
+S,21,90,887,1021
+J,1,ctrl,1,73,59,57270,2830,57933,102964897,1,2840
+# done
+# RUN config=extreme alpha=90 rep=2/3
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,90,1,ctrl,41,300,2
+D,1,90,17,12,122
+W,1,90,2,ai,115,1000,14
+W,1,90,3,log,38,350,9
+S,1,90,895,1087
+W,2,90,1,ctrl,17,300,2
+D,2,90,7,7,524
+W,2,90,2,ai,92,1200,17
+W,2,90,3,log,29,350,9
+S,2,90,887,1317
+W,3,90,1,ctrl,18,300,2
+D,3,90,8,8,988
+W,3,90,2,ai,86,1300,18
+W,3,90,3,log,30,500,14
+S,3,90,873,1067
+W,4,90,1,ctrl,15,300,2
+D,4,90,5,5,920
+W,4,90,2,ai,74,1600,23
+W,4,90,3,log,21,500,14
+S,4,90,848,1094
+W,5,90,1,ctrl,15,300,2
+D,5,90,4,4,1230
+W,5,90,2,ai,117,2000,28
+W,5,90,3,log,45,600,17
+S,5,90,872,1226
+W,6,90,1,ctrl,14,300,2
+D,6,90,4,4,1830
+W,6,90,2,ai,142,2300,33
+W,6,90,3,log,29,600,17
+S,6,90,868,1240
+W,7,90,1,ctrl,12,300,2
+D,7,90,4,4,2243
+W,7,90,2,ai,116,2500,36
+W,7,90,3,log,29,750,21
+S,7,90,814,1146
+W,8,90,1,ctrl,11,300,2
+D,8,90,2,2,1450
+W,8,90,2,ai,124,2500,36
+W,8,90,3,log,39,750,21
+S,8,90,872,1333
+W,9,90,1,ctrl,9,300,2
+D,9,90,2,2,1770
+W,9,90,2,ai,128,2700,40
+W,9,90,3,log,35,750,21
+S,9,90,736,1538
+W,10,90,1,ctrl,11,300,2
+D,10,90,3,3,3120
+W,10,90,2,ai,135,3000,44
+W,10,90,3,log,40,900,26
+S,10,90,721,1203
+W,11,90,1,ctrl,10,300,2
+D,11,90,3,3,3646
+W,11,90,2,ai,149,3000,44
+W,11,90,3,log,44,900,26
+S,11,90,725,1448
+W,12,90,1,ctrl,9,300,2
+D,12,90,2,2,2800
+W,12,90,2,ai,152,3100,47
+W,12,90,3,log,45,900,26
+S,12,90,861,1604
+W,13,90,1,ctrl,8,300,2
+D,13,90,3,3,4530
+W,13,90,2,ai,100,3400,51
+W,13,90,3,log,30,1000,29
+S,13,90,774,1105
+W,14,90,1,ctrl,10,300,2
+D,14,90,2,2,3420
+W,14,90,2,ai,167,3400,51
+W,14,90,3,log,50,1000,29
+S,14,90,891,1431
+W,15,90,1,ctrl,9,300,2
+D,15,90,3,3,5505
+W,15,90,2,ai,109,3600,54
+W,15,90,3,log,35,1000,29
+S,15,90,748,1051
+W,16,90,1,ctrl,10,300,2
+D,16,90,2,2,4100
+W,16,90,2,ai,177,3600,54
+W,16,90,3,log,50,1000,29
+S,16,90,843,1452
+W,17,90,1,ctrl,10,300,2
+D,17,90,3,3,6810
+W,17,90,2,ai,180,3800,57
+W,17,90,3,log,55,1150,33
+S,17,90,834,1425
+W,18,90,1,ctrl,10,300,2
+D,18,90,3,3,7247
+W,18,90,2,ai,123,3800,57
+W,18,90,3,log,35,1150,33
+S,18,90,783,1052
+W,19,90,1,ctrl,10,300,2
+D,19,90,3,3,7937
+W,19,90,2,ai,188,3900,60
+W,19,90,3,log,59,1150,33
+S,19,90,774,1473
+J,1,ctrl,1,80,75,60192,2654,60970,103395202,2,2664
+# done
+# RUN config=extreme alpha=90 rep=3/3
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,90,1,ctrl,41,300,2
+D,1,90,16,4,48
+W,1,90,2,ai,102,1000,14
+W,1,90,3,log,51,350,9
+S,1,90,867,1154
+W,2,90,1,ctrl,17,300,2
+D,2,90,9,9,356
+W,2,90,2,ai,68,1300,18
+W,2,90,3,log,25,500,14
+S,2,90,721,1048
+W,3,90,1,ctrl,19,300,2
+D,3,90,9,9,647
+W,3,90,2,ai,89,1600,22
+W,3,90,3,log,30,500,14
+S,3,90,869,1034
+W,4,90,1,ctrl,14,300,2
+D,4,90,5,5,734
+W,4,90,2,ai,79,1600,22
+W,4,90,3,log,24,600,17
+S,4,90,685,1170
+W,5,90,1,ctrl,16,300,2
+D,5,90,5,5,1296
+W,5,90,2,ai,111,1700,24
+W,5,90,3,log,40,600,17
+S,5,90,885,1210
+W,6,90,1,ctrl,16,300,2
+D,6,90,5,5,1914
+W,6,90,2,ai,114,1800,26
+W,6,90,3,log,40,750,21
+S,6,90,835,1119
+W,7,90,1,ctrl,13,300,2
+D,7,90,4,4,1884
+W,7,90,2,ai,96,2100,30
+W,7,90,3,log,39,750,21
+S,7,90,855,1091
+W,8,90,1,ctrl,11,300,2
+D,8,90,3,3,1848
+W,8,90,2,ai,103,2300,33
+W,8,90,3,log,47,750,21
+S,8,90,847,1308
+W,9,90,1,ctrl,12,300,2
+D,9,90,2,2,1504
+W,9,90,2,ai,108,2300,33
+W,9,90,3,log,25,900,25
+S,9,90,689,1494
+W,10,90,1,ctrl,11,300,2
+D,10,90,2,2,1812
+W,10,90,2,ai,116,2500,36
+W,10,90,3,log,44,900,25
+S,10,90,780,1265
+W,11,90,1,ctrl,10,300,2
+D,11,90,3,3,3182
+W,11,90,2,ai,126,2700,39
+W,11,90,3,log,60,900,25
+S,11,90,853,1490
+W,12,90,1,ctrl,13,300,2
+D,12,90,2,2,2453
+W,12,90,2,ai,123,2800,41
+W,12,90,3,log,29,1000,28
+S,12,90,715,1388
+W,13,90,1,ctrl,9,300,2
+D,13,90,2,2,2692
+W,13,90,2,ai,91,2800,41
+W,13,90,3,log,34,1000,28
+S,13,90,829,1089
+W,14,90,1,ctrl,9,300,2
+D,14,90,3,3,4353
+W,14,90,2,ai,92,2800,41
+W,14,90,3,log,34,1000,28
+S,14,90,748,1106
+W,15,90,1,ctrl,11,300,2
+D,15,90,2,2,3261
+W,15,90,2,ai,139,3000,45
+W,15,90,3,log,50,1050,31
+S,15,90,913,1236
+W,16,90,1,ctrl,11,300,2
+D,16,90,3,3,5478
+W,16,90,2,ai,150,3300,50
+W,16,90,3,log,50,1050,31
+S,16,90,721,1230
+W,17,90,1,ctrl,9,300,2
+D,17,90,2,2,3914
+W,17,90,2,ai,108,3300,50
+W,17,90,3,log,35,1050,31
+S,17,90,790,1084
+W,18,90,1,ctrl,10,300,2
+D,18,90,3,3,6469
+W,18,90,2,ai,165,3500,53
+W,18,90,3,log,52,1050,31
+S,18,90,845,1386
+W,19,90,1,ctrl,9,300,2
+D,19,90,2,2,4582
+W,19,90,2,ai,113,3500,53
+W,19,90,3,log,34,1200,35
+S,19,90,748,1105
+W,20,90,1,ctrl,9,300,2
+D,20,90,2,2,4881
+W,20,90,2,ai,118,3800,57
+W,20,90,3,log,40,1200,35
+S,20,90,810,1056
+W,21,90,1,ctrl,7,300,2
+D,21,90,1,1,2595
+W,21,90,2,ai,123,3800,57
+W,21,90,3,log,40,1200,35
+S,21,90,902,1365
+J,1,ctrl,1,85,73,55903,2595,56704,89564584,2,2605
+# done
+# WARMUP config=extreme alpha=100
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,100,1,ctrl,40,600,2
+D,1,100,16,8,68
+W,1,100,2,ai,110,1100,11
+W,1,100,3,log,50,400,8
+S,1,100,853,1425
+W,2,100,1,ctrl,21,600,2
+D,2,100,8,8,509
+W,2,100,2,ai,93,1600,16
+W,2,100,3,log,32,550,11
+S,2,100,821,1524
+W,3,100,1,ctrl,16,600,2
+D,3,100,4,4,632
+W,3,100,2,ai,89,2000,20
+W,3,100,3,log,29,700,14
+S,3,100,709,1521
+W,4,100,1,ctrl,12,600,2
+D,4,100,5,5,1134
+W,4,100,2,ai,96,2400,24
+W,4,100,3,log,24,700,14
+S,4,100,733,1800
+W,5,100,1,ctrl,16,600,2
+D,5,100,6,6,2119
+W,5,100,2,ai,127,2800,28
+W,5,100,3,log,33,700,14
+S,5,100,845,1622
+W,6,100,1,ctrl,10,600,2
+D,6,100,2,2,948
+W,6,100,2,ai,96,3100,31
+W,6,100,3,log,30,950,19
+S,6,100,835,1767
+W,7,100,1,ctrl,9,600,2
+D,7,100,2,2,1188
+W,7,100,2,ai,99,3500,35
+W,7,100,3,log,29,950,19
+S,7,100,879,1815
+W,8,100,1,ctrl,9,600,2
+D,8,100,2,2,1446
+W,8,100,2,ai,107,3500,35
+W,8,100,3,log,28,950,19
+S,8,100,737,1903
+W,9,100,1,ctrl,10,600,2
+D,9,100,2,2,1735
+W,9,100,2,ai,119,3900,39
+W,9,100,3,log,33,1100,22
+S,9,100,764,1754
+W,10,100,1,ctrl,9,600,2
+D,10,100,3,3,2783
+W,10,100,2,ai,87,3900,39
+W,10,100,3,log,29,1100,22
+S,10,100,666,1486
+W,11,100,1,ctrl,9,600,2
+D,11,100,2,2,2166
+W,11,100,2,ai,101,4400,44
+W,11,100,3,log,24,1100,22
+S,11,100,687,1462
+W,12,100,1,ctrl,9,600,2
+D,12,100,3,3,3594
+W,12,100,2,ai,102,4400,44
+W,12,100,3,log,29,1100,22
+S,12,100,796,1531
+W,13,100,1,ctrl,11,600,2
+D,13,100,3,3,4106
+W,13,100,2,ai,155,4800,48
+W,13,100,3,log,45,1250,25
+S,13,100,863,1730
+W,14,100,1,ctrl,12,600,2
+D,14,100,1,1,1559
+W,14,100,2,ai,151,5200,52
+W,14,100,3,log,29,1250,25
+S,14,100,887,1370
+W,15,100,1,ctrl,10,600,2
+D,15,100,2,2,3526
+W,15,100,2,ai,171,5200,52
+W,15,100,3,log,40,1250,25
+S,15,100,716,1888
+W,16,100,1,ctrl,8,600,2
+D,16,100,3,3,5724
+W,16,100,2,ai,132,5500,55
+W,16,100,3,log,30,1450,29
+S,16,100,857,1680
+W,17,100,1,ctrl,12,600,2
+D,17,100,1,1,2123
+W,17,100,2,ai,178,5900,59
+W,17,100,3,log,47,1450,29
+S,17,100,866,1500
+W,18,100,1,ctrl,11,600,2
+D,18,100,3,3,7061
+W,18,100,2,ai,183,5900,59
+W,18,100,3,log,47,1450,29
+S,18,100,883,1666
+W,19,100,1,ctrl,8,600,2
+D,19,100,2,2,5046
+W,19,100,2,ai,145,6300,63
+W,19,100,3,log,33,1600,32
+S,19,100,839,1627
+W,20,100,1,ctrl,10,600,2
+D,20,100,4,4,11199
+W,20,100,2,ai,179,3600,36
+W,20,100,3,log,46,1050,21
+S,20,100,710,2714
+J,1,ctrl,1,74,66,58666,2894,59375,105683341,3,2904
+# done
+# RUN config=extreme alpha=100 rep=1/3
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,100,1,ctrl,41,600,2
+D,1,100,16,9,146
+W,1,100,2,ai,116,1500,15
+W,1,100,3,log,42,300,6
+S,1,100,892,1213
+W,2,100,1,ctrl,18,600,2
+D,2,100,7,7,364
+W,2,100,2,ai,85,1800,18
+W,2,100,3,log,25,500,10
+S,2,100,864,1471
+W,3,100,1,ctrl,13,600,2
+D,3,100,5,5,557
+W,3,100,2,ai,71,2100,21
+W,3,100,3,log,20,500,10
+S,3,100,881,1496
+W,4,100,1,ctrl,13,600,2
+D,4,100,5,5,840
+W,4,100,2,ai,79,2100,21
+W,4,100,3,log,24,650,13
+S,4,100,781,1598
+W,5,100,1,ctrl,15,600,2
+D,5,100,5,5,1236
+W,5,100,2,ai,93,2400,24
+W,5,100,3,log,24,650,13
+S,5,100,705,1451
+W,6,100,1,ctrl,14,600,2
+D,6,100,5,5,1684
+W,6,100,2,ai,106,2900,29
+W,6,100,3,log,33,800,16
+S,6,100,867,1527
+W,7,100,1,ctrl,16,600,2
+D,7,100,5,5,2417
+W,7,100,2,ai,164,3200,32
+W,7,100,3,log,39,800,16
+S,7,100,724,1780
+W,8,100,1,ctrl,11,600,2
+D,8,100,3,3,1890
+W,8,100,2,ai,78,3500,35
+W,8,100,3,log,25,800,16
+S,8,100,887,1270
+W,9,100,1,ctrl,12,600,2
+D,9,100,2,2,1510
+W,9,100,2,ai,109,3500,35
+W,9,100,3,log,25,950,19
+S,9,100,852,1439
+W,10,100,1,ctrl,10,600,2
+D,10,100,2,2,1800
+W,10,100,2,ai,114,3700,37
+W,10,100,3,log,27,950,19
+S,10,100,693,1727
+W,11,100,1,ctrl,9,600,2
+D,11,100,3,3,3000
+W,11,100,2,ai,92,3900,39
+W,11,100,3,log,24,950,19
+S,11,100,894,1527
+W,12,100,1,ctrl,11,600,2
+D,12,100,2,2,2292
+W,12,100,2,ai,122,3900,39
+W,12,100,3,log,29,1150,23
+S,12,100,872,1582
+W,13,100,1,ctrl,10,600,2
+D,13,100,1,1,1305
+W,13,100,2,ai,120,4200,42
+W,13,100,3,log,34,1150,23
+S,13,100,862,1666
+W,14,100,1,ctrl,12,600,2
+D,14,100,2,2,2958
+W,14,100,2,ai,131,4600,46
+W,14,100,3,log,37,1150,23
+S,14,100,736,1424
+W,15,100,1,ctrl,9,600,2
+D,15,100,2,2,3119
+W,15,100,2,ai,140,4600,46
+W,15,100,3,log,46,1350,27
+S,15,100,854,1978
+W,16,100,1,ctrl,12,600,2
+D,16,100,2,2,3690
+W,16,100,2,ai,144,4800,48
+W,16,100,3,log,33,1350,27
+S,16,100,894,1396
+W,17,100,1,ctrl,9,600,2
+D,17,100,2,2,4081
+W,17,100,2,ai,186,5100,51
+W,17,100,3,log,48,1350,27
+S,17,100,748,2297
+W,18,100,1,ctrl,12,600,2
+D,18,100,2,2,4480
+W,18,100,2,ai,118,5100,51
+W,18,100,3,log,33,1500,30
+S,18,100,887,1136
+W,19,100,1,ctrl,11,600,2
+D,19,100,3,3,7335
+W,19,100,2,ai,153,5400,54
+W,19,100,3,log,57,1500,30
+S,19,100,898,1632
+W,20,100,1,ctrl,11,600,2
+D,20,100,2,2,5320
+W,20,100,2,ai,160,5700,57
+W,20,100,3,log,34,1500,30
+S,20,100,886,1433
+J,1,ctrl,1,76,69,50024,2664,50754,81073518,2,2674
+# done
+# RUN config=extreme alpha=100 rep=2/3
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,100,1,ctrl,36,600,2
+D,1,100,15,8,66
+W,1,100,2,ai,109,1400,14
+W,1,100,3,log,35,300,6
+S,1,100,697,1300
+W,2,100,1,ctrl,18,600,2
+D,2,100,5,5,273
+W,2,100,2,ai,82,1800,18
+W,2,100,3,log,19,550,11
+S,2,100,860,1344
+W,3,100,1,ctrl,14,600,2
+D,3,100,7,7,881
+W,3,100,2,ai,90,2100,21
+W,3,100,3,log,26,550,11
+S,3,100,877,1719
+W,4,100,1,ctrl,13,600,2
+D,4,100,4,4,818
+W,4,100,2,ai,82,2500,25
+W,4,100,3,log,24,750,15
+S,4,100,765,1422
+W,5,100,1,ctrl,15,600,2
+D,5,100,4,4,1257
+W,5,100,2,ai,112,2800,28
+W,5,100,3,log,32,750,15
+S,5,100,885,1531
+W,6,100,1,ctrl,14,600,2
+D,6,100,5,5,2340
+W,6,100,2,ai,129,3000,30
+W,6,100,3,log,43,1000,20
+S,6,100,822,1733
+W,7,100,1,ctrl,11,600,2
+D,7,100,3,3,1827
+W,7,100,2,ai,90,3000,30
+W,7,100,3,log,25,1000,20
+S,7,100,846,1494
+W,8,100,1,ctrl,8,600,2
+D,8,100,2,2,1378
+W,8,100,2,ai,75,3400,34
+W,8,100,3,log,25,1000,20
+S,8,100,843,1621
+W,9,100,1,ctrl,8,600,2
+D,9,100,3,3,2337
+W,9,100,2,ai,80,3400,34
+W,9,100,3,log,32,1100,22
+S,9,100,666,1772
+W,10,100,1,ctrl,10,600,2
+D,10,100,1,1,914
+W,10,100,2,ai,130,3700,37
+W,10,100,3,log,32,1100,22
+S,10,100,816,1913
+W,11,100,1,ctrl,12,600,2
+D,11,100,2,2,2136
+W,11,100,2,ai,89,4100,41
+W,11,100,3,log,24,1100,22
+S,11,100,907,1072
+W,12,100,1,ctrl,10,600,2
+D,12,100,2,2,2457
+W,12,100,2,ai,123,4100,41
+W,12,100,3,log,35,1100,22
+S,12,100,888,1745
+W,13,100,1,ctrl,8,600,2
+D,13,100,3,3,4048
+W,13,100,2,ai,104,4500,45
+W,13,100,3,log,28,1250,25
+S,13,100,737,1649
+W,14,100,1,ctrl,10,600,2
+D,14,100,2,2,3050
+W,14,100,2,ai,131,4800,48
+W,14,100,3,log,37,1250,25
+S,14,100,879,1607
+W,15,100,1,ctrl,8,600,2
+D,15,100,2,2,3308
+W,15,100,2,ai,108,4800,48
+W,15,100,3,log,36,1250,25
+S,15,100,807,1730
+W,16,100,1,ctrl,11,600,2
+D,16,100,3,3,5516
+W,16,100,2,ai,142,5200,52
+W,16,100,3,log,28,1500,30
+S,16,100,847,1366
+W,17,100,1,ctrl,9,600,2
+D,17,100,2,2,4088
+W,17,100,2,ai,154,5200,52
+W,17,100,3,log,45,1500,30
+S,17,100,835,1906
+W,18,100,1,ctrl,10,600,2
+D,18,100,3,3,6762
+W,18,100,2,ai,156,5500,55
+W,18,100,3,log,44,1500,30
+S,18,100,874,1659
+W,19,100,1,ctrl,9,600,2
+D,19,100,2,2,4939
+W,19,100,2,ai,157,5600,56
+W,19,100,3,log,43,1750,35
+S,19,100,851,1744
+W,20,100,1,ctrl,10,600,2
+D,20,100,2,2,5408
+W,20,100,2,ai,160,5600,56
+W,20,100,3,log,52,1750,35
+S,20,100,887,1666
+J,1,ctrl,1,72,65,53803,2708,54498,89039754,4,2718
+# done
+# RUN config=extreme alpha=100 rep=3/3
+# prev_baseline_reset ngroups=3
+# schedlab win=100 total=3600 groups=3
+W,1,100,1,ctrl,39,600,2
+D,1,100,17,10,113
+W,1,100,2,ai,122,1300,13
+W,1,100,3,log,35,300,6
+S,1,100,883,1373
+W,2,100,1,ctrl,20,600,2
+D,2,100,6,6,468
+W,2,100,2,ai,96,1700,17
+W,2,100,3,log,19,350,7
+S,2,100,734,1527
+W,3,100,1,ctrl,16,600,2
+D,3,100,5,5,795
+W,3,100,2,ai,87,2000,20
+W,3,100,3,log,15,450,9
+S,3,100,816,1451
+W,4,100,1,ctrl,14,600,2
+D,4,100,5,5,1212
+W,4,100,2,ai,97,2200,22
+W,4,100,3,log,18,450,9
+S,4,100,675,1703
+W,5,100,1,ctrl,15,600,2
+D,5,100,5,5,1727
+W,5,100,2,ai,107,2500,25
+W,5,100,3,log,23,650,13
+S,5,100,800,1553
+W,6,100,1,ctrl,13,600,2
+D,6,100,5,5,2083
+W,6,100,2,ai,102,2800,28
+W,6,100,3,log,23,650,13
+S,6,100,739,1574
+W,7,100,1,ctrl,15,600,2
+D,7,100,4,4,2336
+W,7,100,2,ai,136,3200,32
+W,7,100,3,log,27,650,13
+S,7,100,732,1595
+W,8,100,1,ctrl,9,600,2
+D,8,100,3,3,2164
+W,8,100,2,ai,103,3500,35
+W,8,100,3,log,24,850,17
+S,8,100,726,1833
+W,9,100,1,ctrl,9,600,2
+D,9,100,2,2,1702
+W,9,100,2,ai,111,3800,38
+W,9,100,3,log,27,850,17
+S,9,100,884,1868
+W,10,100,1,ctrl,7,600,2
+D,10,100,2,2,1891
+W,10,100,2,ai,89,3800,38
+W,10,100,3,log,28,850,17
+S,10,100,728,2035
+W,11,100,1,ctrl,9,600,2
+D,11,100,2,2,2180
+W,11,100,2,ai,113,4100,41
+W,11,100,3,log,19,1000,20
+S,11,100,892,1666
+W,12,100,1,ctrl,10,600,2
+D,12,100,2,2,2324
+W,12,100,2,ai,125,4100,41
+W,12,100,3,log,30,1000,20
+S,12,100,753,1750
+W,13,100,1,ctrl,10,600,2
+D,13,100,2,2,2821
+W,13,100,2,ai,117,4200,42
+W,13,100,3,log,30,1000,20
+S,13,100,888,1634
+W,14,100,1,ctrl,10,600,2
+D,14,100,3,3,4712
+W,14,100,2,ai,125,4600,46
+W,14,100,3,log,32,1200,24
+S,14,100,743,1576
+W,15,100,1,ctrl,11,600,2
+D,15,100,2,2,3490
+W,15,100,2,ai,131,4600,46
+W,15,100,3,log,44,1200,24
+S,15,100,835,1576
+W,16,100,1,ctrl,10,600,2
+D,16,100,3,3,5794
+W,16,100,2,ai,138,4800,48
+W,16,100,3,log,36,1200,24
+S,16,100,878,1666
+W,17,100,1,ctrl,9,600,2
+D,17,100,2,2,4233
+W,17,100,2,ai,140,5200,52
+W,17,100,3,log,28,1350,27
+S,17,100,888,1660
+W,18,100,1,ctrl,13,600,2
+D,18,100,4,4,9348
+W,18,100,2,ai,185,5400,54
+W,18,100,3,log,65,1350,27
+S,18,100,884,1653
+W,19,100,1,ctrl,12,600,2
+D,19,100,5,5,12841
+W,19,100,2,ai,185,5400,54
+W,19,100,3,log,27,1350,27
+S,19,100,847,1528
+J,1,ctrl,1,82,75,70606,2838,71397,130437903,2,2848
+# done
+
+# sexp2_multi ALL DONE
+/ $ shu[2K/ $ shutdown 
+bye bye~
