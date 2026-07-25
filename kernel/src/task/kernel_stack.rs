@@ -10,7 +10,7 @@ use crate::mm::frame_allocator::{
 };
 use crate::trap::TrapContext;
 
-pub const KERNEL_STACK_SIZE: usize = 128 * 1024;
+pub const KERNEL_STACK_SIZE: usize = 512 * 1024;
 const TRAP_CONTEXT_SIZE: usize = core::mem::size_of::<TrapContext>();
 
 pub struct KernelStack {
