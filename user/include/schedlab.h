@@ -52,7 +52,7 @@ extern "C" {
 /* #define printf uprintf */
 
 #define SL_MAX_GROUPS  8
-#define SL_MAX_THREADS 128
+#define SL_MAX_THREADS 512
 #define SL_NAME_LEN    16
 
 /* ================= 数据类型 ================= */

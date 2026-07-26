@@ -690,7 +690,10 @@ external commands are in /bin:
 
 / $ 。/   ./sched/sexp3              ./se    ./sce hed/
 ./sched/calibrate  ./sched/schedlab  ./sched/sexp1_mech  ./sched/sexp2_edge  ./sched/sexp2_multi  ./sched/sexp3_aimd  
-[2K/ $ ./sched/ex  se[2K/ $ ./sched/sexp3[2K/ $ ./sched/sexp3_aimd
+
+[2K/ $ ./sched/ex  se
+[2K/ $ ./sched/sexp3
+[2K/ $ ./sched/sexp3_aimd
 # === RESUME: medium aimd100 ===
 # WARMUP config=medium aimd100
 # RUN config=medium mode=aimd alpha0=100 rep=0/5
@@ -55854,5 +55857,6 @@ J,1,ctrl,1,3600,658,34294,224,58829,4395677,0,234
 # done
 
 # sexp3_aimd_resume ALL DONE
-/ $ shu[2K/ $ shutdown 
+/ $ shu
+[2K/ $ shutdown 
 bye bye~
