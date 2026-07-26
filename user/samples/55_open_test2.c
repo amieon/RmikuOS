@@ -48,7 +48,7 @@ static void test_truncate(const char *dir) {
     close(fd);
     puts("after write 10 bytes:\n");
     puts("  size=");
-    put_int(file_size(path));
+    printf("%d", file_size(path));
     puts("\n");
     dump(path);
 
@@ -58,7 +58,7 @@ static void test_truncate(const char *dir) {
     close(fd);
     puts("after truncate-rewrite 'BB':\n");
     puts("  size=");
-    put_int(file_size(path));
+    printf("%d", file_size(path));
     puts("  (期望 2)\n");
     dump(path);                    // 期望 content=[BB],不能有 A 残留
 
@@ -77,7 +77,7 @@ static void test_append(const char *dir) {
     close(fd);
     puts("after init 'aaa':\n");
     puts("  size=");
-    put_int(file_size(path));
+    printf("%d", file_size(path));
     puts("\n");
     dump(path);
 
@@ -87,7 +87,7 @@ static void test_append(const char *dir) {
     close(fd);
     puts("after append 'bbb':\n");
     puts("  size=");
-    put_int(file_size(path));
+    printf("%d", file_size(path));
     puts("  (期望 6)\n");
     dump(path);                    // 期望 content=[aaabbb]
 
@@ -97,7 +97,7 @@ static void test_append(const char *dir) {
     close(fd);
     puts("after append 'ccc':\n");
     puts("  size=");
-    put_int(file_size(path));
+    printf("%d", file_size(path));
     puts("  (期望 9)\n");
     dump(path);                    // 期望 content=[aaabbbccc]
 

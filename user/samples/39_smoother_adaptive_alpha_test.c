@@ -218,7 +218,7 @@ static void print_adaptive_window(
         miss_per_1000 = miss * 1000 / jobs;
     }
 
-    uprintf("[adaptive_window] window=%lu alpha_before=%lu alpha_after=%lu safe_windows=%lu jobs=%lu miss=%lu miss_per_1000=%lu action=%s\n",
+    printf("[adaptive_window] window=%lu alpha_before=%lu alpha_after=%lu safe_windows=%lu jobs=%lu miss=%lu miss_per_1000=%lu action=%s\n",
         (usize)window_id,
         (usize)alpha_before,
         (usize)alpha_after,
@@ -253,7 +253,7 @@ static void print_result_line(
     usize resp_max
 ) {
     /* 公共前半段：三种 role 完全一致。注意这里行尾不带 '\n'。 */
-    uprintf("[edge_deadline] alpha=%lu role=%s_result pid=%lu threads=%lu tickets=%lu effective=0 ready=0 run_ticks=0 work=%lu jobs=%lu miss=%lu",
+    printf("[edge_deadline] alpha=%lu role=%s_result pid=%lu threads=%lu tickets=%lu effective=0 ready=0 run_ticks=0 work=%lu jobs=%lu miss=%lu",
         (usize)alpha,
         role,
         (usize)getpid(),
@@ -269,7 +269,7 @@ static void print_result_line(
             resp_min = 0;
         }
 
-        uprintf(" lateness_sum=%lu lateness_max=%lu resp_sum=%lu resp_sumsq=%lu resp_min=%lu resp_max=%lu",
+        printf(" lateness_sum=%lu lateness_max=%lu resp_sum=%lu resp_sumsq=%lu resp_min=%lu resp_max=%lu",
             lateness_sum,
             lateness_max,
             resp_sum,
@@ -278,7 +278,7 @@ static void print_result_line(
             resp_max);
     }
 
-    uprintf("\n");
+    printf("\n");
 }
 
 static void print_parent_stat_line(
@@ -288,7 +288,7 @@ static void print_parent_stat_line(
     int tickets,
     struct sched_proc_stat *st
 ) {
-    uprintf("[edge_sample] alpha=%lu role=%s pid=%lu threads=%lu tickets=%lu effective=%lu ready=%lu run_ticks=%lu stride=%lu pass=%lu\n",
+    printf("[edge_sample] alpha=%lu role=%s pid=%lu threads=%lu tickets=%lu effective=%lu ready=%lu run_ticks=%lu stride=%lu pass=%lu\n",
         (usize)alpha,
         role,
         (usize)st->pid,
@@ -492,13 +492,13 @@ static int run_control(int alpha, int control_threads) {
         if (ret != tids[i] || code != 0) {
             puts("[edge_deadline] FAIL: control join\n");
             puts("i=");
-            put_int(i);
+            printf("%d", i);
             puts(" tid=");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -560,13 +560,13 @@ static int run_ai(int alpha, int ai_threads) {
         if (ret != tids[i] || code != 0) {
             puts("[edge_deadline] FAIL: ai join\n");
             puts("i=");
-            put_int(i);
+            printf("%d", i);
             puts(" tid=");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -621,13 +621,13 @@ static int run_logger(int alpha, int logger_threads) {
         if (ret != tids[i] || code != 0) {
             puts("[edge_deadline] FAIL: logger join\n");
             puts("i=");
-            put_int(i);
+            printf("%d", i);
             puts(" tid=");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -656,13 +656,13 @@ static int run_one_fixed_case(
     int logger_threads
 ) {
     puts("\n[adaptive_alpha] run initial_alpha=");
-    put_int(fixed_alpha);
+    printf("%d", fixed_alpha);
     puts(" control_threads=");
-    put_int(control_threads);
+    printf("%d", control_threads);
     puts(" ai_threads=");
-    put_int(ai_threads);
+    printf("%d", ai_threads);
     puts(" logger_threads=");
-    put_int(logger_threads);
+    printf("%d", logger_threads);
     puts("\n");
 
     int alpha = fixed_alpha;
@@ -795,7 +795,7 @@ static int run_one_fixed_case(
     }
 
     puts("[adaptive_alpha] final_alpha=");
-    put_int(alpha);
+    printf("%d", alpha);
     puts("\n");
 
     return 0;
@@ -808,16 +808,16 @@ static int run_one_adaptive_case(
     int logger_threads
 ) {
     puts("\n[adaptive_alpha] run initial_alpha=");
-    put_int(initial_alpha);
+    printf("%d", initial_alpha);
 
     puts(" control_threads=");
-    put_int(control_threads);
+    printf("%d", control_threads);
 
     puts(" ai_threads=");
-    put_int(ai_threads);
+    printf("%d", ai_threads);
 
     puts(" logger_threads=");
-    put_int(logger_threads);
+    printf("%d", logger_threads);
 
     puts("\n");
 
@@ -1088,7 +1088,7 @@ static int run_one_adaptive_case(
     }
 
     puts("[adaptive_alpha] final_alpha=");
-    put_int(alpha);
+    printf("%d", alpha);
     puts("\n");
 
     return 0;
@@ -1137,9 +1137,9 @@ int main(int argc, char **argv) {
     if (argc == 6) {
         const char *m = argv[5];
 
-        if (str_eq(m, "fixed")) {
+        if ((strcmp(m, "fixed") == 0)) {
             fixed_mode = 1;
-        } else if (str_eq(m, "adaptive")) {
+        } else if ((strcmp(m, "adaptive") == 0)) {
             fixed_mode = 0;
         } else {
             puts("[adaptive_alpha] FAIL: mode must be 'adaptive' or 'fixed'\n");

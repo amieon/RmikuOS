@@ -11,9 +11,9 @@ int main(int argc, char **argv)
         int n = http_load_file(argv[1], http_file_buf, HTTP_FILE_CAP);
         if (n > 0) {
             http_file_len = n;
-            uprintf("[httpd] loaded %s, %d bytes, serving at /\n", argv[1], n);
+            printf("[httpd] loaded %s, %d bytes, serving at /\n", argv[1], n);
         } else {
-            uprintf("[httpd] cannot open %s, fallback to inline pages\n", argv[1]);
+            printf("[httpd] cannot open %s, fallback to inline pages\n", argv[1]);
         }
     }
     int lfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -39,7 +39,7 @@ int main(int argc, char **argv)
 
         int n = http_recv_request(cfd, req, sizeof(req));
         if (n <= 0) {
-            uprintf("[httpd] idle conn fd=%d, kicked\n", cfd);
+            printf("[httpd] idle conn fd=%d, kicked\n", cfd);
             net_close(cfd);
             continue;
         }

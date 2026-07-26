@@ -1,6 +1,32 @@
 #include "user.h"
 
 
+
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
+
 #define N 160
 #define ROUNDS 150
 
@@ -57,11 +83,11 @@ int main() {
             if (!ptrs[i]) {
                 puts("FAIL: malloc null\n");
                 puts("round=");
-                put_int(r);
+                printf("%d", r);
                 puts(" i=");
-                put_int(i);
+                printf("%d", i);
                 puts(" size=");
-                put_int(size);
+                printf("%d", size);
                 puts("\n");
                 return 1;
             }
@@ -85,11 +111,11 @@ int main() {
                 if (p[j] != expected) {
                     puts("FAIL: pattern mismatch\n");
                     puts("round=");
-                    put_int(r);
+                    printf("%d", r);
                     puts(" i=");
-                    put_int(i);
+                    printf("%d", i);
                     puts(" offset=");
-                    put_int(j);
+                    printf("%d", j);
                     puts("\n");
                     return 1;
                 }
@@ -116,9 +142,9 @@ int main() {
             if (!ptrs[i]) {
                 puts("FAIL: second malloc null\n");
                 puts("round=");
-                put_int(r);
+                printf("%d", r);
                 puts(" i=");
-                put_int(i);
+                printf("%d", i);
                 puts("\n");
                 return 1;
             }
@@ -139,11 +165,11 @@ int main() {
                 if (p[j] != expected) {
                     puts("FAIL: second pattern mismatch\n");
                     puts("round=");
-                    put_int(r);
+                    printf("%d", r);
                     puts(" i=");
-                    put_int(i);
+                    printf("%d", i);
                     puts(" offset=");
-                    put_int(j);
+                    printf("%d", j);
                     puts("\n");
                     return 1;
                 }

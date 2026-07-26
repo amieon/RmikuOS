@@ -15,7 +15,7 @@ int main(void) {
     }
 
     puts("before reset run_ticks=");
-    put_int(st.run_ticks);
+    printf("%d", st.run_ticks);
     puts("\n");
 
     if (reset_sched_stat() < 0) {
@@ -29,7 +29,7 @@ int main(void) {
     }
 
     puts("after reset run_ticks=");
-    put_int(st.run_ticks);
+    printf("%d", st.run_ticks);
     puts("\n");
 
     if (st.run_ticks != 0) {

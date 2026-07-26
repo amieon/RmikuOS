@@ -20,9 +20,9 @@ int main(void) {
     int old_proc = get_process_tickets(pid);
 
     puts("initial my_tickets=");
-    put_int(old_my);
+    printf("%d", old_my);
     puts(" process_tickets=");
-    put_int(old_proc);
+    printf("%d", old_proc);
     puts("\n");
 
     if (old_my != old_proc) {
@@ -67,7 +67,7 @@ int main(void) {
     int old_thread = get_thread_tickets(tid);
 
     puts("initial thread_tickets=");
-    put_int(old_thread);
+    printf("%d", old_thread);
     puts("\n");
 
     if (old_thread <= 0) {
@@ -93,9 +93,9 @@ int main(void) {
     if (ret != tid || code != 0) {
         puts("FAIL: thread_join\n");
         puts("ret=");
-        put_int(ret);
+        printf("%d", ret);
         puts(" code=");
-        put_int(code);
+        printf("%d", code);
         puts("\n");
         return 1;
     }

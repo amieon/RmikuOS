@@ -71,9 +71,9 @@ int main() {
     int expected = THREADS * ITERS;
 
     puts("counter=");
-    put_int(counter);
+    printf("%d", counter);
     puts(" expected=");
-    put_int(expected);
+    printf("%d", expected);
     puts("\n");
 
     if (counter != expected) {

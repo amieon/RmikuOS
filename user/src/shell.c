@@ -519,7 +519,7 @@ static void reap_jobs(void) {
         if (jobs[i].used) {
             int status;
             if (waitpid(jobs[i].pid, &status, WNOHANG) == jobs[i].pid) {
-                uprintf("[%d] done %s\n", jobs[i].id, jobs[i].cmd);
+                printf("[%d] done %s\n", jobs[i].id, jobs[i].cmd);
                 jobs[i].used = 0;
             }
         }
@@ -529,7 +529,7 @@ static void reap_jobs(void) {
 static void print_jobs(void) {
     for (int i = 0; i < MAX_JOBS; i++) {
         if (jobs[i].used) {
-            uprintf("[%d] running %s\n", jobs[i].id, jobs[i].cmd);
+            printf("[%d] running %s\n", jobs[i].id, jobs[i].cmd);
         }
     }
 }
@@ -1000,7 +1000,7 @@ static int run_external(int argc, char *argv[], int background) {
     } else if (pid > 0) {
         if (background) {
             add_job(pid, argv[0]);
-            uprintf("[%d] %d\n", next_job_id - 1, pid);
+            printf("[%d] %d\n", next_job_id - 1, pid);
             fcntl(0, F_SETFL, 0);
             return 0;
         }
@@ -1012,7 +1012,7 @@ static int run_external(int argc, char *argv[], int background) {
             int n = read(0, &ch, 1);
             if (n == 1 && ch == 3) {
                 kill(pid, SIGINT);
-                uprintf("\n");
+                printf("\n");
                 while (waitpid(pid, &status, 0) < 0) yield();
                 break;
             }
@@ -1107,7 +1107,7 @@ static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[])
     if (seg->infile[0]) {
         isize fd = open(seg->infile, O_RDONLY);
         if (fd < 0) {
-            uprintf("cannot open %s for input\n", seg->infile);
+            printf("cannot open %s for input\n", seg->infile);
             exit(1);
         }
         dup2(fd, 0);
@@ -1120,7 +1120,7 @@ static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[])
         else
             fd = open(seg->outfile, O_CREAT | O_TRUNC | O_WRONLY);
         if (fd < 0) {
-            uprintf("cannot open %s for output\n", seg->outfile);
+            printf("cannot open %s for output\n", seg->outfile);
             exit(1);
         }
         dup2(fd, 1);

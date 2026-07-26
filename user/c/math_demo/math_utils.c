@@ -1,5 +1,5 @@
 #include "math_utils.h"
-#include "fmt.h"
+#include "stdio.h"
 
 long factorial(int n) {
     if (n <= 1) return 1;
@@ -23,7 +23,7 @@ long fibonacci(int n) {
 void print_result(const char* name, int n, long result) {
     uprintf(name);
     uprintf("(");
-    put_int(n);
+    printf("%d", n);
     uprintf(") = ");
-    put_int(result);
+    printf("%d", result);
 }

@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
                 puts("unknown ");
             }
 
-            put_int(st.size);
+            printf("%d", st.size);
             puts(" ");
 
             puts(name);

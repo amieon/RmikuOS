@@ -1,5 +1,30 @@
 #include "user.h"
 
+
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
 #define MAX_PROCS 6
 #define MAX_THREADS 50
 
@@ -170,13 +195,13 @@ static int run_workload_process(int alpha, int role, int threads) {
         if (ret != tids[i] || code != 0) {
             puts("[alpha_arg] FAIL: thread_join\n");
             puts("i=");
-            put_int(i);
+            printf("%d", i);
             puts(" tid=");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -220,7 +245,7 @@ static void sample_children(
             );
         } else {
             puts("[alpha_sample] FAIL: get_process_sched_stat role=");
-            put_int(i);
+            printf("%d", i);
             puts("\n");
         }
     }
@@ -228,13 +253,13 @@ static void sample_children(
 
 static int run_one_case(int alpha, int proc_count, int threads[]) {
     puts("\n[alpha_arg] run alpha=");
-    put_int(alpha);
+    printf("%d", alpha);
     puts(" procs=");
-    put_int(proc_count);
+    printf("%d", proc_count);
     puts(" threads=");
 
     for (int i = 0; i < proc_count; i++) {
-        put_int(threads[i]);
+        printf("%d", threads[i]);
         if (i + 1 < proc_count) {
             puts(",");
         }
@@ -286,11 +311,11 @@ static int run_one_case(int alpha, int proc_count, int threads[]) {
 
         if (ret != pids[i] || code != 0) {
             puts("[alpha_arg] FAIL: child failed role=");
-            put_int(i);
+            printf("%d", i);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -311,7 +336,7 @@ int main(int argc, char **argv) {
 
     int alpha = 0;
 
-    if ((alpha = parse_int(argv[1])) < 0) {
+    if ((alpha = atoi(argv[1])) < 0) {
         puts("[alpha_arg] FAIL: bad alpha\n");
         return 1;
     }
@@ -331,7 +356,7 @@ int main(int argc, char **argv) {
     int threads[MAX_PROCS];
 
     for (int i = 0; i < proc_count; i++) {
-        if ((threads[i] = parse_int(argv[i + 2])) < 0) {
+        if ((threads[i] = atoi(argv[i + 2])) < 0) {
             puts("[alpha_arg] FAIL: bad thread count\n");
             return 1;
         }

@@ -4,7 +4,7 @@ static void check(const char *label, isize got, int want_ok) {
     int got_ok = (got >= 0) ? 1 : 0;
     puts(label);
     puts(": ret=");
-    put_int(got);
+    printf("%d", got);
     if (got_ok == want_ok) {
         puts("  [PASS]\n");
     } else {

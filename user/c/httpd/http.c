@@ -53,9 +53,9 @@ int http_send_all(int fd, const char *buf, int len)
         
 
         int n = send(fd, buf + sent, chunk, 0);
-       // uprintf("[http] send %d..%d -> %d\n", sent, sent + chunk, n);
+       // printf("[http] send %d..%d -> %d\n", sent, sent + chunk, n);
         if (n <= 0) {
-            uprintf("[http] STALLED at %d/%d\n", sent, len);
+            printf("[http] STALLED at %d/%d\n", sent, len);
             return sent;
         }
         sent += n;

@@ -1,5 +1,5 @@
 #include "math_utils.h"
-#include "fmt.h"
+#include "stdio.h"
 
 int main() {
     uprintf("=== math_demo (C multi-file project) ===\n");

@@ -27,9 +27,6 @@ static inline void put_char(char ch) {
     write(1, &ch, 1);
 }
 
-static inline void puts(const char *s) {
-    write(1, s, strlen(s));
-}
 
 static inline isize create2(const char *path, usize len) {
     return syscall3(SYS_CREATE, (usize)path, len, 0);

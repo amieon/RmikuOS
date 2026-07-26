@@ -96,9 +96,9 @@ static int check_stat_path(const char *path, unsigned char expected_type) {
         puts("[FAIL] stat type mismatch: ");
         puts(path);
         puts(" got=");
-        put_int(st.file_type);
+        printf("%d", st.file_type);
         puts(" expected=");
-        put_int(expected_type);
+        printf("%d", expected_type);
         puts("\n");
         failures++;
         return -1;
@@ -108,7 +108,7 @@ static int check_stat_path(const char *path, unsigned char expected_type) {
         puts("[stat] ");
         print_type(st.file_type);
         puts(" size=");
-        put_int(st.size);
+        printf("%d", st.size);
         puts(" ");
         puts(path);
         puts("\n");
@@ -129,9 +129,9 @@ static int check_fstat_fd(int fd, unsigned char expected_type, const char *tag) 
         puts("[FAIL] fstat type mismatch: ");
         puts(tag);
         puts(" got=");
-        put_int(st.file_type);
+        printf("%d", st.file_type);
         puts(" expected=");
-        put_int(expected_type);
+        printf("%d", expected_type);
         puts("\n");
         failures++;
         return -1;
@@ -207,7 +207,7 @@ static int scan_dir(const char *path, int min_entries) {
         puts("[FAIL] too few entries in ");
         puts(path);
         puts(": ");
-        put_int(total);
+        printf("%d", total);
         puts("\n");
         failures++;
         return -1;
@@ -266,7 +266,7 @@ static int read_all_file(const char *path, int min_bytes) {
         puts("[FAIL] file too small or read incomplete: ");
         puts(path);
         puts(" total=");
-        put_int(total);
+        printf("%d", total);
         puts("\n");
         failures++;
         return -1;
@@ -276,9 +276,9 @@ static int read_all_file(const char *path, int min_bytes) {
         puts("[FAIL] read size != stat size: ");
         puts(path);
         puts(" read=");
-        put_int(total);
+        printf("%d", total);
         puts(" stat=");
-        put_int(st.size);
+        printf("%d", st.size);
         puts("\n");
         failures++;
         return -1;
@@ -320,7 +320,7 @@ static int fd_reuse_test(void) {
 
     if (fd != 3) {
         puts("[WARN] fd reuse did not return 3, got ");
-        put_int(fd);
+        printf("%d", fd);
         puts("\n");
         /*
          * 这里先不算失败，因为你的 free_fds 策略可能不是严格最小 fd。
@@ -421,7 +421,7 @@ static int cwd_relative_test(void) {
 static void one_round(int round) {
     if (verbose) {
         puts("\n--- round ");
-        put_int(round);
+        printf("%d", round);
         puts(" ---\n");
     }
 
@@ -455,9 +455,9 @@ int main(int argc, char **argv) {
 
     puts("\n========== RmikuOS FS Stress ==========\n");
     puts("pid=");
-    put_int(getpid());
+    printf("%d", getpid());
     puts(" loops=");
-    put_int(loops);
+    printf("%d", loops);
     puts("\n");
 
     char cwd[MAX_PATH];
@@ -472,11 +472,11 @@ int main(int argc, char **argv) {
 
         if (i % 20 == 0) {
             puts("[progress] ");
-            put_int(i);
+            printf("%d", i);
             puts("/");
-            put_int(loops);
+            printf("%d", loops);
             puts(" failures=");
-            put_int(failures);
+            printf("%d", failures);
             puts("\n");
         }
 
@@ -489,9 +489,9 @@ int main(int argc, char **argv) {
 
     puts("\n========== FS Stress Summary ==========\n");
     puts("loops=");
-    put_int(loops);
+    printf("%d", loops);
     puts(" failures=");
-    put_int(failures);
+    printf("%d", failures);
     puts("\n");
 
     if (failures == 0) {

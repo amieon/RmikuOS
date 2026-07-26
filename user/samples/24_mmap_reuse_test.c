@@ -36,9 +36,9 @@ int main() {
     }
 
     puts("b=");
-    put_int((usize)b);
+    printf("%d", (usize)b);
     puts(" d=");
-    put_int((usize)d);
+    printf("%d", (usize)d);
     puts("\n");
 
     if (d != b) {

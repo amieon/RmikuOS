@@ -13,21 +13,21 @@ int main(void) {
     }
 
     puts("pid=");
-    put_int(st.pid);
+    printf("%d", st.pid);
     puts(" tickets=");
-    put_int(st.tickets);
+    printf("%d", st.tickets);
     puts(" effective=");
-    put_int(st.effective_tickets);
+    printf("%d", st.effective_tickets);
     puts(" ready=");
-    put_int(st.ready_threads);
+    printf("%d", st.ready_threads);
     puts(" alpha=");
-    put_int(st.alpha);
+    printf("%d", st.alpha);
     puts(" run_ticks=");
-    put_int(st.run_ticks);
+    printf("%d", st.run_ticks);
     puts(" pass=");
-    put_int(st.pass);
+    printf("%d", st.pass);
     puts(" stride=");
-    put_int(st.stride);
+    printf("%d", st.stride);
     puts("\n");
 
     if (st.pid != getpid()) {
