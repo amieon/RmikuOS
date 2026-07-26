@@ -26,7 +26,7 @@ static void sl_reset_state(void) {
 }
 
 static void setup(void) {
-    sl_add_jobs_parent("ctrl", 300, 1, /*period*/4, /*cpu*/2, /*burn*/400000);
+    sl_add_jobs_parent("ctrl", 300, 1, /*period*/6, /*cpu*/2, /*burn*/400000);
     sl_add_spin_phased("ai", 100, 150, 12000, /*light_active*/3);
     sl_add_spin("log", 50, 32, 12000);
 }
@@ -54,7 +54,7 @@ static void run_aimd(int alpha0, int rep, unsigned long total) {
 }
 
 int main(void) {
-    const unsigned long total = 36000;
+    const unsigned long total = 72000;
     const int nreps = 3;
     const int fixed_alphas[] = {0, 30, 60, 100};
     const int aimd_alphas[]  = {0, 50, 100};
