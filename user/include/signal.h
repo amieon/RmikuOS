@@ -16,6 +16,11 @@ static inline void kill(isize pid, usize sig){
     syscall3(SYS_KILL, pid, sig, 0);
 }
 
+#ifndef SIGNAL_H
+#define SIGNAL_H
+typedef int sig_atomic_t;
+#endif
+
 #ifdef __cplusplus
 }
 #endif
