@@ -1,95 +1,70 @@
-// ========== uprintf 实现 ==========
-#include <stdarg.h>
-#include "syscall.h"
-#include "types.h"
-#include "io.h"
-#include "file.h"
-
-#ifndef UPRINTF_BUF_SIZE
-#define UPRINTF_BUF_SIZE 1024
+#pragma once
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-struct uprintf_buf {
-    char data[UPRINTF_BUF_SIZE];
-    int  len;
-};
+#include <stdarg.h>
+#include "file.h"   /* 带入 io.h → syscall.h, flag.h; 以及 FILE, stdin/stdout/stderr,
+                       fopen, fclose, fgetc, fputc, fread, fwrite, fflush, fputs 等 */
 
-static inline void uprintf_flush(struct uprintf_buf *b) {
-    if (b->len > 0) {
-        syscall3(SYS_WRITE, 1, (unsigned long)b->data, (unsigned long)b->len);
-        b->len = 0;
-    }
+/* ================================================================
+ *  内部：向 FILE* 逐字符输出（复用 file.h 的缓冲）
+ * ================================================================ */
+
+static inline void __pf_putc(FILE *fp, char ch) {
+    fputc((unsigned char)ch, fp);
 }
 
-static inline void uprintf_putc(struct uprintf_buf *b, char ch) {
-    if (b->len >= UPRINTF_BUF_SIZE) uprintf_flush(b);
-    b->data[b->len++] = ch;
+static inline void __pf_puts(FILE *fp, const char *s) {
+    if (!s) s = "(null)";
+    while (*s) fputc((unsigned char)*s++, fp);
 }
 
-static inline void uprintf_puts_raw(struct uprintf_buf *b, const char *s) {
-    if (s == 0) s = "(null)";
-    while (*s) uprintf_putc(b, *s++);
+static inline void __pf_u64(FILE *fp, unsigned long long v, int base, int upper) {
+    const char *d = upper ? "0123456789ABCDEF" : "0123456789abcdef";
+    char tmp[64];
+    int n = 0;
+    if (v == 0) { fputc('0', fp); return; }
+    while (v) { tmp[n++] = d[v % base]; v /= base; }
+    while (n > 0) fputc((unsigned char)tmp[--n], fp);
 }
 
-static inline void uprintf_u64_dec(struct uprintf_buf *b, unsigned long long v) {
-    char tmp[20]; int n = 0;
-    if (v == 0) { uprintf_putc(b, '0'); return; }
-    while (v > 0 && n < (int)sizeof(tmp)) { tmp[n++] = (char)('0' + (int)(v % 10)); v /= 10; }
-    while (n > 0) uprintf_putc(b, tmp[--n]);
+static inline void __pf_i64(FILE *fp, long long v, int width, char pad) {
+    int neg = v < 0;
+    unsigned long long uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL
+                                : (unsigned long long)v;
+    char tmp[24];
+    int n = 0;
+    if (uv == 0) tmp[n++] = '0';
+    while (uv) { tmp[n++] = (char)('0' + uv % 10); uv /= 10; }
+    int total = n + neg;
+    if (pad == '0' && neg) { fputc('-', fp); neg = 0; }
+    while (total < width) { fputc((unsigned char)pad, fp); total++; }
+    if (neg) fputc('-', fp);
+    while (n > 0) fputc((unsigned char)tmp[--n], fp);
 }
 
-static inline void uprintf_i64_dec(struct uprintf_buf *b, long long v) {
-    if (v < 0) {
-        uprintf_putc(b, '-');
-        uprintf_u64_dec(b, (unsigned long long)(-(v + 1)) + 1ULL);
-    } else {
-        uprintf_u64_dec(b, (unsigned long long)v);
-    }
-}
-
-static inline void uprintf_u64_hex(struct uprintf_buf *b, unsigned long long v, int upper) {
-    static const char digits_lower[] = "0123456789abcdef";
-    static const char digits_upper[] = "0123456789ABCDEF";
-    const char *digits = upper ? digits_upper : digits_lower;
-    char tmp[16]; int n = 0;
-    if (v == 0) { uprintf_putc(b, '0'); return; }
-    while (v > 0 && n < (int)sizeof(tmp)) { tmp[n++] = digits[(int)(v & 0xf)]; v >>= 4; }
-    while (n > 0) uprintf_putc(b, tmp[--n]);
-}
-
-static inline void uprintf_u64_oct(struct uprintf_buf *b, unsigned long long v) {
-    char tmp[22]; int n = 0;
-    if (v == 0) { uprintf_putc(b, '0'); return; }
-    while (v > 0 && n < (int)sizeof(tmp)) { tmp[n++] = (char)('0' + (int)(v % 8)); v /= 8; }
-    while (n > 0) uprintf_putc(b, tmp[--n]);
-}
-
-static inline void uprintf_float(struct uprintf_buf *b, double v, int prec) {
-    if (v < 0) { uprintf_putc(b, '-'); v = -v; }
+static inline void __pf_float(FILE *fp, double v, int prec) {
+    if (v < 0) { fputc('-', fp); v = -v; }
     unsigned long long ip = (unsigned long long)v;
     double frac = v - (double)ip;
-    if (ip == 0) uprintf_putc(b, '0');
-    else {
-        char tmp[32]; int n = 0;
-        while (ip > 0) { tmp[n++] = '0' + (ip % 10); ip /= 10; }
-        while (n > 0) uprintf_putc(b, tmp[--n]);
-    }
-    uprintf_putc(b, '.');
+    __pf_u64(fp, ip, 10, 0);
+    fputc('.', fp);
     for (int i = 0; i < prec; i++) {
-        frac *= 10;
-        int digit = (int)frac;
-        if (digit > 9) digit = 9;
-        uprintf_putc(b, '0' + digit);
-        frac -= digit;
+        frac *= 10.0;
+        int d = (int)frac;
+        if (d > 9) d = 9;
+        fputc((char)('0' + d), fp);
+        frac -= d;
     }
 }
 
-static inline void uprintf_scientific(struct uprintf_buf *b, double v, int prec) {
-    if (v < 0) { uprintf_putc(b, '-'); v = -v; }
+static inline void __pf_sci(FILE *fp, double v, int prec) {
+    if (v < 0) { fputc('-', fp); v = -v; }
     if (v == 0.0) {
-        uprintf_putc(b, '0'); uprintf_putc(b, '.');
-        for (int i = 0; i < prec; i++) uprintf_putc(b, '0');
-        uprintf_putc(b, 'e'); uprintf_putc(b, '+'); uprintf_putc(b, '0'); uprintf_putc(b, '0');
+        __pf_puts(fp, "0.");
+        for (int i = 0; i < prec; i++) fputc('0', fp);
+        __pf_puts(fp, "e+00");
         return;
     }
     int exp10 = 0;
@@ -97,477 +72,433 @@ static inline void uprintf_scientific(struct uprintf_buf *b, double v, int prec)
     while (m >= 10.0) { m /= 10.0; exp10++; }
     while (m < 1.0)   { m *= 10.0; exp10--; }
     int d = (int)m;
-    uprintf_putc(b, '0' + d);
-    uprintf_putc(b, '.');
+    fputc((char)('0' + d), fp);
+    fputc('.', fp);
     double frac = m - d;
     for (int i = 0; i < prec; i++) {
-        frac *= 10;
-        int digit = (int)frac;
-        if (digit > 9) digit = 9;
-        uprintf_putc(b, '0' + digit);
-        frac -= digit;
+        frac *= 10.0;
+        int dd = (int)frac;
+        if (dd > 9) dd = 9;
+        fputc((char)('0' + dd), fp);
+        frac -= dd;
     }
-    uprintf_putc(b, 'e');
-    if (exp10 >= 0) uprintf_putc(b, '+');
-    else { uprintf_putc(b, '-'); exp10 = -exp10; }
-    if (exp10 < 10) uprintf_putc(b, '0');
-    uprintf_u64_dec(b, (unsigned long long)exp10);
+    fputc('e', fp);
+    fputc(exp10 >= 0 ? '+' : '-', fp);
+    if (exp10 < 0) exp10 = -exp10;
+    if (exp10 < 10) fputc('0', fp);
+    __pf_u64(fp, (unsigned long long)exp10, 10, 0);
 }
 
-static inline void uprintf_pad(struct uprintf_buf *b, int width, int len, char pad_char) {
-    for (int i = len; i < width; i++) uprintf_putc(b, pad_char);
-}
+/* ================================================================
+ *  vfprintf —— 格式化核心
+ * ================================================================ */
 
-static inline void uprintf_int(struct uprintf_buf *b, long long v, int width, int prec, char pad_char) {
-    char tmp[32]; int n = 0;
-    int neg = v < 0;
-    unsigned long long uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v;
-    if (uv == 0) tmp[n++] = '0';
-    while (uv > 0) { tmp[n++] = '0' + (uv % 10); uv /= 10; }
-    int total = n + (neg ? 1 : 0);
-    int pad_len = width > total ? width - total : 0;
-    for (int i = 0; i < pad_len && pad_char == ' '; i++) uprintf_putc(b, ' ');
-    if (neg) uprintf_putc(b, '-');
-    while (n > 0) uprintf_putc(b, tmp[--n]);
-}
+static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
+    if (!fp) return -1;
+    int count = 0;
 
-static inline void uvprintf(const char *fmt, va_list ap) {
-    struct uprintf_buf b; b.len = 0;
+    /* 包装 fputc 同时计数 */
+    #define _PUT(ch) do { fputc((unsigned char)(ch), fp); count++; } while(0)
+    #define _PUTS(s) do { const char *_s=(s); if(!_s)_s="(null)"; \
+                          while(*_s){ fputc((unsigned char)*_s++,fp); count++; } } while(0)
+
     while (*fmt) {
         char ch = *fmt++;
-        if (ch != '%') { uprintf_putc(&b, ch); continue; }
+        if (ch != '%') { _PUT(ch); continue; }
 
-        // 解析格式：%[flags][width][.precision][length]specifier
-        int width = 0;
-        int prec = -1;  // -1 表示未指定
-        int is_long = 0;
-        int is_long_long = 0;
-        int is_size_t = 0;
-        char pad_char = ' ';
-        int alt_form = 0;
-
-        // flags
-        while (1) {
-            if (*fmt == '0') { pad_char = '0'; fmt++; }
-            else if (*fmt == '-') { fmt++; }  // 左对齐，暂不实现
-            else if (*fmt == '#') { alt_form = 1; fmt++; }
-            else break;
-        }
-
-        // width
-        while (*fmt >= '0' && *fmt <= '9') {
-            width = width * 10 + (*fmt - '0');
+        /* flags */
+        char pad = ' ';
+        int alt = 0;
+        while (*fmt == '0' || *fmt == '-' || *fmt == '#') {
+            if (*fmt == '0') pad = '0';
+            if (*fmt == '#') alt = 1;
             fmt++;
         }
 
-        // precision（只解析一次）
+        /* width */
+        int width = 0;
+        while (*fmt >= '0' && *fmt <= '9')
+            width = width * 10 + (*fmt++ - '0');
+
+        /* precision */
+        int prec = -1;
         if (*fmt == '.') {
             fmt++;
             prec = 0;
-            while (*fmt >= '0' && *fmt <= '9') {
-                prec = prec * 10 + (*fmt - '0');
-                fmt++;
-            }
+            while (*fmt >= '0' && *fmt <= '9')
+                prec = prec * 10 + (*fmt++ - '0');
         }
 
-        // length
+        /* length */
+        int is_ll = 0, is_l = 0, is_z = 0;
         if (*fmt == 'l') {
             fmt++;
-            if (*fmt == 'l') {
-                is_long_long = 1;
-                fmt++;
-            } else {
-                is_long = 1;
-            }
-        } else if (*fmt == 'z') {
-            is_size_t = 1;
-            fmt++;
-        }
+            if (*fmt == 'l') { is_ll = 1; fmt++; }
+            else is_l = 1;
+        } else if (*fmt == 'z') { is_z = 1; fmt++; }
 
         char spec = *fmt;
-        if (spec == 0) { uprintf_putc(&b, '%'); break; }
+        if (!spec) { _PUT('%'); break; }
         fmt++;
 
-        // 浮点默认精度 6，整数不在这里默认
-        int fprec = (prec < 0 && (spec == 'f' || spec == 'e' || spec == 'g' || spec == 'E' || spec == 'G')) ? 6 : prec;
+        int fprec = (prec < 0 && (spec=='f'||spec=='F'||spec=='e'||
+                     spec=='E'||spec=='g'||spec=='G')) ? 6 : prec;
 
         switch (spec) {
-            case 'd':
-            case 'i': {
-                long long v;
-                if (is_long_long) v = va_arg(ap, long long);
-                else if (is_long) v = va_arg(ap, long);
-                else if (is_size_t) v = (long long)va_arg(ap, size_t);
-                else v = va_arg(ap, int);
-                uprintf_int(&b, v, width, prec, pad_char);
+        case 'd': case 'i': {
+            long long v = is_ll ? va_arg(ap, long long)
+                        : is_l  ? va_arg(ap, long)
+                        : is_z  ? (long long)va_arg(ap, usize)
+                        :         va_arg(ap, int);
+            /* 手动展开 __pf_i64 以计数 */
+            int neg = v < 0;
+            unsigned long long uv = neg ? (unsigned long long)(-(v+1))+1ULL
+                                        : (unsigned long long)v;
+            char tmp[24]; int n = 0;
+            if (uv == 0) tmp[n++] = '0';
+            while (uv) { tmp[n++] = (char)('0' + uv%10); uv /= 10; }
+            int total = n + neg;
+            if (pad=='0' && neg) { _PUT('-'); neg = 0; }
+            while (total < width) { _PUT(pad); total++; }
+            if (neg) _PUT('-');
+            while (n > 0) _PUT(tmp[--n]);
+            break;
+        }
+        case 'u': case 'o': case 'x': case 'X': {
+            unsigned long long v = is_ll ? va_arg(ap, unsigned long long)
+                                 : is_l  ? va_arg(ap, unsigned long)
+                                 : is_z  ? (unsigned long long)va_arg(ap, usize)
+                                 :         va_arg(ap, unsigned int);
+            int base = spec=='u' ? 10 : spec=='o' ? 8 : 16;
+            int upper = (spec == 'X');
+            if (alt && v) {
+                _PUT('0');
+                _PUT(upper ? 'X' : 'x');
+            }
+            const char *dig = upper ? "0123456789ABCDEF" : "0123456789abcdef";
+            char tmp[64]; int n = 0;
+            if (v == 0) tmp[n++] = '0';
+            while (v) { tmp[n++] = dig[v % base]; v /= base; }
+            while (n < width) { _PUT(pad); width--; }
+            while (n > 0) _PUT(tmp[--n]);
+            break;
+        }
+        case 'p': {
+            void *v = va_arg(ap, void *);
+            _PUT('0'); _PUT('x');
+            unsigned long long uv = (unsigned long long)(usize)v;
+            const char *dig = "0123456789abcdef";
+            char tmp[16]; int n = 0;
+            if (uv == 0) tmp[n++] = '0';
+            while (uv) { tmp[n++] = dig[uv & 0xf]; uv >>= 4; }
+            while (n > 0) _PUT(tmp[--n]);
+            break;
+        }
+        case 'c':
+            _PUT((char)va_arg(ap, int));
+            break;
+        case 's': {
+            const char *s = va_arg(ap, const char *);
+            if (!s) s = "(null)";
+            int len = 0; while (s[len]) len++;
+            for (int i = len; i < width; i++) _PUT(' ');
+            _PUTS(s);
+            break;
+        }
+        case 'f': case 'F': {
+            double v = va_arg(ap, double);
+            if (v < 0) { _PUT('-'); v = -v; }
+            unsigned long long ip = (unsigned long long)v;
+            double frac = v - (double)ip;
+            /* 整数部分 */
+            char tmp[24]; int n = 0;
+            if (ip == 0) tmp[n++] = '0';
+            while (ip) { tmp[n++] = (char)('0' + ip%10); ip /= 10; }
+            while (n > 0) _PUT(tmp[--n]);
+            _PUT('.');
+            for (int i = 0; i < fprec; i++) {
+                frac *= 10.0;
+                int d = (int)frac; if (d > 9) d = 9;
+                _PUT((char)('0' + d));
+                frac -= d;
+            }
+            break;
+        }
+        case 'e': case 'E': {
+            double v = va_arg(ap, double);
+            if (v < 0) { _PUT('-'); v = -v; }
+            if (v == 0.0) {
+                _PUT('0'); _PUT('.');
+                for (int i = 0; i < fprec; i++) _PUT('0');
+                _PUT('e'); _PUT('+'); _PUT('0'); _PUT('0');
                 break;
             }
-            case 'u': {
-                unsigned long long v;
-                if (is_long_long) v = va_arg(ap, unsigned long long);
-                else if (is_long) v = va_arg(ap, unsigned long);
-                else if (is_size_t) v = (unsigned long long)va_arg(ap, size_t);
-                else v = va_arg(ap, unsigned int);
-                uprintf_u64_dec(&b, v);
-                break;
+            int exp10 = 0;
+            double m = v;
+            while (m >= 10.0) { m /= 10.0; exp10++; }
+            while (m < 1.0)   { m *= 10.0; exp10--; }
+            int d = (int)m;
+            _PUT((char)('0' + d)); _PUT('.');
+            double frac = m - d;
+            for (int i = 0; i < fprec; i++) {
+                frac *= 10.0;
+                int dd = (int)frac; if (dd > 9) dd = 9;
+                _PUT((char)('0' + dd));
+                frac -= dd;
             }
-            case 'o': {
-                unsigned long long v;
-                if (is_long_long) v = va_arg(ap, unsigned long long);
-                else if (is_long) v = va_arg(ap, unsigned long);
-                else if (is_size_t) v = (unsigned long long)va_arg(ap, size_t);
-                else v = va_arg(ap, unsigned int);
-                if (alt_form && v != 0) uprintf_putc(&b, '0');
-                uprintf_u64_oct(&b, v);
-                break;
-            }
-            case 'x': {
-                unsigned long long v;
-                if (is_long_long) v = va_arg(ap, unsigned long long);
-                else if (is_long) v = va_arg(ap, unsigned long);
-                else if (is_size_t) v = (unsigned long long)va_arg(ap, size_t);
-                else v = va_arg(ap, unsigned int);
-                if (alt_form && v != 0) { uprintf_putc(&b, '0'); uprintf_putc(&b, 'x'); }
-                uprintf_u64_hex(&b, v, 0);
-                break;
-            }
-            case 'X': {
-                unsigned long long v;
-                if (is_long_long) v = va_arg(ap, unsigned long long);
-                else if (is_long) v = va_arg(ap, unsigned long);
-                else if (is_size_t) v = (unsigned long long)va_arg(ap, size_t);
-                else v = va_arg(ap, unsigned int);
-                if (alt_form && v != 0) { uprintf_putc(&b, '0'); uprintf_putc(&b, 'X'); }
-                uprintf_u64_hex(&b, v, 1);
-                break;
-            }
-            case 'p': {
-                void *v = va_arg(ap, void *);
-                uprintf_putc(&b, '0'); uprintf_putc(&b, 'x');
-                uprintf_u64_hex(&b, (unsigned long long)(usize)v, 0);
-                break;
-            }
-            case 'c': { int v = va_arg(ap, int); uprintf_putc(&b, (char)v); break; }
-            case 's': {
-                const char *v = va_arg(ap, const char *);
-                int len = 0; while (v[len]) len++;
-                uprintf_pad(&b, width, len, ' ');
-                uprintf_puts_raw(&b, v);
-                break;
-            }
-            case 'f': {
-                double v = va_arg(ap, double);
-                uprintf_float(&b, v, fprec);
-                break;
-            }
-            case 'e': {
-                double v = va_arg(ap, double);
-                uprintf_scientific(&b, v, fprec);
-                break;
-            }
-            case 'g': {
-                double v = va_arg(ap, double);
-                double av = v < 0 ? -v : v;
-                if (av == 0.0 || (av >= 1e-4 && av < 1e6)) {
-                    uprintf_float(&b, v, fprec);
-                } else {
-                    uprintf_scientific(&b, v, fprec);
+            _PUT('e');
+            _PUT(exp10 >= 0 ? '+' : '-');
+            if (exp10 < 0) exp10 = -exp10;
+            if (exp10 < 10) _PUT('0');
+            /* 指数部分（最多两位以上） */
+            char etmp[8]; int en = 0;
+            if (exp10 == 0) etmp[en++] = '0';
+            while (exp10) { etmp[en++] = (char)('0' + exp10%10); exp10 /= 10; }
+            while (en > 0) _PUT(etmp[--en]);
+            break;
+        }
+        case 'g': case 'G': {
+            double v = va_arg(ap, double);
+            double av = v < 0 ? -v : v;
+            /* 简化：用 %f 或 %e 的判定 */
+            if (av == 0.0 || (av >= 1e-4 && av < 1e6)) {
+                /* 走 %f 路径（重新压回 va_list 不现实，直接内联） */
+                if (v < 0) { _PUT('-'); v = -v; }
+                unsigned long long ip = (unsigned long long)v;
+                double frac = v - (double)ip;
+                char tmp[24]; int n = 0;
+                if (ip == 0) tmp[n++] = '0';
+                while (ip) { tmp[n++] = (char)('0'+ip%10); ip/=10; }
+                while (n > 0) _PUT(tmp[--n]);
+                _PUT('.');
+                for (int i = 0; i < fprec; i++) {
+                    frac *= 10.0;
+                    int dd = (int)frac; if (dd>9) dd=9;
+                    _PUT((char)('0'+dd)); frac -= dd;
                 }
-                break;
+            } else {
+                /* 走 %e 路径 */
+                if (v < 0) { _PUT('-'); v = -v; }
+                int exp10 = 0;
+                double m = v;
+                while (m >= 10.0) { m /= 10.0; exp10++; }
+                while (m < 1.0)   { m *= 10.0; exp10--; }
+                int d = (int)m;
+                _PUT((char)('0'+d)); _PUT('.');
+                double frac = m - d;
+                for (int i = 0; i < fprec; i++) {
+                    frac *= 10.0;
+                    int dd = (int)frac; if (dd>9) dd=9;
+                    _PUT((char)('0'+dd)); frac -= dd;
+                }
+                _PUT('e');
+                _PUT(exp10>=0?'+':'-');
+                if (exp10<0) exp10=-exp10;
+                if (exp10<10) _PUT('0');
+                char etmp[8]; int en=0;
+                if (exp10==0) etmp[en++]='0';
+                while (exp10) { etmp[en++]=(char)('0'+exp10%10); exp10/=10; }
+                while (en>0) _PUT(etmp[--en]);
             }
-            case '%': { uprintf_putc(&b, '%'); break; }
-            default: {
-                uprintf_putc(&b, '%');
-                if (is_long_long) { uprintf_putc(&b, 'l'); uprintf_putc(&b, 'l'); }
-                else if (is_long) uprintf_putc(&b, 'l');
-                else if (is_size_t) uprintf_putc(&b, 'z');
-                uprintf_putc(&b, spec);
-                break;
-            }
+            break;
+        }
+        case '%':
+            _PUT('%');
+            break;
+        default:
+            _PUT('%');
+            _PUT(spec);
+            break;
         }
     }
-    uprintf_flush(&b);
+
+    #undef _PUT
+    #undef _PUTS
+    return count;
 }
 
-static inline void uprintf(const char *fmt, ...) {
-    va_list ap; va_start(ap, fmt); uvprintf(fmt, ap); va_end(ap);
+/* ================================================================
+ *  vsnprintf —— 写入字符串
+ * ================================================================ */
+
+static inline int __sn_put(char *s, int cap, int pos, char ch) {
+    if (pos < cap - 1) s[pos] = ch;
+    return pos + 1;
 }
 
+static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
+    int pos = 0, c = (int)cap;
 
-static int parse_int(const char *s) {
-    int x = 0;
-    int sign = 1;
+    #define _SP(ch) do { pos = __sn_put(str, c, pos, (ch)); } while(0)
 
-    if (*s == '-') {
-        sign = -1;
-        s++;
-    }
-
-    while (*s >= '0' && *s <= '9') {
-        x = x * 10 + (*s - '0');
-        s++;
-    }
-
-    return x * sign;
-}
-
-/* ---- 直接输出 ---- */
-
-static inline void put_int(long x) {
-    char buf[32];
-    int i = 0;
-
-    if (x == 0) {
-        put_char('0');
-        return;
-    }
-
-    if (x < 0) {
-        put_char('-');
-        x = -x;
-    }
-
-    while (x > 0) {
-        buf[i++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (i > 0) {
-        i--;
-        put_char(buf[i]);
-    }
-}
-
-static char c(long x) {
-    if (x <= 9) return x + '0';
-    return x - 10 + 'a';
-}
-
-static inline void put_hex(long x) {
-    char buf[32];
-    int i = 0;
-
-    if (x == 0) {
-        put_char('0');
-        return;
-    }
-
-    if (x < 0) {
-        put_char('-');
-        x = -x;
-    }
-
-    while (x > 0) {
-        buf[i++] = c(x % 16);
-        x /= 16;
-    }
-
-    while (i > 0) {
-        i--;
-        put_char(buf[i]);
-    }
-}
-
-/* ---- 缓冲拼接 ---- */
-
-static int append_str(char *buf, int pos, const char *s) {
-    while (*s) {
-        buf[pos++] = *s++;
-    }
-    return pos;
-}
-
-static int append_int(char *buf, int pos, int x) {
-    char tmp[16];
-    int n = 0;
-
-    if (x == 0) {
-        buf[pos++] = '0';
-        return pos;
-    }
-
-    if (x < 0) {
-        buf[pos++] = '-';
-        x = -x;
-    }
-
-    while (x > 0) {
-        tmp[n++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (n > 0) {
-        buf[pos++] = tmp[--n];
-    }
-
-    return pos;
-}
-
-static int append_usize(char *buf, int pos, usize x) {
-    char tmp[32];
-    int n = 0;
-
-    if (x == 0) {
-        buf[pos++] = '0';
-        return pos;
-    }
-
-    while (x > 0) {
-        tmp[n++] = '0' + (x % 10);
-        x /= 10;
-    }
-
-    while (n > 0) {
-        buf[pos++] = tmp[--n];
-    }
-
-    return pos;
-}
-
-/* ---- 比较 ---- */
-
-static int str_eq(const char *a, const char *b) {
-    while (*a && *b) {
-        if (*a != *b) {
-            return 0;
-        }
-        a++;
-        b++;
-    }
-    return *a == 0 && *b == 0;
-}
-
-
-static inline int __vsn_put(char *str, int cap, int pos, char ch) {
-    if (pos < cap - 1) str[pos] = ch;
-    return pos + 1; // pos 永远递增，结尾返回"本应写入的长度"（C 标准语义）
-}
-
-static inline int __vsn_str(char *str, int cap, int pos, const char *s, int width, char pad) {
-    if (!s) s = "(null)";
-    int len = 0;
-    while (s[len]) len++;
-    while (len < width) { pos = __vsn_put(str, cap, pos, pad); width--; }
-    while (*s) pos = __vsn_put(str, cap, pos, *s++);
-    return pos;
-}
-
-static inline int __vsn_u64(char *str, int cap, int pos, unsigned long long v,
-                            int base, int upper, int width, char pad) {
-    const char *digits = upper ? "0123456789ABCDEF" : "0123456789abcdef";
-    char tmp[32]; int n = 0;
-    if (v == 0) tmp[n++] = '0';
-    while (v) { tmp[n++] = digits[v % base]; v /= base; }
-    while (n < width) { pos = __vsn_put(str, cap, pos, pad); width--; }
-    while (n > 0) pos = __vsn_put(str, cap, pos, tmp[--n]);
-    return pos;
-}
-
-static inline int __vsn_i64(char *str, int cap, int pos, long long v, int width, char pad) {
-    unsigned long long uv;
-    int neg = 0;
-    if (v < 0) { neg = 1; uv = (unsigned long long)(-(v + 1)) + 1ULL; }
-    else       { uv = (unsigned long long)v; }
-    char tmp[24]; int n = 0;
-    if (uv == 0) tmp[n++] = '0';
-    while (uv) { tmp[n++] = '0' + (uv % 10); uv /= 10; }
-    int total = n + neg;
-    if (pad == '0' && neg) {   // %05d 负数：符号在零填充前面（-0042）
-        pos = __vsn_put(str, cap, pos, '-');
-        neg = 0;
-    }
-    while (total < width) { pos = __vsn_put(str, cap, pos, pad); total++; }
-    if (neg) pos = __vsn_put(str, cap, pos, '-');
-    while (n > 0) pos = __vsn_put(str, cap, pos, tmp[--n]);
-    return pos;
-}
-
-static inline int vsnprintf(char *str, size_t cap, const char *fmt, va_list ap) {
-    int pos = 0;
-    int c = (int)cap;
     while (*fmt) {
         char ch = *fmt++;
-        if (ch != '%') { pos = __vsn_put(str, c, pos, ch); continue; }
+        if (ch != '%') { _SP(ch); continue; }
 
         char pad = ' ';
-        int width = 0, is_long = 0, is_ll = 0, is_z = 0;
-        while (*fmt == '0' || *fmt == '-') { if (*fmt == '0') pad = '0'; fmt++; }
-        while (*fmt >= '0' && *fmt <= '9') { width = width * 10 + (*fmt - '0'); fmt++; }
-        if (*fmt == 'l') {
+        int alt = 0, width = 0, is_l = 0, is_ll = 0, is_z = 0;
+        while (*fmt=='0'||*fmt=='-'||*fmt=='#') {
+            if (*fmt=='0') pad='0';
+            if (*fmt=='#') alt=1;
             fmt++;
-            if (*fmt == 'l') { is_ll = 1; fmt++; } else { is_long = 1; }
-        } else if (*fmt == 'z') { is_z = 1; fmt++; }
+        }
+        while (*fmt>='0'&&*fmt<='9') { width=width*10+(*fmt++-'0'); }
+        int prec = -1;
+        if (*fmt=='.') { fmt++; prec=0; while(*fmt>='0'&&*fmt<='9') prec=prec*10+(*fmt++-'0'); }
+        if (*fmt=='l') { fmt++; if(*fmt=='l'){is_ll=1;fmt++;} else is_l=1; }
+        else if (*fmt=='z') { is_z=1; fmt++; }
 
         char spec = *fmt ? *fmt++ : 0;
         switch (spec) {
-            case 'd': case 'i': {
-                long long v = is_ll ? va_arg(ap, long long)
-                              : is_long ? va_arg(ap, long)
-                              : is_z ? (long long)va_arg(ap, size_t)
-                              : va_arg(ap, int);
-                pos = __vsn_i64(str, c, pos, v, width, pad);
-                break;
-            }
-            case 'u': case 'x': case 'X': case 'o': {
-                unsigned long long v = is_ll ? va_arg(ap, unsigned long long)
-                                       : is_long ? va_arg(ap, unsigned long)
-                                       : is_z ? (unsigned long long)va_arg(ap, size_t)
-                                       : va_arg(ap, unsigned int);
-                int base = (spec == 'u') ? 10 : (spec == 'o') ? 8 : 16;
-                pos = __vsn_u64(str, c, pos, v, base, spec == 'X', width, pad);
-                break;
-            }
-            case 'p': {
-                unsigned long long v = (unsigned long long)(usize)va_arg(ap, void *);
-                pos = __vsn_str(str, c, pos, "0x", 0, ' ');
-                pos = __vsn_u64(str, c, pos, v, 16, 0, width > 2 ? width - 2 : 0, pad);
-                break;
-            }
-            case 'c': { int v = va_arg(ap, int); pos = __vsn_put(str, c, pos, (char)v); break; }
-            case 's': { const char *v = va_arg(ap, const char *);
-                        pos = __vsn_str(str, c, pos, v, width, ' '); break; }
-            case '%': pos = __vsn_put(str, c, pos, '%'); break;
-            default:
-                pos = __vsn_put(str, c, pos, '%');
-                if (spec) pos = __vsn_put(str, c, pos, spec);
-                break;
+        case 'd': case 'i': {
+            long long v = is_ll ? va_arg(ap,long long)
+                        : is_l  ? va_arg(ap,long)
+                        : is_z  ? (long long)va_arg(ap,usize)
+                        :         va_arg(ap,int);
+            int neg = v<0;
+            unsigned long long uv = neg?(unsigned long long)(-(v+1))+1ULL:(unsigned long long)v;
+            char tmp[24]; int n=0;
+            if (uv==0) tmp[n++]='0';
+            while (uv) { tmp[n++]=(char)('0'+uv%10); uv/=10; }
+            int total = n+neg;
+            if (pad=='0'&&neg) { _SP('-'); neg=0; }
+            while (total<width) { _SP(pad); total++; }
+            if (neg) _SP('-');
+            while (n>0) _SP(tmp[--n]);
+            break;
+        }
+        case 'u': case 'o': case 'x': case 'X': {
+            unsigned long long v = is_ll ? va_arg(ap,unsigned long long)
+                                 : is_l  ? va_arg(ap,unsigned long)
+                                 : is_z  ? (unsigned long long)va_arg(ap,usize)
+                                 :         va_arg(ap,unsigned int);
+            int base = spec=='u'?10:spec=='o'?8:16;
+            int upper = (spec=='X');
+            if (alt&&v) { _SP('0'); _SP(upper?'X':'x'); }
+            const char *dig = upper?"0123456789ABCDEF":"0123456789abcdef";
+            char tmp[64]; int n=0;
+            if (v==0) tmp[n++]='0';
+            while (v) { tmp[n++]=dig[v%base]; v/=base; }
+            while (n<width) { _SP(pad); width--; }
+            while (n>0) _SP(tmp[--n]);
+            break;
+        }
+        case 'p': {
+            unsigned long long v = (unsigned long long)(usize)va_arg(ap,void*);
+            _SP('0'); _SP('x');
+            const char *dig="0123456789abcdef";
+            char tmp[16]; int n=0;
+            if (v==0) tmp[n++]='0';
+            while (v) { tmp[n++]=dig[v&0xf]; v>>=4; }
+            while (n>0) _SP(tmp[--n]);
+            break;
+        }
+        case 'c': _SP((char)va_arg(ap,int)); break;
+        case 's': {
+            const char *s = va_arg(ap,const char*);
+            if (!s) s="(null)";
+            int len=0; while(s[len]) len++;
+            for (int i=len;i<width;i++) _SP(' ');
+            while (*s) _SP(*s++);
+            break;
+        }
+        case '%': _SP('%'); break;
+        default:  _SP('%'); if(spec) _SP(spec); break;
         }
     }
-    if (c > 0) str[pos < c ? pos : c - 1] = 0;
+    #undef _SP
+
+    if (c > 0) str[pos < c ? pos : c-1] = '\0';
     return pos;
 }
 
-static inline int snprintf(char *str, size_t cap, const char *fmt, ...) {
+/* ================================================================
+ *  公开 API
+ * ================================================================ */
+
+static inline int fprintf(FILE *fp, const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    int r = vfprintf(fp, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+static inline int printf(const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    int r = vfprintf(stdout, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+static inline int vprintf(const char *fmt, va_list ap) {
+    return vfprintf(stdout, fmt, ap);
+}
+
+static inline int sprintf(char *str, const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    int r = vsnprintf(str, (usize)0x7fffffff, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+static inline int snprintf(char *str, usize cap, const char *fmt, ...) {
     va_list ap; va_start(ap, fmt);
     int r = vsnprintf(str, cap, fmt, ap);
     va_end(ap);
     return r;
 }
 
-static inline int sprintf(char *str, const char *fmt, ...) {
-    va_list ap; va_start(ap, fmt);
-    int r = vsnprintf(str, 0x7fffffff, fmt, ap); // 不限长，调用者保证缓冲区够大
-    va_end(ap);
-    return r;
+/* ================================================================
+ *  字符 / 字符串 I/O
+ * ================================================================ */
+
+static inline int putchar(int ch) {
+    return fputc(ch, stdout);
 }
 
-
-
-static inline int fprintf(FILE* fp, const char* fmt, ...) {
-    if (!fp || fp->fd < 0) return -1;
-    va_list ap;
-    va_start(ap, fmt);
-    char buf[256];
-    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    if (n > 0) write(fp->fd, buf, (size_t)n);
-    return n;
+static inline int getchar(void) {
+    return fgetc(stdin);
 }
 
-// 顺便把 printf 也改成走 fprintf，统一
-static inline int printf(const char* fmt, ...) {
-    va_list ap; va_start(ap, fmt);
-    uvprintf(fmt, ap); 
-    va_end(ap);
+/* 标准 puts：输出字符串 + 换行，返回非负值或 EOF */
+static inline int puts(const char *s) {
+    if (!s) return EOF;
+    if (fputs(s, stdout) == EOF) return EOF;
+    if (fputc('\n', stdout) == EOF) return EOF;
     return 0;
 }
+
+static inline char *fgets(char *s, int size, FILE *fp) {
+    if (!s || size <= 0 || !fp) return (char*)0;
+    int i = 0;
+    while (i < size - 1) {
+        int ch = fgetc(fp);
+        if (ch == EOF) break;
+        s[i++] = (char)ch;
+        if (ch == '\n') break;
+    }
+    s[i] = '\0';
+    return i > 0 ? s : (char*)0;
+}
+
+/* ================================================================
+ *  杂项
+ * ================================================================ */
+
+static inline void perror(const char *msg) {
+    if (msg && *msg) {
+        fputs(msg, stderr);
+        fputs(": ", stderr);
+    }
+    fputs("error\n", stderr);
+}
+
+static inline int rename_file(const char *old, const char *new_) {
+    /* 裸机简易实现：读旧→写新→删旧，或者你有 syscall 就直接调 */
+    (void)old; (void)new_;
+    return -1; /* TODO: 实现或删掉 */
+}
+
+#ifdef __cplusplus
+}
+#endif
