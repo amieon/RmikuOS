@@ -24,6 +24,8 @@ template <typename T> inline T min(T a, T b) { return a < b ? a : b; }
 
 // ---------- sqrt（硬件指令，RISC-V / LoongArch） ----------
 inline double sqrt(double x) {
+    if (x < 0)  return (x - x) / (x - x);  // NaN
+    if (x == 0) return x;                   // 保留 ±0
     double r;
 #if defined(__riscv)
     __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
@@ -131,6 +133,8 @@ inline double log(double x) {
         if (x == 0.0) return -1e308 * 1e308;  // log(0) = -inf
         return (x - x) / (x - x);              // log(-x) = NaN
     }
+    if (x != x) return x;              // NaN
+    if (x == 1.0/0.0) return x;       // +inf（或用位操作判断 hx >= 0x7ff00000）
 
     DoubleBits db; db.d = x;
     uint64_t ix = db.u;
@@ -188,7 +192,7 @@ inline double pow(double base, double e) {
     if (e == -0.5) return 1.0 / sqrt(base);
     
     // ---- 整数指数：快速幂（O(log n) 乘法，比 exp/log 快且更准）----
-    if (e == (double)(long long)e) {
+    if (e == (double)(long long)e && e >= -1024.0 && e <= 1024.0) {
         long long n = (long long)e;
         bool neg = n < 0;
         if (neg) n = -n;
