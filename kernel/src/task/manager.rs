@@ -688,52 +688,45 @@ impl TaskManager {
         })
     }
 
-    pub fn reap_process(&mut self, pid: Pid) {
+pub fn reap_process(&mut self, pid: Pid) {
     log::info!(
         "[reap] pid={} root_ppn={:?}",
         pid,
         self.process(pid).user_space.root_ppn(),
     );
-    // 先做防御检查
+
+    // 防御检查
     {
         let Some(process) = self.try_process(pid) else {
             panic!("[task] reap non-existing process: pid={}", pid);
         };
-
         for &tid in process.threads.iter() {
             if let Some(thread) = self.try_thread(tid) {
                 if thread.running_on.is_some() {
                     panic!(
                         "[task] reap process pid={} while tid={} running_on={:?}",
-                        pid,
-                        tid,
-                        thread.running_on,
+                        pid, tid, thread.running_on,
                     );
                 }
             }
         }
     }
 
-    let process = self
-        .processes
-        .get_mut(pid)
+    // 先收集 tid 列表（process 被 take 后就不能再借用了）
+    let tids: Vec<Tid> = self.process(pid).threads.clone();
+
+    // 先逐个 reap 线程（释放 TCB + KernelStack）
+    for tid in tids {
+        self.reap_thread(tid);
+    }
+
+    // 再摘除 PCB（释放 user_space / fd_table 等）
+    let _process = self.processes.get_mut(pid)
         .expect("[task] invalid reap pid")
         .take()
         .expect("[task] reap empty process slot");
 
-    for tid in process.threads {
-        if let Some(thread) = self.try_thread(tid) {
-            if thread.running_on.is_some() {
-                panic!(
-                    "[task] reap tid={} while running_on={:?}",
-                    tid,
-                    thread.running_on,
-                );
-            }
-        }
-
-    }
-
+    log::info!("[reap] pid={} fully reaped", pid);
 }
 
 pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
