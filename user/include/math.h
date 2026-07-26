@@ -23,6 +23,11 @@ typedef union {
     } s;
 } mm_bits;
 
+static inline double mm_sqrt(double x);
+static inline double mm_exp(double x);
+static inline double mm_expm1(double x);
+static inline double mm_log(double x);
+
 static inline double mm_fabs(double x) {
     mm_bits b; b.d = x; b.s.hi &= 0x7fffffffu; return b.d;
 }
@@ -1065,6 +1070,21 @@ static inline double mm_modf(double x, double *iptr) {
     return x - *iptr;
 }
 
+/* ---- pow（简化版，用 exp + log 实现） ---- */
+static inline double mm_pow(double x, double y) {
+    if (y == 0.0) return 1.0;
+    if (x == 0.0) return 0.0;
+    if (x == 1.0) return 1.0;
+    /* 负底数 + 非整数指数 → NaN */
+    if (x < 0.0) {
+        double yi = (double)(int64_t)y;
+        if (yi != y) return (x - x) / (x - x); /* NaN */
+        double r = mm_exp(y * mm_log(-x));
+        int64_t n = (int64_t)y;
+        return (n & 1) ? -r : r;
+    }
+    return mm_exp(y * mm_log(x));
+}
 
 #ifndef __cplusplus
 
@@ -1087,6 +1107,7 @@ static inline double mm_modf(double x, double *iptr) {
 #define floor(x)      mm_floor(x)
 #define fmod(x,y)     mm_fmod(x,y)
 #define fabs(x)       mm_fabs(x)
+#define pow(x,y)      mm_pow(x,y)
 
 /* 带指针的单独给 inline（宏处理多参数指针容易出错） */
 static inline void   sincos(double x, double *s, double *c) { mm_sincos(x, s, c); }
@@ -1111,6 +1132,7 @@ static inline double modf(double x, double *ip)             { return mm_modf(x, 
 #define floorf(x)     ((float)mm_floor((double)(x)))
 #define fmodf(x,y)    ((float)mm_fmod((double)(x),(double)(y)))
 #define fabsf(x)      ((float)mm_fabs((double)(x)))
+#define powf(x,y)     ((float)mm_pow((double)(x),(double)(y)))
 
 static inline void sincosf(float x, float *s, float *c) {
     double ds, dc; mm_sincos((double)x, &ds, &dc);
@@ -1121,4 +1143,7 @@ static inline float modff(float x, float *ip) {
     *ip = (float)di; return r;
 }
 
+
 #endif /* __cplusplus */
+
+#define PI  3.14159265358979323846

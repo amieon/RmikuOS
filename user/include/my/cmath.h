@@ -1,4 +1,5 @@
-#include "../cmath.h"
+#pragma once
+#include "../math.h"
 #ifdef __cplusplus
 
 namespace mymath {
@@ -26,6 +27,8 @@ inline double ceil(double x)  { return mm_ceil(x); }
 inline double floor(double x) { return mm_floor(x); }
 inline double fmod(double x, double y) { return mm_fmod(x, y); }
 inline double modf(double x, double *iptr) { return mm_modf(x, iptr); }
+inline double fabs(double x)  { return mm_fabs(x); }
+inline double pow(double x, double y) { return mm_pow(x, y); }
 
 /* float 重载 */
 inline float sin(float x)     { return (float)mm_sin((double)x); }
@@ -45,9 +48,11 @@ inline float exp(float x)     { return (float)mm_exp((double)x); }
 inline float log(float x)     { return (float)mm_log((double)x); }
 inline float log10(float x)   { return (float)mm_log10((double)x); }
 inline float sqrt(float x)    { return (float)mm_sqrt((double)x); }
+inline float fabs(float x)   { return (float)mm_fabs((double)x); }
 inline float ceil(float x)    { return (float)mm_ceil((double)x); }
 inline float floor(float x)   { return (float)mm_floor((double)x); }
 inline float fmod(float x, float y) { return (float)mm_fmod((double)x, (double)y); }
+inline float pow(float x, float y) { return (float)mm_pow((double)x, (double)y); }
 inline float modf(float x, float *iptr) {
     double di; float r = (float)mm_modf((double)x, &di); *iptr = (float)di; return r;
 }
@@ -55,3 +60,4 @@ inline float modf(float x, float *iptr) {
 } /* namespace mymath */
 
 #endif /* __cplusplus */
+
