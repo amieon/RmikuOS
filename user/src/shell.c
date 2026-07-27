@@ -593,9 +593,10 @@ static int read_line(const char *prompt, char *buf, int max_len) {
                     fputs("  ", stdout);
                 }
                 fputs("\n", stdout);
-                fflush(stdout);     
+                fflush(stdout);
                 redraw_line(prompt, buf, cursor);
-            };
+            }
+            continue;   
         }
 
         if (ch == 0x1b) {
