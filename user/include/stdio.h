@@ -403,7 +403,19 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
             break;
         }
         case 'f': case 'F': {
-            double v = va_arg(ap, double);
+             double v = va_arg(ap, double);
+            /* ---- 特殊值检查（避免 infinity 死循环） ---- */
+            if (v != v) {  /* NaN（NaN != NaN） */
+                const char *_s = (spec=='G'||spec=='F'||spec=='E') ? "NAN" : "nan";
+                while (*_s) _SP(*_s++);
+                break;
+            }
+            if (v > 1e308 || v < -1e308) {  /* ±infinity */
+                if (v < 0) _SP('-');
+                const char *_s = (spec=='G'||spec=='F'||spec=='E') ? "INF" : "inf";
+                while (*_s) _SP(*_s++);
+                break;
+            }
             if (v < 0) { _SP('-'); v = -v; }
             unsigned long long ip = (unsigned long long)v;
             double frac = v - (double)ip;
@@ -421,7 +433,19 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
             break;
             }
         case 'e': case 'E': {
-            double v = va_arg(ap, double);
+             double v = va_arg(ap, double);
+            /* ---- 特殊值检查（避免 infinity 死循环） ---- */
+            if (v != v) {  /* NaN（NaN != NaN） */
+                const char *_s = (spec=='G'||spec=='F'||spec=='E') ? "NAN" : "nan";
+                while (*_s) _SP(*_s++);
+                break;
+            }
+            if (v > 1e308 || v < -1e308) {  /* ±infinity */
+                if (v < 0) _SP('-');
+                const char *_s = (spec=='G'||spec=='F'||spec=='E') ? "INF" : "inf";
+                while (*_s) _SP(*_s++);
+                break;
+            }
             if (v < 0) { _SP('-'); v = -v; }
             if (v == 0.0) {
                 _SP('0'); _SP('.');
@@ -451,7 +475,19 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
             break;
         }
         case 'g': case 'G': {
-            double v = va_arg(ap, double);
+             double v = va_arg(ap, double);
+            /* ---- 特殊值检查（避免 infinity 死循环） ---- */
+            if (v != v) {  /* NaN（NaN != NaN） */
+                const char *_s = (spec=='G'||spec=='F'||spec=='E') ? "NAN" : "nan";
+                while (*_s) _SP(*_s++);
+                break;
+            }
+            if (v > 1e308 || v < -1e308) {  /* ±infinity */
+                if (v < 0) _SP('-');
+                const char *_s = (spec=='G'||spec=='F'||spec=='E') ? "INF" : "inf";
+                while (*_s) _SP(*_s++);
+                break;
+            }
             double av = v < 0 ? -v : v;
             if (prec < 0) prec = 6;
             if (av == 0.0 || (av >= 1e-4 && av < 1e6)) {
