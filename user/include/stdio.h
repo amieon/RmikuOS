@@ -402,6 +402,96 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
             while (*s) _SP(*s++);
             break;
         }
+        case 'f': case 'F': {
+            double v = va_arg(ap, double);
+            if (v < 0) { _SP('-'); v = -v; }
+            unsigned long long ip = (unsigned long long)v;
+            double frac = v - (double)ip;
+            char tmp[24]; int n = 0;
+            if (ip == 0) tmp[n++] = '0';
+            while (ip) { tmp[n++] = (char)('0'+ip%10); ip/=10; }
+            while (n > 0) _SP(tmp[--n]);
+            _SP('.');
+            if (prec < 0) prec = 6;
+            for (int i = 0; i < prec; i++) {
+                frac *= 10.0;
+                int d = (int)frac; if (d>9) d=9;
+                _SP((char)('0'+d)); frac -= d;
+            }
+            break;
+            }
+        case 'e': case 'E': {
+            double v = va_arg(ap, double);
+            if (v < 0) { _SP('-'); v = -v; }
+            if (v == 0.0) {
+                _SP('0'); _SP('.');
+                if (prec < 0) prec = 6;
+                for (int i = 0; i < prec; i++) _SP('0');
+                _SP(spec=='E'?'E':'e'); _SP('+'); _SP('0'); _SP('0');
+                break;
+            }
+            int exp10 = 0; double m = v;
+            while (m >= 10.0) { m /= 10.0; exp10++; }
+            while (m < 1.0)   { m *= 10.0; exp10--; }
+            int d = (int)m;
+            _SP((char)('0'+d)); _SP('.');
+            if (prec < 0) prec = 6;
+            double frac = m - d;
+            for (int i = 0; i < prec; i++) {
+                frac *= 10.0; int dd = (int)frac; if (dd>9) dd=9;
+                _SP((char)('0'+dd)); frac -= dd;
+            }
+            _SP(spec=='E'?'E':'e'); _SP(exp10>=0?'+':'-');
+            if (exp10<0) exp10=-exp10;
+            if (exp10<10) _SP('0');
+            char et[8]; int en=0;
+            if (exp10==0) et[en++]='0';
+            while (exp10) { et[en++]=(char)('0'+exp10%10); exp10/=10; }
+            while (en>0) _SP(et[--en]);
+            break;
+        }
+        case 'g': case 'G': {
+            double v = va_arg(ap, double);
+            double av = v < 0 ? -v : v;
+            if (prec < 0) prec = 6;
+            if (av == 0.0 || (av >= 1e-4 && av < 1e6)) {
+                /* 走 %f */
+                if (v < 0) { _SP('-'); v = -v; }
+                unsigned long long ip = (unsigned long long)v;
+                double frac = v - (double)ip;
+                char tmp[24]; int n = 0;
+                if (ip == 0) tmp[n++] = '0';
+                while (ip) { tmp[n++] = (char)('0'+ip%10); ip/=10; }
+                while (n > 0) _SP(tmp[--n]);
+                _SP('.');
+                for (int i = 0; i < prec; i++) {
+                    frac *= 10.0; int dd = (int)frac; if (dd>9) dd=9;
+                    _SP((char)('0'+dd)); frac -= dd;
+                }
+            } else {
+                /* 走 %e */
+                if (v < 0) { _SP('-'); v = -v; }
+                int exp10 = 0; double m = v;
+                while (m >= 10.0) { m /= 10.0; exp10++; }
+                while (m < 1.0)   { m *= 10.0; exp10--; }
+                int d = (int)m;
+                _SP((char)('0'+d)); _SP('.');
+                double frac = m - d;
+                for (int i = 0; i < prec; i++) {
+                    frac *= 10.0; int dd = (int)frac; if (dd>9) dd=9;
+                    _SP((char)('0'+dd)); frac -= dd;
+                }
+                _SP(spec=='G'?'E':'e'); _SP(exp10>=0?'+':'-');
+                if (exp10<0) exp10=-exp10;
+                if (exp10<10) _SP('0');
+                char et[8]; int en=0;
+                if (exp10==0) et[en++]='0';
+                while (exp10) { et[en++]=(char)('0'+exp10%10); exp10/=10; }
+                while (en>0) _SP(et[--en]);
+            }
+            break;
+        }
+
         case '%': _SP('%'); break;
         default:  _SP('%'); if(spec) _SP(spec); break;
         }
