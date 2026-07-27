@@ -258,6 +258,17 @@ static inline void free(void *ptr) {
     mutex_unlock(&malloc_lock);
 }
 
+/* 查询已分配块的 payload 大小（realloc 用,避免越界读） */
+static inline usize malloc_payload_size(void *ptr) {
+    if (!ptr) return 0;
+    malloc_block_t *block = malloc_block_from_payload(ptr);
+    if (is_slab(block)) {
+        return slab_sizes[slab_sc(block)];
+    }
+    return block->size;
+}
+
+
 static inline void *calloc(usize n, usize size) {
     usize total = n * size;
     if (n != 0 && total / n != size) return 0;

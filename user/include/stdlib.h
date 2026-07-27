@@ -115,9 +115,16 @@ static inline int rand(void) {
 static inline void *realloc(void *p, size_t s) {
     if (!p)   return malloc(s);
     if (s == 0) { free(p); return NULL; }
+
+    usize old_size = malloc_payload_size(p);
+
+    /* 缩小或相等:直接返回原指针（不收缩,合法的 realloc 行为） */
+    if (s <= old_size) return p;
+
+    /* 扩大:分配新块,只拷 old_size 字节（绝不越界读） */
     void *np = malloc(s);
     if (!np) return NULL;
-    memcpy(np, p, s);   /* 注意：如果 s > 旧大小会越界读，按需改 */
+    memcpy(np, p, old_size);
     free(p);
     return np;
 }
