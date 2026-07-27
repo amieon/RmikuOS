@@ -16,7 +16,7 @@ print("ceil(3.2) =", math.ceil(3.2))   -- 4
 print("abs(-5) =", math.abs(-5))       -- 5
 print("fmod(7,3) =", math.fmod(7, 3))  -- 1.0
 print("modf(3.14) =", math.modf(3.14)) -- 0.14  3.0
-print("pow(2,10) =", math.pow(2, 10))  -- 1024.0
+print("pow(2,10) =", 2^10)  -- 1024.0
 print("max:", math.max(1, 5, 3, 8, 2))  -- 8
 print("min:", math.min(1, 5, 3, 8, 2))  -- 1
 
