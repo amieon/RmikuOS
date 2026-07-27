@@ -27,12 +27,9 @@ static void sl_reset_state(void) {
 }
 
 static void setup(void) {
-    /* ctrl: period=5, cpu=2 保持中等压力 */
     sl_add_jobs_parent("ctrl", 300, 1, /*period*/7, /*cpu*/2, /*burn*/400000);
-    /* ai: burn 加大到 300000 (~1.5 ticks)，轻相位只 3 个活跃 */
-    sl_add_spin_phased("ai", 100, 150, /*burn*/300000, /*light_active*/3);
-    /* log: 也 phased！轻相位只 4 个活跃，重相位 32 个全上 */
-    sl_add_spin_phased("log", 50, 32, /*burn*/300000, /*light_active*/4);
+    sl_add_spin_phased("ai",  100, 60, /*burn*/300000, /*light_active*/3);  /* 重相位60 */
+    sl_add_spin_phased("log",  50, 15, /*burn*/300000, /*light_active*/4);  /* 重相位15 */
 }
 
 static void run_fixed(int alpha, int rep, unsigned long total) {
