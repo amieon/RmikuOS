@@ -9,6 +9,6 @@ int main() {
     print_result("fibonacci", 10, fibonacci(10)); // 55
     print_result("fibonacci", 20, fibonacci(20)); // 6765
 
-    uprintf("=== done ===\n");
+    printf("=== done ===\n");
     return 0;
 }
