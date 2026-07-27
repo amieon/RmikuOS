@@ -15,7 +15,7 @@ static void print_stat(const char *path) {
     put_char(' ');
     print_file_type_char(st.file_type);
     puts(" size=");
-    put_int(st.size);
+    printf("%d", st.size);
 }
 
 // 列出目录下所有条目（ls 风格）
@@ -47,7 +47,7 @@ static void do_ls(const char *path) {
         puts("  getdents错误");
     }
     puts("  总计 ");
-    put_int(total);
+    printf("%d", total);
     puts(" 个条目\n");
     close(fd);
 }
@@ -92,7 +92,7 @@ static void do_open_read_close(const char *path) {
     }
     close(fd);
     puts("  读取完毕，总字节: ");
-    put_int(total);
+    printf("%d", total);
 }
 
 // ---------- 主函数 ----------
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     int mypid = getpid();
     puts("\n========== FS Stress Test ==========\n");
     puts("进程 PID: ");
-    put_int(mypid);
+    printf("%d", mypid);
     puts("\n开始压力测试，循环 50 次...\n");
 
     // 预先获取当前工作目录（用于参考）
@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
 
     for (int i = 1; i <= 50; i++) {
         puts("\n--- 循环 ");
-        put_int(i);
+        printf("%d", i);
         puts(" / 50 ---\n");
 
         // 1. ls /
@@ -143,13 +143,13 @@ int main(int argc, char *argv[]) {
         // 每 10 次循环打印一个进度提示
         if (i % 10 == 0) {
             puts("\n*** 已完成 ");
-            put_int(i);
+            printf("%d", i);
             puts(" 次循环 ***\n");
         }
     }
 
     puts("\n========== 测试完成，进程 ");
-    put_int(mypid);
+    printf("%d", mypid);
     puts(" 正常退出 ==========\n");
     exit(0);
     return 0;

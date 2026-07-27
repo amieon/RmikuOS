@@ -3,8 +3,8 @@
 int main(int argc, char **argv) {
     printf("There is nothing here: %d", getpid());
     // const char   *mode  = argc > 1 ? argv[1] : "adamw";
-    // int          alpha0 = argc > 2 ? parse_int(argv[2]) : 50;
-    // unsigned long total = argc > 3 ? (unsigned long)parse_int(argv[3]) : 36000;
+    // int          alpha0 = argc > 2 ? atoi(argv[2]) : 50;
+    // unsigned long total = argc > 3 ? (unsigned long)atoi(argv[3]) : 36000;
 
     // sl_add_jobs("ctrl", 300, 8, /*period*/4, /*cpu*/2, /*burn*/400000);
     // sl_add_spin("ai",   100, 32, 12000);
@@ -15,10 +15,10 @@ int main(int argc, char **argv) {
     // sl_policy_t policy = sl_policy_adamw;
     // void       *ud     = &g_adamw;
 
-    // if (str_eq(mode, "fixed")) {
+    // if ((strcmp(mode, "fixed") == 0)) {
     //     policy = 0;                     /* sl_run 内 alpha 冻结在 alpha0 */
     //     ud = 0;
-    // } else if (str_eq(mode, "hill")) {
+    // } else if ((strcmp(mode, "hill") == 0)) {
     //     sl_hill_init(&g_hill, alpha0, /*step*/5);
     //     policy = sl_policy_hill;
     //     ud = &g_hill;

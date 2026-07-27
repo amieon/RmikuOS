@@ -24,13 +24,13 @@ static sl_adamw_t g_adamw;
 
 static int has_fixed_flag(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
-        if (str_eq(argv[i], "fixed")) return 1;
+        if ((strcmp(argv[i], "fixed") == 0)) return 1;
     }
     return 0;
 }
 
 static int arg_or(int argc, char **argv, int i, int dflt) {
-    if (i < argc && !str_eq(argv[i], "fixed")) return parse_int(argv[i]);
+    if (i < argc && !(strcmp(argv[i], "fixed") == 0)) return atoi(argv[i]);
     return dflt;
 }
 
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
     const char *mode = argv[1];
 
     /* ── Experiment 0: Baseline EDF (no backoff, alpha=1) ── */
-    if (str_eq(mode, "edf")) {
+    if ((strcmp(mode, "edf") == 0)) {
         int ctrl_t = arg_or(argc, argv, 2, 1);
         int ai_t   = arg_or(argc, argv, 3, 14);
         int log_t  = arg_or(argc, argv, 4, 8);
@@ -79,13 +79,13 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    int        alpha0 = parse_int(argv[2]);
+    int        alpha0 = atoi(argv[2]);
     int        fixed  = has_fixed_flag(argc, argv);
 
     sl_policy_t policy = 0;
     void       *ud     = 0;
 
-    if (str_eq(mode, "mech")) {
+    if ((strcmp(mode, "mech") == 0)) {
         int t1 = arg_or(argc, argv, 3, 1);
         int t2 = arg_or(argc, argv, 4, 9);
         int t3 = arg_or(argc, argv, 5, 25);
@@ -105,11 +105,11 @@ int main(int argc, char **argv) {
     unsigned long total;
     int phased = 0;
 
-    if (str_eq(mode, "edge") || str_eq(mode, "aimd")) {
+    if ((strcmp(mode, "edge") == 0) || (strcmp(mode, "aimd") == 0)) {
         ai_t  = arg_or(argc, argv, 4, 14);
         log_t = arg_or(argc, argv, 5, 8);
         total = (unsigned long)arg_or(argc, argv, 6, 3600);
-    } else if (str_eq(mode, "dyn") || str_eq(mode, "adamw")) {
+    } else if ((strcmp(mode, "dyn") == 0) || (strcmp(mode, "adamw") == 0)) {
         ai_t  = arg_or(argc, argv, 4, 100);
         log_t = arg_or(argc, argv, 5, 16);
         total = (unsigned long)arg_or(argc, argv, 6, 36000);
@@ -125,11 +125,11 @@ int main(int argc, char **argv) {
     sl_add_spin("log", 50, log_t, 12000);
 
     if (!fixed) {
-        if (str_eq(mode, "aimd") || str_eq(mode, "dyn")) {
+        if ((strcmp(mode, "aimd") == 0) || (strcmp(mode, "dyn") == 0)) {
             sl_aimd_init(&g_aimd, alpha0);
             policy = sl_policy_aimd;
             ud = &g_aimd;
-        } else if (str_eq(mode, "adamw")) {
+        } else if ((strcmp(mode, "adamw") == 0)) {
             sl_adamw_init(&g_adamw, alpha0, /*lr*/8, /*target*/50);
             policy = sl_policy_adamw;
             ud = &g_adamw;

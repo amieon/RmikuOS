@@ -2,6 +2,7 @@
 
 #pragma once
 #include "../include/syscall.h"  
+#include "../stdio.h"
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
@@ -15,10 +16,6 @@ inline unsigned long cstr_len(const char* s) {
     return n;
 }
 
-// 打印字符串(fd=1 标准输出)
-inline void puts(const char* s) {
-    syscall3(SYS_WRITE, 1, (unsigned long)s, cstr_len(s));
-}
 
 
 inline void put_int(long v, bool newline = true) {

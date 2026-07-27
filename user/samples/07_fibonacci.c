@@ -58,11 +58,11 @@ static unsigned long fib(unsigned int n) {
 static void do_extra_work(int work_type, int pid) {
     if (work_type == 0) return;
     puts("[子进程 ");
-    put_int(pid);
+    printf("%d", pid);
     puts("] 开始额外休息，模拟 I/O 阻塞...\n");
     sleep(work_type);  // sleep ticks
     puts("[子进程 ");
-    put_int(pid);
+    printf("%d", pid);
     puts("] 休息结束，继续计算。\n");
 }
 
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
     }
     if (n == 0) n = 35;  // 默认值
     puts("计算 Fibonacci(");
-    put_int(n);
+    printf("%d", n);
     puts(")\n");
 
     puts("请输入子进程数量 (推荐 5~10): ");
@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
     if (num_procs > 20) num_procs = 20;  // 避免过度fork
 
     puts("\n开始创建 ");
-    put_int(num_procs);
+    printf("%d", num_procs);
     puts(" 个子进程，每个都将独立计算 Fib(...)\n");
 
     int child_pids[20];
@@ -110,17 +110,17 @@ int main(int argc, char *argv[]) {
             do_extra_work((i % 3) * 2, mypid);
 
             puts("[子进程 ");
-            put_int(mypid);
+            printf("%d", mypid);
             puts("] 开始计算 Fibonacci(");
-            put_int(n);
+            printf("%d", n);
             puts(")...\n");
 
             unsigned long result = fib(n);
 
             puts("[子进程 ");
-            put_int(mypid);
+            printf("%d", mypid);
             puts("] 计算完成！结果是: ");
-            put_int(result);   // 注：long 可能超过 int 范围，但 put_int 支持 long
+            printf("%d", result);   // 注：long 可能超过 int 范围，但 put_int 支持 long
             puts("\n");
 
             // 将结果通过退出码返回（但退出码只有低8位会被内核保留，这里我们只展示用法；
@@ -141,13 +141,13 @@ int main(int argc, char *argv[]) {
         isize ret = waitpid(child_pids[i], &exit_code, 0);
         if (ret < 0) {
             puts("waitpid 失败！子进程 ");
-            put_int(child_pids[i]);
+            printf("%d", child_pids[i]);
             puts(" 可能已经异常？\n");
         } else {
             puts("子进程 ");
-            put_int(child_pids[i]);
+            printf("%d", child_pids[i]);
             puts(" 已回收，退出码: ");
-            put_int(exit_code);
+            printf("%d", exit_code);
             puts("\n");
             total_exit_sum += exit_code;
             finished++;
@@ -156,21 +156,21 @@ int main(int argc, char *argv[]) {
 
     puts("\n========== 大赛总结 ==========\n");
     puts("成功回收 ");
-    put_int(finished);
+    printf("%d", finished);
     puts(" 个子进程（共 ");
-    put_int(child_count);
+    printf("%d", child_count);
     puts(" 个）。\n");
     puts("所有子进程退出码之和（低8位）: ");
-    put_int(total_exit_sum);
+    printf("%d", total_exit_sum);
     puts("\n注意：真正的斐波那契结果已经在各子进程输出中打印。\n");
     puts("如果父进程没有卡死且正确回收了所有子进程，说明 fork/waitpid/exit 工作正常。\n");
 
     // 额外测试：父进程自己再计算一次，验证正确性
     puts("\n父进程自行验证计算 Fibonacci(");
-    put_int(n);
+    printf("%d", n);
     puts(") = ");
     unsigned long parent_result = fib(n);
-    put_int(parent_result);
+    printf("%d", parent_result);
     puts("\n");
 
     puts("\n按回车键退出程序...\n");

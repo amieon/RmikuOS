@@ -787,6 +787,11 @@ static inline double mm_log(double x) {
     return (double)k * ln2_hi - ((hfsq - (s * (hfsq + R) + (double)k * ln2_lo)) - f);
 }
 
+
+static inline double mm_log2(double x) {
+    return mm_log(x) * 1.44269504088896340736; 
+}
+
 static inline double mm_log10(double x) {
     static const double
         two54     = 1.80143985094819840000e+16,
@@ -814,69 +819,24 @@ static inline double mm_log10(double x) {
     return y * log10_2lo + ivln10 * mm_log(x) + y * log10_2hi;
 }
 
-/* ======================================================================== */
-/*  sqrt                                                                    */
-/* ======================================================================== */
+
 
 static inline double mm_sqrt(double x) {
-    mm_bits xb; xb.d = x;
-    uint32_t ix0 = xb.s.hi, ix1 = xb.s.lo;
+ // ---------- sqrt（硬件指令，RISC-V / LoongArch） ----------
 
-    if ((ix0 & 0x7ff00000u) == 0x7ff00000u) return x * x + x;
-    if (ix0 <= 0) {
-        if (((ix0 & 0x7fffffffu) | ix1) == 0) return x;
-        return (x - x) / (x - x);
-    }
+    double r;
+#if defined(__riscv)
+    __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
+#elif defined(__loongarch__) || defined(__loongarch64__)
+    __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
+#else
+    // 兜底：牛顿迭代（主机测试用）
+    if (x <= 0) return 0;
+    r = x;
+    for (int i = 0; i < 60; ++i) r = 0.5 * (r + x / r);
+#endif
+    return r;
 
-    int m = (int)(ix0 >> 20);
-    if (m == 0) {
-        while (ix0 == 0) { m -= 21; ix0 |= (ix1 >> 11); ix1 <<= 21; }
-        int i;
-        for (i = 0; (ix0 & 0x00100000u) == 0; i++) ix0 <<= 1;
-        m -= i - 1;
-        ix0 |= (ix1 >> (32 - i)); ix1 <<= i;
-    }
-    m -= 1023;
-    ix0 = (ix0 & 0x000fffffu) | 0x00100000u;
-    if (m & 1) { ix0 = ix0 + ix0 + (ix1 >> 31); ix1 += ix1; }
-    m >>= 1;
-
-    ix0 = ix0 + ix0 + (ix1 >> 31); ix1 += ix1;
-    uint32_t q = 0, q1 = 0, s0 = 0, s1 = 0, r = 0x00200000u;
-
-    while (r) {
-        uint32_t t = s0 + r;
-        if (t <= ix0) { s0 = t + r; ix0 -= t; q += r; }
-        ix0 = ix0 + ix0 + (ix1 >> 31); ix1 += ix1; r >>= 1;
-    }
-    r = 0x80000000u;
-    while (r) {
-        uint32_t t1 = s1 + r, t = s0;
-        if (t < ix0 || (t == ix0 && t1 <= ix1)) {
-            s1 = t1 + r;
-            if ((t1 & 0x80000000u) && !(s1 & 0x80000000u)) s0++;
-            ix0 -= t; if (ix1 < t1) ix0--; ix1 -= t1; q1 += r;
-        }
-        ix0 = ix0 + ix0 + (ix1 >> 31); ix1 += ix1; r >>= 1;
-    }
-
-    static const double one = 1.0, tiny = 1.0e-300;
-    if ((ix0 | ix1) != 0) {
-        double z = one - tiny;
-        if (z >= one) {
-            z = one + tiny;
-            if (q1 == 0xffffffffu)      { q1 = 0; q++; }
-            else if (z > one)           { if (q1 == 0xfffffffeu) q++; q1 += 2; }
-            else                        { q1 += (q1 & 1); }
-        }
-    }
-    ix0 = (q >> 1) + 0x3fe00000u;
-    ix1 = q1 >> 1;
-    if (q & 1) ix1 |= 0x80000000u;
-    ix0 += ((uint32_t)m << 20);
-
-    mm_bits zb; zb.s.hi = ix0; zb.s.lo = ix1;
-    return zb.d;
 }
 
 /* ======================================================================== */
@@ -1086,6 +1046,13 @@ static inline double mm_pow(double x, double y) {
     return mm_exp(y * mm_log(x));
 }
 
+#ifndef HUGE_VAL
+#define HUGE_VAL    (1.0 / 0.0)
+#endif
+#ifndef HUGE_VALF
+#define HUGE_VALF   (1.0f / 0.0f)
+#endif
+
 #ifndef __cplusplus
 
 /* double 版本 */
@@ -1101,6 +1068,7 @@ static inline double mm_pow(double x, double y) {
 #define tanh(x)       mm_tanh(x)
 #define exp(x)        mm_exp(x)
 #define log(x)        mm_log(x)
+#define log2(x)       mm_log2(x)
 #define log10(x)      mm_log10(x)
 #define sqrt(x)       mm_sqrt(x)
 #define ceil(x)       mm_ceil(x)
@@ -1142,6 +1110,32 @@ static inline float modff(float x, float *ip) {
     double di; float r = (float)mm_modf((double)x, &di);
     *ip = (float)di; return r;
 }
+
+
+static inline double ldexp(double x, int n) {
+    return x * mm_pow(2.0, (double)n);
+}
+
+static inline float ldexpf(float x, int n) {
+    return (float)((double)x * mm_pow(2.0, (double)n));
+}
+
+static inline double frexp(double x, int *exp) {
+    if (x == 0.0) { *exp = 0; return 0.0; }
+    union { double d; unsigned long long u; } b;
+    b.d = x;
+    int e = (int)((b.u >> 52) & 0x7FF) - 1022;
+    b.u = (b.u & 0x800FFFFFFFFFFFFFULL) | 0x3FE0000000000000ULL;
+    *exp = e;
+    return b.d;
+}
+
+static inline float frexpf(float x, int *exp) {
+    double r = frexp((double)x, exp);
+    return (float)r;
+}
+
+
 
 
 #endif /* __cplusplus */

@@ -6,6 +6,7 @@ extern "C" {
 
 
 #include "syscall.h"
+#include "arch.h"
 
 /* ---- tickets ---- */
 
@@ -70,11 +71,7 @@ static inline int reset_sched_stat(void) {
     return syscall3(SYS_RESET_SCHED_STAT, 0, 0, 0);
 }
 
-/* ---- 时钟节拍 ---- */
 
-static inline usize get_ticks(void) {
-    return syscall3(SYS_GET_TICKS, 0, 0, 0);
-}
 #ifdef __cplusplus
 }
 #endif

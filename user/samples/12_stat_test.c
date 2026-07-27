@@ -9,9 +9,9 @@ int main(void) {
     }
 
     puts("/etc/motd type=");
-    put_int(st.file_type);
+    printf("%d", st.file_type);
     puts(" size=");
-    put_int(st.size);
+    printf("%d", st.size);
     puts("\n");
 
     int fd = open("/etc/motd",O_RDWR);
@@ -27,9 +27,9 @@ int main(void) {
     }
 
     puts("fd stat type=");
-    put_int(st.file_type);
+    printf("%d", st.file_type);
     puts(" size=");
-    put_int(st.size);
+    printf("%d", st.size);
     puts("\n");
 
     close(fd);

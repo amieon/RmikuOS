@@ -1,5 +1,30 @@
 #include "user.h"
 
+
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
 #define THREADS 4
 #define ROUNDS 40
 #define PAGES_PER_THREAD 3
@@ -165,7 +190,7 @@ int main(int argc, char *argv[]) {
 
         if (tids[i] < 0) {
             puts("FAIL: thread_create failed\n");
-            put_int(i);
+            printf("%d", i);
             puts("\n");
             return 1;
         }
@@ -214,32 +239,32 @@ int main(int argc, char *argv[]) {
 
         if (ret != tids[i]) {
             puts("FAIL: thread_join returned wrong tid\n");
-            put_int(ret);
+            printf("%d", ret);
             puts(" expected ");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts("\n");
             return 1;
         }
 
         if (code != 100 + i) {
             puts("FAIL: thread exit code wrong\n");
-            put_int(code);
+            printf("%d", code);
             puts(" expected ");
-            put_int(100 + i);
+            printf("%d", 100 + i);
             puts("\n");
             return 1;
         }
 
         if (!thread_done[i]) {
             puts("FAIL: thread_done not set\n");
-            put_int(i);
+            printf("%d", i);
             puts("\n");
             return 1;
         }
 
         if (thread_errors[i] != 0) {
             puts("FAIL: thread_errors nonzero\n");
-            put_int(i);
+            printf("%d", i);
             puts("\n");
             return 1;
         }

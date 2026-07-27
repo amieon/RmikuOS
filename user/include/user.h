@@ -16,7 +16,7 @@ extern "C" {
 #include "sched.h"
 #include "ipc.h"
 #include "string.h"
-#include "fmt.h"
+#include "stdio.h"
 #include "arch.h"
 #include "signal.h"
 #include "net.h"

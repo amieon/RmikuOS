@@ -1,5 +1,31 @@
 #include "user.h"
 
+
+
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
 #define CONTROL_THREADS 1
 #define AI_THREADS 9
 #define LOGGER_THREADS 4
@@ -313,9 +339,9 @@ static int run_control(int alpha) {
     if (ret != tid || code != 0) {
         puts("[edge_deadline] FAIL: control join\n");
         puts("ret=");
-        put_int(ret);
+        printf("%d", ret);
         puts(" code=");
-        put_int(code);
+        printf("%d", code);
         puts("\n");
         return 1;
     }
@@ -375,13 +401,13 @@ static int run_ai(int alpha) {
         if (ret != tids[i] || code != 0) {
             puts("[edge_deadline] FAIL: ai join\n");
             puts("i=");
-            put_int(i);
+            printf("%d", i);
             puts(" tid=");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -444,13 +470,13 @@ static int run_logger(int alpha) {
         if (ret != tids[i] || code != 0) {
             puts("[edge_deadline] FAIL: logger join\n");
             puts("i=");
-            put_int(i);
+            printf("%d", i);
             puts(" tid=");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -479,7 +505,7 @@ static int run_logger(int alpha) {
 }
 static int run_one_alpha(int alpha) {
     puts("\n[edge_deadline] run alpha=");
-    put_int(alpha);
+    printf("%d", alpha);
     puts("\n");
 
     if (set_sched_alpha(alpha) < 0) {
@@ -553,9 +579,9 @@ static int run_one_alpha(int alpha) {
     if (ret_control != pid_control || code_control != 0) {
         puts("FAIL: control child failed\n");
         puts("ret=");
-        put_int(ret_control);
+        printf("%d", ret_control);
         puts(" code=");
-        put_int(code_control);
+        printf("%d", code_control);
         puts("\n");
         return 1;
     }
@@ -563,9 +589,9 @@ static int run_one_alpha(int alpha) {
     if (ret_ai != pid_ai || code_ai != 0) {
         puts("FAIL: ai child failed\n");
         puts("ret=");
-        put_int(ret_ai);
+        printf("%d", ret_ai);
         puts(" code=");
-        put_int(code_ai);
+        printf("%d", code_ai);
         puts("\n");
         return 1;
     }
@@ -573,9 +599,9 @@ static int run_one_alpha(int alpha) {
     if (ret_logger != pid_logger || code_logger != 0) {
         puts("FAIL: logger child failed\n");
         puts("ret=");
-        put_int(ret_logger);
+        printf("%d", ret_logger);
         puts(" code=");
-        put_int(code_logger);
+        printf("%d", code_logger);
         puts("\n");
         return 1;
     }

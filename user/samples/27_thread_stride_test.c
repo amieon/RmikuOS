@@ -1,5 +1,31 @@
 #include "user.h"
 
+
+
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
 #define THREADS 4
 #define TEST_TICKS 300
 #define BURN_ITERS 12000
@@ -113,13 +139,13 @@ int main(void) {
 
         if (ret != tids[i] || code != 0) {
             puts("FAIL: thread_join i=");
-            put_int(i);
+            printf("%d", i);
             puts(" tid=");
-            put_int(tids[i]);
+            printf("%d", tids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }
@@ -133,7 +159,7 @@ int main(void) {
     }
 
     puts("[thread_stride] total=");
-    put_int(total);
+    printf("%d", total);
     puts("\n");
 
 #if ENABLE_THREAD_TICKETS

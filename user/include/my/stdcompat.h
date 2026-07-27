@@ -8,7 +8,7 @@
 #include "io.h"
 #include "map.h"
 #include "set.h"
-#include "../fmt.h"
+#include "../stdio.h"
 #include "../file.h"
 
 using usize = unsigned long;

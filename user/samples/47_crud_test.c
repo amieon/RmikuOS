@@ -84,7 +84,7 @@ int main(void) {
             pass_count++;
         } else {
             puts("  FAIL: read back content wrong, n=");
-            put_int(n); puts("\n");
+            printf("%d", n); puts("\n");
             fail_count++;
         }
     }
@@ -126,8 +126,8 @@ int main(void) {
 
     // --- 总结 ---
     puts("\n=== summary ===\n");
-    puts("PASS: "); put_int(pass_count); puts("\n");
-    puts("FAIL: "); put_int(fail_count); puts("\n");
+    puts("PASS: "); printf("%d", pass_count); puts("\n");
+    puts("FAIL: "); printf("%d", fail_count); puts("\n");
     if (fail_count == 0) {
         puts("ALL TESTS PASSED\n");
         return 0;

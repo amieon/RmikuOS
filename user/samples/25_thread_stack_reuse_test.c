@@ -35,7 +35,7 @@ int main() {
 
         if (tid < 0) {
             puts("FAIL: thread_create at ");
-            put_int(i);
+            printf("%d", i);
             puts("\n");
             return 1;
         }
@@ -50,23 +50,23 @@ int main() {
 
         if (code != 100 + id) {
             puts("FAIL: bad exit code ");
-            put_int(code);
+            printf("%d", code);
             puts(" expected ");
-            put_int(100 + id);
+            printf("%d", 100 + id);
             puts("\n");
             return 1;
         }
 
         if (i % 10 == 0) {
             puts("[thread_stack_reuse] round=");
-            put_int(i);
+            printf("%d", i);
             puts("\n");
         }
     }
 
     if (done != ROUNDS) {
         puts("FAIL: done mismatch\n");
-        put_int(done);
+        printf("%d", done);
         puts("\n");
         return 1;
     }

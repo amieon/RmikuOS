@@ -286,7 +286,7 @@ int main(int argc, char **argv)
 {
     int reps = 5;
     if (argc > 1) {
-        reps = parse_int(argv[1]);
+        reps = atoi(argv[1]);
         if (reps < 1)        reps = 1;
         if (reps > MAX_REPS) reps = MAX_REPS;
     }

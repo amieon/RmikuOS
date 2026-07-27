@@ -1,5 +1,29 @@
 #include "user.h"
 
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
 #define STACK_SIZE 16384
 
 
@@ -49,7 +73,7 @@ static void worker(void *arg) {
 
 int main(int argc, char *argv[]) {
     // puts("stack1_top=");
-    // put_hex((usize)(stack1 + STACK_SIZE));
+    // printf("%x", (usize)(stack1 + STACK_SIZE));
     // puts("\n");
 
 
@@ -59,9 +83,9 @@ int main(int argc, char *argv[]) {
     int t2 = thread_create(worker, "thread2"/*, stack2 + STACK_SIZE*/);
 
     puts("created threads: ");
-    put_int(t1);
+    printf("%d", t1);
     puts(", ");
-    put_int(t2);
+    printf("%d", t2);
     puts("\n");
 
     for (int i = 0; i < 20; i++) {
@@ -76,15 +100,15 @@ int main(int argc, char *argv[]) {
     int j2 = thread_join(t2, &code2);
 
     puts("join t1=");
-    put_int(j1);
+    printf("%d", j1);
     puts(" code=");
-    put_int(code1);
+    printf("%d", code1);
     puts("\n");
 
     puts("join t2=");
-    put_int(j2);
+    printf("%d", j2);
     puts(" code=");
-    put_int(code2);
+    printf("%d", code2);
     puts("\n");
 
     puts("thread_test PASS\n");

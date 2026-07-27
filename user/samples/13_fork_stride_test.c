@@ -1,5 +1,30 @@
 #include "user.h"
 
+
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
 static void print_round_line(const char *name, int pid, int round) {
     char buf[128];
     int pos = 0;
@@ -45,19 +70,19 @@ int main(int argc, char *argv[]) {
     int burn = 120000;
 
     if (argc >= 2) {
-        rounds = parse_int(argv[1]);
+        rounds = atoi(argv[1]);
     }
 
     if (argc >= 3) {
-        burn = parse_int(argv[2]);
+        burn = atoi(argv[2]);
     }
 
     puts("This test creates two CPU-bound processes.\n");
     puts("If process-level stride scheduling works, parent and child should interleave.\n");
     puts("rounds=");
-    put_int(rounds);
+    printf("%d", rounds);
     puts(", burn=");
-    put_int(burn);
+    printf("%d", burn);
     puts("\n\n");
 
     int child = fork();
@@ -80,9 +105,9 @@ int main(int argc, char *argv[]) {
     int waited = waitpid(child, &exit_code, 0);
 
     puts("[parent] waitpid returned pid=");
-    put_int(waited);
+    printf("%d", waited);
     puts(", exit_code=");
-    put_int(exit_code);
+    printf("%d", exit_code);
     puts("\n");
 
     if (waited != child || exit_code != 0) {

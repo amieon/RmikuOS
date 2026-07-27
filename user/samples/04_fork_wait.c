@@ -2,14 +2,14 @@
 
 int main(void) {
     puts("[fork_wait] parent before fork, pid=");
-    put_int(getpid());
+    printf("%d", getpid());
     puts("\n");
 
     isize child = fork();
 
     if (child == 0) {
         puts("[fork_wait] child running, pid=");
-        put_int(getpid());
+        printf("%d", getpid());
         puts("\n");
 
         puts("[fork_wait] child sleep 3 ticks\n");
@@ -19,16 +19,16 @@ int main(void) {
         exit(42);
     } else if (child > 0) {
         puts("[fork_wait] parent forked child=");
-        put_int(child);
+        printf("%d", child);
         puts("\n");
 
         int code = -1;
         isize ret = waitpid(child, &code, 0);
 
         puts("[fork_wait] parent waitpid ret=");
-        put_int(ret);
+        printf("%d", ret);
         puts(", code=");
-        put_int(code);
+        printf("%d", code);
         puts("\n");
 
         exit(0);

@@ -11,7 +11,7 @@ static void test0(){
             total += n;
             for (int i = 0; i < 10; i++) yield();
         }
-        uprintf("child total read = %d\n", total);   // 应该 = 4096
+        printf("child total read = %d\n", total);   // 应该 = 4096
         exit(0);
     } else {
         close(fd[0]);
@@ -23,7 +23,7 @@ static void test0(){
             if (n < 0) break;
             total += n;
         }
-        uprintf("parent total written = %d\n", total);  // 应该 = 4096
+        printf("parent total written = %d\n", total);  // 应该 = 4096
         close(fd[1]);
         waitpid(pid, 0, 0);
     }
@@ -40,13 +40,13 @@ static void test1(){
         while ((n = read(fd[0], buf, 64)) > 0) {
             for (int i = 0; i < n; i++) {
                 if ((unsigned char)buf[i] != (expect % 256)) {
-                    uprintf("MISMATCH at %d: got %d expect %d\n", expect, buf[i], expect % 256);
+                    printf("MISMATCH at %d: got %d expect %d\n", expect, buf[i], expect % 256);
                     exit(1);
                 }
                 expect++;
             }
         }
-        uprintf("verified %d bytes, all correct\n", expect);
+        printf("verified %d bytes, all correct\n", expect);
         exit(0);
     } else {
         close(fd[0]);
@@ -58,7 +58,7 @@ static void test1(){
             if (n < 0) break;
             total += n;
         }
-        uprintf("parent total written = %d\n", total);  // 应该 = 4096
+        printf("parent total written = %d\n", total);  // 应该 = 4096
         close(fd[1]);
         waitpid(pid, 0, 0);
     }
@@ -78,7 +78,7 @@ static void test2(){
     close(fd[1]);
     char receive[300];
     read(fd[0],receive,300);
-    uprintf("Get 300 chars\n");
+    printf("Get 300 chars\n");
 }
 static void test3(){
     int fd[2];
@@ -86,13 +86,13 @@ static void test3(){
     int pid = fork();
     if (pid == 0) {
         exec("directly_return");
-        uprintf("exec failed!\n");
+        printf("exec failed!\n");
         exit(1);
     } else {
         close(fd[1]);
         char buf[16];
         int n = read(fd[0], buf, 16); 
-        uprintf("parent read n=%d (expect 0 = EOF)\n", n);
+        printf("parent read n=%d (expect 0 = EOF)\n", n);
         waitpid(pid, 0, 0);
     }
 }
@@ -113,20 +113,20 @@ static void test4(){
             close(fd[1]);
             waitpid(pid, 0, 0);
         }
-        uprintf("cycle %d done.\n",i);
+        printf("cycle %d done.\n",i);
     }
-    uprintf("200 pipe cycles done\n");
+    printf("200 pipe cycles done\n");
 }
 int main(int argc, char **argv) {
     test0();
-    uprintf("TEST0 PASS\n");
+    printf("TEST0 PASS\n");
     test1();
-    uprintf("TEST1 PASS\n");
+    printf("TEST1 PASS\n");
     test2();
-    uprintf("TEST2 PASS\n");
+    printf("TEST2 PASS\n");
     test3();
-    uprintf("TEST3 PASS\n");
+    printf("TEST3 PASS\n");
     test4();
-    uprintf("TEST4 PASS\n");
+    printf("TEST4 PASS\n");
     return 0;
 }

@@ -6,6 +6,7 @@ extern "C" {
 #include "mem.h"
 #include "lock.h"
 #include "io.h"
+#include "stdio.h"
 
 #define THREAD_STACK_SIZE (64 * 1024)
 #define THREAD_MAX_RECORDS 512

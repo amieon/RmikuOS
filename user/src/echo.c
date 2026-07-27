@@ -2,11 +2,13 @@
 
 int main(int argc, char *argv[]) {
     for (int i = 1; i < argc; i++) {
-        puts(argv[i]);
+        fputs(argv[i], stdout);
         if (i < argc - 1) {
-            puts(" ");       
+            fputs(" ", stdout);     
+            fflush(stdout);  
         }
     }
-    puts("\n");
+    fputs("\n", stdout);
+    fflush(stdout);  
     return 0;
 }

@@ -1,5 +1,31 @@
 #include "user.h"
 
+
+
+
+/* --- legacy append helpers (auto-injected, remove after refactor) --- */
+static inline int append_str(char *buf, int pos, const char *s) {
+    while (*s) buf[pos++] = *s++;
+    return pos;
+}
+static inline int append_int(char *buf, int pos, int x) {
+    char tmp[16]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    if (x < 0) { buf[pos++] = '-'; x = -x; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+static inline int append_usize(char *buf, int pos, unsigned long x) {
+    char tmp[24]; int n = 0;
+    if (x == 0) { buf[pos++] = '0'; return pos; }
+    while (x > 0) { tmp[n++] = (char)('0' + x % 10); x /= 10; }
+    while (n > 0) buf[pos++] = tmp[--n];
+    return pos;
+}
+/* --- end legacy append helpers --- */
+
+
 #define MAX_PROCS 8
 
 #define START_DELAY_TICKS 80
@@ -250,13 +276,13 @@ static int run_one_case(int proc_count, int *tickets) {
         if (ret != pids[i] || code != 0) {
             puts("[stride_ticket] FAIL: child failed\n");
             puts("i=");
-            put_int(i);
+            printf("%d", i);
             puts(" pid=");
-            put_int(pids[i]);
+            printf("%d", pids[i]);
             puts(" ret=");
-            put_int(ret);
+            printf("%d", ret);
             puts(" code=");
-            put_int(code);
+            printf("%d", code);
             puts("\n");
             return 1;
         }

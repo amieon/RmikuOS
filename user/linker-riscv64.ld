@@ -20,16 +20,18 @@ SECTIONS
         *(.rodata.*)
         *(.srodata)
         *(.srodata.*)
+    }
 
-        . = ALIGN(8);
+    . = ALIGN(0x1000);
 
+    .data : {
         *(.data)
         *(.data.*)
         *(.sdata)
         *(.sdata.*)
     }
 
-    . = ALIGN(0x1000);
+    . = ALIGN(8);
 
     .bss : {
         *(.bss)

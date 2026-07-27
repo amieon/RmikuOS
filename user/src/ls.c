@@ -52,9 +52,10 @@ int main(int argc, char *argv[]) {
 
     int fd = open(path,O_RDONLY);
     if (fd < 0) {
-        puts("ls: cannot open ");
-        puts(path);
-        puts("\n");
+        fputs("ls: cannot open ", stdout);
+        fputs(path, stdout);
+        fputs("\n", stdout);
+        fflush(stdout);
         return 1;
     }
 
@@ -65,9 +66,10 @@ int main(int argc, char *argv[]) {
 
         if (n < 0) {
 
-            puts("ls: not a directory: ");
-            puts(path);
-            puts("\n");
+            fputs("ls: not a directory: ", stdout);
+            fputs(path, stdout);
+            fputs("\n", stdout);
+            fflush(stdout);
             close(fd);
             return 1;
         }
@@ -87,30 +89,32 @@ int main(int argc, char *argv[]) {
             join_path(path, name, full_path, sizeof(full_path));
 
             if (stat(full_path, &st) < 0) {
-                puts("?       ");
-                puts(name);
-                puts("\n");
+                fputs("?       ", stdout);
+                fputs(name, stdout);
+                fputs("\n", stdout);
+                fflush(stdout);
                 continue;
             }
 
             if (st.file_type == STAT_TYPE_DIR) {
-                puts("dir     ");
+                fputs("dir     ", stdout);
             } else if (st.file_type == STAT_TYPE_FILE) {
-                puts("file    ");
+                fputs("file    ", stdout);
             } else if (st.file_type == STAT_TYPE_CHAR) {
-                puts("char    ");
+                fputs("char    ", stdout);
             } else {
-                puts("unknown ");
+                fputs("unknown ", stdout);
             }
 
-            put_int(st.size);
-            puts(" ");
+            printf("%d", st.size);
+            fputs(" ", stdout);
 
-            puts(name);
+            fputs(name, stdout);
             if (st.file_type == STAT_TYPE_DIR) {
-                puts("/");
+                fputs("/", stdout);
             }
-            puts("\n");
+            fputs("\n", stdout);
+            fflush(stdout);
         }
     }
 

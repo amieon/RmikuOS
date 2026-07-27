@@ -2,15 +2,6 @@
 #include "user.h"
 
 // ---------- 工具函数 ----------
-// 简易 atoi，从字符串开头解析整数
-static int atoi(const char *s) {
-    int val = 0;
-    while (*s >= '0' && *s <= '9') {
-        val = val * 10 + (*s - '0');
-        s++;
-    }
-    return val;
-}
 
 // 读取一行（最多 maxlen-1 个字符），返回长度，字符串以 '\0' 结尾
 static int readline(char *buf, int maxlen) {
@@ -120,9 +111,9 @@ int main() {
             // 子进程
             int mypid = getpid();
             puts("[子进程 ");
-            put_int(mypid);
+            printf("%d", mypid);
             puts("] 启动，投点次数: ");
-            put_int(points_per_child);
+            printf("%d", points_per_child);
             puts("\n");
 
             // 用自身 pid 和时间（简易）做种子，保证不同子进程随机序列不同
@@ -130,9 +121,9 @@ int main() {
 
             int inside = monte_carlo_points(points_per_child, &seed);
             puts("[子进程 ");
-            put_int(mypid);
+            printf("%d", mypid);
             puts("] 圆内点数: ");
-            put_int(inside);
+            printf("%d", inside);
             puts("\n");
 
             exit(inside);   // 通过退出码返回结果
@@ -155,9 +146,9 @@ int main() {
             total_inside += exit_code;
             total_points += points_per_child;
             puts("子进程 ");
-            put_int(child_pids[i]);
+            printf("%d", child_pids[i]);
             puts(" 结束，返回圆内点数: ");
-            put_int(exit_code);
+            printf("%d", exit_code);
             puts("\n");
         }
     }
@@ -177,11 +168,11 @@ int main() {
 
     puts("\n========== 最终结果 ==========\n");
     puts("总投点数: ");
-    put_int(total_points);
+    printf("%d", total_points);
     puts("\n总圆内点数: ");
-    put_int(total_inside);
+    printf("%d", total_inside);
     puts("\n估算的 π ≈ ");
-    put_int(pi_integer);
+    printf("%d", pi_integer);
     put_char('.');
     // 补零到 6 位小数
     int frac_digits[6];

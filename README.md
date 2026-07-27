@@ -1,6 +1,6 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java** 四种语言的用户程序，通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
 当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端），以及用于调度器实验的 workload 与自适应控制器。
 
@@ -96,7 +96,7 @@ loongarch64
 * VFS 与多文件系统挂载
 * ext4 rootfs / tmpfs / FAT
 * block cache
-* shell 和用户程序（C / C++ / Rust / Java）
+* shell 和用户程序（C / C++ / Rust / Java / Lua）
 * 调度器与调度实验框架
 * 网络协议栈（virtio-net / ARP / IPv4 / TCP / UDP / DHCP / ICMP）
 
@@ -411,8 +411,9 @@ rootfs 由宿主机上的目录模板 `user/rootfs/` 生成，用户程序的编
 ```text
 /
 ├── bin/         系统命令(shell, ls, cat, echo, grep ...)
-├── tests/       C / 单文件 Rust 测试程序
-├── programs/    cargo workspace 构建的 Rust 程序
+├── samples/     C/C++ / 单文件 Rust 测试程序
+├── tests/       测试程序
+├── programs/    构建的 Rust/C/C++ 程序
 ├── gcn/         C++ 图神经网络程序（GCN / GAT）
 ├── jvm/         Java 项目的class文件
 ├── etc/
@@ -821,9 +822,9 @@ python3 scripts/plot_sr2.py          # 出图 + 汇总表
 
 ---
 
-## User Programs in C, C++, Rust and Java
+## User Programs in C, C++, Rust, Java and Lua
 
-RmikuOS 的用户程序可以用 **C、C++、Rust and Java** 编写。前三者编译成相同格式的静态 ELF、走完全相同的系统调用 ABI（号在 `a7`/`r11`，参数在 `a0..`/`r4..`，触发 `ecall` / `syscall 0`，返回值在 `a0`/`r4`），因此在内核看来完全等价——**支持 C++ 用户程序内核侧零改动**，只是多了一条产出兼容 ELF 的编译流程。 后者通过javac编译成class文件后用cpp编写的jvm进行使用。
+RmikuOS 的用户程序可以用 **C、C++、Rust, Java and Lua** 编写。前三者编译成相同格式的静态 ELF、走完全相同的系统调用 ABI（号在 `a7`/`r11`，参数在 `a0..`/`r4..`，触发 `ecall` / `syscall 0`，返回值在 `a0`/`r4`），因此在内核看来完全等价——**支持 C++ 用户程序内核侧零改动**，只是多了一条产出兼容 ELF 的编译流程。 后者通过javac编译成class文件后用cpp编写的jvm进行使用。
 
 ### syscall ABI 是语言无关的
 
@@ -1181,6 +1182,81 @@ LoongArch64 AOT 在相同 QEMU 主机上比 RISC-V AOT 慢约 8 倍，反映的�
 ---
 
 
+### Lua：零改动移植 Lua 5.4
+
+Lua 是 RmikuOS 的第五种用户态语言。与 GCN 移植（把 `#include <vector>` 替换为 `#include "my/stdcompat.h"`，算法代码零改动但头文件要换）不同，**Lua 5.4 的官方源码一行未改**——只是删掉了动态链接（`loadlib.c`）和环境系统（`loslib.c` 的 `os.execute`/`os.tmpname` 等）相关的几个文件，其余 30 余个 `.c` 文件原样编译。
+
+#### 桥接层：lcompat
+
+Lua 5.4 的 C 源码依赖一组标准库头文件。RmikuOS 在 `user/include/` 下提供了一组同名裸运行时头文件，把 Lua 的标准库调用桥接到 RmikuOS 的 syscall ABI：
+
+```text
+Lua 源码 #include <stdio.h>    →  user/include/stdio.h   (vfprintf/vsnprintf/printf/fopen...)
+Lua 源码 #include <stdlib.h>   →  user/include/stdlib.h  (malloc/free/realloc/strtol/exit...)
+Lua 源码 #include <math.h>     →  user/include/math.h    (exp/log/sqrt/sin/cos... 裸运行时)
+Lua 源码 #include <setjmp.h>   →  user/include/setjmp.h  (双架构 naked 汇编)
+Lua 源码 #include <string.h>   →  user/include/string.h  (memcpy/memset 在 lib/string.c)
+...
+```
+
+桥接的关键约束：
+
+* **`setjmp`/`longjmp`**：Lua 用它做 `pcall` 错误传播和协程切换，是 `no_std` 环境下最棘手的依赖。RmikuOS 用 `__attribute__((naked))` 函数手写了两架构的汇编实现（riscv64 存 `s0-s11`+`sp`+`ra`，loongarch64 存 `ra`+`sp`+`fp`+`s0-s8`），无外部依赖。
+* **`realloc` 与 `malloc_payload_size`**：Lua 的 `l_alloc` 默认调 `realloc`，而 `realloc` 需要知道旧块大小才能正确拷贝。RmikuOS 在 `mem.h` 加了 `malloc_payload_size()`，从 slab header（`SLAB_MAGIC | sc`）或大对象 header（`block->size`）查询实际分配大小，`realloc` 用 `min(old, new)` 限制 `memcpy` 长度，杜绝越界读。
+* **`vsnprintf` 的 `%g`**：Lua 的 `print` 对浮点数用 `%.14g`。RmikuOS 的 `vsnprintf` 补全了 `%g`/`%f`/`%e` case，并在开头检查 NaN/infinity（`v != v` 判 NaN，`v > 1e308` 判 inf），避免 `math.huge`（无穷大）触发 `while (m >= 10.0)` 死循环。
+
+#### 删除的文件
+
+```text
+loadlib.c        动态链接库加载（dlopen/dlsym）
+loslib.c 部分    os.execute / os.exit / os.tmpname / os.getenv（环境系统）
+liolib.c 部分    临时文件、popen（管道进程）
+```
+
+保留的库：`base` / `string` / `table` / `math` / `coroutine` / `io`（文件读写接 VFS）/ `os`（time/clock/date）。
+
+#### 移植过程中踩出的四个 bug
+
+移植过程中踩出的四个 bug，每一个都不是 Lua 的问题，而是 RmikuOS 基础设施的缺陷被 Lua 暴露：
+
+1. **链接脚本 `.data` 权限**：`linker-riscv64.ld` 把 `*(.data)` 塞进了 `.text` 输出 section，导致 `.data` 段继承 `R E`（只读+可执行）权限。`stdio.h` 引入的 `_stdout` FILE 全局变量落在只读页，`__init_stdout` 写它 → store page fault。修复：`.data` 独立 section + `ALIGN(0x1000)`，两个架构都改。
+2. **`vsnprintf` 缺 `%g`**：`vfprintf` 有 `%g` case 但 `vsnprintf` 没有，Lua 的 `print` 走 `snprintf` → 浮点数输出 `%g` 字面量。修复：补全浮点格式化 case。
+3. **`realloc` 越界读**：`realloc` 的 `memcpy(np, p, s)` 用新大小 `s` 拷贝，扩大时越界读旧块后的内存，读到 mmap 区未映射页 → `memcpy` 里 load page fault。修复：`malloc_payload_size` + `min(old, new)`。
+4. **`%g` 对 infinity 死循环**：`math.huge`（`1.0/0.0`）传入 `%g` 的 `%e` 路径，`while (m >= 10.0) { m /= 10.0; }` 对 `INFINITY` 死循环。修复：开头加 NaN/inf 检查。
+
+四个 bug 的定位过程也是一次 trap 诊断方法的实战：`stval` 直接指向出问题的虚拟地址，`sepc` + `objdump -d` 反汇编定位到 `memcpy`，`readelf -l` 看段权限暴露链接脚本问题。
+
+#### 测试验证
+
+9 个递进测试脚本覆盖 Lua 5.4 核心特性：
+
+```text
+01_hello       print / 整数浮点算术 / 字符串拼接
+02_types       type / math.type / ipairs+pairs / table 库
+03_closure     upvalue 捕获与共享 / 递归 / 尾调用（10000 层不爆栈）/ vararg
+04_control     if/while/repeat/for / 自定义迭代器 / break
+05_math        exp/log/sqrt/sin/cos/random / sin²+cos²=1 / math.huge=inf
+06_string      format/gsub/gmatch/match / 模式捕获 / 字符码
+07_pcall       error/pcall/assert/嵌套/level       ← setjmp/longjmp 压测
+08_coroutine   resume/yield/wrap/深层 yield/协程内 error  ← 协程切换压测
+09_metatable   运算符重载/继承/__index/__call/proxy
+```
+
+`pcall` 和 `coroutine` 全部通过，证明手写的 `setjmp/longjmp` 不仅支持错误传播，还支持协程的跨栈帧切换——这是 Lua 5.4 最考验实现的特性。
+
+#### 与其他语言移植的对比
+
+| 语言 | 移植方式 | 源码改动 | 桥接层 |
+| --- | --- | --- | --- |
+| C | 原生 | 无 | 无（直接用 user 库） |
+| C++ (GCN) | 头文件替换 | 算法零改动，`#include <vector>` → `"my/stdcompat.h"` | `stdcompat.h` |
+| Rust | 原生 no_std | 无 | `ulib` crate |
+| Java | 自研 JVM | 无（javac 编译） | 手写 JVM + `Rmiku.*` native |
+| **Lua** | **官方源码原样编译** | **零改动** | **lcompat（同名头文件 + setjmp 汇编）** |
+
+Lua 移植是唯一一种"官方源码一行不改、只提供桥接头文件"的方式——这得益于 Lua 5.4 源码的干净设计（纯 C89、无平台 ifdef、所有系统依赖都经 `luaconf.h` 的 `luai_*` 宏集中配置）。
+
+
 
 ### 统一构建
 
@@ -1531,6 +1607,7 @@ LoongArch64 使用 QEMU `virt` 机器和 virtio-pci 块设备。
 ```text
 user/
 ├── rootfs/                 rootfs 目录模板(etc/motd, home, share, tmp, fat ...)
+│   └── scripts/lua         lua测试文件
 ├── include/                C/C++ 用户库(分层头文件)
 │   ├── types.h             基础类型(usize / isize)
 │   ├── syscall.h           系统调用号 + syscall3 / syscall6
@@ -1564,7 +1641,10 @@ user/
 │   └── shell.c             交互式 shell（内建命令 + 外部命令执行）
 ├── tests/                  C / 单文件 Rust / 单文件 C++ 测试程序 → /tests
 ├── c/                      C 项目型构建目录（每个子文件夹编译为一个 ELF，如多文件工程 httpd）→ /programs
+│   ├── lua                 Lua 5.4 官方源码
+│   └── httpd               httpd 代码
 ├── cpp/                    C++ 项目型构建目录（每个子文件夹编译为一个 ELF）→ /programs
+│   └── lvm                 转载期AOT的JVM 代码
 ├── gcn/                    C++ 图神经网络项目（GCN/GAT）→ /gcn
 │   ├── Tensor.h
 │   ├── GCNLayer.h
@@ -1588,7 +1668,7 @@ user/
 ```text
 user/build/<arch>/
 ├── bin/          # src/*.c
-├── tests/        # tests/*.{c,cpp,rs}
+├── samples/      # samples/*.{c,cpp,rs,S}
 ├── programs/     # c/*/, cpp/*/, rust/programs/*
 └── gcn/          # gcn/*.cpp
 ```
@@ -1651,7 +1731,7 @@ python3 scripts/plot_dynamic_load.py \
 ## Current Architecture
 
 ```text
-                         User Programs (C / C++ / Rust / Java)
+                         User Programs (C / C++ / Rust / Java / lua)
                                   │
                                   ▼
                                Syscall
@@ -1737,6 +1817,7 @@ User Programs (httpd / udp_test / tcp_test)
 * **Java 用户程序支持**：自研 JVM（class 解析 + 解释器 + 装载期 AOT），riscv64 / loongarch64 双原生后端，`Rmiku.*` native 桥接 syscall ABI
 * **RmikuRay**：纯 Java 16.16 定点光线追踪（零浮点指令），双线程分带渲染拼帧，双架构同一份 class 运行
 * **buddy 物理帧分配器**（order 0–10，连续块供 DMA，dealloc 越界断言 + double-free 检查）
+* **Lua 用户程序支持**：零改动移植 Lua 5.4 官方源码，lcompat 桥接层（同名头文件 + 手写 setjmp/longjmp），9 组递进测试全部通过（含 pcall / coroutine）
 * 统一构建脚本 `build.py`（C / C++ / 单文件 Rust / cargo Rust 分派编译）
 * 双架构关机（riscv SiFive Test finisher / loongarch ACPI GED）
 * RISC-V / LoongArch64 SMP 启动与多核调度验证（per-hart timer、IPI reschedule、running_on 防重入）

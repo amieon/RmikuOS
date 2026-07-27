@@ -9,7 +9,7 @@ int main(void) {
     }
 
     puts("opened fd=");
-    put_int(fd);
+    printf("%d", fd);
     puts(", now exec hello\n");
 
     exec("hello");

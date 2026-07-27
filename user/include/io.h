@@ -6,14 +6,7 @@ extern "C" {
 
 #include "syscall.h"
 #include "flag.h"
-
-static inline usize strlen(const char *s) {
-    usize n = 0;
-    while (s[n]) {
-        n++;
-    }
-    return n;
-}
+#include "strutil.h"
 
 static inline isize write(int fd, const char *buf, usize len) {
     return syscall3(SYS_WRITE, (usize)fd, (usize)buf, len);
@@ -27,9 +20,6 @@ static inline void put_char(char ch) {
     write(1, &ch, 1);
 }
 
-static inline void puts(const char *s) {
-    write(1, s, strlen(s));
-}
 
 static inline isize create2(const char *path, usize len) {
     return syscall3(SYS_CREATE, (usize)path, len, 0);
