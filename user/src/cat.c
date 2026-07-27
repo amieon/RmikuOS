@@ -9,7 +9,8 @@ int main(int argc, char *argv[]) {
         while (1) {
             isize n = read(0, buf, sizeof(buf));
             if (n < 0) {
-                printf("cat: read failed\n");
+                fputs("cat: read failed\n", stdout);
+                fflush(stdout);  
                 ret = 1;
                 break;
             }
@@ -24,9 +25,10 @@ int main(int argc, char *argv[]) {
         const char *path = argv[argi];
         int fd = open(path, O_RDONLY);
         if (fd < 0) {
-            printf("cat: cannot open ");
-            printf(path);
-            printf("\n");
+            fputs("cat: cannot open ", stdout);
+            fputs(path, stdout);
+            fputs("\n", stdout);
+            fflush(stdout);  
             ret = 1;
             continue;
         }
@@ -34,9 +36,10 @@ int main(int argc, char *argv[]) {
         while (1) {
             isize n = read(fd, buf, sizeof(buf));
             if (n < 0) {
-                printf("cat: read failed: ");
-                printf(path);
-                printf("\n");
+                fputs("cat: read failed: ", stdout);
+                fputs(path, stdout);
+                fputs("\n", stdout);
+                fflush(stdout);  
                 ret = 1;
                 break;
             }

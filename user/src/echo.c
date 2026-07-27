@@ -2,11 +2,13 @@
 
 int main(int argc, char *argv[]) {
     for (int i = 1; i < argc; i++) {
-        printf(argv[i]);
+        fputs(argv[i], stdout);
         if (i < argc - 1) {
-            printf(" ");       
+            fputs(" ", stdout);     
+            fflush(stdout);  
         }
     }
-    printf("\n");
+    fputs("\n", stdout);
+    fflush(stdout);  
     return 0;
 }

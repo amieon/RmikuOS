@@ -23,7 +23,8 @@ static int line_contains(const char *line, const char *pattern) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        printf("usage: grep <pattern>\n");
+        fputs("usage: grep <pattern>\n", stdout);
+        fflush(stdout);
         return 1;
     }
 
@@ -41,8 +42,9 @@ int main(int argc, char *argv[]) {
             line[len] = '\0';
             if (line_contains(line, pattern)) {
 
-                write(1, line, len);
-                write(1, "\n", 1);
+                fputs(line,stdout);
+                putchar('\n');
+                fflush(stdout);
             }
             len = 0;  
         } else {
@@ -58,8 +60,9 @@ int main(int argc, char *argv[]) {
     if (len > 0) {
         line[len] = '\0';
         if (line_contains(line, pattern)) {
-            write(1, line, len);
-            write(1, "\n", 1);
+            fputs(line,stdout);
+            putchar('\n');
+            fflush(stdout);
         }
     }
 
