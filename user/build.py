@@ -228,7 +228,6 @@ def build_one(arch: str, source: Path, app_id: int, category):
         out_dir = BUILD_DIR / arch / "sched"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    bin_path = out_dir / f"{app_id}_{stem}.bin"
 
     # ---- 增量编译检查 ----
     arch_cache = get_arch_cache(arch)
@@ -243,26 +242,27 @@ def build_one(arch: str, source: Path, app_id: int, category):
     current_hash = h.hexdigest()
 
 
-    if single_cache.get(src_key) == current_hash and bin_path.exists():
-        data = bin_path.read_bytes()
-        print(f"[user] cache hit app{app_id}: {source.name}, {len(data)} bytes")
+    elf_path = out_dir / f"{app_id}_{stem}.elf"
+    if single_cache.get(src_key) == current_hash and elf_path.exists():
+        data = elf_path.read_bytes()
+        print(f"[user] cache hit app{app_id}: {source.name}, {len(data)} bytes (ELF)")
         return {
             "id": app_id,
             "source": source,
             "name": stem,
             "symbol": sanitize_name(source),
-            "bin": bin_path,
-            "data": data,
+            "bin": elf_path,        
+            "data": data,         
             "category": category,
         }
 
     # ---- 真正编译 ----
     if source.suffix == ".rs":
-        result = _build_rust_real(arch, source, app_id, category, out_dir, stem, bin_path)
+        result = _build_rust_real(arch, source, app_id, category, out_dir, stem, elf_path)
     elif source.suffix == ".cpp":
-        result = _build_cpp_real(arch, source, app_id, category, out_dir, stem, bin_path)
+        result = _build_cpp_real(arch, source, app_id, category, out_dir, stem, elf_path)
     else:
-        result = _build_c_asm_real(arch, source, app_id, category, out_dir, stem, bin_path)
+        result = _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path)
 
     # ---- 更新缓存 ----
     arch_cache = get_arch_cache(arch)  # 重新读取，防止并发覆盖
@@ -271,7 +271,7 @@ def build_one(arch: str, source: Path, app_id: int, category):
     return result
 
 
-def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, bin_path):
+def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
     cfg = ARCH_CONFIG[arch]
     obj = out_dir / f"{app_id}_{stem}.o"
     crt0_obj = out_dir / f"{app_id}_{stem}_crt0.o"
@@ -360,32 +360,24 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, bin_path):
     ]
     run(link_cmd)
 
-    objcopy_cmd = [
-        cfg["objcopy"],
-        "-O", "binary",
-        "-j", ".text",
-        str(elf),
-        str(bin_path),
-    ]
-    run(objcopy_cmd)
-
-    data = bin_path.read_bytes()
+    data = elf.read_bytes()
     if not data:
-        raise RuntimeError(f"{source} produced empty binary")
+        raise RuntimeError(f"{source} produced empty ELF")
 
-    print(f"[user] built app{app_id}: {source.name}, {len(data)} bytes")
+    print(f"[user] built app{app_id}: {source.name}, {len(data)} bytes (ELF)")
     return {
         "id": app_id,
         "source": source,
         "name": stem,
         "symbol": sanitize_name(source),
-        "bin": bin_path,
-        "data": data,
+        "bin": elf,            
+        "data": data,         
         "category": category,
     }
 
 
-def _build_cpp_real(arch, source, app_id, category, out_dir, stem, bin_path):
+
+def _build_cpp_real(arch, source, app_id, category, out_dir, stem, elf_path):
     cfg = ARCH_CONFIG[arch]
     obj = out_dir / f"{app_id}_{stem}.o"
     crt0_obj = out_dir / f"{app_id}_{stem}_crt0.o"
@@ -428,20 +420,19 @@ def _build_cpp_real(arch, source, app_id, category, out_dir, stem, bin_path):
         link_cmd.append(str(string_obj))
     link_cmd.extend(["-o", str(elf)])
     run(link_cmd)
+    data = elf.read_bytes()
+    if not data:
+        raise RuntimeError(f"{source} produced empty ELF")
 
-    run([cfg["objcopy"], "-O", "binary", "-j", ".text",
-         str(elf), str(bin_path)])
-
-    data = bin_path.read_bytes()
-    print(f"[user] built cpp app{app_id}: {source.name}, {len(data)} bytes")
+    print(f"[user] built cpp app{app_id}: {source.name}, {len(data)} bytes (ELF)")
     return {
         "id": app_id, "source": source, "name": stem,
-        "symbol": sanitize_name(source), "bin": bin_path,
-        "data": data, "category": category,
+        "symbol": sanitize_name(source), "bin": elf,  
+        "data": data, "category": category,          
     }
 
 
-def _build_rust_real(arch, source, app_id, category, out_dir, stem, bin_path):
+def _build_rust_real(arch, source, app_id, category, out_dir, stem, elf_path):
     cfg = ARCH_CONFIG[arch]
     elf = out_dir / f"{app_id}_{stem}.elf"
 
@@ -454,20 +445,18 @@ def _build_rust_real(arch, source, app_id, category, out_dir, stem, bin_path):
         "-o", str(elf), str(source),
     ]
     run(cmd)
+    data = elf.read_bytes()
+    if not data:
+        raise RuntimeError(f"{source} produced empty ELF")
 
-    # rustc 直接出 elf，需要 objcopy 成 bin
-    run([cfg["objcopy"], "-O", "binary", "-j", ".text",
-         str(elf), str(bin_path)])
-
-    data = bin_path.read_bytes()
-    print(f"[user] built rust(single) app{app_id}: {source.name}, {len(data)} bytes")
+    print(f"[user] built rust(single) app{app_id}: {source.name}, {len(data)} bytes (ELF)")
     return {
         "id": app_id,
         "source": source,
         "name": stem,
         "symbol": sanitize_name(source),
-        "bin": bin_path,
-        "data": data,
+        "bin": elf,              # ← 改
+        "data": data,            # ← 改
         "category": category,
     }
 
@@ -505,12 +494,11 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
 
     cached_entry = proj_cache.get(proj_key)
     if cached_entry and cached_entry.get("files") == files_hash:
-        # 再确认所有产物 .bin 都存在
         all_exist = True
         for s in sources:
             content = s.read_text()
             if "int main(" in content or 'extern "C" int main(' in content:
-                if not (out_dir / f"{s.stem}.bin").exists():
+                if not (out_dir / f"{s.stem}.elf").exists():
                     all_exist = False
                     break
         if all_exist:
@@ -587,7 +575,6 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
                     other_objs.append(str(o))
 
         elf = out_dir / f"{entry_stem}.elf"
-        bin_path = out_dir / f"{entry_stem}.bin"
 
         link_objs = [str(crt0_obj), str(entry_obj), str(runtime_obj)] + other_objs
         if string_obj:
@@ -603,11 +590,8 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
              *link_objs,
              "-o", str(elf)])
 
-        run([cfg["objcopy"], "-O", "binary", "-j", ".text",
-             str(elf), str(bin_path)])
-
-        data = bin_path.read_bytes()
-        print(f"[user] {src_dir.name}/{entry_stem}: {len(data)} bytes")
+        data = elf.read_bytes()
+        print(f"[user] {src_dir.name}/{entry_stem}: {len(data)} bytes (ELF)")
 
     # ---- 更新缓存 ----
     arch_cache = get_arch_cache(arch)

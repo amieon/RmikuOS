@@ -171,6 +171,24 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                 cx.stval,
                 cx.scause
             );
+            trap_println!("  ra  = {:#x}", cx.x[1]);
+            trap_println!("  sp  = {:#x}", cx.x[2]);
+            trap_println!("  gp  = {:#x}", cx.x[3]);
+            trap_println!("  tp  = {:#x}", cx.x[4]);
+            trap_println!("  t0  = {:#x}", cx.x[5]);
+            trap_println!("  t1  = {:#x}", cx.x[6]);
+            trap_println!("  t2  = {:#x}", cx.x[7]);
+            trap_println!("  s0  = {:#x}", cx.x[8]);
+            trap_println!("  s1  = {:#x}", cx.x[9]);
+            trap_println!("  a0  = {:#x}", cx.x[10]);
+            trap_println!("  a1  = {:#x}", cx.x[11]);
+            trap_println!("  a2  = {:#x}", cx.x[12]);
+            trap_println!("  a3  = {:#x}", cx.x[13]);
+            trap_println!("  a4  = {:#x}", cx.x[14]);
+            trap_println!("  a5  = {:#x}", cx.x[15]);
+            trap_println!("  a6  = {:#x}", cx.x[16]);
+            trap_println!("  a7  = {:#x}", cx.x[17]);
+
             panic!("fatal RISC-V exception");
         }
         _ => {

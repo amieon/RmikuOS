@@ -138,15 +138,22 @@ impl MapArea {
     }
 
     fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+        // 已映射 → 只升级权限，不浪费帧
+        if page_table.translate(vpn).is_some() {
+            let flags = map_perm_to_pte_flags(self.permission);
+            // 调用 map 会走上面的 "已映射" 分支，合并权限
+            // 但需要一个 ppn 参数，随便传（不会被使用）
+            page_table.map(vpn, PhysPageNum(0), flags);
+            return;
+        }
+
         let ppn = match self.map_type {
             MapType::Identical => PhysPageNum(vpn.0),
-
             MapType::Linear { offset } => {
                 let va = vpn.addr().0;
                 let pa = va - offset;
                 PhysAddr::from(pa).floor()
             }
-
             MapType::Framed => {
                 let frame = FrameTracker::new(
                     alloc_frame().expect("failed to allocate frame for MapArea"),
