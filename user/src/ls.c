@@ -52,9 +52,9 @@ int main(int argc, char *argv[]) {
 
     int fd = open(path,O_RDONLY);
     if (fd < 0) {
-        puts("ls: cannot open ");
-        puts(path);
-        puts("\n");
+        printf("ls: cannot open ");
+        printf(path);
+        printf("\n");
         return 1;
     }
 
@@ -65,9 +65,9 @@ int main(int argc, char *argv[]) {
 
         if (n < 0) {
 
-            puts("ls: not a directory: ");
-            puts(path);
-            puts("\n");
+            printf("ls: not a directory: ");
+            printf(path);
+            printf("\n");
             close(fd);
             return 1;
         }
@@ -87,30 +87,30 @@ int main(int argc, char *argv[]) {
             join_path(path, name, full_path, sizeof(full_path));
 
             if (stat(full_path, &st) < 0) {
-                puts("?       ");
-                puts(name);
-                puts("\n");
+                printf("?       ");
+                printf(name);
+                printf("\n");
                 continue;
             }
 
             if (st.file_type == STAT_TYPE_DIR) {
-                puts("dir     ");
+                printf("dir     ");
             } else if (st.file_type == STAT_TYPE_FILE) {
-                puts("file    ");
+                printf("file    ");
             } else if (st.file_type == STAT_TYPE_CHAR) {
-                puts("char    ");
+                printf("char    ");
             } else {
-                puts("unknown ");
+                printf("unknown ");
             }
 
             printf("%d", st.size);
-            puts(" ");
+            printf(" ");
 
-            puts(name);
+            printf(name);
             if (st.file_type == STAT_TYPE_DIR) {
-                puts("/");
+                printf("/");
             }
-            puts("\n");
+            printf("\n");
         }
     }
 

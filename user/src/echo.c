@@ -2,11 +2,11 @@
 
 int main(int argc, char *argv[]) {
     for (int i = 1; i < argc; i++) {
-        puts(argv[i]);
+        printf(argv[i]);
         if (i < argc - 1) {
-            puts(" ");       
+            printf(" ");       
         }
     }
-    puts("\n");
+    printf("\n");
     return 0;
 }

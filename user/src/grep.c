@@ -23,7 +23,7 @@ static int line_contains(const char *line, const char *pattern) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        puts("usage: grep <pattern>\n");
+        printf("usage: grep <pattern>\n");
         return 1;
     }
 
