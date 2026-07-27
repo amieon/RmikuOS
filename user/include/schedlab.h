@@ -294,8 +294,8 @@ static void sl_aimd_init(sl_aimd_t *a, int alpha0) {
     a->alpha = alpha0;
     a->inc = 5;
     a->backoff = 80;
-    a->safe_lateness = 0;
-    a->danger_lateness = 25;
+    a->safe_lateness = 10;
+    a->danger_lateness = 20;
     a->safe_windows = 0;
     a->cooldown = 0;
 }

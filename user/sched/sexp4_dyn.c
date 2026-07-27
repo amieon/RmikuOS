@@ -1,11 +1,12 @@
 /*
  * sexp4_dyn.c —— 实验 4: 动态负载（三段相位）下 AIMD vs Fixed α
- * v2: ctrl period=4, cpu=2; ai=150, log=32; fixed 分 0/30/60/100 四档
+ * v3: 解决"轻不够轻、重不够重"
  *
- * 负载: ctrl(1, period=4, cpu=2, burn=400000) + ai(150, phased, light_active=3) + log(32)
- * 相位: 0=轻(3线程) → 1=重(150线程) → 2=轻(3线程)，各占总时长 1/3
- * 模式: fixed α={0,30,60,100} / AIMD α0={0,50,100}
- * 每 trial: win=100, total=36000 ticks
+ * 负载: ctrl(1, period=5, cpu=2, burn=400000)
+ *       + ai(150, phased, light_active=3, burn=300000)
+ *       + log(32, phased, light_active=4, burn=300000)
+ * 相位: 0=轻(ai=3, log=4) → 1=重(ai=150, log=32) → 2=轻
+ * 模式: fixed 0/30/60/100 / AIMD 15/50/100
  */
 #include "schedlab.h"
 
@@ -26,15 +27,18 @@ static void sl_reset_state(void) {
 }
 
 static void setup(void) {
-    sl_add_jobs_parent("ctrl", 300, 1, /*period*/5, /*cpu*/2, /*burn*/400000);
-    sl_add_spin_phased("ai", 100, 150, 12000, /*light_active*/3);
-    sl_add_spin("log", 50, 32, 12000);
+    /* ctrl: period=5, cpu=2 保持中等压力 */
+    sl_add_jobs_parent("ctrl", 300, 1, /*period*/7, /*cpu*/2, /*burn*/400000);
+    /* ai: burn 加大到 300000 (~1.5 ticks)，轻相位只 3 个活跃 */
+    sl_add_spin_phased("ai", 100, 150, /*burn*/300000, /*light_active*/3);
+    /* log: 也 phased！轻相位只 4 个活跃，重相位 32 个全上 */
+    sl_add_spin_phased("log", 50, 32, /*burn*/300000, /*light_active*/4);
 }
 
 static void run_fixed(int alpha, int rep, unsigned long total) {
     sl_reset_state();
     setup();
-    printf("# RUN config=dyn mode=fixed alpha=%d rep=%d/5\n", alpha, rep);
+    printf("# RUN config=dyn mode=fixed alpha=%d rep=%d/3\n", alpha, rep);
     sl_run(&(sl_cfg){
         .total_ticks = total, .window_ticks = 100,
         .alpha0 = alpha, .policy = 0, .policy_ud = 0,
@@ -46,7 +50,7 @@ static void run_aimd(int alpha0, int rep, unsigned long total) {
     setup();
     sl_aimd_t aimd;
     sl_aimd_init(&aimd, alpha0);
-    printf("# RUN config=dyn mode=aimd alpha0=%d rep=%d/5\n", alpha0, rep);
+    printf("# RUN config=dyn mode=aimd alpha0=%d rep=%d/3\n", alpha0, rep);
     sl_run(&(sl_cfg){
         .total_ticks = total, .window_ticks = 100,
         .alpha0 = alpha0, .policy = sl_policy_aimd, .policy_ud = &aimd,
@@ -57,12 +61,12 @@ int main(void) {
     const unsigned long total = 72000;
     const int nreps = 3;
     const int fixed_alphas[] = {0, 30, 60, 100};
-    const int aimd_alphas[]  = {10, 50, 100};
+    const int aimd_alphas[]  = {15, 50, 100};
 
-    printf("# sexp4_dyn_v2: dyn load x fixed{0,30,60,100} + aimd{0,50,100} x (1w+%dr), total=%lu\n",
+    printf("# sexp4_dyn_v3: dyn load x fixed{0,30,60,100} + aimd{15,50,100} x (1w+%dr), total=%lu\n",
            nreps, total);
 
-    /* fixed baseline: 0, 30, 60, 100 */
+    /* fixed baseline */
     for (int fi = 0; fi < 4; fi++) {
         int fa = fixed_alphas[fi];
         printf("\n# === FIXED alpha=%d ===\n", fa);
@@ -70,7 +74,7 @@ int main(void) {
             if (r == 0) {
                 printf("# WARMUP config=dyn fixed%d\n", fa);
                 sl_reset_state(); setup();
-                printf("# RUN config=dyn mode=fixed alpha=%d rep=0/5\n", fa);
+                printf("# RUN config=dyn mode=fixed alpha=%d rep=0/3\n", fa);
                 sl_run(&(sl_cfg){.total_ticks=total, .window_ticks=100, .alpha0=fa, .policy=0, .policy_ud=0});
             } else {
                 run_fixed(fa, r, total);
@@ -78,7 +82,7 @@ int main(void) {
         }
     }
 
-    /* AIMD from 0, 50, 100 */
+    /* AIMD */
     for (int ai = 0; ai < 3; ai++) {
         int a0 = aimd_alphas[ai];
         printf("\n# === AIMD alpha0=%d ===\n", a0);
@@ -87,7 +91,7 @@ int main(void) {
                 printf("# WARMUP config=dyn aimd%d\n", a0);
                 sl_reset_state(); setup();
                 sl_aimd_t aimd; sl_aimd_init(&aimd, a0);
-                printf("# RUN config=dyn mode=aimd alpha0=%d rep=0/5\n", a0);
+                printf("# RUN config=dyn mode=aimd alpha0=%d rep=0/3\n", a0);
                 sl_run(&(sl_cfg){.total_ticks=total, .window_ticks=100, .alpha0=a0, .policy=sl_policy_aimd, .policy_ud=&aimd});
             } else {
                 run_aimd(a0, r, total);
@@ -95,6 +99,6 @@ int main(void) {
         }
     }
 
-    printf("\n# sexp4_dyn_v2 ALL DONE\n");
+    printf("\n# sexp4_dyn_v3 ALL DONE\n");
     return 0;
 }

@@ -27,7 +27,7 @@ COLORS = {
     "fixed30":  "#64748b",
     "fixed60":  "#475569",
     "fixed100": "#1e293b",
-    "aimd0":    "#0891b2",
+    "aimd15":    "#0891b2",
     "aimd50":   "#2563eb",
     "aimd100":  "#dc2626",
 }
@@ -256,7 +256,7 @@ def add_phase_background(ax, total_wins):
 def plot_miss_all(stats, outdir):
     """Fig 1: overall miss rate, all 7 configs."""
     fig, ax = plt.subplots(figsize=(10, 5))
-    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd15", "aimd50", "aimd100"]
     colors = [COLORS.get(m, "#666") for m in modes]
     vals, errs = [], []
     for m in modes:
@@ -286,19 +286,27 @@ def plot_alpha_traj(runs, outdir):
     total_wins = runs[0].get("total_wins", 720) if runs else 720
     add_phase_background(ax, total_wins)
 
-    for mode, color in [("aimd0", COLORS["aimd0"]),
+    for mode, color in [("aimd15", COLORS["aimd15"]),
                          ("aimd50", COLORS["aimd50"]),
                          ("aimd100", COLORS["aimd100"])]:
         reps = [r for r in runs if r["mode"] == mode and "alphas" in r]
         if not reps:
             continue
+        
+        # 画每个 rep 的完整细线
+        max_len = max(len(r["alphas"]) for r in reps)
         for r in reps:
             x = np.arange(len(r["alphas"]))
             ax.plot(x, r["alphas"], "-", color=color, lw=0.4, alpha=0.3)
-        min_len = min(len(r["alphas"]) for r in reps)
-        aligned = np.array([r["alphas"][:min_len] for r in reps])
-        mean = aligned.mean(axis=0)
-        ax.plot(np.arange(len(mean)), mean, "-", color=color, lw=2,
+        
+        # 用 nanmean 处理不等长数组，不再截断
+        padded = np.full((len(reps), max_len), np.nan)
+        for i, r in enumerate(reps):
+            padded[i, :len(r["alphas"])] = r["alphas"]
+        mean = np.nanmean(padded, axis=0)
+        # 只画有数据的部分
+        valid = ~np.isnan(mean)
+        ax.plot(np.arange(max_len)[valid], mean[valid], "-", color=color, lw=2,
                 label=f"α0={mode.replace('aimd','')} (n={len(reps)})")
 
     ax.set_xlabel("Window")
@@ -308,9 +316,7 @@ def plot_alpha_traj(runs, outdir):
     ax.set_ylim(-2, 105)
     fig.tight_layout()
     out = os.path.join(outdir, "exp4v2_alpha_traj.png")
-    fig.savefig(out)
-    print(f"[saved] {out}")
-    plt.close(fig)
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
 def plot_miss_traj(runs, outdir):
@@ -319,7 +325,7 @@ def plot_miss_traj(runs, outdir):
     total_wins = runs[0].get("total_wins", 720) if runs else 720
     add_phase_background(ax, total_wins)
 
-    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd15", "aimd50", "aimd100"]
     for mode in modes:
         reps = [r for r in runs if r["mode"] == mode and "miss_rates" in r]
         if not reps:
@@ -348,7 +354,7 @@ def plot_miss_traj(runs, outdir):
 def plot_phase_comparison(stats, outdir):
     """Fig 4: phase-resolved miss and throughput."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd15", "aimd50", "aimd100"]
     colors = [COLORS.get(m, "#666") for m in modes]
     x = np.arange(3)
     width = 0.11
@@ -406,7 +412,7 @@ def plot_transition_zoom(runs, outdir):
     ax = axes[0]
     zoom_start = seg - 15
     zoom_end = seg + 35
-    for mode in ["fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]:
+    for mode in ["fixed50", "fixed100", "aimd15", "aimd50", "aimd100"]:
         reps = [r for r in runs if r["mode"] == mode and "miss_rates" in r]
         if not reps:
             continue
@@ -431,7 +437,7 @@ def plot_transition_zoom(runs, outdir):
     ax = axes[1]
     zoom_start = 2 * seg - 15
     zoom_end = 2 * seg + 35
-    for mode in ["fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]:
+    for mode in ["fixed50", "fixed100", "aimd15", "aimd50", "aimd100"]:
         reps = [r for r in runs if r["mode"] == mode and "miss_rates" in r]
         if not reps:
             continue
@@ -466,7 +472,7 @@ def plot_summary(runs, stats, outdir):
 
     # Top-left: overall miss
     ax = axes[0, 0]
-    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed30", "fixed60", "fixed100", "aimd15", "aimd50", "aimd100"]
     colors = [COLORS.get(m, "#666") for m in modes]
     vals, errs = [], []
     for m in modes:
@@ -506,7 +512,7 @@ def plot_summary(runs, stats, outdir):
     ax = axes[1, 0]
     total_wins = runs[0].get("total_wins", 720) if runs else 720
     add_phase_background(ax, total_wins)
-    for mode, color in [("aimd0", COLORS["aimd0"]),
+    for mode, color in [("aimd15", COLORS["aimd15"]),
                          ("aimd50", COLORS["aimd50"]),
                          ("aimd100", COLORS["aimd100"])]:
         reps = [r for r in runs if r["mode"] == mode and "alphas" in r]
