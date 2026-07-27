@@ -9,5 +9,6 @@
   "rust-analyzer.check.allTargets": false,
   "rust-analyzer.cargo.allTargets": false,
 
-  "rust-analyzer.cargo.targetDir": true
+  "rust-analyzer.cargo.targetDir": true,
+  "C_Cpp.errorSquiggles": "disabled"
 }

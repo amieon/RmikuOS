@@ -6,14 +6,7 @@ extern "C" {
 
 #include "syscall.h"
 #include "flag.h"
-
-static inline usize strlen(const char *s) {
-    usize n = 0;
-    while (s[n]) {
-        n++;
-    }
-    return n;
-}
+#include "strutil.h"
 
 static inline isize write(int fd, const char *buf, usize len) {
     return syscall3(SYS_WRITE, (usize)fd, (usize)buf, len);

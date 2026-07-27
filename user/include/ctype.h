@@ -28,5 +28,10 @@ static inline int isalnum(int c){unsigned char u=c;return _ctab[u]&6;}
 static inline int iscntrl(int c){unsigned char u=c;return u<32||u==127;}
 static inline int toupper(int c){unsigned char u=c;return (u>='a'&&u<='z')?u-32:u;}
 static inline int tolower(int c){unsigned char u=c;return (u>='A'&&u<='Z')?u+32:u;}
+static inline int isupper(int c){unsigned char u=c;return u>='A'&&u<='Z';}
+static inline int islower(int c){unsigned char u=c;return u>='a'&&u<='z';}
+static inline int isgraph(int c){unsigned char u=c;return u>32&&u<127;}
+static inline int ispunct(int c){unsigned char u=c;return u>32&&u<127&&!(_ctab[u]&6);}
+static inline int isprint(int c){unsigned char u=c;return u>=32&&u<127;}
 
 #endif

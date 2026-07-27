@@ -787,6 +787,11 @@ static inline double mm_log(double x) {
     return (double)k * ln2_hi - ((hfsq - (s * (hfsq + R) + (double)k * ln2_lo)) - f);
 }
 
+
+static inline double mm_log2(double x) {
+    return mm_log(x) * 1.44269504088896340736; 
+}
+
 static inline double mm_log10(double x) {
     static const double
         two54     = 1.80143985094819840000e+16,
@@ -1041,6 +1046,13 @@ static inline double mm_pow(double x, double y) {
     return mm_exp(y * mm_log(x));
 }
 
+#ifndef HUGE_VAL
+#define HUGE_VAL    (1.0 / 0.0)
+#endif
+#ifndef HUGE_VALF
+#define HUGE_VALF   (1.0f / 0.0f)
+#endif
+
 #ifndef __cplusplus
 
 /* double 版本 */
@@ -1056,6 +1068,7 @@ static inline double mm_pow(double x, double y) {
 #define tanh(x)       mm_tanh(x)
 #define exp(x)        mm_exp(x)
 #define log(x)        mm_log(x)
+#define log2(x)       mm_log2(x)
 #define log10(x)      mm_log10(x)
 #define sqrt(x)       mm_sqrt(x)
 #define ceil(x)       mm_ceil(x)
@@ -1097,6 +1110,32 @@ static inline float modff(float x, float *ip) {
     double di; float r = (float)mm_modf((double)x, &di);
     *ip = (float)di; return r;
 }
+
+
+static inline double ldexp(double x, int n) {
+    return x * mm_pow(2.0, (double)n);
+}
+
+static inline float ldexpf(float x, int n) {
+    return (float)((double)x * mm_pow(2.0, (double)n));
+}
+
+static inline double frexp(double x, int *exp) {
+    if (x == 0.0) { *exp = 0; return 0.0; }
+    union { double d; unsigned long long u; } b;
+    b.d = x;
+    int e = (int)((b.u >> 52) & 0x7FF) - 1022;
+    b.u = (b.u & 0x800FFFFFFFFFFFFFULL) | 0x3FE0000000000000ULL;
+    *exp = e;
+    return b.d;
+}
+
+static inline float frexpf(float x, int *exp) {
+    double r = frexp((double)x, exp);
+    return (float)r;
+}
+
+
 
 
 #endif /* __cplusplus */

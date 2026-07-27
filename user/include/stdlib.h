@@ -7,6 +7,7 @@
 #include "io.h"
 #include "process.h"
 #include "string.h"
+#include "stdio.h"
 
 
 /* ---- misc (inline) ---- */
@@ -17,6 +18,9 @@ static inline void abort(void) {
 
 static inline char *getenv(const char *name) { (void)name; return (char*)0; }
 
+static inline int abs(int x) {
+    return x < 0 ? -x : x;
+}
 
 static inline long strtol(const char *s, char **e, int b) {
     long n = 0;
@@ -147,5 +151,12 @@ static inline void _qsort(void *b, size_t n, size_t s, int (*c)(const void*,cons
 static inline void qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*)) {
     _qsort(b,n,s,c,16);
 }
+
+#ifndef EXIT_SUCCESS
+#define EXIT_SUCCESS 0
+#endif
+#ifndef EXIT_FAILURE
+#define EXIT_FAILURE 1
+#endif
 
 #endif
