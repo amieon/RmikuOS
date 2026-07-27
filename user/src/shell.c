@@ -74,8 +74,8 @@ static void redraw_line(const char *prompt, const char *buf, int cursor) {
     int len = strlen_(buf);
     write(1, "\r", 1);
     write(1, "\x1b[2K", 4);
-    puts(prompt);
-    puts(buf);
+    printf(prompt);
+    printf(buf);
     for (int i = 0; i < len - cursor; i++) {
         write(1, "\b", 1);
     }
@@ -545,7 +545,7 @@ static int read_line(const char *prompt, char *buf, int max_len) {
 
     buf[0] = 0;
     history_idx = history_count;
-    puts(prompt);
+    printf(prompt);
 
     while (len < max_len - 1) {
         char ch = 0;
@@ -555,7 +555,7 @@ static int read_line(const char *prompt, char *buf, int max_len) {
         if (ch == '\r') ch = '\n';
 
         if (ch == '\n') {
-            puts("\n");
+            printf("\n");
             break;
         }
 
@@ -593,10 +593,10 @@ static int read_line(const char *prompt, char *buf, int max_len) {
                 } else {
                     write(1, "\n", 1);
                     for (int i = 0; i < n; i++) {
-                        puts(matches[i]);
-                        puts("  ");
+                        printf(matches[i]);
+                        printf("  ");
                     }
-                    puts("\n");
+                    printf("\n");
                     redraw_line(prompt, buf, cursor);
                 }
             }
@@ -779,31 +779,31 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
 
 /* ---- builtins ---- */
 static void print_help(void) {
-    puts("commands:\n");
-    puts("  help\n");
-    puts("  exit\n");
-    puts("  pwd\n");
-    puts("  cd <path>\n");
-    puts("  mkdir <path>\n");
-    puts("  touch <path>\n");
-    puts("  rm [-r] <path>\n");
-    puts("  rmdir <path>\n");
-    puts("  jobs\n");
-    puts("  clear\n");
-    puts("  shutdown\n");
-    puts("\nexternal commands are in /bin:\n");
-    puts("  try: ls /bin\n\n");
+    printf("commands:\n");
+    printf("  help\n");
+    printf("  exit\n");
+    printf("  pwd\n");
+    printf("  cd <path>\n");
+    printf("  mkdir <path>\n");
+    printf("  touch <path>\n");
+    printf("  rm [-r] <path>\n");
+    printf("  rmdir <path>\n");
+    printf("  jobs\n");
+    printf("  clear\n");
+    printf("  shutdown\n");
+    printf("\nexternal commands are in /bin:\n");
+    printf("  try: ls /bin\n\n");
 }
 
 static int builtin_pwd(void) {
     char buf[128];
     isize n = getcwd(buf, sizeof(buf));
     if (n < 0) {
-        puts("pwd: getcwd failed\n");
+        printf("pwd: getcwd failed\n");
         return 1;
     }
-    puts(buf);
-    puts("\n");
+    printf(buf);
+    printf("\n");
     return 0;
 }
 
@@ -811,9 +811,9 @@ static int builtin_cd(int argc, char *argv[]) {
     const char *path = "/";
     if (argc >= 2) path = argv[1];
     if (chdir(path) < 0) {
-        puts("cd: no such directory: ");
-        puts(path);
-        puts("\n");
+        printf("cd: no such directory: ");
+        printf(path);
+        printf("\n");
         return 1;
     }
     return 0;
@@ -821,13 +821,13 @@ static int builtin_cd(int argc, char *argv[]) {
 
 static int builtin_mkdir(int argc, char *argv[]) {
     if (argc < 2) {
-        puts("mkdir: missing operand\n");
+        printf("mkdir: missing operand\n");
         return 1;
     }
     if (mkdir(argv[1]) < 0) {
-        puts("mkdir: cannot create directory: ");
-        puts(argv[1]);
-        puts("\n");
+        printf("mkdir: cannot create directory: ");
+        printf(argv[1]);
+        printf("\n");
         return 1;
     }
     return 0;
@@ -835,13 +835,13 @@ static int builtin_mkdir(int argc, char *argv[]) {
 
 static int builtin_create(int argc, char *argv[]) {
     if (argc < 2) {
-        puts("create: missing operand\n");
+        printf("create: missing operand\n");
         return 1;
     }
     if (create(argv[1]) < 0) {
-        puts("create: cannot create file: ");
-        puts(argv[1]);
-        puts("\n");
+        printf("create: cannot create file: ");
+        printf(argv[1]);
+        printf("\n");
         return 1;
     }
     return 0;
@@ -849,7 +849,7 @@ static int builtin_create(int argc, char *argv[]) {
 
 static int builtin_rm(int argc, char *argv[]) {
     if (argc < 2) {
-        puts("rm: missing operand\n");
+        printf("rm: missing operand\n");
         return 1;
     }
     int recursive = 0;
@@ -862,9 +862,9 @@ static int builtin_rm(int argc, char *argv[]) {
     for (int i = start; i < argc; i++) {
         int r = recursive ? remove_recursive(argv[i]) : unlink(argv[i]);
         if (r < 0) {
-            puts("rm: cannot remove ");
-            puts(argv[i]);
-            puts("\n");
+            printf("rm: cannot remove ");
+            printf(argv[i]);
+            printf("\n");
             ret = 1;
         }
     }
@@ -873,15 +873,15 @@ static int builtin_rm(int argc, char *argv[]) {
 
 static int builtin_rmdir(int argc, char *argv[]) {
     if (argc < 2) {
-        puts("rmdir: missing operand\n");
+        printf("rmdir: missing operand\n");
         return 1;
     }
     int ret = 0;
     for (int i = 1; i < argc; i++) {
         if (rmdir(argv[i]) < 0) {
-            puts("rmdir: failed to remove ");
-            puts(argv[i]);
-            puts("\n");
+            printf("rmdir: failed to remove ");
+            printf(argv[i]);
+            printf("\n");
             ret = 1;
         }
     }
@@ -972,9 +972,9 @@ static void run_exec(int argc, char *argv[]){
 
     if (has_slash(argv[0])) {
         exec_with_args(argv[0], &args);
-        puts("exec failed: ");
-        puts(argv[0]);
-        puts("\n");
+        printf("exec failed: ");
+        printf(argv[0]);
+        printf("\n");
         return;
     }
 
@@ -986,9 +986,9 @@ static void run_exec(int argc, char *argv[]){
         exec_with_args(path, &args);
     }
 
-    puts("command not found: ");
-    puts(argv[0]);
-    puts("\n");
+    printf("command not found: ");
+    printf(argv[0]);
+    printf("\n");
 }
 
 static int run_external(int argc, char *argv[], int background) {
@@ -1021,7 +1021,7 @@ static int run_external(int argc, char *argv[], int background) {
         fcntl(0, F_SETFL, 0);
         return WEXITSTATUS(status);
     } else {
-        puts("fork failed\n");
+        printf("fork failed\n");
         return 1;
     }
 }
@@ -1153,7 +1153,7 @@ static int run_pipeline(char *line) {
             } else if (c == '|') {
                 line[i] = 0;
                 if (nseg >= MAX_SEGMENTS) {
-                    puts("too many pipe segments\n");
+                    printf("too many pipe segments\n");
                     return 1;
                 }
                 seg_strs[nseg++] = line + i + 1;
@@ -1164,7 +1164,7 @@ static int run_pipeline(char *line) {
     struct segment segs[MAX_SEGMENTS];
     for (int s = 0; s < nseg; s++) {
         if (parse_redirect(seg_strs[s], &segs[s]) < 0) {
-            puts("syntax error in redirection\n");
+            printf("syntax error in redirection\n");
             return 1;
         }
     }
@@ -1175,7 +1175,7 @@ static int run_pipeline(char *line) {
     for (int s = 0; s < nseg; s++) {
         seg_argc[s] = parse_args(segs[s].cmd_str, seg_argv[s], MAX_ARGC, seg_quoted[s]);
         if (seg_argc[s] == 0) {
-            puts("syntax error: empty command\n");
+            printf("syntax error: empty command\n");
             return 1;
         }
     }
@@ -1189,7 +1189,7 @@ static int run_pipeline(char *line) {
         int has_next = (s < nseg - 1);
         if (has_next) {
             if (pipe(pipefd) < 0) {
-                puts("pipe failed\n");
+                printf("pipe failed\n");
                 break;
             }
         }
@@ -1207,7 +1207,7 @@ static int run_pipeline(char *line) {
         } else if (pid > 0) {
             pids[npid++] = pid;
         } else {
-            puts("fork failed\n");
+            printf("fork failed\n");
         }
         if (prev_read >= 0) close(prev_read);
         if (has_next) {
@@ -1268,7 +1268,7 @@ static int run_node(char *cmd, int background) {
     int exp_argc = expand_args(argc, argv, exp_argv, quoted);
 
     if (streq(exp_argv[0], "help")) { print_help(); return 0; }
-    if (streq(exp_argv[0], "exit")) { puts("bye\n"); exit(0); }
+    if (streq(exp_argv[0], "exit")) { printf("bye\n"); exit(0); }
     if (streq(exp_argv[0], "pwd")) { return builtin_pwd(); }
     if (streq(exp_argv[0], "cd")) { return builtin_cd(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv); }
@@ -1279,12 +1279,12 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
     if (streq(exp_argv[0], "source") || streq(exp_argv[0], ".")) {
         if (exp_argc < 2) {
-            puts("source: missing file operand\n");
+            printf("source: missing file operand\n");
             return 1;
         }
         return builtin_source(exp_argv[1]);
     }
-    if (streq(exp_argv[0], "shutdown")) { puts("bye bye~\n"); shutdown(); return 0; }
+    if (streq(exp_argv[0], "shutdown")) { printf("bye bye~\n"); shutdown(); return 0; }
 
     return run_external(exp_argc, exp_argv, background);
 }
@@ -1408,9 +1408,9 @@ static int execute_line(char *line) {
 static int builtin_source(const char *path) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
-        puts("source: cannot open ");
-        puts(path);
-        puts("\n");
+        printf("source: cannot open ");
+        printf(path);
+        printf("\n");
         return 1;
     }
 
@@ -1464,7 +1464,7 @@ static int builtin_source(const char *path) {
 int main(void) {
     char line[LINE_SIZE];
 
-    puts("\nRmikuOS shell\n");
+    printf("\nRmikuOS shell\n");
     print_help();
     load_search_dirs();
 
