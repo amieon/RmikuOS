@@ -208,12 +208,7 @@ impl PageTable {
 
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PteFlags) {
         let pte = self.find_pte_create(vpn).expect("failed to create pte");
-        if pte.is_valid() {
-            // 已映射：合并权限位，保留原物理页
-            let merged = PteFlags { bits: pte.flags().bits | flags.bits };
-            *pte = PageTableEntry::new(pte.ppn(), merged);
-            return;
-        }
+        assert!(!pte.is_valid(), "vpn {:?} is already mapped", vpn);
         *pte = PageTableEntry::new(ppn, flags.union(PteFlags::V));
     }
 

@@ -20,9 +20,11 @@ SECTIONS
         *(.rodata.*)
         *(.srodata)
         *(.srodata.*)
+    }
 
-        . = ALIGN(8);
+    . = ALIGN(0x1000);
 
+    .data : {
         *(.data)
         *(.data.*)
         *(.sdata)
@@ -30,7 +32,7 @@ SECTIONS
 
         . = ALIGN(8);
 
-        *(.got)     
+        *(.got)
         *(.got.*)
     }
 

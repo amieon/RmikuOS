@@ -394,7 +394,14 @@ impl MemorySet {
     }
 
     pub fn from_elf(elf_data: &[u8]) -> Option<(Self, usize, usize)> {
-        use crate::mm::elf::{Elf64Header, PF_R, PF_W, PF_X, PT_INTERP, PT_LOAD};
+        use crate::mm::elf::{
+            Elf64Header,
+            PF_R,
+            PF_W,
+            PF_X,
+            PT_INTERP,
+            PT_LOAD,
+        };
 
         let header = Elf64Header::parse(elf_data)?;
 
@@ -405,30 +412,58 @@ impl MemorySet {
             let ph = header.program_header(elf_data, i)?;
 
             if ph.p_type == PT_INTERP {
-                log::warn!("[elf] PT_INTERP not supported");
+                //不支持动态链接器的哦
+                log::warn!("[elf] PT_INTERP is not supported");
                 return None;
             }
-            if ph.p_type != PT_LOAD || ph.p_memsz == 0 {
+
+            if ph.p_type != PT_LOAD {
                 continue;
             }
+
             if ph.p_memsz < ph.p_filesz {
+                log::warn!(
+                    "[elf] invalid segment: memsz={} filesz={}",
+                    ph.p_memsz,
+                    ph.p_filesz,
+                );
                 return None;
+            }
+
+            if ph.p_memsz == 0 {
+                continue;
             }
 
             let file_start = ph.p_offset as usize;
             let file_size = ph.p_filesz as usize;
-            if file_start + file_size > elf_data.len() {
+            let file_end = file_start.checked_add(file_size)?;
+
+            if file_end > elf_data.len() {
+                log::warn!("[elf] segment out of file range");
                 return None;
             }
 
-            let seg_va = ph.p_vaddr as usize;
-            let map_start = crate::mm::align_down(seg_va, PAGE_SIZE);
-            let map_end = crate::mm::align_up(seg_va + ph.p_memsz as usize, PAGE_SIZE);
+            let seg_start_va = ph.p_vaddr as usize;
+            let seg_file_end_va = seg_start_va.checked_add(file_size)?;
+            let seg_mem_end_va = seg_start_va.checked_add(ph.p_memsz as usize)?;
+
+            let map_start = crate::mm::align_down(seg_start_va, PAGE_SIZE);
+            let map_end = crate::mm::align_up(seg_mem_end_va, PAGE_SIZE);
 
             let mut perm = MapPermission::U;
-            if ph.p_flags & PF_R != 0 { perm = perm.union(MapPermission::R); }
-            if ph.p_flags & PF_W != 0 { perm = perm.union(MapPermission::W); }
-            if ph.p_flags & PF_X != 0 { perm = perm.union(MapPermission::X); }
+
+            if ph.p_flags & PF_R != 0 {
+                perm = perm.union(MapPermission::R);
+            }
+
+            if ph.p_flags & PF_W != 0 {
+                perm = perm.union(MapPermission::W);
+            }
+
+            if ph.p_flags & PF_X != 0 {
+                perm = perm.union(MapPermission::X);
+            }
+
             memory_set.insert_area(MapArea::new(
                 VirtAddr(map_start),
                 VirtAddr(map_end),
@@ -436,57 +471,53 @@ impl MemorySet {
                 perm,
             ));
 
-            // 拷贝文件数据（按页批量）
-            if file_size > 0 {
-                memory_set.copy_data(VirtAddr(seg_va), &elf_data[file_start..file_start + file_size]);
-            }
+            
+            //拷贝文件中真实存在的部分。
+            memory_set.write_bytes_to_user(
+                seg_start_va,
+                &elf_data[file_start..file_end],
+            )?;
 
-            // 清零 .bss（按页批量）
-            let bss_start = seg_va + file_size;
-            let bss_len = (seg_va + ph.p_memsz as usize) - bss_start;
-            if bss_len > 0 {
-                memory_set.zero_range(VirtAddr(bss_start), bss_len);
+            
+            // 清零 .bss:
+            // [p_vaddr + p_filesz, p_vaddr + p_memsz)
+
+            if seg_mem_end_va > seg_file_end_va {
+                memory_set.zero_user(
+                    seg_file_end_va,
+                    seg_mem_end_va - seg_file_end_va,
+                )?;
             }
 
             log::info!(
-                "[elf] seg{}: va={:#x}..{:#x} file={} mem={} flags={:#x}",
-                i, map_start, map_end, file_size, ph.p_memsz, ph.p_flags,
+                "[elf] load segment {}: va={:#x}..{:#x}, file={} bytes, mem={} bytes, flags={:#x}",
+                i,
+                map_start,
+                map_end,
+                ph.p_filesz,
+                ph.p_memsz,
+                ph.p_flags,
             );
         }
 
-        // 用户栈
-        let stack_top = crate::mm::USER_STACK_TOP;
-        let stack_bottom = stack_top - crate::mm::USER_STACK_SIZE;
-        memory_set.insert_framed_area(
-            VirtAddr(stack_bottom),
-            VirtAddr(stack_top),
-            MapPermission::R.union(MapPermission::W).union(MapPermission::U),
-        );
 
-        Some((memory_set, header.e_entry as usize, stack_top))
-    }
-    pub fn zero_range(&self, start_va: VirtAddr, len: usize) {
-        let mut offset = 0usize;
-        while offset < len {
-            let va = start_va.0 + offset;
-            let vpn = VirtAddr(va).floor();
-            let page_offset = va & (PAGE_SIZE - 1);
 
-            let pte = lock_detect!(self.page_table)
-                .translate(vpn)
-                .expect("zero_range: page not mapped");
+        let user_stack_top = crate::mm::USER_STACK_TOP;
+        let user_stack_bottom = user_stack_top - crate::mm::USER_STACK_SIZE;
 
-            let ppn = pte.ppn();
-            let chunk = core::cmp::min(PAGE_SIZE - page_offset, len - offset);
+        memory_set.insert_area(MapArea::new(
+            VirtAddr(user_stack_bottom),
+            VirtAddr(user_stack_top),
+            MapType::Framed,
+            MapPermission::R
+                .union(MapPermission::W)
+                .union(MapPermission::U),
+        ));
 
-            let dst_pa = (ppn.0 << super::PAGE_SIZE_BITS) + page_offset;
-            let dst_va = crate::mm::kernel_phys_to_virt(dst_pa);
-
-            unsafe {
-                core::ptr::write_bytes(dst_va as *mut u8, 0, chunk);
-            }
-
-            offset += chunk;
-        }
+        Some((
+            memory_set,
+            header.e_entry as usize,
+            user_stack_top,
+        ))
     }
 }
