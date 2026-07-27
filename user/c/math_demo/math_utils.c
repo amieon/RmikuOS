@@ -21,9 +21,9 @@ long fibonacci(int n) {
 }
 
 void print_result(const char* name, int n, long result) {
-    uprintf(name);
-    uprintf("(");
+    printf(name);
+    printf("(");
     printf("%d", n);
-    uprintf(") = ");
+    printf(") = ");
     printf("%d", result);
 }
