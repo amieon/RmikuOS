@@ -20,13 +20,13 @@ static const unsigned char _ctab[256] = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };
-int isspace(int c){return _ctab[(unsigned char)c]&1;}
-int isdigit(int c){return _ctab[(unsigned char)c]&2;}
-int isxdigit(int c){unsigned char u=c;return (u>='0'&&u<='9')||(u>='a'&&u<='f')||(u>='A'&&u<='F');}
-int isalpha(int c){return _ctab[(unsigned char)c]&4;}
-int isalnum(int c){unsigned char u=c;return _ctab[u]&6;}
-int iscntrl(int c){unsigned char u=c;return u<32||u==127;}
-int toupper(int c){unsigned char u=c;return (u>='a'&&u<='z')?u-32:u;}
-int tolower(int c){unsigned char u=c;return (u>='A'&&u<='Z')?u+32:u;}
+static inline int isspace(int c){return _ctab[(unsigned char)c]&1;}
+static inline int isdigit(int c){return _ctab[(unsigned char)c]&2;}
+static inline int isxdigit(int c){unsigned char u=c;return (u>='0'&&u<='9')||(u>='a'&&u<='f')||(u>='A'&&u<='F');}
+static inline int isalpha(int c){return _ctab[(unsigned char)c]&4;}
+static inline int isalnum(int c){unsigned char u=c;return _ctab[u]&6;}
+static inline int iscntrl(int c){unsigned char u=c;return u<32||u==127;}
+static inline int toupper(int c){unsigned char u=c;return (u>='a'&&u<='z')?u-32:u;}
+static inline int tolower(int c){unsigned char u=c;return (u>='A'&&u<='Z')?u+32:u;}
 
 #endif

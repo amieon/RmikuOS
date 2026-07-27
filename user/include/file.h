@@ -101,6 +101,9 @@ static inline int fgetc(FILE* fp) {
     return (unsigned char)fp->buf[fp->pos++];
 }
 
+#define getc(fp)      fgetc(fp)
+#define putc(c, fp)   fputc((c), (fp))
+
 static inline size_t fread(void* ptr, size_t size, size_t nmemb, FILE* fp) {
     if (!fp || !(fp->flags & _F_READ)) return 0;
     char* dst = (char*)ptr;
@@ -162,6 +165,24 @@ static inline int fputs(const char* s, FILE* fp) {
 static inline int feof(FILE* fp) { return fp && (fp->flags & _F_EOF); }
 static inline int ferror(FILE* fp) { return fp && (fp->flags & _F_ERR); }
 static inline void clearerr(FILE* fp) { if (fp) fp->flags &= ~(_F_EOF | _F_ERR); }
+
+
+static inline FILE* freopen(const char* path, const char* mode, FILE* fp) {
+    int flags = _mode_flags(mode);
+    int fd = -1;
+    if (flags & _F_APPEND)      fd = open_create(path, O_WRONLY | O_CREAT | O_APPEND);
+    else if (flags & _F_WRITE)  fd = open_create(path, O_WRONLY | O_CREAT | O_TRUNC);
+    else                        fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        if (fp && fp->fd >= 0) close(fp->fd);
+        if (fp) fp->fd = -1;
+        return (FILE*)0;
+    }
+    if (!fp) { close(fd); return fopen(path, mode); }   /* 退化兜底，lua 走不到 */
+    if (fp->fd >= 0) close(fp->fd);
+    fp->fd = fd; fp->pos = 0; fp->end = 0; fp->flags = flags; fp->ungetc = -1;
+    return fp;
+}
 
 #ifdef __cplusplus
 }

@@ -182,6 +182,58 @@ static inline int memcmp(const void *a, const void *b, size_t n) {
     return 0;
 }
 
+static inline const char *strerror(int err) {
+    switch (err) {
+        case  2: return "No such file or directory";
+        case  9: return "Bad file descriptor";
+        case 12: return "Out of memory";
+        case 22: return "Invalid argument";
+        case 28: return "No space left on device";
+        case 33: return "Argument out of domain";
+        case 34: return "Result too large";
+        default: return "Unknown error";
+    }
+}
+
+static inline size_t strspn(const char *s, const char *accept) {
+    const char *p = s;
+    while (*p) {
+        const char *a;
+        int found = 0;
+        for (a = accept; *a; a++) {
+            if (*p == *a) { found = 1; break; }
+        }
+        if (!found) break;
+        p++;
+    }
+    return (size_t)(p - s);
+}
+
+static inline size_t strcspn(const char *s, const char *reject) {
+    const char *p = s;
+    while (*p) {
+        const char *r;
+        for (r = reject; *r; r++) {
+            if (*p == *r) return (size_t)(p - s);
+        }
+        p++;
+    }
+    return (size_t)(p - s);
+}
+
+static inline char *strpbrk(const char *s, const char *accept) {
+    while (*s) {
+        const char *a;
+        for (a = accept; *a; a++) {
+            if (*s == *a) return (char *)s;
+        }
+        s++;
+    }
+    return NULL;
+}
+
+
+
 #ifdef __cplusplus
 }
 #endif

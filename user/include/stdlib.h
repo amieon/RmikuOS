@@ -8,21 +8,6 @@
 #include "process.h"
 #include "string.h"
 
-/* ---- string → number ---- */
-int      atoi(const char *s);
-long     strtol(const char *s, char **e, int b);
-unsigned long strtoul(const char *s, char **e, int b);
-double   strtod(const char *s, char **e);
-
-/* ---- PRNG ---- */
-int  rand(void);
-void srand(unsigned int s);
-
-/* ---- memory ---- */
-void *realloc(void *p, size_t s);
-
-/* ---- sort ---- */
-void qsort(void *b, size_t n, size_t s, int (*c)(const void *, const void *));
 
 /* ---- misc (inline) ---- */
 static inline void abort(void) {
@@ -30,20 +15,10 @@ static inline void abort(void) {
     exit(127);
 }
 
-char *getenv(const char *name) { (void)name; return (char*)0; }
+static inline char *getenv(const char *name) { (void)name; return (char*)0; }
 
 
-int atoi(const char *s) {
-    int n = 0, sign = 1;
-    while (*s == ' ' || *s == '\t' || *s == '\n') s++;
-    if (*s == '-')      { sign = -1; s++; }
-    else if (*s == '+') { s++; }
-    while (*s >= '0' && *s <= '9')
-        n = n * 10 + (*s++ - '0');
-    return sign * n;
-}
-
-long strtol(const char *s, char **e, int b) {
+static inline long strtol(const char *s, char **e, int b) {
     long n = 0;
     int sign = 1;
 
@@ -78,11 +53,11 @@ long strtol(const char *s, char **e, int b) {
     return sign * n;
 }
 
-unsigned long strtoul(const char *s, char **e, int b) {
+static inline unsigned long strtoul(const char *s, char **e, int b) {
     return (unsigned long)strtol(s, e, b);
 }
 
-double strtod(const char *s, char **e) {
+static inline double strtod(const char *s, char **e) {
     double n = 0.0, sign = 1.0, frac = 0.1;
 
     while (*s == ' ' || *s == '\t') s++;
@@ -121,11 +96,11 @@ double strtod(const char *s, char **e) {
 
 static unsigned int _seed = 1;
 
-void srand(unsigned int s) {
+static inline void srand(unsigned int s) {
     _seed = s ? s : 1;
 }
 
-int rand(void) {
+static inline int rand(void) {
     _seed ^= _seed << 13;
     _seed ^= _seed >> 17;
     _seed ^= _seed << 5;
@@ -133,8 +108,7 @@ int rand(void) {
 }
 
 
-void *memcpy(void *dst, const void *src, unsigned long n);
-void *realloc(void *p, size_t s) {
+static inline void *realloc(void *p, size_t s) {
     if (!p)   return malloc(s);
     if (s == 0) { free(p); return NULL; }
     void *np = malloc(s);
@@ -146,10 +120,10 @@ void *realloc(void *p, size_t s) {
 
 
 
-static void _qswap(char *a, char *b, size_t s) {
+static inline void _qswap(char *a, char *b, size_t s) {
     while(s--){char t=*a;*a++=*b;*b++=t;}
 }
-static void _qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*), size_t th) {
+static inline void _qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*), size_t th) {
     if(n<=1)return;
     if(n<=th){
         for(size_t i=1;i<n;i++)
@@ -170,7 +144,7 @@ static void _qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*
     _qsort(b,(r-(char *)b)/s,s,c,th);
     _qsort(r+s,rn-1,s,c,th);
 }
-void qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*)) {
+static inline void qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*)) {
     _qsort(b,n,s,c,16);
 }
 

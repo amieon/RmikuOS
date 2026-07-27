@@ -22,7 +22,7 @@
 typedef struct { unsigned long buf[14]; } jmp_buf[1];  /* s0-s11 + sp + ra */
 
 static __attribute__((naked, noinline, unused))
-int setjmp(jmp_buf env) {
+static inline int setjmp(jmp_buf env) {
     __asm__ volatile (
         "sd s0,    0(a0)\n\t"
         "sd s1,    8(a0)\n\t"
@@ -44,7 +44,7 @@ int setjmp(jmp_buf env) {
 }
 
 static __attribute__((naked, noinline, unused))
-void longjmp(jmp_buf env, int val) {
+static inline void longjmp(jmp_buf env, int val) {
     __asm__ volatile (
         "ld s0,    0(a0)\n\t"
         "ld s1,    8(a0)\n\t"
@@ -74,7 +74,7 @@ typedef struct { unsigned long buf[12]; } jmp_buf[1];  /* ra,sp,fp,s0-s8 */
  * 浮点寄存器全是 caller-saved，不存。 */
 
 static __attribute__((naked, noinline, unused))
-int setjmp(jmp_buf env) {           /* env 在 $a0 */
+static inline int setjmp(jmp_buf env) {           /* env 在 $a0 */
     __asm__ volatile (
         "st.d $ra, $a0, 0\n\t"
         "st.d $sp, $a0, 8\n\t"
@@ -94,7 +94,7 @@ int setjmp(jmp_buf env) {           /* env 在 $a0 */
 }
 
 static __attribute__((naked, noinline, unused))
-void longjmp(jmp_buf env, int val) { /* env 在 $a0, val 在 $a1 */
+static inline void longjmp(jmp_buf env, int val) { /* env 在 $a0, val 在 $a1 */
     __asm__ volatile (
         "ld.d $s0, $a0, 24\n\t"
         "ld.d $s1, $a0, 32\n\t"
