@@ -234,7 +234,7 @@ impl TaskManager {
     pub fn update_process_stride_by_alpha(&mut self, pid: Pid) {
         // runnable_count 由状态变迁点增量维护(block/wake/ready/exit/reap/create),
         // pick 热路径不再全表重扫。
-        let runnable_threads = self.process(pid).runnable_count;
+        let runnable_threads = self.count_runnable_threads_in_process(pid).max(1);
 
         if runnable_threads == 0 {
             let process = self.process_mut(pid);

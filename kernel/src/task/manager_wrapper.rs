@@ -1488,14 +1488,9 @@ pub fn account_current_tick() {
         }
     };
 
-    // 冲刷缓冲:pending 全部属于当前 tid(见 processor.rs 不变式)。
-    // 极端情况(线程在丢账后、冲刷前退出)会把少量 tick 记给继任者,
-    // 数量以 slice 为界,对窗口级统计无影响。
-    let n = 1 + processor::take_pending_ticks();
-
     let pid = manager.pid_of_tid(tid);
-    manager.thread_mut(tid).run_ticks += n;
-    manager.process_mut(pid).run_ticks += n;
+    manager.thread_mut(tid).run_ticks += 1;
+    manager.process_mut(pid).run_ticks += 1;
 }
 
 fn write_value_to_user<T: Copy>(user_ptr: usize, value: &T) -> isize {
@@ -1561,7 +1556,7 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
         }
 
         let runnable_threads = manager
-            .count_sched_runnable_threads_in_process(pid)
+            .count_runnable_threads_in_process(pid)
             .max(1);
 
         let alpha = manager.get_sched_alpha();
