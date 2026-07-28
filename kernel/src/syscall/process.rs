@@ -197,3 +197,165 @@ pub fn sys_listenv(buf_ptr: usize, buf_len: usize) -> isize {
     }
     total as isize
 }
+
+// ===== 进程凭证 / 权限系统 syscall handlers =====
+//
+// 凭证模型(简化版,不实现 saved-uid/saved-gid):
+//   - 特权判定: euid == 0 即为超级用户(root)。
+//   - setuid/seteuid/setgid/setegid 以及 setreuid/setregid 遵循以下规则:
+//       * 特权进程(euid==0):可把 uid/euid/gid/egid 设成任意值。
+//       * 非特权进程:只能把某字段设成自己当前的 uid / euid(或 gid / egid)。
+//         否则返回 -1。
+//   - usize::MAX 在 setreuid/setregid 中表示"不改变该字段"(对应 POSIX 的 -1)。
+
+const NO_CHANGE: usize = usize::MAX;
+
+/// (uid, euid, gid, egid) -> (new_uid, new_euid)，按 setuid 语义计算。
+fn compute_setuid(cur: (usize, usize, usize, usize), uid: usize) -> Option<(usize, usize)> {
+    let (cur_uid, cur_euid, _, _) = cur;
+    if cur_euid == 0 || uid == cur_uid || uid == cur_euid {
+        Some((uid, uid))
+    } else {
+        None
+    }
+}
+
+/// (uid, euid, gid, egid) -> new_euid，按 seteuid 语义计算。
+fn compute_seteuid(cur: (usize, usize, usize, usize), euid: usize) -> Option<usize> {
+    let (cur_uid, cur_euid, _, _) = cur;
+    if cur_euid == 0 || euid == cur_uid || euid == cur_euid {
+        Some(euid)
+    } else {
+        None
+    }
+}
+
+/// (uid, euid, gid, egid) -> (new_gid, new_egid)，按 setgid 语义计算。
+fn compute_setgid(cur: (usize, usize, usize, usize), gid: usize) -> Option<(usize, usize)> {
+    let (_, _, cur_gid, cur_egid) = cur;
+    if cur_egid == 0 || gid == cur_gid || gid == cur_egid {
+        Some((gid, gid))
+    } else {
+        None
+    }
+}
+
+/// (uid, euid, gid, egid) -> new_egid，按 setegid 语义计算。
+fn compute_setegid(cur: (usize, usize, usize, usize), egid: usize) -> Option<usize> {
+    let (_, _, cur_gid, cur_egid) = cur;
+    if cur_egid == 0 || egid == cur_gid || egid == cur_egid {
+        Some(egid)
+    } else {
+        None
+    }
+}
+
+pub fn sys_getuid() -> isize {
+    crate::task::current_creds().0 as isize
+}
+
+pub fn sys_geteuid() -> isize {
+    crate::task::current_creds().1 as isize
+}
+
+pub fn sys_getgid() -> isize {
+    crate::task::current_creds().2 as isize
+}
+
+pub fn sys_getegid() -> isize {
+    crate::task::current_creds().3 as isize
+}
+
+pub fn sys_setuid(uid: usize) -> isize {
+    let cur = crate::task::current_creds();
+    match compute_setuid(cur, uid) {
+        Some((new_uid, new_euid)) => {
+            let (_, _, g, ge) = cur;
+            crate::task::set_current_creds(new_uid, new_euid, g, ge);
+            0
+        }
+        None => -1,
+    }
+}
+
+pub fn sys_seteuid(euid: usize) -> isize {
+    let cur = crate::task::current_creds();
+    match compute_seteuid(cur, euid) {
+        Some(new_euid) => {
+            let (u, _, g, ge) = cur;
+            crate::task::set_current_creds(u, new_euid, g, ge);
+            0
+        }
+        None => -1,
+    }
+}
+
+pub fn sys_setgid(gid: usize) -> isize {
+    let cur = crate::task::current_creds();
+    match compute_setgid(cur, gid) {
+        Some((new_gid, new_egid)) => {
+            let (u, ue, _, _) = cur;
+            crate::task::set_current_creds(u, ue, new_gid, new_egid);
+            0
+        }
+        None => -1,
+    }
+}
+
+pub fn sys_setegid(egid: usize) -> isize {
+    let cur = crate::task::current_creds();
+    match compute_setegid(cur, egid) {
+        Some(new_egid) => {
+            let (u, ue, g, _) = cur;
+            crate::task::set_current_creds(u, ue, g, new_egid);
+            0
+        }
+        None => -1,
+    }
+}
+
+pub fn sys_setreuid(ruid: usize, euid: usize) -> isize {
+    let cur = crate::task::current_creds();
+    let mut new_uid = cur.0;
+    let mut new_euid = cur.1;
+
+    if ruid != NO_CHANGE {
+        match compute_setuid(cur, ruid) {
+            Some((u, _)) => new_uid = u,
+            None => return -1,
+        }
+    }
+    if euid != NO_CHANGE {
+        match compute_seteuid(cur, euid) {
+            Some(e) => new_euid = e,
+            None => return -1,
+        }
+    }
+
+    let (_, _, g, ge) = cur;
+    crate::task::set_current_creds(new_uid, new_euid, g, ge);
+    0
+}
+
+pub fn sys_setregid(rgid: usize, egid: usize) -> isize {
+    let cur = crate::task::current_creds();
+    let mut new_gid = cur.2;
+    let mut new_egid = cur.3;
+
+    if rgid != NO_CHANGE {
+        match compute_setgid(cur, rgid) {
+            Some((g, _)) => new_gid = g,
+            None => return -1,
+        }
+    }
+    if egid != NO_CHANGE {
+        match compute_setegid(cur, egid) {
+            Some(e) => new_egid = e,
+            None => return -1,
+        }
+    }
+
+    let (u, ue, _, _) = cur;
+    crate::task::set_current_creds(u, ue, new_gid, new_egid);
+    0
+}
