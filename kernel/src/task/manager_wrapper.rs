@@ -1484,9 +1484,6 @@ pub fn account_current_tick() {
     let mut manager = match TASK_MANAGER.try_lock() {
         Some(g) => g,
         None => {
-            // 拿不到锁不再丢账:暂存到 per-hart 缓冲,下次拿到锁时冲刷。
-            // 归属正确性见 Processor::pending_ticks 的不变式注释。
-            processor::add_pending_tick();
             return;
         }
     };
