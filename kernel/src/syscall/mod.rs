@@ -55,8 +55,6 @@ pub const SYSCALL_SETENV: usize = 46;
 pub const SYSCALL_UNSETENV: usize = 47;
 pub const SYSCALL_CLEARENV: usize = 48;
 pub const SYSCALL_LISTENV: usize = 49;
-
-// ===== 进程凭证 / 权限系统 =====
 pub const SYSCALL_GETUID: usize = 50;
 pub const SYSCALL_GETEUID: usize = 51;
 pub const SYSCALL_GETGID: usize = 52;
@@ -149,7 +147,6 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_UNSETENV => process::sys_unsetenv(args[0], args[1]),
         SYSCALL_CLEARENV => process::sys_clearenv(),
         SYSCALL_LISTENV => process::sys_listenv(args[0], args[1]),
-
         SYSCALL_GETUID => process::sys_getuid(),
         SYSCALL_GETEUID => process::sys_geteuid(),
         SYSCALL_GETGID => process::sys_getgid(),

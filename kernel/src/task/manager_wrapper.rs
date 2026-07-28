@@ -1453,9 +1453,6 @@ pub fn account_current_tick() {
     let mut manager = match TASK_MANAGER.try_lock() {
         Some(g) => g,
         None => {
-            // 拿不到锁不再丢账:暂存到 per-hart 缓冲,下次拿到锁时冲刷。
-            // 归属正确性见 Processor::pending_ticks 的不变式注释。
-            processor::add_pending_tick();
             return;
         }
     };
@@ -1532,9 +1529,9 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
             }
         }
 
-        let runnable_threads = manager
-            .count_sched_runnable_threads_in_process(pid)
-            .max(1);
+        let runnable_threads = process.runnable_count.max(1);
+        //log::warn!("[stat] pid={} runnable_count={}", pid, process.runnable_count);
+
 
         let alpha = manager.get_sched_alpha();
         let factor = crate::math::sched_thread_scale(runnable_threads, alpha);

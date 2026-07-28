@@ -65,9 +65,10 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             INTERRUPT_SUPERVISOR_TIMER => {
                 crate::drivers::net::on_timer_tick();
                 let should_schedule = crate::timer::tick();
+                crate::task::account_current_tick();
 
                 if cx.is_from_user() {
-                    crate::task::account_current_tick();
+
                     crate::task::do_signal();
 
                     if should_schedule {

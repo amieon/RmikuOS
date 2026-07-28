@@ -186,9 +186,10 @@ fn handle_interrupt(cx: &mut TrapContext) {
 
         let should_schedule =
             crate::timer::tick_with_context(from_user, cx.era, cx.prmd);
+        crate::task::account_current_tick();
 
         if from_user {
-            crate::task::account_current_tick();
+            
             crate::task::do_signal();
 
             if should_schedule {
