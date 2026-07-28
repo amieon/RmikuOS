@@ -20,7 +20,7 @@ extern "C" {
 #include "arch.h"
 #include "signal.h"
 #include "net.h"
-
+#include "env.h"
 
 #ifdef __cplusplus
 }

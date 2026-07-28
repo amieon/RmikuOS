@@ -51,6 +51,13 @@ extern "C" {
 #define SYS_GET_TIME                 42
 #define SYS_HARTID                   43
 #define SYS_GETPPID                  44
+#define SYS_GETENV                   45
+#define SYS_SETENV                   46
+#define SYS_UNSETENV                 47
+#define SYS_CLEARENV                 48
+#define SYS_LISTENV                  49
+
+
 
 
 #define SYS_NET_SOCKET0              100

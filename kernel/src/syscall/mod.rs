@@ -50,6 +50,11 @@ pub const SYSCALL_FCNTL: usize = 41;
 pub const SYSCALL_GET_TIME: usize = 42;
 pub const SYSCALL_HARTID: usize = 43;
 pub const SYSCALL_GETPPID: usize = 44;
+pub const SYSCALL_GETENV: usize = 45;
+pub const SYSCALL_SETENV: usize = 46;
+pub const SYSCALL_UNSETENV: usize = 47;
+pub const SYSCALL_CLEARENV: usize = 48;
+pub const SYSCALL_LISTENV: usize = 49;
 
 
 
@@ -127,6 +132,11 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GET_TIME => arch::sys_arch_time(),
         SYSCALL_HARTID => arch::sys_hartid(),
         SYSCALL_GETPPID => process::sys_getppid(),
+        SYSCALL_GETENV => process::sys_getenv(args[0], args[1], args[2], args[3]),
+        SYSCALL_SETENV => process::sys_setenv(args[0], args[1], args[2], args[3], args[4]),
+        SYSCALL_UNSETENV => process::sys_unsetenv(args[0], args[1]),
+        SYSCALL_CLEARENV => process::sys_clearenv(),
+        SYSCALL_LISTENV => process::sys_listenv(args[0], args[1]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),
