@@ -56,6 +56,18 @@ pub const SYSCALL_UNSETENV: usize = 47;
 pub const SYSCALL_CLEARENV: usize = 48;
 pub const SYSCALL_LISTENV: usize = 49;
 
+// ===== 进程凭证 / 权限系统 =====
+pub const SYSCALL_GETUID: usize = 50;
+pub const SYSCALL_GETEUID: usize = 51;
+pub const SYSCALL_GETGID: usize = 52;
+pub const SYSCALL_GETEGID: usize = 53;
+pub const SYSCALL_SETUID: usize = 54;
+pub const SYSCALL_SETEUID: usize = 55;
+pub const SYSCALL_SETGID: usize = 56;
+pub const SYSCALL_SETEGID: usize = 57;
+pub const SYSCALL_SETREUID: usize = 58;
+pub const SYSCALL_SETREGID: usize = 59;
+
 
 
 pub const SYSCALL_NET_SOCKET: usize = 100; 
@@ -137,6 +149,17 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_UNSETENV => process::sys_unsetenv(args[0], args[1]),
         SYSCALL_CLEARENV => process::sys_clearenv(),
         SYSCALL_LISTENV => process::sys_listenv(args[0], args[1]),
+
+        SYSCALL_GETUID => process::sys_getuid(),
+        SYSCALL_GETEUID => process::sys_geteuid(),
+        SYSCALL_GETGID => process::sys_getgid(),
+        SYSCALL_GETEGID => process::sys_getegid(),
+        SYSCALL_SETUID => process::sys_setuid(args[0]),
+        SYSCALL_SETEUID => process::sys_seteuid(args[0]),
+        SYSCALL_SETGID => process::sys_setgid(args[0]),
+        SYSCALL_SETEGID => process::sys_setegid(args[0]),
+        SYSCALL_SETREUID => process::sys_setreuid(args[0], args[1]),
+        SYSCALL_SETREGID => process::sys_setregid(args[0], args[1]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

@@ -67,6 +67,12 @@ pub fn init() {
         String::from("/"),
     );
 
+    // init 进程以 root 身份启动：uid/euid/gid/egid 全为 0。
+    process.uid = 0;
+    process.euid = 0;
+    process.gid = 0;
+    process.egid = 0;
+
     // 给 init shell 一份最小环境；之后可用 export 覆盖 / 追加。
     process.env.push((String::from("PATH"), String::from("/bin:/tests:/programs")));
     process.env.push((String::from("HOME"), String::from("/home")));
@@ -428,6 +434,10 @@ pub fn fork_current() -> isize {
             child_mmap_areas,
             child_mmap_free_areas,
             child_mmap_next,
+            manager.process(parent_pid).uid,
+            manager.process(parent_pid).euid,
+            manager.process(parent_pid).gid,
+            manager.process(parent_pid).egid,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
@@ -488,6 +498,27 @@ pub fn current_task_id() -> usize {
 
 pub fn current_task_ppid() -> usize {
     current_ppid()
+}
+
+/// 读取当前进程的 4 个凭证(uid, euid, gid, egid)。
+pub fn current_creds() -> (usize, usize, usize, usize) {
+    let tid = processor::current_tid();
+    let manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.pid_of_tid(tid);
+    let p = manager.process(pid);
+    (p.uid, p.euid, p.gid, p.egid)
+}
+
+/// 设置当前进程的 4 个凭证。
+pub fn set_current_creds(uid: usize, euid: usize, gid: usize, egid: usize) {
+    let tid = processor::current_tid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.pid_of_tid(tid);
+    let p = manager.process_mut(pid);
+    p.uid = uid;
+    p.euid = euid;
+    p.gid = gid;
+    p.egid = egid;
 }
 
 pub fn read_current_user_bytes(user_buf: usize, len: usize) -> Option<Vec<u8>> {

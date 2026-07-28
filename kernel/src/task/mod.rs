@@ -85,4 +85,7 @@ pub use manager_wrapper::{
     env_set_current_value,
     env_clear_current_values,
     env_get_all_current,
+
+    current_creds,
+    set_current_creds,
 };
