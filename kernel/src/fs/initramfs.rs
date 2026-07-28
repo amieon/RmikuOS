@@ -70,14 +70,23 @@ impl Inode for InitramfsInode {
             InitramfsNode::Etc => Metadata {
                 inode_type: InodeType::Directory,
                 size: 0,
+                uid: 0,
+                gid: 0,
+                mode: 0o755,
             },
             InitramfsNode::Motd => Metadata {
                 inode_type: InodeType::File,
                 size: MOTD.len(),
+                uid: 0,
+                gid: 0,
+                mode: 0o644,
             },
             InitramfsNode::App(id) => Metadata {
                 inode_type: InodeType::File,
                 size: crate::loader::get_app_data(id).len(),
+                uid: 0,
+                gid: 0,
+                mode: 0o644,
             },
         }
     }
@@ -209,7 +218,7 @@ impl File for MemFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_FILE, self.data.len())
+        Stat::new(STAT_TYPE_FILE, self.data.len(), 0o644, 0, 0)
     }
 }
 
@@ -274,7 +283,7 @@ impl File for DirFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE)
+        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE, 0o755, 0, 0)
     }
 
 }

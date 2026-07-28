@@ -152,7 +152,7 @@ impl File for FatFile {
             };
             result
         };
-        Stat::new(STAT_TYPE_FILE, size)
+        Stat::new(STAT_TYPE_FILE, size, 0o644, 0, 0)
     }
 }
 
@@ -205,8 +205,12 @@ fn to_fat_path(path: &str) -> &str {
 
 impl Inode for FatInode {
     fn metadata(&self) -> Metadata {
+        // FAT 没有 unix 权限位, 统一映射: 目录 0o755, 文件 0o644, 全部 root 拥有。
+        const FAT_DIR_MODE: u16 = 0o755;
+        const FAT_FILE_MODE: u16 = 0o644;
+
         if self.path == "/" {
-            return Metadata { inode_type: InodeType::Directory, size: 0 };
+            return Metadata { inode_type: InodeType::Directory, size: 0, uid: 0, gid: 0, mode: FAT_DIR_MODE };
         }
 
         let fs = self.fs.inner.lock();
@@ -217,15 +221,15 @@ impl Inode for FatInode {
             let root = fs.root_dir();
 
             if root.open_dir(fat_path).is_ok() {
-                Metadata { inode_type: InodeType::Directory, size: 0 }
+                Metadata { inode_type: InodeType::Directory, size: 0, uid: 0, gid: 0, mode: FAT_DIR_MODE }
             } else {
                 match root.open_file(fat_path) {
                     Ok(mut file) => {
                         use fatfs::{Seek, SeekFrom};
                         let size = file.seek(SeekFrom::End(0)).unwrap_or(0) as usize;
-                        Metadata { inode_type: InodeType::File, size }
+                        Metadata { inode_type: InodeType::File, size, uid: 0, gid: 0, mode: FAT_FILE_MODE }
                     }
-                    Err(_) => Metadata { inode_type: InodeType::File, size: 0 },
+                    Err(_) => Metadata { inode_type: InodeType::File, size: 0, uid: 0, gid: 0, mode: FAT_FILE_MODE },
                 }
             }
         };  // ← root, file 在这里析构,fs 还活着,meta 是独立的

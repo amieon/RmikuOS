@@ -58,7 +58,7 @@ impl File for PipeReadEnd {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_PIPE, 0)
+        Stat::new(STAT_TYPE_PIPE, 0, 0o666, 0, 0)
     }
 
     fn read(&self, buf: &mut [u8]) -> isize {
@@ -110,7 +110,7 @@ impl File for PipeWriteEnd {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_PIPE, 0)
+        Stat::new(STAT_TYPE_PIPE, 0, 0o666, 0, 0)
     }
 
     fn read(&self, _buf: &mut [u8]) -> isize {

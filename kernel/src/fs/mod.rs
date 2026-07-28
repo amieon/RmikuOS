@@ -17,6 +17,7 @@ mod stdio;
 
 pub use file::{File, FileRef};
 pub use inode::{Inode, InodeRef, Metadata, InodeType};
+use crate::fs::inode::{check_access, R_OK, W_OK, X_OK};
 pub use stdio::{stdin, stdout};
 pub use flag::*;
 pub const EOF : isize = 0;
@@ -55,6 +56,11 @@ pub fn open_at(cwd: &str, path: &str, flags: usize) -> Option<FileRef> {
         }
     };
 
+    // 访问检查(现有文件): 目录/普通文件按 R/W 请求检查; O_EXEC 由 exec 自管
+    if !check_open(&inode, flags) {
+        return None;
+    }
+
     if flags & O_TRUNC != 0 {
         inode.truncate();
     }
@@ -72,6 +78,10 @@ pub fn open(path: &str, flags: usize) -> Option<FileRef> {
             }
         }
     };
+
+    if !check_open(&inode, flags) {
+        return None;
+    }
 
     if flags & O_TRUNC != 0 {
         inode.truncate();
@@ -102,7 +112,7 @@ pub fn stat_at(cwd: &str, path: &str) -> Option<Stat> {
         InodeType::Directory => STAT_TYPE_DIR,
     };
 
-    Some(Stat::new(file_type, meta.size))
+    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32))
 }
 
 pub fn stat(path: &str) -> Option<Stat> {
@@ -114,7 +124,7 @@ pub fn stat(path: &str) -> Option<Stat> {
         InodeType::Directory => STAT_TYPE_DIR,
     };
 
-    Some(Stat::new(file_type, meta.size))
+    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32))
 }
 
 
@@ -173,7 +183,11 @@ fn split_parent(path: &str) -> (String, String) {
 pub fn create_file(path: &str) -> Option<InodeRef> {
     let abs = normalize_path("/", path)?;
     let (parent, name) = split_parent(&abs);
-    let parent_inode = path::lookup_abs_path(&parent)?;  
+    let parent_inode = path::lookup_abs_path(&parent)?;
+    // 在目录中创建文件需要父目录的 写+搜索 权限(root 绕过)
+    if !check_dir_write(&parent_inode) {
+        return None;
+    }
     parent_inode.create(&name)                    
 }
 
@@ -181,13 +195,20 @@ pub fn make_dir(path: &str) -> Option<InodeRef> {
     let abs = normalize_path("/", path)?;
     let (parent, name) = split_parent(&abs);
     let parent_inode = path::lookup_abs_path(&parent)?;
+    if !check_dir_write(&parent_inode) {
+        return None;
+    }
     parent_inode.mkdir(&name)
 }
 
 pub fn unlink_file(path: &str) -> Option<isize>{
     let abs = normalize_path("/", path)?;
     let (parent, name) = split_parent(&abs);
-    let parent_inode = path::lookup_abs_path(&parent)?;  
+    let parent_inode = path::lookup_abs_path(&parent)?;
+    // 删除需要父目录的 写+搜索 权限
+    if !check_dir_write(&parent_inode) {
+        return None;
+    }
     Some(parent_inode.unlink(&name))                  
 }
 
@@ -195,6 +216,9 @@ pub fn remove_dir(path: &str) -> Option<isize> {
     let abs = normalize_path("/", path)?;
     let (parent, name) = split_parent(&abs);
     let parent_inode = path::lookup_abs_path(&parent)?;
+    if !check_dir_write(&parent_inode) {
+        return None;
+    }
     Some(parent_inode.rmdir(&name))
 }
 
@@ -202,5 +226,55 @@ pub fn remove_recursive(path: &str) -> Option<isize> {
     let abs = normalize_path("/", path)?;
     let (parent, name) = split_parent(&abs);
     let parent_inode = path::lookup_abs_path(&parent)?;
+    if !check_dir_write(&parent_inode) {
+        return None;
+    }
     Some(parent_inode.remove_recursive(&name))
+}
+
+/// 打开现有文件时的访问检查: 按 flags 计算 R/W 请求, 与文件 mode + 当前凭证比对。
+/// O_EXEC 由调用方(exec)自行检查 X 权限, 这里放行。
+fn check_open(inode: &InodeRef, flags: usize) -> bool {
+    if flags & O_EXEC != 0 {
+        return true;
+    }
+    let meta = inode.metadata();
+    let (_u, euid, _g, egid) = crate::task::current_creds();
+    let request = if (flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR {
+        W_OK
+    } else {
+        R_OK
+    };
+    check_access(meta.mode, meta.uid, meta.gid, euid, egid, request)
+}
+
+/// 在目录中创建/删除/改名的必要条件: 父目录需 写+搜索 权限(root 绕过)。
+fn check_dir_write(inode: &InodeRef) -> bool {
+    let meta = inode.metadata();
+    let (_u, euid, _g, egid) = crate::task::current_creds();
+    check_access(meta.mode, meta.uid, meta.gid, euid, egid, W_OK | X_OK)
+}
+
+/// chmod(path, mode): 修改文件权限位。特权检查由系统调用层(sys_chmod)完成。
+pub fn chmod_path(path: &str, mode: u16) -> isize {
+    let abs = match normalize_path("/", path) {
+        Some(p) => p,
+        None => return -1,
+    };
+    match path::lookup_abs_path(&abs) {
+        Some(inode) => inode.chmod(mode),
+        None => -1,
+    }
+}
+
+/// chown(path, uid, gid): 修改文件属主。usize::MAX 表示不修改该项。特权检查由系统调用层完成。
+pub fn chown_path(path: &str, uid: usize, gid: usize) -> isize {
+    let abs = match normalize_path("/", path) {
+        Some(p) => p,
+        None => return -1,
+    };
+    match path::lookup_abs_path(&abs) {
+        Some(inode) => inode.chown(uid, gid),
+        None => -1,
+    }
 }

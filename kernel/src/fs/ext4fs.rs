@@ -203,6 +203,9 @@ impl Inode for Ext4Inode {
         Metadata {
             inode_type,
             size: meta.len() as usize,
+            uid: meta.uid() as usize,
+            gid: meta.gid() as usize,
+            mode: meta.mode(),
         }
     }
 
@@ -246,9 +249,12 @@ impl Inode for Ext4Inode {
         };
 
         let file_type = meta.file_type();
+        let mode = meta.mode();
+        let uid = meta.uid() as u32;
+        let gid = meta.gid() as u32;
 
         if file_type.is_dir() {
-            return Some(Arc::new(ReadOnlyDirFile::new(self.getdents())));
+            return Some(Arc::new(ReadOnlyDirFile::new_perms(self.getdents(), mode, uid, gid)));
         }
 
         if file_type.is_regular_file() {
@@ -257,7 +263,7 @@ impl Inode for Ext4Inode {
                 fs.read(self.path.as_str()).ok()?
             };
 
-            return Some(Arc::new(ReadOnlyMemFile::from_vec(data)));
+            return Some(Arc::new(ReadOnlyMemFile::from_vec_perms(data, mode, uid, gid)));
         }
 
         None

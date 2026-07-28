@@ -15,7 +15,7 @@ impl File for Stdin {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_CHAR, 0)
+        Stat::new(STAT_TYPE_CHAR, 0, 0o666, 0, 0)
     }
 
     fn read(&self, buf: &mut [u8]) -> isize {
@@ -76,7 +76,7 @@ impl File for Stdout {
         buf.len() as isize
     }
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_CHAR, 0)
+        Stat::new(STAT_TYPE_CHAR, 0, 0o666, 0, 0)
     }
 }
 

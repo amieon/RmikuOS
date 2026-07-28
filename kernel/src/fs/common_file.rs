@@ -33,6 +33,8 @@ impl ReadOnlyData {
 pub struct ReadOnlyMemFile {
     data: ReadOnlyData,
     offset: Mutex<usize>,
+    // (mode, uid, gid) —— 供 fstat 返回真实属主/权限
+    perms: (u16, u32, u32),
 }
 
 impl ReadOnlyMemFile {
@@ -40,6 +42,7 @@ impl ReadOnlyMemFile {
         Self {
             data: ReadOnlyData::Static(data),
             offset: Mutex::new(0),
+            perms: (0, 0, 0),
         }
     }
 
@@ -47,6 +50,16 @@ impl ReadOnlyMemFile {
         Self {
             data: ReadOnlyData::Owned(data),
             offset: Mutex::new(0),
+            perms: (0, 0, 0),
+        }
+    }
+
+    /// 携带真实属主/权限的构造(用于 ext4 等能从磁盘读出属主的后端)
+    pub fn from_vec_perms(data: Vec<u8>, mode: u16, uid: u32, gid: u32) -> Self {
+        Self {
+            data: ReadOnlyData::Owned(data),
+            offset: Mutex::new(0),
+            perms: (mode, uid, gid),
         }
     }
 }
@@ -61,7 +74,8 @@ impl File for ReadOnlyMemFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_FILE, self.data.len())
+        let (mode, uid, gid) = self.perms;
+        Stat::new(STAT_TYPE_FILE, self.data.len(), mode, uid, gid)
     }
 
     fn read(&self, buf: &mut [u8]) -> isize {
@@ -91,6 +105,8 @@ impl File for ReadOnlyMemFile {
 pub struct ReadOnlyDirFile {
     entries: Vec<DirEntry>,
     offset: Mutex<usize>,
+    // (mode, uid, gid) —— 供 fstat 返回真实属主/权限
+    perms: (u16, u32, u32),
 }
 
 impl ReadOnlyDirFile {
@@ -98,6 +114,16 @@ impl ReadOnlyDirFile {
         Self {
             entries,
             offset: Mutex::new(0),
+            perms: (0o755, 0, 0),
+        }
+    }
+
+    /// 携带真实属主/权限的构造
+    pub fn new_perms(entries: Vec<DirEntry>, mode: u16, uid: u32, gid: u32) -> Self {
+        Self {
+            entries,
+            offset: Mutex::new(0),
+            perms: (mode, uid, gid),
         }
     }
 }
@@ -116,7 +142,8 @@ impl File for ReadOnlyDirFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE)
+        let (mode, uid, gid) = self.perms;
+        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE, mode, uid, gid)
     }
 
     fn read(&self, _buf: &mut [u8]) -> isize {
