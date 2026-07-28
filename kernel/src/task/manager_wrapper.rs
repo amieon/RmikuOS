@@ -39,7 +39,7 @@ static IDLE_HARTS: [AtomicBool; MAX_HARTS] =
     [const { AtomicBool::new(false) }; MAX_HARTS];
 
 /// 若存在 idle hart,广播一次 Reschedule IPI。
-/// (v1 从简用广播;阶段三可改单播 + 按 hart 踢。)
+/// (从简用广播;可改单播 + 按 hart 踢。)
 fn kick_idle_harts() {
     for h in 0..MAX_HARTS {
         if IDLE_HARTS[h].load(Ordering::Acquire) {
@@ -50,10 +50,10 @@ fn kick_idle_harts() {
 }
 
 pub fn init() {
-    let init_path = "/bin/shell";
+    let init_path = "/bin/login";
 
     let app = crate::fs::read_all(init_path)
-        .expect("[task] failed to load init shell from /bin/shell");
+        .expect("[task] failed to load init program (expected /bin/login)");
 
     let (user_space, entry, user_sp) =
         crate::mm::MemorySet::from_elf(app.as_slice()).unwrap();
@@ -73,7 +73,7 @@ pub fn init() {
     process.gid = 0;
     process.egid = 0;
 
-    // 给 init shell 一份最小环境；之后可用 export 覆盖 / 追加。
+    // 给 init 进程(login, 以 root 身份)一份最小环境；之后可用 export 覆盖 / 追加。
     process.env.push((String::from("PATH"), String::from("/bin:/tests:/programs")));
     process.env.push((String::from("HOME"), String::from("/home")));
     process.env.push((String::from("PWD"), String::from("/")));

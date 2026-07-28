@@ -20,7 +20,7 @@ extern "C" {
 #define SYS_GETDENTS   11
 #define SYS_CHDIR      12
 #define SYS_GETCWD     13
-#define SYS_STAT       14
+#define SYS_STAT       14 
 #define SYS_FSTAT      15
 #define SYS_THREAD_CREATE            16
 #define SYS_THREAD_EXIT              17
