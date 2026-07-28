@@ -29,6 +29,8 @@ pub struct ProcessControlBlock {
     pub free_fds: Vec<usize>,
     pub cwd: String,
 
+    pub env: Vec<(String, String)>,
+
     pub threads: Vec<Tid>,
     pub ready_threads: Vec<Tid>,
 
@@ -49,8 +51,6 @@ pub struct ProcessControlBlock {
     pub mmap_next: usize,
 
     pub sig_pending: u64,
-
-    pub env: Vec<(String,String)>,
 
     pub exit_code: i32,
 }
@@ -74,6 +74,8 @@ impl ProcessControlBlock {
             fd_flags: Vec::new(),
             cwd,
 
+            env: Vec::new(),
+
             threads: Vec::new(),
             ready_threads: Vec::new(),
 
@@ -92,7 +94,6 @@ impl ProcessControlBlock {
 
             sig_pending: 0,
 
-            env: Vec::new(),
 
             exit_code: 0,
         }
@@ -106,12 +107,12 @@ impl ProcessControlBlock {
         fd_flags: Vec<usize>,
         free_fds: Vec<usize>,
         cwd: String,
+        env: Vec<(String, String)>,
         parent_tickets: usize,
         parent_pass: usize,
         mmap_areas: Vec<MmapArea>,
         mmap_free_ranges: Vec<MmapFreeRange>,
         mmap_next: usize,
-        parent_env: Vec<(String,String)>,
     ) -> Self {
         let tickets = parent_tickets.max(1);
         let stride = BIG_STRIDE / tickets;
@@ -128,6 +129,8 @@ impl ProcessControlBlock {
             fd_flags,
             free_fds,
             cwd,
+
+            env,
 
             threads: Vec::new(),
             ready_threads: Vec::new(),
@@ -146,8 +149,6 @@ impl ProcessControlBlock {
             mmap_next,
 
             sig_pending: 0,
-
-            env: parent_env,
 
             exit_code: 0,
         }
@@ -181,6 +182,48 @@ impl ProcessControlBlock {
             }
         }
         closed   // 把关掉的 file 返回出去
+    }
+}
+
+impl ProcessControlBlock {
+    /// 查询环境变量，返回值的不可变引用。
+    pub fn env_get(&self, key: &str) -> Option<&String> {
+        self.env.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+    }
+
+    /// 设置环境变量。overwrite=false 且 key 已存在时不做改动。
+    /// key 为空返回 false（非法）。
+    pub fn env_set(&mut self, key: String, val: String, overwrite: bool) -> bool {
+        if key.is_empty() {
+            return false;
+        }
+        for slot in self.env.iter_mut() {
+            if slot.0 == key {
+                if overwrite {
+                    slot.1 = val;
+                }
+                return true;
+            }
+        }
+        self.env.push((key, val));
+        true
+    }
+
+    /// 删除环境变量（不存在也安全）。
+    pub fn env_unset(&mut self, key: &str) {
+        if let Some(pos) = self.env.iter().position(|(k, _)| k == key) {
+            self.env.remove(pos);
+        }
+    }
+
+    /// 清空全部环境变量。
+    pub fn env_clear(&mut self) {
+        self.env.clear();
+    }
+
+    /// 复制整张环境表（exec 构造 envp 与用户态枚举用）。
+    pub fn env_pairs(&self) -> Vec<(String, String)> {
+        self.env.clone()
     }
 }
 

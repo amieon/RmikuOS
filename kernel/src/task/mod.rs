@@ -80,7 +80,9 @@ pub use manager_wrapper::{
     do_signal,
     set_current_sig_pending,
 
-    last_switch_back_tick,
-    dump_preempt_masks,
-    dump_task_manager_lock_state,
+    env_get_current_value,
+    env_unset_current_value,
+    env_set_current_value,
+    env_clear_current_values,
+    env_get_all_current,
 };

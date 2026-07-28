@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use log::logger;
 
@@ -66,6 +66,11 @@ pub fn init() {
         user_space,
         String::from("/"),
     );
+
+    // 给 init shell 一份最小环境；之后可用 export 覆盖 / 追加。
+    process.env.push((String::from("PATH"), String::from("/bin:/tests:/programs")));
+    process.env.push((String::from("HOME"), String::from("/home")));
+    process.env.push((String::from("PWD"), String::from("/")));
 
     let thread = ThreadControlBlock::new_main_thread(
         0,
@@ -408,7 +413,6 @@ pub fn fork_current() -> isize {
         let child_mmap_free_areas = manager.process(parent_pid).mmap_free_ranges.clone();
         let child_mmap_next = manager.process(parent_pid).mmap_next.clone();
 
-        let child_enc =  manager.process(parent_pid).env.clone();
 
         let mut child_process = ProcessControlBlock::fork_from(
             child_pid,
@@ -418,12 +422,12 @@ pub fn fork_current() -> isize {
             child_fd_flags,
             child_free_fds,
             child_cwd,
+            manager.process(parent_pid).env.clone(),
             parent_tickets,
             parent_pass,
             child_mmap_areas,
             child_mmap_free_areas,
             child_mmap_next,
-            child_enc,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
@@ -562,6 +566,24 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 
     let argc = argv.len();
 
+    // 把当前进程的 env 取出来，序列化后与 argv 一起压栈（execve 兼容的 envp）。
+    let cur_tid = processor::current_tid();
+    let env_pairs: Vec<(String, String)> = {
+        let manager = lock_detect!(TASK_MANAGER);
+        let pid = manager.pid_of_tid(cur_tid);
+        manager.process(pid).env_pairs()
+    };
+    let env: Vec<Vec<u8>> = env_pairs
+        .iter()
+        .map(|(k, v)| {
+            let mut s = String::with_capacity(k.len() + 1 + v.len());
+            s.push_str(k);
+            s.push('=');
+            s.push_str(v);
+            s.into_bytes()
+        })
+        .collect();
+
     let file = match crate::fs::open(path, crate::fs::flag::O_RDONLY) {
         Some(file) => file,
         None => {
@@ -611,6 +633,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         &new_user_space,
         user_sp,
         &argv,
+        &env,
     ) {
         Some(v) => v,
         None => return -1,
@@ -744,10 +767,14 @@ fn build_user_stack_with_args(
     user_space: &crate::mm::MemorySet,
     user_sp: usize,
     argv: &[Vec<u8>],
+    env: &[Vec<u8>],
 ) -> Option<(usize, usize)> {
     let mut sp = user_sp;
     let mut arg_ptrs: Vec<usize> = Vec::new();
+    let mut env_ptrs: Vec<usize> = Vec::new();
 
+    // 字符串落到栈底（低地址）。顺序无所谓，关键是 argv[] 紧跟其 NULL 终止符、
+    // 之后是 envp[] 与其 NULL 终止符，使 envp = argv_ptr + (argc + 1) * sizeof(char*)。
     for arg in argv.iter().rev() {
         sp -= arg.len() + 1;
 
@@ -757,12 +784,28 @@ fn build_user_stack_with_args(
         arg_ptrs.push(sp);
     }
 
+    for e in env.iter().rev() {
+        sp -= e.len() + 1;
+
+        write_to_user_space(user_space, sp, e)?;
+        write_to_user_space(user_space, sp + e.len(), &[0])?;
+
+        env_ptrs.push(sp);
+    }
+
     arg_ptrs.reverse();
+    env_ptrs.reverse();
 
     sp = align_down(sp, 16);
 
+    // envp[] 以 NULL 结尾
     push_usize_to_user_stack(user_space, &mut sp, 0)?;
+    for &ptr in env_ptrs.iter().rev() {
+        push_usize_to_user_stack(user_space, &mut sp, ptr)?;
+    }
 
+    // argv[] 以 NULL 结尾
+    push_usize_to_user_stack(user_space, &mut sp, 0)?;
     for &ptr in arg_ptrs.iter().rev() {
         push_usize_to_user_stack(user_space, &mut sp, ptr)?;
     }
@@ -828,6 +871,51 @@ pub fn set_current_cwd(new_cwd: String) -> isize {
     let mut manager = lock_detect!(TASK_MANAGER);
     manager.process_mut(pid).cwd = new_cwd;
     0
+}
+
+// ===== 环境变量子系统（内核态 PCB 存储，用户态经下方封装访问）=====
+
+/// 取变量值（已克隆，调用方需先持有 key 的 &str，且不持 TASK_MANAGER 锁）。
+pub fn env_get_current_value(key: &str) -> Option<String> {
+    let pid = current_pid();
+    let manager = lock_detect!(TASK_MANAGER);
+    manager.process(pid).env_get(key).cloned()
+}
+
+/// 设置变量；key 为空返回 -1，否则返回 0。
+pub fn env_set_current_value(key: &str, val: &str, overwrite: bool) -> isize {
+    if key.is_empty() {
+        return -1;
+    }
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    manager
+        .process_mut(pid)
+        .env_set(key.to_string(), val.to_string(), overwrite);
+    0
+}
+
+/// 删除变量（不存在也返回 0）。
+pub fn env_unset_current_value(key: &str) -> isize {
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    manager.process_mut(pid).env_unset(key);
+    0
+}
+
+/// 清空全部变量。
+pub fn env_clear_current_values() -> isize {
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    manager.process_mut(pid).env_clear();
+    0
+}
+
+/// 复制整张环境表（供用户态 env 命令枚举）。
+pub fn env_get_all_current() -> Vec<(String, String)> {
+    let pid = current_pid();
+    let manager = lock_detect!(TASK_MANAGER);
+    manager.process(pid).env_pairs()
 }
 
 pub fn exit_current_and_run_next(exit_code: i32) -> ! {
