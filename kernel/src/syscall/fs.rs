@@ -346,3 +346,41 @@ pub fn sys_unlink(path_ptr : usize, len : usize) -> isize {
     }
 }
 
+pub fn sys_chmod(path_ptr: usize, len: usize, mode: usize) -> isize {
+    let abs = match user_path_to_abs(path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+
+    let inode = match crate::fs::lookup(&abs) {
+        Some(i) => i,
+        None => return -1,
+    };
+
+    let meta = inode.metadata();
+    let (_u, ue, _g, _ge) = crate::task::current_creds();
+
+    // 特权: euid==0(超级用户) 或 调用者是文件属主
+    if ue != 0 && ue != meta.uid {
+        return -1;
+    }
+
+    crate::fs::chmod_path(&abs, (mode & 0o7777) as u16)
+}
+
+pub fn sys_chown(path_ptr: usize, len: usize, uid: usize, gid: usize) -> isize {
+    let abs = match user_path_to_abs(path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+
+    let (_u, ue, _g, _ge) = crate::task::current_creds();
+
+    // 简化模型: 仅超级用户(euid==0)可修改文件属主
+    if ue != 0 {
+        return -1;
+    }
+
+    crate::fs::chown_path(&abs, uid, gid)
+}
+

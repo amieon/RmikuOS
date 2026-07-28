@@ -66,6 +66,8 @@ extern "C" {
 #define SYS_SETEGID                  57
 #define SYS_SETREUID                 58
 #define SYS_SETREGID                 59
+#define SYS_CHMOD                    60
+#define SYS_CHOWN                    61
 
 
 
