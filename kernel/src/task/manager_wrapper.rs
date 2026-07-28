@@ -408,6 +408,7 @@ pub fn fork_current() -> isize {
         let child_mmap_free_areas = manager.process(parent_pid).mmap_free_ranges.clone();
         let child_mmap_next = manager.process(parent_pid).mmap_next.clone();
 
+        let child_enc =  manager.process(parent_pid).env.clone();
 
         let mut child_process = ProcessControlBlock::fork_from(
             child_pid,
@@ -422,6 +423,7 @@ pub fn fork_current() -> isize {
             child_mmap_areas,
             child_mmap_free_areas,
             child_mmap_next,
+            child_enc,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,

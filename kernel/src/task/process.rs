@@ -50,6 +50,8 @@ pub struct ProcessControlBlock {
 
     pub sig_pending: u64,
 
+    pub env: Vec<(String,String)>,
+
     pub exit_code: i32,
 }
 
@@ -90,6 +92,7 @@ impl ProcessControlBlock {
 
             sig_pending: 0,
 
+            env: Vec::new(),
 
             exit_code: 0,
         }
@@ -108,6 +111,7 @@ impl ProcessControlBlock {
         mmap_areas: Vec<MmapArea>,
         mmap_free_ranges: Vec<MmapFreeRange>,
         mmap_next: usize,
+        parent_env: Vec<(String,String)>,
     ) -> Self {
         let tickets = parent_tickets.max(1);
         let stride = BIG_STRIDE / tickets;
@@ -142,6 +146,8 @@ impl ProcessControlBlock {
             mmap_next,
 
             sig_pending: 0,
+
+            env: parent_env,
 
             exit_code: 0,
         }
