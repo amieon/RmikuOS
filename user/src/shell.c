@@ -229,6 +229,7 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
 
     const char *builtins[] = {
         "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir",
+        "whoami", "chmod",
         "shutdown", "ls", "cat", "clear", "jobs",
         "export", "env", "unset", NULL
     };
@@ -913,6 +914,8 @@ static void print_help(void) {
     fputs("  touch <path>\n", stdout);
     fputs("  rm [-r] <path>\n", stdout);
     fputs("  rmdir <path>\n", stdout);
+    fputs("  whoami              (print effective user name)\n", stdout);
+    fputs("  chmod <mode> <path> (mode is octal, e.g. 755 / 0644)\n", stdout);
     fputs("  jobs\n", stdout);
     fputs("  clear\n", stdout);
     fputs("  export NAME=VALUE   (set env var; $VAR / ${VAR} / $? expands in commands)\n", stdout);
@@ -1021,6 +1024,53 @@ static int builtin_rmdir(int argc, char *argv[]) {
         }
     }
     return ret;
+}
+
+/* uid -> 用户名(仅教学用的最小映射; 与 login/su 用户表保持一致) */
+static const char *uid_to_name(usize uid) {
+    if (uid == 0)   return "root";
+    if (uid == 100) return "alice";
+    if (uid == 101) return "bob";
+    return NULL;
+}
+
+/* 打印无符号整数(保持与现有 builtin 一致用 fputc/fputs) */
+static void fmt_uint(usize v) {
+    char tmp[12]; int i = 0;
+    if (v == 0) tmp[i++] = '0';
+    while (v) { tmp[i++] = (char)('0' + (v % 10)); v /= 10; }
+    while (i > 0) fputc(tmp[--i], stdout);
+}
+
+static int builtin_whoami(void) {
+    usize e = (usize) geteuid();
+    const char *n = uid_to_name(e);
+    if (n) fputs(n, stdout);
+    else { fputs("uid=", stdout); fmt_uint(e); }
+    fputc('\n', stdout);
+    return 0;
+}
+
+/* chmod <mode> <path>：mode 为八进制字符串(如 755 / 0644) */
+static int builtin_chmod(int argc, char *argv[]) {
+    if (argc < 3) {
+        fputs("chmod: usage: chmod <mode> <path>\n", stdout);
+        return 1;
+    }
+    const char *m = argv[1];
+    usize mode = 0;
+    for (int i = 0; m[i]; i++) {
+        if (m[i] < '0' || m[i] > '7') {
+            fputs("chmod: invalid mode (need octal digits 0-7)\n", stdout);
+            return 1;
+        }
+        mode = (mode << 3) | (usize)(m[i] - '0');
+    }
+    if (chmod(argv[2], mode) < 0) {
+        fputs("chmod: permission denied or no such file\n", stdout);
+        return 1;
+    }
+    return 0;
 }
 
 static void builtin_clear(void) {
@@ -1492,6 +1542,8 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "touch")) { return builtin_create(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "rm")) { return builtin_rm(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "rmdir")) { return builtin_rmdir(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "whoami")) { return builtin_whoami(); }
+    if (streq(exp_argv[0], "chmod")) { return builtin_chmod(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "jobs")) { print_jobs(); return 0; }
     if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
     if (streq(exp_argv[0], "source") || streq(exp_argv[0], ".")) {
@@ -1687,7 +1739,6 @@ int main(void) {
     load_search_dirs();
 
     while (1) {
-        set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];
