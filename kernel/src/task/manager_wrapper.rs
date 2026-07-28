@@ -639,10 +639,12 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         None => return -1,
     };
 
+
     let mut new_trap_cx =
         crate::trap::TrapContext::app_init_context(entry, new_user_sp);
-
-    new_trap_cx.set_app_args(argc, argv_ptr);
+    
+    let envp = argv_ptr + (argc + 1) * core::mem::size_of::<usize>();
+    new_trap_cx.set_app_args(argc, argv_ptr, envp);
 
     let current_tid = processor::current_tid();
 
