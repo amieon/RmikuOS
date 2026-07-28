@@ -24,6 +24,12 @@ static int glob_pool_idx = 0;
 static char brace_pool[MAX_BRACE][LINE_SIZE];
 static int brace_pool_idx = 0;
 
+static char var_pool[MAX_ARGC][LINE_SIZE];
+static int var_pool_idx = 0;
+
+/* 最近一条前台命令的退出码，供 $? 展开使用（与 bash 语义一致）。 */
+static int g_last_exit = 0;
+
 struct job {
     int used;
     int id;
@@ -223,7 +229,8 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
 
     const char *builtins[] = {
         "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir",
-        "shutdown", "ls", "cat", "clear", "jobs", NULL
+        "shutdown", "ls", "cat", "clear", "jobs",
+        "export", "env", "unset", NULL
     };
 
     for (int i = 0; builtins[i] && count < max_matches; i++) {
@@ -503,6 +510,124 @@ static int expand_args(int argc, char *argv[], char *outv[], int quoted[]) {
     return outc;
 }
 
+/* ---- 变量展开 $VAR / ${VAR} ---- */
+static int is_env_name_char(char c) {
+    if (c >= 'a' && c <= 'z') return 1;
+    if (c >= 'A' && c <= 'Z') return 1;
+    if (c >= '0' && c <= '9') return 1;
+    if (c == '_') return 1;
+    return 0;
+}
+
+/* 把整数转成十进制字符串写入 out，返回写入长度（不含结尾）。val 可为负。 */
+static int itoa_(int val, char *out) {
+    int tmp[12];
+    int n = 0;
+    int v = val;
+    if (v < 0) { out[n++] = '-'; v = -v; }
+    if (v == 0) { out[n++] = '0'; return n; }
+    int digits = 0;
+    while (v > 0) { tmp[digits++] = '0' + (v % 10); v /= 10; }
+    for (int i = digits - 1; i >= 0; i--) out[n++] = tmp[i];
+    return n;
+}
+
+/* 展开 $VAR / ${VAR} / $? / ${?}。
+ * 引号语义（bash 风格）：
+ *   - quoted[]==1（单引号）：完全保护，$ 原样输出，不展开；
+ *   - quoted[]==2（双引号）：仍展开 $（含 $?）；
+ *   - 0（无引号）：展开 $。
+ * 双引号展开结果标记为整体（out_quoted=1），不再做 glob/分词，符合 bash。
+ * 结果写入 var_pool（独立于原始 line，避免展开后变长覆盖相邻 token）。 */
+static int expand_variables(int argc, char *argv[], int quoted[],
+                             char *outv[], int out_quoted[]) {
+    var_pool_idx = 0;
+    int outc = 0;
+    for (int i = 0; i < argc && outc < MAX_ARGC; i++) {
+        if (quoted[i] == 1) {
+            /* 单引号：完全保护，原样输出 */
+            if (var_pool_idx >= MAX_ARGC) break;
+            copy_str(var_pool[var_pool_idx], argv[i], LINE_SIZE);
+            outv[outc] = var_pool[var_pool_idx++];
+            out_quoted[outc] = 1;
+            outc++;
+            continue;
+        }
+        char *src = argv[i];
+        char *dst = var_pool[var_pool_idx];
+        int o = 0;
+        int j = 0;
+        while (src[j] && o < LINE_SIZE - 1) {
+            if (src[j] == '$' && src[j + 1]) {
+                if (src[j + 1] == '?') {
+                    /* $? : 上条命令退出码 */
+                    if (o + 12 < LINE_SIZE - 1) {
+                        int len = itoa_(g_last_exit, dst + o);
+                        o += len;
+                    }
+                    j += 2;
+                    continue;
+                } else if (src[j + 1] == '{') {
+                    int k = j + 2;
+                    while (src[k] && src[k] != '}') k++;
+                    int namelen = k - (j + 2);
+                    if (namelen > 0 && src[k] == '}') {
+                        char name[64];
+                        int nl = namelen < 63 ? namelen : 63;
+                        for (int t = 0; t < nl; t++) name[t] = src[j + 2 + t];
+                        name[nl] = 0;
+                        const char *val = 0;
+                        int from_exit = 0;
+                        if (name[0] == '?' && name[1] == 0) {
+                            from_exit = 1;          /* ${?} */
+                        } else {
+                            val = getenv(name);
+                        }
+                        if (from_exit) {
+                            if (o + 12 < LINE_SIZE - 1) {
+                                int len = itoa_(g_last_exit, dst + o);
+                                o += len;
+                            }
+                        } else if (val) {
+                            for (int t = 0; val[t] && o < LINE_SIZE - 1; t++)
+                                dst[o++] = val[t];
+                        }
+                        j = k + 1;
+                        continue;
+                    }
+                    /* 没配对的 {，原样输出 $ */
+                } else if (is_env_name_char(src[j + 1])) {
+                    int k = j + 1;
+                    while (is_env_name_char(src[k])) k++;
+                    int namelen = k - (j + 1);
+                    char name[64];
+                    int nl = namelen < 63 ? namelen : 63;
+                    for (int t = 0; t < nl; t++) name[t] = src[j + 1 + t];
+                    name[nl] = 0;
+                    const char *val = getenv(name);
+                    if (val) {
+                        for (int t = 0; val[t] && o < LINE_SIZE - 1; t++)
+                            dst[o++] = val[t];
+                    }
+                    j = k;
+                    continue;
+                }
+                /* 孤立的 $ 或 $ 后接非法字符：原样输出 $ */
+                dst[o++] = '$';
+                j++;
+                continue;
+            }
+            dst[o++] = src[j++];
+        }
+        dst[o] = 0;
+        if (var_pool_idx >= MAX_ARGC) break;
+        outv[outc] = var_pool[var_pool_idx++];
+        out_quoted[outc] = (quoted[i] == 2) ? 1 : 0;
+        outc++;
+    }
+    return outc;
+}
+
 /* ---- 后台作业 ---- */
 static void add_job(isize pid, const char *cmd) {
     for (int i = 0; i < MAX_JOBS; i++) {
@@ -731,7 +856,7 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
 
         argv[argc] = &line[i];
         int w = i;
-        int is_quoted = 0;
+        int quote_type = 0;   /* 0=无引号, 1=单引号, 2=双引号 */
 
         while (line[i] && line[i] != ' ' && line[i] != '\t') {
             char c = line[i];
@@ -742,7 +867,7 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
                     i++;
                 }
             } else if (c == '"') {
-                is_quoted = 1;
+                quote_type = 2;
                 i++;
                 while (line[i] && line[i] != '"') {
                     if (line[i] == '\\') {
@@ -757,7 +882,7 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
                 }
                 if (line[i] == '"') i++;
             } else if (c == '\'') {
-                is_quoted = 1;
+                quote_type = 1;
                 i++;
                 while (line[i] && line[i] != '\'') {
                     line[w++] = line[i++];
@@ -771,7 +896,7 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
         int had_sep = (line[i] == ' ' || line[i] == '\t');
         line[w] = '\0';
         if (had_sep) i++;
-        quoted[argc] = is_quoted;
+        quoted[argc] = quote_type;
         argc++;
     }
     return argc;
@@ -790,8 +915,13 @@ static void print_help(void) {
     fputs("  rmdir <path>\n", stdout);
     fputs("  jobs\n", stdout);
     fputs("  clear\n", stdout);
+    fputs("  export NAME=VALUE   (set env var; $VAR / ${VAR} / $? expands in commands)\n", stdout);
+    fputs("  env                 (print all env vars)\n", stdout);
+    fputs("  unset NAME          (remove env var)\n", stdout);
+    fputs("  variable expansion: $VAR, ${VAR}, $? (last exit code)\n", stdout);
+    fputs("    'single quotes' protect $; \"double quotes\" still expand $ (bash style)\n", stdout);
     fputs("  shutdown\n", stdout);
-    fputs("\nexternal commands are in /bin:\n", stdout);
+    fputs("\nexternal commands are in $PATH (/bin, /tests, /programs):\n", stdout);
     fputs("  try: ls /bin\n\n", stdout);
 }
 
@@ -815,6 +945,11 @@ static int builtin_cd(int argc, char *argv[]) {
         fputs(path, stdout);
         fputs("\n", stdout);
         return 1;
+    }
+    /* 让 $PWD 反映新工作目录 */
+    char cwd_buf[128];
+    if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
+        setenv_s("PWD", cwd_buf, 1);
     }
     return 0;
 }
@@ -893,35 +1028,88 @@ static void builtin_clear(void) {
     fflush(stdout);
 }
 
+/* export NAME=VALUE：把变量写入内核每进程环境（fork 继承、exec 作为 envp 传子进程）。
+ * 不带 '=' 的 export NAME 视为无操作（本内核环境始终在内核侧维护）。 */
+static int builtin_export(int argc, char *argv[]) {
+    if (argc < 2) return 0;
+    for (int i = 1; i < argc; i++) {
+        char *eq = 0;
+        for (int k = 0; argv[i][k]; k++) {
+            if (argv[i][k] == '=') { eq = &argv[i][k]; break; }
+        }
+        if (!eq) continue;          /* export NAME（无值）：跳过 */
+        *eq = 0;
+        char *name = argv[i];
+        char *val = eq + 1;
+        setenv_s(name, val, 1);
+    }
+    return 0;
+}
+
+/* env：枚举并逐行打印 KEY=VALUE。 */
+static int builtin_env(int argc, char *argv[]) {
+    char buf[8192];
+    buf[0] = 0;
+    isize total = listenv(0, 0);          /* 先探测所需大小 */
+    if (total < 0) return 0;
+    if (total > (isize)(sizeof(buf) - 1)) {
+        fputs("env: environment too large to print\n", stdout);
+        return 0;
+    }
+    listenv(buf, sizeof(buf));
+    int i = 0;
+    while (i < total) {
+        fputs(&buf[i], stdout);
+        fputs("\n", stdout);
+        i += strlen_(&buf[i]) + 1;
+    }
+    return 0;
+}
+
+/* unset NAME [NAME ...]：从内核环境删除变量。 */
+static int builtin_unset(int argc, char *argv[]) {
+    if (argc < 2) {
+        fputs("unset: missing operand\n", stdout);
+        return 1;
+    }
+    for (int i = 1; i < argc; i++) {
+        unsetenv_s(argv[i]);
+    }
+    return 0;
+}
+
 static void load_search_dirs(void) {
     num_dirs = 0;
-    int fd = open("/etc/path", O_RDONLY);
-    if (fd < 0) {
+
+    /* 命令搜索路径来自内核环境变量 PATH（由 init 播种为
+     * /bin:/tests:/programs，可用 export PATH=... 改写）。
+     * 不再依赖 /etc/path 文件。 */
+    const char *path = getenv("PATH");
+    if (!path || path[0] == 0) {
         copy_str(search_dirs[num_dirs++], "/bin/", DIR_LEN);
         copy_str(search_dirs[num_dirs++], "/tests/", DIR_LEN);
+        if (num_dirs < MAX_DIRS)
+            copy_str(search_dirs[num_dirs++], "/programs/", DIR_LEN);
         return;
     }
+
     char buf[256];
-    int total = 0;
-    while (total < (int)sizeof(buf) - 1) {
-        isize n = read(fd, buf + total, sizeof(buf) - 1 - total);
-        if (n <= 0) break;
-        total += n;
-    }
-    buf[total] = '\0';
-    close(fd);
+    int plen = 0;
+    for (int i = 0; path[i] && plen < (int)sizeof(buf) - 1; i++)
+        buf[plen++] = path[i];
+    buf[plen] = 0;
 
     int start = 0;
-    for (int i = 0; i <= total; i++) {
-        if (buf[i] == '\n' || buf[i] == '\0') {
-            if (i > start && num_dirs < MAX_DIRS) {
-                int len = i - start;
-                if (len > DIR_LEN - 2) len = DIR_LEN - 2;
+    for (int i = 0; i <= plen; i++) {
+        if (buf[i] == ':' || buf[i] == 0) {
+            int len = i - start;
+            if (len > 0 && num_dirs < MAX_DIRS) {
                 int k = 0;
+                if (len > DIR_LEN - 2) len = DIR_LEN - 2;
                 for (int j = start; j < start + len; j++) {
                     search_dirs[num_dirs][k++] = buf[j];
                 }
-                if (k > 0 && search_dirs[num_dirs][k-1] != '/') {
+                if (k > 0 && search_dirs[num_dirs][k - 1] != '/') {
                     search_dirs[num_dirs][k++] = '/';
                 }
                 search_dirs[num_dirs][k] = '\0';
@@ -993,6 +1181,8 @@ static void run_exec(int argc, char *argv[]){
 }
 
 static int run_external(int argc, char *argv[], int background) {
+    /* 每次外部命令前刷新命令搜索路径：使 export PATH=... 立即生效 */
+    load_search_dirs();
     fcntl(0, F_SETFL, O_NONBLOCK);
     isize pid = fork();
     if (pid == 0) {
@@ -1171,14 +1361,31 @@ static int run_pipeline(char *line) {
     }
 
     static char *seg_argv[MAX_SEGMENTS][MAX_ARGC];
+    static char pipeline_arg_strs[MAX_SEGMENTS][MAX_ARGC][LINE_SIZE];
     int seg_argc[MAX_SEGMENTS];
     int seg_quoted[MAX_SEGMENTS][MAX_ARGC];
     for (int s = 0; s < nseg; s++) {
-        seg_argc[s] = parse_args(segs[s].cmd_str, seg_argv[s], MAX_ARGC, seg_quoted[s]);
-        if (seg_argc[s] == 0) {
+        int q0[MAX_ARGC];
+        char *a0[MAX_ARGC];
+        int ac0 = parse_args(segs[s].cmd_str, a0, MAX_ARGC, q0);
+        if (ac0 == 0) {
             fputs("syntax error: empty command\n", stdout);
             return 1;
         }
+        /* 变量展开 + brace/glob 展开（与 run_node 同处理） */
+        char *ve[MAX_ARGC];
+        int vq[MAX_ARGC];
+        int vac = expand_variables(ac0, a0, q0, ve, vq);
+        char *ea[MAX_ARGC];
+        int eac = expand_args(vac, ve, ea, vq);
+        seg_argc[s] = eac;
+        /* expand_args 写入共享 glob_pool，多段解析循环会覆盖它；
+         * 故把每个 token 拷到按段独立的池，避免后续段破坏前段参数。 */
+        for (int k = 0; k < eac && k < MAX_ARGC; k++) {
+            copy_str(pipeline_arg_strs[s][k], ea[k], LINE_SIZE);
+            seg_argv[s][k] = pipeline_arg_strs[s][k];
+        }
+        for (int k = 0; k < eac && k < MAX_ARGC; k++) seg_quoted[s][k] = vq[k];
     }
 
     int prev_read = -1;
@@ -1260,16 +1467,25 @@ static int run_node(char *cmd, int background) {
     int argc = parse_args(cmd, argv, MAX_ARGC, quoted);
     if (argc == 0) return 0;
 
-    if (argc > 0 && streq(argv[argc - 1], "&")) {
+    /* 变量展开：$VAR / ${VAR}（引号内保护的 token 跳过）。
+     * 必须在 brace/glob 展开之前，使 $VAR 的结果也能被通配。 */
+    char *var_argv[MAX_ARGC];
+    int var_quoted[MAX_ARGC];
+    int var_argc = expand_variables(argc, argv, quoted, var_argv, var_quoted);
+
+    if (var_argc > 0 && streq(var_argv[var_argc - 1], "&")) {
         background = 1;
-        argc--;
+        var_argc--;
     }
 
     char *exp_argv[MAX_ARGC];
-    int exp_argc = expand_args(argc, argv, exp_argv, quoted);
+    int exp_argc = expand_args(var_argc, var_argv, exp_argv, var_quoted);
 
     if (streq(exp_argv[0], "help")) { print_help(); return 0; }
     if (streq(exp_argv[0], "exit")) { fputs("bye\n", stdout); exit(0); }
+    if (streq(exp_argv[0], "export")) { return builtin_export(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "env")) { return builtin_env(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "unset")) { return builtin_unset(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "pwd")) { return builtin_pwd(); }
     if (streq(exp_argv[0], "cd")) { return builtin_cd(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv); }
@@ -1400,6 +1616,7 @@ static int execute_line(char *line) {
                 if (nodes[i-1].op == 2 && last_status == 0) continue;
             }
             last_status = run_node(nodes[i].cmd, nodes[i].bg);
+            g_last_exit = last_status;   /* 供 $? 展开使用 */
         }
     }
 
@@ -1470,7 +1687,6 @@ int main(void) {
     load_search_dirs();
 
     while (1) {
-        set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];
