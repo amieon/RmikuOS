@@ -590,6 +590,28 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         path_buf.as_str()
     };
 
+    // exec 权限检查 + setuid/setgid 决策
+    // - 需要文件的 X 权限(超级用户 euid==0 绕过)
+    // - 若文件 mode 含 S_ISUID, 则 euid 提升为文件属主; S_ISGID 同理作用于 egid
+    let elevate = {
+        let (_u, euid, _g, egid) = crate::task::current_creds();
+        let meta = crate::fs::lookup(path).map(|i| i.metadata());
+        if let Some(m) = meta {
+            if !crate::fs::inode::check_access(
+                m.mode, m.uid, m.gid, euid, egid, crate::fs::inode::X_OK,
+            ) {
+                log::warn!("[exec] permission denied (no exec bit): {}", path);
+                return -1;
+            }
+            let (u, ue, g, ge) = crate::task::current_creds();
+            let new_ue = if m.mode & crate::fs::stat::S_ISUID != 0 { m.uid } else { ue };
+            let new_ge = if m.mode & crate::fs::stat::S_ISGID != 0 { m.gid } else { ge };
+            Some((u, new_ue, g, new_ge))
+        } else {
+            None
+        }
+    };
+
     let argv = match read_exec_args(args_ptr, name) {
         Some(argv) => argv,
         None => return -1,
@@ -615,7 +637,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         })
         .collect();
 
-    let file = match crate::fs::open(path, crate::fs::flag::O_RDONLY) {
+    let file = match crate::fs::open(path, crate::fs::flag::O_EXEC) {
         Some(file) => file,
         None => {
             log::info!("[exec] open failed: {}", path);
@@ -712,9 +734,18 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         root
     };
 
-    crate::mm::activate_page_table(new_root);
+        crate::mm::activate_page_table(new_root);
 
-    argc as isize
+        // 施加 setuid/setgid 位(成功 exec 后才改变有效凭证)
+        if let Some((u, ue, g, ge)) = elevate {
+            let (cu, cue, cg, cge) = crate::task::current_creds();
+            if ue != cue || ge != cge {
+                crate::task::set_current_creds(u, ue, g, ge);
+                log::info!("[exec] setuid/setgid applied: euid={}, egid={}", ue, ge);
+            }
+        }
+
+        argc as isize
 }
 
 fn read_exec_args(
@@ -1453,6 +1484,9 @@ pub fn account_current_tick() {
     let mut manager = match TASK_MANAGER.try_lock() {
         Some(g) => g,
         None => {
+            // 拿不到锁不再丢账:暂存到 per-hart 缓冲,下次拿到锁时冲刷。
+            // 归属正确性见 Processor::pending_ticks 的不变式注释。
+            processor::add_pending_tick();
             return;
         }
     };
@@ -1529,9 +1563,9 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
             }
         }
 
-        let runnable_threads = process.runnable_count.max(1);
-        //log::warn!("[stat] pid={} runnable_count={}", pid, process.runnable_count);
-
+        let runnable_threads = manager
+            .count_sched_runnable_threads_in_process(pid)
+            .max(1);
 
         let alpha = manager.get_sched_alpha();
         let factor = crate::math::sched_thread_scale(runnable_threads, alpha);
