@@ -79,6 +79,23 @@ static inline isize exec(const char *path) {
 
     return exec_with_args(path, &args);
 }
+
+static inline isize getuid(void)  { return syscall3(SYS_GETUID, 0, 0, 0); }
+static inline isize geteuid(void) { return syscall3(SYS_GETEUID, 0, 0, 0); }
+static inline isize getgid(void)  { return syscall3(SYS_GETGID, 0, 0, 0); }
+static inline isize getegid(void) { return syscall3(SYS_GETEGID, 0, 0, 0); }
+
+#define UID_NO_CHANGE ((usize)-1)   /* setreuid/setregid 的 -1 哨兵 */
+#define GID_NO_CHANGE ((usize)-1)
+
+static inline isize setuid(usize uid)     { return syscall3(SYS_SETUID, uid, 0, 0); }
+static inline isize seteuid(usize euid)   { return syscall3(SYS_SETEUID, euid, 0, 0); }
+static inline isize setgid(usize gid)     { return syscall3(SYS_SETGID, gid, 0, 0); }
+static inline isize setegid(usize egid)   { return syscall3(SYS_SETEGID, egid, 0, 0); }
+static inline isize setreuid(usize ruid, usize euid) { return syscall3(SYS_SETREUID, ruid, euid, 0); }
+static inline isize setregid(usize rgid, usize egid) { return syscall3(SYS_SETREGID, rgid, egid, 0); }
+
+
 #ifdef __cplusplus
 }
 #endif

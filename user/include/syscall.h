@@ -56,6 +56,16 @@ extern "C" {
 #define SYS_UNSETENV                 47
 #define SYS_CLEARENV                 48
 #define SYS_LISTENV                  49
+#define SYS_GETUID                   50
+#define SYS_GETEUID                  51
+#define SYS_GETGID                   52
+#define SYS_GETEGID                  53
+#define SYS_SETUID                   54
+#define SYS_SETEUID                  55
+#define SYS_SETGID                   56
+#define SYS_SETEGID                  57
+#define SYS_SETREUID                 58
+#define SYS_SETREGID                 59
 
 
 
