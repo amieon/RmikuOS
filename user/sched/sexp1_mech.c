@@ -1,47 +1,56 @@
 /*
- * sexp1_mech.c —— 实验 1: α 机制验证 (α=0..100, step=1)
+ * sexp1_mech.c —— 实验 1: α 机制验证
  *
- * 三组等tickets(100)、不同线程数(1/9/25)的纯spin任务,
- * 对每个α跑6000 tick,验证:
- *   1. α↓ → 重负载(t3) eff_tickets 被压
- *   2. CPU share 从 1:9:25 趋向 1:1:1
- *   3. Jain 从 ~0.5 趋向 ~1.0
- *
- * 输出: # mode=mech / W/ S/ K 行
+ * 三组等 tickets(100)、不同线程数(1/9/25)的纯 spin 任务，
+ * α=0..100 扫描，验证:
+ *   1. eff_tickets = tickets × scale(threads, α) 单调不降
+ *   2. CPU share ∝ eff_tickets
+ *   3. α=0 → 三组公平(1:1:1)，α=100 → 按线程数(1:9:25)
  *
  * 用法:
- *   ./build/rmikuos run ./build/sexp1_mech.elf > ./logs/sched/mech/sexp1_mech.csv
+ *   ./sched/sexp1_mech > ./logs/sched/mech/sexp1_mech.csv
+ *   python3 ./scripts/sched/stat_exp1.py ./logs/sched/mech/sexp1_mech.csv
+ *
+ * 注意: 101 个 α 点 × 6000 tick ≈ 3 小时（1 tick=17.51ms）。
+ *       调试时可用 ALPHA_STEP=5（21 个点，~37 分钟）。
  */
 #include "schedlab.h"
 
 #define TRIAL_TICKS  6000UL
 #define WIN_TICKS    100
+#define ALPHA_STEP   1
+
+static void sl_reset_state(void) {
+    sl_ngroups = 0;
+    for (int i = 0; i < SL_MAX_GROUPS; i++) {
+        sl_gstats[i].work       = 0;
+        sl_gstats[i].jobs       = 0;
+        sl_gstats[i].miss       = 0;
+        sl_gstats[i].late_sum   = 0;
+        sl_gstats[i].late_max   = 0;
+        sl_gstats[i].resp_sum   = 0;
+        sl_gstats[i].resp_sumsq = 0;
+        sl_gstats[i].resp_min   = 0;
+        sl_gstats[i].resp_max   = 0;
+    }
+}
 
 int main(void) {
-    printf("# experiment=1_mech sweep=0..100 step=1 trial=%lu win=%d\n",
-           (unsigned long)TRIAL_TICKS, WIN_TICKS);
+    set_my_tickets(1);  /* 排除 schedlab 自身干扰 */
 
-    for (int a = 0; a <= 100; a++) {
-        /* 重置 schedlab 全局 */
-        sl_ngroups = 0;
-        for (int i = 0; i < SL_MAX_GROUPS; i++) {
-            sl_gstats[i].work       = 0;
-            sl_gstats[i].jobs       = 0;
-            sl_gstats[i].miss       = 0;
-            sl_gstats[i].late_sum   = 0;
-            sl_gstats[i].late_max   = 0;
-            sl_gstats[i].resp_sum   = 0;
-            sl_gstats[i].resp_sumsq = 0;
-            sl_gstats[i].resp_min   = 0;
-            sl_gstats[i].resp_max   = 0;
-        }
+    printf("# sexp1_mech: alpha mechanism verification\n");
+    printf("# sweep=0..100 step=%d trial=%lu win=%d\n",
+           ALPHA_STEP, (unsigned long)TRIAL_TICKS, WIN_TICKS);
+    printf("# t1=tickets=100,1thread  t2=tickets=100,9threads  t3=tickets=100,25threads\n");
 
-        /* 三组等tickets纯spin,不同线程数 */
-        sl_add_spin("ctrl", 100,  1, 12000);
-        sl_add_spin("log", 100,  9, 12000);
-        sl_add_spin("ai", 100, 25, 12000);
+    for (int a = 0; a <= 100; a += ALPHA_STEP) {
+        sl_reset_state();
 
-        printf("# mode=mech alpha=%d threads=1,9,25 total=%lu\n",
+        sl_add_spin("t1", 100, 1, 12000);
+        sl_add_spin("t2", 100, 9, 12000);
+        sl_add_spin("t3", 100, 25, 12000);
+
+        printf("# TRIAL alpha=%d threads=1,9,25 total=%lu\n",
                a, (unsigned long)TRIAL_TICKS);
 
         sl_run(&(sl_cfg){
@@ -53,6 +62,6 @@ int main(void) {
         });
     }
 
-    printf("# done\n");
+    printf("# sexp1_mech ALL DONE\n");
     return 0;
 }

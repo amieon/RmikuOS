@@ -1687,6 +1687,7 @@ int main(void) {
     load_search_dirs();
 
     while (1) {
+        set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];
