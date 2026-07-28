@@ -127,7 +127,7 @@ impl TrapContext {
 }
 
 impl TrapContext {
-    pub fn set_thread_args(&mut self, func: usize, arg: usize,envp: usize) {
-        self.set_app_args(func, arg, envp);
+    pub fn set_thread_args(&mut self, func: usize, arg: usize) {
+        self.set_app_args(func, arg, 0);
     }
 }
