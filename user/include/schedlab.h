@@ -52,7 +52,7 @@ extern "C" {
 /* #define printf uprintf */
 
 #define SL_MAX_GROUPS  8
-#define SL_MAX_THREADS 512
+#define SL_MAX_THREADS 128
 #define SL_NAME_LEN    16
 
 /* ================= 数据类型 ================= */
@@ -282,78 +282,69 @@ static void sl_child_main(sl_group_t *g) {
 
 typedef struct {
     int alpha;
-    int inc;             /* 加性增步长 = 5 */
-    int backoff;         /* 默认乘性减保留比例(%) = 80 */
-    int danger_miss_q;   /* miss 率 ×1000，>= 判危险 = 300 (30%) */
-    int safe_miss_q;     /* miss 率 ×1000，<= 且 late 小判安全 = 50 (5%) */
-    int danger_late_q;   /* 每 job 平均迟到 ticks ×1000，>= 判危险 = 2000 (2 ticks) */
-    int safe_late_q;     /* 每 job 平均迟到 ticks ×1000，<= 判安全 = 500 (0.5 tick) */
+    int inc;             /* AIMD_INC = 5 */
+    int backoff;         /* AIMD_BACKOFF = 80(%) */
+    int safe_lateness;   /* 窗口迟到 <= 此值算安全 = 0 */
+    int danger_lateness; /* 窗口迟到 >= 此值算危险 = 25 */
     int safe_windows;
-    int cooldown;
+    int cooldown;        /* COOLDOWN_WINDOWS_AFTER_DOWN = 1 */
 } sl_aimd_t;
 
 static void sl_aimd_init(sl_aimd_t *a, int alpha0) {
     a->alpha = alpha0;
-    a->inc = 5;              /* v3: 上探步长, 配合"连续2窗口"防过冲 */
-    a->backoff = 65;         /* v3: danger 砍 35% */
-    a->danger_miss_q = 130;  /* v3: 13%  重相位 miss 爆才砍, 砍到 <13% 停 */
-    a->safe_miss_q = 80;     /* v3: 8%   miss 很低才上探, 轻相位爬到 miss8% 停 */
-    a->danger_late_q = 1500;
-    a->safe_late_q = 600;
+    a->inc = 5;
+    a->backoff = 80;
+    a->safe_lateness = 0;
+    a->danger_lateness = 25;
     a->safe_windows = 0;
     a->cooldown = 0;
 }
+
 static int sl_policy_aimd(const sl_window_t *w, void *ud) {
     sl_aimd_t *a = (sl_aimd_t *)ud;
     unsigned long miss_per_1000 = w->jobs_delta
         ? w->miss_delta * 1000 / w->jobs_delta : 0;
-    unsigned long late_per_job_q = w->jobs_delta
-        ? w->late_delta * 1000 / w->jobs_delta : 0;
-    int can_probe_up = w->remain_windows > 3;
-
-    int danger, safe;
-    if (w->jobs_delta == 0) {        /* 饿死 = 最危险 */
-        danger = 1; safe = 0;
-    } else {
-        danger = ((long)miss_per_1000 >= a->danger_miss_q) ||
-                 ((long)late_per_job_q >= a->danger_late_q);
-        safe   = ((long)miss_per_1000 <= a->safe_miss_q) &&
-                 ((long)late_per_job_q <= a->safe_late_q);
-    }
+    int can_probe_up = w->remain_windows > 3;   /* MIN_REMAIN_WINDOWS_TO_PROBE */
 
     int before = a->alpha;
     const char *action = "hold";
 
     if (a->cooldown > 0) {
-        a->cooldown--; a->safe_windows = 0; action = "cool";
-    } else if (danger) {
+        a->cooldown--;
+        a->safe_windows = 0;
+        action = "cool";
+    } else if ((long)w->late_delta >= a->danger_lateness) {
         int na;
-        if (w->jobs_delta == 0 || miss_per_1000 >= 900)      na = a->alpha * 40 / 100;
-        else if (miss_per_1000 >= 500)                       na = a->alpha * 55 / 100;
-        else                                                 na = a->alpha * a->backoff / 100;
+        if (miss_per_1000 >= 900)      na = a->alpha * 40 / 100;
+        else if (miss_per_1000 >= 500) na = a->alpha * 60 / 100;
+        else                           na = a->alpha * a->backoff / 100;
         if (na >= a->alpha) na = a->alpha - 1;
         if (na < 0) na = 0;
-        a->alpha = na; a->safe_windows = 0; a->cooldown = 1;  /* v3: 冻1窗口防单点噪声 */
+        a->alpha = na;
+        a->safe_windows = 0;
+        a->cooldown = 1;
         action = "down";
-    } else if (safe) {
+    } else if ((long)w->late_delta <= a->safe_lateness) {
         a->safe_windows++;
+        /* SAFE_WINDOWS_TO_PROBE_UP = 1(40 版) */
         if (!can_probe_up) {
             action = "late_hold";
-        } else if (a->safe_windows >= 2) {        /* 连续2个 safe 才 +inc, 治过冲 */
-            int na = a->alpha + a->inc; if (na > 100) na = 100;
-            a->alpha = na; a->safe_windows = 0; action = "up";
         } else {
-            action = "safe_wait";
+            int na = a->alpha + a->inc;
+            if (na > 100) na = 100;
+            a->alpha = na;
+            action = "up";
         }
+        a->safe_windows = 0;
     } else {
-        /* v3 关键: gray 滞回带(8%-13%) 完全不动! 不 drift 不 hold-then-osc
-           让 alpha 稳稳停在悬崖边: 轻相位停 40-50, 重相位停 15-25 */
-        a->safe_windows = 0; action = "hold";
+        a->safe_windows = 0;
+        action = "gray";
     }
 
     printf("A,%d,%d,%d,%s\n", w->window_no, before, a->alpha, action);
     return a->alpha;
 }
+
 /* ================= 策略:SPSA-AdamW(deadline 损失版) =================
  * loss_q = miss_per_1000 + 平均迟到 ×1000(封顶 4000)。
  * 与 AIMD 同一信号竞技;其余 SPSA/定点机制与 v1 相同。
@@ -543,16 +534,27 @@ static int sl_run(const sl_cfg *cfg) {
 
     printf("# schedlab win=%d total=%lu groups=%d\n",
            sl_window, cfg->total_ticks, sl_ngroups);
-    printf("# T0 %lu %lu\n", sl_t0, sl_t_end);
+
+    for (int i = 0; i < sl_ngroups; i++) {
+        if (sl_groups[i].pid < 0) continue;
+        struct sched_proc_stat st;
+        if (get_process_sched_stat(sl_groups[i].pid, &st) >= 0) {
+            prev_run[i] = st.run_ticks;
+        }
+        if (sl_groups[i].flags & SL_F_IN_PARENT) {
+            prev_jobs[i] = sl_gstats[i].jobs;
+            prev_miss[i] = sl_gstats[i].miss;
+            prev_late[i] = sl_gstats[i].late_sum;
+        }
+    }
 
     int win = 0;
     while (get_ticks() < sl_t_end) {
         sleep((usize)sl_window);
         win++;
         static sl_window_t w;          /* 这个 static 留着无所谓,w 每窗口被整体重写 */
-        unsigned long tick_now = get_ticks();
-        w.remain_windows = (int)((sl_t_end > tick_now
-            ? sl_t_end - tick_now : 0) / (unsigned long)sl_window);
+        w.remain_windows = (int)((sl_t_end > get_ticks()
+            ? sl_t_end - get_ticks() : 0) / (unsigned long)sl_window);
         sl_measure_window(&w, win, alpha, prev_run, prev_jobs, prev_miss, prev_late);
         if (cfg->policy) {
             alpha = cfg->policy(&w, cfg->policy_ud);
@@ -560,7 +562,7 @@ static int sl_run(const sl_cfg *cfg) {
             if (alpha > 100) alpha = 100;
             set_sched_alpha(alpha);
         }
-        printf("S,%d,%d,%d,%d,%lu\n", win, alpha, w.jain_q, w.max_slowdown_q, tick_now);
+        printf("S,%d,%d,%d,%d\n", win, alpha, w.jain_q, w.max_slowdown_q);
     }
 
     /* in-parent 组的 J 行由监控进程自报 */

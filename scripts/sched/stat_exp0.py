@@ -278,7 +278,7 @@ def plot_miss_rate_over_time(all_stats, out="./logs/sched/edf/exp0_miss_rate.png
     plt.close(fig)
 
 
-def plot_cpu_share(all_stats, out="exp0_cpu_share.png"):
+def plot_cpu_share(all_stats, out="./logs/sched/edf/exp0_cpu_share.png"):
     fig, ax = plt.subplots(figsize=(10, 4))
     stats = all_stats[0]
     if "_cpu_share" not in stats:

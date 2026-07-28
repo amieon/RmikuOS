@@ -310,12 +310,12 @@ impl TaskManager {
         process.pass = process.pass.wrapping_add(process.stride);
 
             // 临时调试：每 10 次 pick 打印一次
-    static PICK_COUNT: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
-    let n = PICK_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-    if n % 10 == 0 {
-        log::warn!("[pick] pid={} pass={} stride={} tickets={}",
-            pid, process.pass, process.stride, process.effective_tickets);
-    }
+    // static PICK_COUNT: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+    // let n = PICK_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    // if n % 10 == 0 {
+    //     log::warn!("[pick] pid={} pass={} stride={} tickets={}",
+    //         pid, process.pass, process.stride, process.effective_tickets);
+    // }
 
         Some(tid)
     }
