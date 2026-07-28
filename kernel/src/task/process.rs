@@ -52,6 +52,12 @@ pub struct ProcessControlBlock {
 
     pub sig_pending: u64,
 
+    /// 进程凭证(POSIX uid/euid/gid/egid)。0 = root / 超级用户。
+    pub uid: usize,
+    pub euid: usize,
+    pub gid: usize,
+    pub egid: usize,
+
     pub exit_code: i32,
 }
 
@@ -94,6 +100,11 @@ impl ProcessControlBlock {
 
             sig_pending: 0,
 
+            // 默认 root（uid/euid/gid/egid = 0）。init 进程即以此身份启动。
+            uid: 0,
+            euid: 0,
+            gid: 0,
+            egid: 0,
 
             exit_code: 0,
         }
@@ -113,6 +124,10 @@ impl ProcessControlBlock {
         mmap_areas: Vec<MmapArea>,
         mmap_free_ranges: Vec<MmapFreeRange>,
         mmap_next: usize,
+        uid: usize,
+        euid: usize,
+        gid: usize,
+        egid: usize,
     ) -> Self {
         let tickets = parent_tickets.max(1);
         let stride = BIG_STRIDE / tickets;
@@ -149,6 +164,11 @@ impl ProcessControlBlock {
             mmap_next,
 
             sig_pending: 0,
+
+            uid,
+            euid,
+            gid,
+            egid,
 
             exit_code: 0,
         }
