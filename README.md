@@ -2,7 +2,7 @@
 
 RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
-当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端），以及用于调度器实验的 workload 与自适应控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端），以及用于调度器实验的 workload 与自适应控制器。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -47,10 +47,12 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 ![tcp loss sweep](logs/tcp/fig3_loss_sweep.png)
 
 ### TCP: CUBIC Sawtooth
+
 ![CUBIC Sawtooth](logs/tcp/figs/fig1_cwnd_sawtooth.png)
 
 
 ### JVM: 装载期 AOT
+
 ![加速比](logs/jvm/bench_speedup.png)
 
 ---
@@ -60,20 +62,25 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 ## 环境搭建
 
 ### Docker(推荐)
+
 ```bash
 docker build -t rmikuos-dev .
 docker run -it --rm -v $(pwd):/work -p 8080:8080 rmikuos-dev
 ```
+
 &gt; 构建默认使用本地 cross-tools/ 目录中的 loongarch64 工具链。
 &gt; 没有的话,先从 loong64/cross-tools releases(https://github.com/loong64/cross-tools/releases)下载 x86_64 宿主版解压后将 loongarch64-unknown-linux-gnu 里的内容移至./cross-tools,
 
 ### 无 Docker
+
 bash first_run.sh   # 自动装 apt/rustup/工具链
 之后这样就行：
+
 ```bash
 ./run.sh riscv64
 ./run.sh loongarch64
 ```
+
 ---
 
 ## Features
@@ -220,10 +227,11 @@ RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init she
 ```text
 内建：  cd  pwd  exit  help  shutdown  jobs  clear
         mkdir  touch  rm  rmdir  source  .
+        export  env  unset
 外部：  ls  cat  echo  grep  shell  sleep ...
 ```
 
-`ls` / `cat` / `echo` / `grep` 等 IO 工具被实现为独立的外部程序，因此它们能出现在管道与重定向中；`cd` / `pwd` / `exit` / `jobs` / `source` 保持内建，因为它们必须修改 shell 进程自身的状态或访问 shell 内部数据结构。
+`ls` / `cat` / `echo` / `grep` 等 IO 工具被实现为独立的外部程序，因此它们能出现在管道与重定向中；`cd` / `pwd` / `exit` / `jobs` / `source` / `export` / `env` / `unset` 保持内建，因为它们必须修改 shell 进程自身的状态（如环境变量表、当前工作目录）或访问 shell 内部数据结构。
 
 ### Interactive Line Editing
 
@@ -339,6 +347,33 @@ cmd < in | f1 | f2 > out   管道 + 两端重定向
 引号状态在分词、管道切分、重定向解析三处一致跟踪，保证操作符在引号内无特殊含义。
 
 
+
+---
+
+### Environment Variables & `$?` Expansion
+
+Shell 支持用户态环境变量与 `$?`（上一条命令退出码）的读取与修改，并内建 `export` / `env` / `unset` 三个命令：
+
+```text
+/ $ export FOO=bar            # 设置环境变量（shell 进程内，exec 子进程时随 envp 透传）
+/ $ echo $FOO                 # 单参数展开 -> bar
+/ $ echo ${FOO}               # 大括号形式 -> bar
+/ $ echo "FOO=$FOO"           # 双引号内展开 -> FOO=bar
+/ $ echo '$FOO'               # 单引号保护 -> $FOO（不展开）
+/ $ ls /bin/*.c; echo $?      # $? = 上一条命令退出码
+/ $ env                      # 打印当前全部 KEY=VALUE
+/ $ unset FOO                # 删除变量
+```
+
+展开规则与 bash 对齐：
+
+* `$VAR` / `${VAR}`：读取环境变量（经 `getenv` syscall）；
+* `$?` / `${?}`：展开为 `g_last_exit`（每跑完一条命令由 `execute_line` 更新，含管道整条命令的退出码）；
+* **单引号** `'...'` 内完全字面，**不展开**任何 `$`；
+* **双引号** `"..."` 内展开 `$` 与转义 `\`，但保留空白与字边界；
+* 变量展开在引号保护下进行：`echo "$FOO | bar"` 不会被误判为管道。
+
+`export` 设置的环境变量在 shell `exec` 外部命令时，随内核经寄存器传入的 `envp` 透传给子进程（详见下节「Environment Variable Syscalls」）。shell 的命令搜索目录也从环境变量 `PATH`（`getenv("PATH")`，按 `:` 切分，回退 `/bin /tests /programs`）读取，因此 `export PATH=/bin:/tests` 等修改即时生效。
 
 ---
 
@@ -710,12 +745,12 @@ old:  固定 RTO = 1s,指数退避,封顶 16s(实现 Jacobson 之前的原版)
 
 ![loss sweep](logs/tcp/fig3_loss_sweep.png)
 
-| 注入丢包率 | new（中位数） | old（中位数） | 提速 |
-| ---------- | ------------- | ------------- | ---- |
-| 0%（对照） | 2.052s | 2.111s | 1.03× |
-| 5% | 2.253s | 5.425s | **2.41×** |
-| 10% | 3.187s | 10.765s | **3.38×** |
-| 20% | 5.770s | 23.243s | **4.03×** |
+| 注入丢包率 | new（中位数） | old（中位数） | 提速      |
+| ---------- | ------------- | ------------- | --------- |
+| 0%（对照） | 2.052s        | 2.111s        | 1.03×     |
+| 5%         | 2.253s        | 5.425s        | **2.41×** |
+| 10%        | 3.187s        | 10.765s       | **3.38×** |
+| 20%        | 5.770s        | 23.243s       | **4.03×** |
 
 * 0% 对照臂两版一致（1.03×），实验台自证干净；
 * old 耗时随丢包率近似线性爆炸（≈ 每 1% 丢包 +1.05s），正是固定 1s RTO「每洞罚一秒」的理论预期；new 的 RTO 收敛在 200ms 附近，曲线平缓；
@@ -784,15 +819,15 @@ python3 scripts/plot_tcp.py
 
 ![分组箱线图](logs/sr/figs/fig_sr2_box.png)
 
-| 丢包率 | GBN 中位(s) | SR 中位(s) | 结论 |
-|---|---|---|---|
-| 0 | 29.9 | 29.2 | 打平 |
-| 1/5 | 71.3 | 69.8 | 共同触底 |
-| 1/6 | ~35.1 | ~35.9 | 打平，中间态                  |
-| **1/7** | **~35.7** | **~28.9** | **SR 快 19%,SR 回到基线水平！** |
-| 1/10 | 30.7 | 28.6 | **SR 快 7%** |
-| 1/20 | 30.4 | 28.6 | **SR 快 6%** |
-| 1/50 ~ 1/500 | 28.4~28.7 | 28.6~30.5 | 打平 |
+| 丢包率       | GBN 中位(s) | SR 中位(s) | 结论                            |
+| ------------ | ----------- | ---------- | ------------------------------- |
+| 0            | 29.9        | 29.2       | 打平                            |
+| 1/5          | 71.3        | 69.8       | 共同触底                        |
+| 1/6          | ~35.1       | ~35.9      | 打平，中间态                    |
+| **1/7**      | **~35.7**   | **~28.9**  | **SR 快 19%,SR 回到基线水平！** |
+| 1/10         | 30.7        | 28.6       | **SR 快 7%**                    |
+| 1/20         | 30.4        | 28.6       | **SR 快 6%**                    |
+| 1/50 ~ 1/500 | 28.4~28.7   | 28.6~30.5  | 打平                            |
 
 
 
@@ -849,6 +884,7 @@ ipc.h       pipe / dup2
 net.h       socket 封装(socket/bind/connect/listen/accept/send/recv/sendto/recvfrom/close)
 string.h    标准字符串/内存函数(strlen/strstr/memmove 等,static inline)+ trim / copy_str / read_file
 fmt.h       parse_int / put_int / put_hex / uprintf / snprintf 族
+env.h       getenv/getenv_r / setenv / unsetenv / clearenv / listenv
 ```
 
 ### 用户态堆分配器（Slab + First-Fit 混合）
@@ -1151,15 +1187,15 @@ AOT 没有缩小差距，说明 LoongArch 的 codegen 后端生成的机器码�
 
 ![加速比](logs/jvm/bench_speedup.png)
 
-| 测试项 | RISC-V 加速比 | LoongArch 加速比 | 瓶颈说明 |
-|---|---|---|---|
-| `alu_mix`（位运算） | **53.7 倍** | **48.9 倍** | 解释器取指/译码/分发开销 |
-| `branch_heavy`（分支密集） | **35.5 倍** | **29.2 倍** | 分支预测 + switch 跳转表失效 |
-| `mul_lcg`（乘加） | **17.9 倍** | **15.8 倍** | 整数 ALU |
-| `array_rw`（数组读写） | 4.9 倍 | 5.9 倍 | 内存 load/store（AOT 无法优化） |
-| `static_call`（静态调用） | 1.6 倍 | 1.5 倍 | 方法解析仍走解释路径 |
-| `object_field`（对象字段） | 1.1 倍 | 1.1 倍 | `new` + `getfield` 被分配器主导 |
-| `string_ldc`（字符串常量） | 1.2 倍 | 1.3 倍 | 每次 `ldc` 都调 `alloc_string` |
+| 测试项                     | RISC-V 加速比 | LoongArch 加速比 | 瓶颈说明                        |
+| -------------------------- | ------------- | ---------------- | ------------------------------- |
+| `alu_mix`（位运算）        | **53.7 倍**   | **48.9 倍**      | 解释器取指/译码/分发开销        |
+| `branch_heavy`（分支密集） | **35.5 倍**   | **29.2 倍**      | 分支预测 + switch 跳转表失效    |
+| `mul_lcg`（乘加）          | **17.9 倍**   | **15.8 倍**      | 整数 ALU                        |
+| `array_rw`（数组读写）     | 4.9 倍        | 5.9 倍           | 内存 load/store（AOT 无法优化） |
+| `static_call`（静态调用）  | 1.6 倍        | 1.5 倍           | 方法解析仍走解释路径            |
+| `object_field`（对象字段） | 1.1 倍        | 1.1 倍           | `new` + `getfield` 被分配器主导 |
+| `string_ldc`（字符串常量） | 1.2 倍        | 1.3 倍           | 每次 `ldc` 都调 `alloc_string`  |
 
 #### 跨架构对比（AOT 模式）
 
@@ -1246,13 +1282,13 @@ liolib.c 部分    临时文件、popen（管道进程）
 
 #### 与其他语言移植的对比
 
-| 语言 | 移植方式 | 源码改动 | 桥接层 |
-| --- | --- | --- | --- |
-| C | 原生 | 无 | 无（直接用 user 库） |
-| C++ (GCN) | 头文件替换 | 算法零改动，`#include <vector>` → `"my/stdcompat.h"` | `stdcompat.h` |
-| Rust | 原生 no_std | 无 | `ulib` crate |
-| Java | 自研 JVM | 无（javac 编译） | 手写 JVM + `Rmiku.*` native |
-| **Lua** | **官方源码原样编译** | **零改动** | **lcompat（同名头文件 + setjmp 汇编）** |
+| 语言      | 移植方式             | 源码改动                                             | 桥接层                                  |
+| --------- | -------------------- | ---------------------------------------------------- | --------------------------------------- |
+| C         | 原生                 | 无                                                   | 无（直接用 user 库）                    |
+| C++ (GCN) | 头文件替换           | 算法零改动，`#include <vector>` → `"my/stdcompat.h"` | `stdcompat.h`                           |
+| Rust      | 原生 no_std          | 无                                                   | `ulib` crate                            |
+| Java      | 自研 JVM             | 无（javac 编译）                                     | 手写 JVM + `Rmiku.*` native             |
+| **Lua**   | **官方源码原样编译** | **零改动**                                           | **lcompat（同名头文件 + setjmp 汇编）** |
 
 Lua 移植是唯一一种"官方源码一行不改、只提供桥接头文件"的方式——这得益于 Lua 5.4 源码的干净设计（纯 C89、无平台 ifdef、所有系统依赖都经 `luaconf.h` 的 `luai_*` 宏集中配置）。
 
@@ -1623,6 +1659,7 @@ user/
 │   ├── net.h               socket 封装(100–109 号段)
 │   ├── string.h            标准字符串/内存函数(static inline)+ trim / copy_str / read_file
 │   ├── fmt.h               parse_int / put_int / put_hex / append_* / str_eq + uprintf / snprintf 族
+│   ├── env.h               getenv/getenv_r / setenv / unsetenv / clearenv / listenv
 │   ├── user.h              纯汇总入口（#include 全部上述头文件）
 │   └── my/                 C++ 桥接层与裸运行时库
 │       ├── stdcompat.h     C++ 桥接头文件：std::vector→mv::Vector, std::exp→mymath::exp...
@@ -1818,6 +1855,9 @@ User Programs (httpd / udp_test / tcp_test)
 * **RmikuRay**：纯 Java 16.16 定点光线追踪（零浮点指令），双线程分带渲染拼帧，双架构同一份 class 运行
 * **buddy 物理帧分配器**（order 0–10，连续块供 DMA，dealloc 越界断言 + double-free 检查）
 * **Lua 用户程序支持**：零改动移植 Lua 5.4 官方源码，lcompat 桥接层（同名头文件 + 手写 setjmp/longjmp），9 组递进测试全部通过（含 pcall / coroutine）
+* **环境变量子系统**：内核 syscall 号段 45–49（`getenv` / `getenv_r` / `setenv` / `unsetenv` / `listenv` / `clearenv`）+ C 用户库 `env.h` 封装
+* shell 内建 `export` / `env` / `unset`，支持 `$VAR` / `${VAR}` / `$?` 展开（单引号保护、双引号展开），`PATH` 经 `getenv` 驱动命令搜索且可即时修改
+* 内核 `exec` 路径将 `envp` 经寄存器（`a2` / `r6`）传入 `main` 第 3 参数，`test_env.c` 全量用例（9 项）在双架构实机验证通过
 * 统一构建脚本 `build.py`（C / C++ / 单文件 Rust / cargo Rust 分派编译）
 * 双架构关机（riscv SiFive Test finisher / loongarch ACPI GED）
 * RISC-V / LoongArch64 SMP 启动与多核调度验证（per-hart timer、IPI reschedule、running_on 防重入）
