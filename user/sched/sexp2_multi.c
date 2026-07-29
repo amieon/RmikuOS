@@ -18,11 +18,9 @@ typedef struct {
 } cfg_t;
 
 static const cfg_t CFGS[] = {
-    {7,   3, "light"},
-    {15,  8, "medlo"},
+
     {25,  9, "medium"},
-    {75, 25, "heavy"},
-    {225,50, "extreme"},
+
 };
 #define N_CFGS ((int)(sizeof(CFGS)/sizeof(CFGS[0])))
 
@@ -37,7 +35,7 @@ static void sl_reset_state(void) {
 }
 
 static void setup(int ai, int log) {
-    sl_add_jobs_parent("ctrl", 300, 1, /*period*/10, /*cpu*/3, /*burn*/400000);
+    sl_add_jobs_parent("ctrl", 300, 1, /*period*/20, /*cpu*/3, /*burn*/400000);
     sl_add_spin("ai",  100, ai,  12000);
     sl_add_spin("log",  50, log, 12000);
 }
@@ -46,7 +44,7 @@ int main(void) {
     static const int alphas[] = {0,10,20,30,40,50,60,70,80,90,100};
     const int nalpha = 11;
     const int nreps  = 3;
-    const unsigned long total = 3600;
+    const unsigned long total = 6000;
 
     printf("# sexp2_multi: %d configs x %d alphas x (1w+%dr), total=%lu\n",
            N_CFGS, nalpha, nreps, total);

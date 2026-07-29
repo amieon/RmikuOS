@@ -54,6 +54,9 @@ def parse(path):
             # warmup marker
             m_warm = re.search(r'# WARMUP config=(\S+) alpha=(\d+)', line)
             if m_warm:
+                # save previous formal run before starting warmup
+                if cur is not None and not in_warmup:
+                    runs.append(cur)
                 in_warmup = True
                 cur = None
                 continue
@@ -61,6 +64,9 @@ def parse(path):
             # formal run marker
             m_run = re.search(r'# RUN config=(\S+) alpha=(\d+) rep=(\d+)/(\d+)', line)
             if m_run:
+                # save previous formal run before starting new one
+                if cur is not None and not in_warmup:
+                    runs.append(cur)
                 in_warmup = False
                 cur = {
                     "config": m_run.group(1),
