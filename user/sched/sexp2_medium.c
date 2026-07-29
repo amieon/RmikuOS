@@ -26,7 +26,7 @@ static void sl_reset_state(void) {
 
 static void setup(void) {
     /* ctrl 用 fork 子进程（非 in-parent），避免被主线程打断 */
-    sl_add_jobs("ctrl", 300, 1, /*period*/3, /*cpu*/3, /*burn*/200000);
+    sl_add_jobs("ctrl", 300, 1, /*period*/4, /*cpu*/3, /*burn*/400000);
     sl_add_spin("ai",  100, 25, 12000);
     sl_add_spin("log",  50,  9, 12000);
 }
