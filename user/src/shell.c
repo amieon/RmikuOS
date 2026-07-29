@@ -228,7 +228,7 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
     int prefix_len = strlen_(prefix);
 
     const char *builtins[] = {
-        "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir",
+        "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir", "rename", "mv",
         "whoami", "chmod", "chown",
         "shutdown", "ls", "cat", "clear", "jobs",
         "export", "env", "unset", NULL
@@ -916,6 +916,7 @@ static void print_help(void) {
     fputs("  rmdir <path>\n", stdout);
     fputs("  whoami              (print effective user name)\n", stdout);
     fputs("  chmod <mode> <path> (mode is octal, e.g. 755 / 0644)\n", stdout);
+    fputs("  rename <old> <new> (mv <old> <new> also works; ...)\n".stdout);
     fputs("  jobs\n", stdout);
     fputs("  clear\n", stdout);
     fputs("  export NAME=VALUE   (set env var; $VAR / ${VAR} / $? expands in commands)\n", stdout);
@@ -1083,6 +1084,22 @@ static int builtin_chown(int argc, char *argv[]) {
     usize gid = (usize) atoi(argv[2]);
     if (chown(argv[3], uid, gid) < 0) {
         fputs("chown: permission denied or no such file\n", stdout);
+        return 1;
+    }
+    return 0;
+}
+
+static int builtin_rename(int argc, char *argv[]) {
+    if (argc < 3) {
+        fputs("rename: usage: rename <oldpath> <newpath>\n", stdout);
+        return 1;
+    }
+    if (rename(argv[1], argv[2]) < 0) {
+        fputs("rename: failed: ", stdout);
+        fputs(argv[1], stdout);
+        fputs(" -> ", stdout);
+        fputs(argv[2], stdout);
+        fputs("\n", stdout);
         return 1;
     }
     return 0;
@@ -1560,6 +1577,7 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "whoami")) { return builtin_whoami(); }
     if (streq(exp_argv[0], "chmod")) { return builtin_chmod(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "chown")) { return builtin_chown(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "rename") || streq(exp_argv[0], "mv")) { return builtin_rename(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "jobs")) { print_jobs(); return 0; }
     if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
     if (streq(exp_argv[0], "source") || streq(exp_argv[0], ".")) {
