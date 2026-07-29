@@ -198,8 +198,20 @@ impl TaskManager {
             return -1;
         }
         self.sched_alpha = alpha;
+        // alpha 变化后，旧 pass 不再公平，重置避免前几个窗口歪斜
+        for process in self.processes.iter_mut() {
+            if let Some(p) = process.as_mut() {
+                p.pass = 0;
+            }
+        }
+        for thread in self.threads.iter_mut() {
+            if let Some(t) = thread.as_mut() {
+                t.pass = 0;
+            }
+        }
         0
     }
+
 
     pub fn get_sched_alpha(&self) -> isize{
         self.sched_alpha
@@ -270,11 +282,16 @@ impl TaskManager {
                 continue;
             };
 
-            // 快速跳过没有任何可运行线程的进程(缓存值,O(1),借用即放)
-            if self.processes[pid]
-                .as_ref()
-                .map_or(true, |p| p.runnable_count == 0)
-            {
+            // 改前：用 runnable_count 缓存（不准）
+            // if self.processes[pid]
+            //     .as_ref()
+            //     .map_or(true, |p| p.runnable_count == 0)
+            // {
+            //     continue;
+            // }
+
+            // 改后：实时扫描
+            if self.count_runnable_threads_in_process(pid) == 0 {
                 continue;
             }
 
@@ -325,14 +342,29 @@ impl TaskManager {
             return false;
         };
 
-        process.ready_threads.iter().any(|&tid| {
-            self.threads
-                .get(tid)
-                .and_then(|x| x.as_ref())
-                .map(|thread| thread.status == ThreadStatus::Ready)
+        process.threads.iter().any(|&tid| {
+            self.threads.get(tid).and_then(|x| x.as_ref())
+                .map(|t| t.status == ThreadStatus::Ready || t.status == ThreadStatus::Running)
                 .unwrap_or(false)
         })
     }
+    /// 统计进程里的"活线程数"：非 Zombie、非 Dead。
+    /// 用于 stat syscall，避免瞬时 Ready/Running 状态抖动。
+    /// spin 实验中活线程 == runnable 线程，但更稳定。
+    pub fn count_alive_threads_in_process(&self, pid: Pid) -> usize {
+        let Some(process) = self.processes.get(pid).and_then(|x| x.as_ref()) else {
+            return 0;
+        };
+        let mut count = 0;
+        for &tid in process.threads.iter() {
+            let Some(thread) = self.try_thread(tid) else { continue };
+            if !matches!(thread.status, ThreadStatus::Zombie | ThreadStatus::Dead) {
+                count += 1;
+            }
+        }
+        count
+    }
+
     
 
     pub fn pick_ready_thread_in_process(&mut self, pid: Pid) -> Option<Tid> {
@@ -344,15 +376,9 @@ impl TaskManager {
 
         {
             let process = self.process(pid);
-            for &tid in process.ready_threads.iter() {
-                let Some(thread) = self.try_thread(tid) else {
-                    continue;
-                };
-
-                if thread.status != ThreadStatus::Ready {
-                    continue;
-                }
-
+            for &tid in process.threads.iter() {
+                let Some(thread) = self.try_thread(tid) else { continue; };
+                if thread.status != ThreadStatus::Ready { continue; }
                 if best_tid.is_none() || thread.pass < best_pass {
                     best_tid = Some(tid);
                     best_pass = thread.pass;
@@ -362,15 +388,6 @@ impl TaskManager {
 
         let tid = best_tid?;
 
-        {
-            let process = self.process_mut(pid);
-
-            if let Some(pos) = process.ready_threads.iter().position(|&x| x == tid) {
-                process.ready_threads.remove(pos);
-            } else {
-                return None;
-            }
-        }
 
         {
             let thread = self.thread_mut(tid);
@@ -650,23 +667,34 @@ impl TaskManager {
 
     pub fn wake_blocked_thread(&mut self, tid: Tid) -> bool {
         let pid = self.thread(tid).pid;
-        let should_enqueue = {
+        let (should_enqueue, was_sleep) = {
             let thread = self.thread_mut(tid);
-
             if thread.status != ThreadStatus::Blocking {
                 return false;
             }
-
+            let was_sleep = matches!(thread.block_reason, BlockReason::Sleep { .. });
             thread.status = ThreadStatus::Ready;
             thread.block_reason = BlockReason::None;
-
-            // 如果它还在某个 CPU 上，说明它还没真正 __switch 出去。
-            // 不能现在入队，否则可能双核运行同一个 tid。
-            thread.running_on.is_none()
+            // sleep 唤醒:重置线程 pass,保证被 pick_ready_thread_in_process 及时选中
+            if was_sleep {
+                thread.pass = 0;
+            }
+            (thread.running_on.is_none(), was_sleep)
         };
 
-        // Blocking -> Ready:该线程重新变得可运行
+        // 在 runnable_count += 1 之前判断:进程是否从"无 runnable"变"有 runnable"
+        // 只有这种情况才重置进程 pass
+        // —— 避免 phased sleep 频繁 wake 破坏多线程进程的公平性
+        let was_empty = self.process(pid).runnable_count == 0;
+
         self.process_mut(pid).runnable_count += 1;
+
+        if was_sleep && was_empty {
+            // 进程之前没有 runnable 线程(如 schedlab 主线程是唯一线程且在 sleep),
+            // 这次 sleep wake 让它重新可调度。重置进程 pass,
+            // 让它被 pick_ready_process_by_stride 及时选中。
+            self.process_mut(pid).pass = 0;
+        }
 
         if should_enqueue {
             self.enqueue_ready_thread(tid);

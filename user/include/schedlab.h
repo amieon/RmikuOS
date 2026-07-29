@@ -262,18 +262,27 @@ static void sl_print_j(int gi) {
 static void sl_child_main(sl_group_t *g) {
     int gi = (int)(g - sl_groups);
     set_my_tickets(g->tickets);
+
+    int tids[SL_MAX_THREADS];
     for (int i = 0; i < g->threads; i++) {
         sl_args[gi][i].g = g;
         sl_args[gi][i].idx = i;
-        thread_create(g->kind == SL_JOBS ? sl_job_fn : sl_spin_fn,
-                      &sl_args[gi][i]);
+        tids[i] = thread_create(g->kind == SL_JOBS ? sl_job_fn : sl_spin_fn,
+                                &sl_args[gi][i]);
     }
-    /* 子进程主线程也干活(省一个线程位) */
-    if (g->kind == SL_JOBS) sl_job_fn(&(sl_task_arg_t){ g, -1 });
-    else                    sl_spin_fn(&(sl_task_arg_t){ g, -1 });
+
+    /* 主线程不参与负载,只等子线程退出。
+     * 这样 runnable = g->threads(主线程 block 在 join,不算 Ready/Running),
+     * 符合实验"N threads"的语义。
+     * 原来主线程也跑 sl_spin_fn,导致 threads.len=N+1,runnable=N+1。 */
+    for (int i = 0; i < g->threads; i++) {
+        int code;
+        thread_join(tids[i], &code);
+    }
+
     /* 自报汇总 */
     if (g->kind == SL_JOBS) sl_print_j(gi);
-    else printf("K,%d,%s,%d,%lu\n", g->pid, g->name, g->threads + 1,
+    else printf("K,%d,%s,%d,%lu\n", g->pid, g->name, g->threads,
                 sl_gstats[gi].work);
     exit(0);
 }
