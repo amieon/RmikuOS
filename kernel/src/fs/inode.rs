@@ -112,4 +112,16 @@ pub trait Inode: Send + Sync {
     fn chown(&self, _uid: usize, _gid: usize) -> isize {
         -1
     }
+
+    /// 改名/移动: self 为源所在目录, from 为源名, to 为目标的完整绝对路径(可跨目录)。
+    /// 默认不支持(只读文件系统返回 -1)。
+    fn rename(&self, _from: &str, _to: &str) -> isize {
+        -1
+    }
+
+    /// 把文件截断为 len 字节(路径版本, 供 truncate() 系统调用使用)。
+    /// 默认不支持(返回 -1)。注意与无参 truncate()(供 O_TRUNC 用)区分。
+    fn truncate_to(&self, _len: usize) -> isize {
+        -1
+    }
 }

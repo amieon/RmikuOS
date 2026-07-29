@@ -28,6 +28,7 @@ type FatFsInner = FatFileSystem<BlockIo, fatfs::NullTimeProvider, fatfs::LossyOe
 
 pub struct FatFs {
     inner: Mutex<FatFsInner>,
+    dev: Arc<dyn BlockDevice>,  // 保存块设备引用,供 fsync 真正刷盘
 }
 
 // fatfs FileSystem 用了 RefCell,可能 !Sync。和 ext4 一样,单核 + 全局锁兜底。
@@ -154,12 +155,78 @@ impl File for FatFile {
         };
         Stat::new(STAT_TYPE_FILE, size, 0o644, 0, 0)
     }
+
+    fn seek(&self, offset: isize, whence: usize) -> isize {
+        let mut off = self.offset.lock();
+        let new = match whence {
+            0 => offset as i64,
+            1 => *off as i64 + offset as i64,
+            2 => {
+                // SEEK_END: 先拿到文件大小
+                let size = {
+                    let fs = self.fs.inner.lock();
+                    let root = fs.root_dir();
+                    let r = match root.open_file(&self.path) {
+                        Ok(mut f) => {
+                            use fatfs::{Seek, SeekFrom};
+                            f.seek(SeekFrom::End(0)).unwrap_or(0) as i64
+                        }
+                        Err(_) => return -1,
+                    };
+                    r
+                };
+                size + offset as i64
+            }
+            _ => return -1,
+        };
+        if new < 0 {
+            return -1;
+        }
+        *off = new as u64;
+        new as isize
+    }
+
+    fn ftruncate(&self, len: usize) -> isize {
+        if !self.writable() {
+            return -1;
+        }
+        // self.path 在构造时已是 FAT 格式路径,无需再 to_fat_path
+        let fs = self.fs.inner.lock();
+        let root = fs.root_dir();
+        let r = match root.open_file(&self.path) {
+            Ok(mut f) => {
+                use fatfs::{Write, Seek, SeekFrom};
+                match f.seek(SeekFrom::Start(len as u64)) {
+                    Ok(_) => match f.truncate() { Ok(_) => 0, Err(_) => -1 },
+                    Err(_) => -1,
+                }
+            }
+            Err(_) => -1,
+        };
+        r
+    }
+
+    fn fsync(&self) -> isize {
+        // 把 fatfs 内部缓冲刷到 BlockIo,再让 BlockIo 真正落到块设备
+        {
+            // self.path 在构造时已是 FAT 格式路径(无前导 /)
+            let fs = self.fs.inner.lock();
+            let root = fs.root_dir();
+            // 注意末尾分号:让 open_file 的临时 Result 在语句结束就 drop,
+            // 否则它作为块尾表达式会活得比 fs 锁守卫久,触发 E0597
+            if let Ok(mut f) = root.open_file(&self.path) {
+                use fatfs::Write;
+                let _ = f.flush();
+            };
+        }
+        self.fs.dev.flush()
+    }
 }
 
 
 impl FatFs {
     pub fn load(device: Arc<dyn BlockDevice>, num_sectors: u64) -> Option<Arc<Self>> {
-        let io = BlockIo::new(device, num_sectors);
+        let io = BlockIo::new(device.clone(), num_sectors);
         let fs = match FatFileSystem::new(io, FsOptions::new()) {
             Ok(fs) => fs,
             Err(e) => {
@@ -168,7 +235,7 @@ impl FatFs {
             }
         };
         log::info!("[fat] filesystem loaded");
-        Some(Arc::new(Self { inner: Mutex::new(fs) }))
+        Some(Arc::new(Self { inner: Mutex::new(fs), dev: device }))
     }
 }
 
@@ -365,6 +432,63 @@ impl Inode for FatInode {
             Ok(mut f) => {
                 use fatfs::Write;  // 或 fatfs::File 的方法,看 0.4
                 match f.truncate() { Ok(_) => 0, Err(_) => -1 }
+            }
+            Err(_) => -1,
+        };
+        r
+    }
+
+    fn rename(&self, from: &str, to: &str) -> isize {
+        // self = 源所在目录; from = 源名; to = 目标完整绝对路径(可跨目录)。
+        let src = to_fat_path(&join_path(&self.path, from)).to_string();
+
+        // 解析目标父目录(相对 root 的路径)与目标名
+        let trimmed = to.trim_end_matches('/');
+        let (parent, name) = match trimmed.rfind('/') {
+            Some(0) => ("", &trimmed[1..]),
+            Some(pos) => (&trimmed[..pos], &trimmed[pos + 1..]),
+            None => ("", trimmed),
+        };
+        let dest_parent_fat = to_fat_path(parent);
+        let dest_name = name;
+
+        let fs = self.fs.inner.lock();
+        let root = fs.root_dir();
+
+        // 目标若是已存在的文件,先删以支持编辑器式原子覆盖保存
+        let dest_fat_full = to_fat_path(to).to_string();
+        if root.open_file(&dest_fat_full).is_ok() {
+            let _ = root.remove(&dest_fat_full);
+        }
+
+        let r = if dest_parent_fat.is_empty() {
+            match root.rename(&src, &root, dest_name) {
+                Ok(_) => 0,
+                Err(_) => -1,
+            }
+        } else {
+            match root.open_dir(dest_parent_fat) {
+                Ok(dest_dir) => match root.rename(&src, &dest_dir, dest_name) {
+                    Ok(_) => 0,
+                    Err(_) => -1,
+                },
+                Err(_) => -1,
+            }
+        };
+        r
+    }
+
+    fn truncate_to(&self, len: usize) -> isize {
+        let fat_path = to_fat_path(&self.path).to_string();
+        let fs = self.fs.inner.lock();
+        let root = fs.root_dir();
+        let r = match root.open_file(&fat_path) {
+            Ok(mut f) => {
+                use fatfs::{Write, Seek, SeekFrom};
+                match f.seek(SeekFrom::Start(len as u64)) {
+                    Ok(_) => match f.truncate() { Ok(_) => 0, Err(_) => -1 },
+                    Err(_) => -1,
+                }
             }
             Err(_) => -1,
         };
