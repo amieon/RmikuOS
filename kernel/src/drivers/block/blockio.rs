@@ -103,7 +103,10 @@ impl Write for BlockIo {
     }
 
     fn flush(&mut self) -> Result<(), ()> {
-        Ok(())   // 无写缓存,每次 write 直接落盘
+        // 把写缓存(如果有)真正写到块设备。BlockIo 本身每次 write 直通设备,
+        // 这里把 flush 链向下传递到 BlockDevice(带缓存的设备会发出真正 flush 命令)。
+        let _ = self.dev.flush();
+        Ok(())
     }
 }
 
