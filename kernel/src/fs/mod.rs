@@ -130,7 +130,7 @@ pub fn stat(path: &str) -> Option<Stat> {
 
 
 
-use alloc::{string::String, vec::Vec};
+use alloc::{format, string::String, vec::Vec};
 
 use crate::{fs::flag::O_RDONLY, io::uart::putchar_raw};
 
@@ -279,4 +279,66 @@ pub fn chown_path(path: &str, uid: usize, gid: usize) -> isize {
         Some(inode) => inode.chown(uid, gid),
         None => -1,
     }
+}
+
+/// truncate(path, len): 把路径指定的文件截断为 len 字节。特权检查由系统调用层完成。
+pub fn truncate_path(path: &str, len: usize) -> isize {
+    let abs = match normalize_path("/", path) {
+        Some(p) => p,
+        None => return -1,
+    };
+    match path::lookup_abs_path(&abs) {
+        Some(inode) => inode.truncate_to(len),
+        None => -1,
+    }
+}
+
+/// rename(old, new): 移动/改名。同一文件系统内支持跨目录;跨设备返回 -1(EXDEV)。
+/// 防自环: 不允许把目录移进它自己的子目录。特权检查由系统调用层完成。
+pub fn rename(old: &str, new: &str) -> isize {
+    let old_abs = match normalize_path("/", old) {
+        Some(p) => p,
+        None => return -1,
+    };
+    let new_abs = match normalize_path("/", new) {
+        Some(p) => p,
+        None => return -1,
+    };
+
+    // 跨设备检测: 两边挂载点不同则不可 rename
+    let mp_old = match mount::resolve_mount(&old_abs) {
+        Some((_, mp)) => mp,
+        None => return -1,
+    };
+    let mp_new = match mount::resolve_mount(&new_abs) {
+        Some((_, mp)) => mp,
+        None => return -1,
+    };
+    if mp_old != mp_new {
+        return -1; // EXDEV
+    }
+
+    // 防自环: 不允许 "/a" -> "/a/b"
+    if new_abs.starts_with(&format!("{}/", old_abs)) {
+        return -1;
+    }
+
+    let (old_parent, old_name) = split_parent(&old_abs);
+    let (new_parent, _) = split_parent(&new_abs);
+
+    let old_parent_inode = match path::lookup_abs_path(&old_parent) {
+        Some(i) => i,
+        None => return -1,
+    };
+    let new_parent_inode = match path::lookup_abs_path(&new_parent) {
+        Some(i) => i,
+        None => return -1,
+    };
+
+    // 在源目录与目标目录中改名/创建 都需要父目录的 写+搜索 权限(root 绕过)
+    if !check_dir_write(&old_parent_inode) || !check_dir_write(&new_parent_inode) {
+        return -1;
+    }
+
+    old_parent_inode.rename(&old_name, &new_abs)
 }

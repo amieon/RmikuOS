@@ -69,6 +69,11 @@ pub const SYSCALL_CHMOD: usize = 60;
 pub const SYSCALL_CHOWN: usize = 61;
 pub const SYSCALL_GETGROUPS: usize = 62;
 pub const SYSCALL_SETGROUPS: usize = 63;
+pub const SYSCALL_FSYNC: usize = 64;
+pub const SYSCALL_FTRUNCATE: usize = 65;
+pub const SYSCALL_TRUNCATE: usize = 66;
+pub const SYSCALL_LSEEK: usize = 67;
+pub const SYSCALL_RENAME: usize = 68;
 
 
 
@@ -165,6 +170,11 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_CHOWN => fs::sys_chown(args[0], args[1], args[2], args[3]),
         SYSCALL_GETGROUPS => process::sys_getgroups(args[0], args[1]),
         SYSCALL_SETGROUPS => process::sys_setgroups(args[0], args[1]),
+        SYSCALL_FSYNC => fs::sys_fsync(args[0]),
+        SYSCALL_FTRUNCATE => fs::sys_ftruncate(args[0], args[1]),
+        SYSCALL_TRUNCATE => fs::sys_truncate(args[0], args[1], args[2]),
+        SYSCALL_LSEEK => fs::sys_lseek(args[0], args[1] as isize, args[2]),
+        SYSCALL_RENAME => fs::sys_rename(args[0], args[1], args[2], args[3]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

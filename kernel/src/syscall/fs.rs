@@ -384,3 +384,56 @@ pub fn sys_chown(path_ptr: usize, len: usize, uid: usize, gid: usize) -> isize {
     crate::fs::chown_path(&abs, uid, gid)
 }
 
+/// fsync(fd): 把 fd 指向的文件数据刷盘。
+pub fn sys_fsync(fd: usize) -> isize {
+    let file = match crate::task::current_file(fd) {
+        Some(file) => file,
+        None => return -1,
+    };
+    file.fsync()
+}
+
+/// ftruncate(fd, len): 把已打开的文件截断为 len 字节。需以可写方式打开。
+pub fn sys_ftruncate(fd: usize, len: usize) -> isize {
+    let file = match crate::task::current_file(fd) {
+        Some(file) => file,
+        None => return -1,
+    };
+    if !file.writable() {
+        return -1;
+    }
+    file.ftruncate(len)
+}
+
+/// truncate(path, len): 按路径把文件截断为 len 字节。
+pub fn sys_truncate(path_ptr: usize, path_len: usize, len: usize) -> isize {
+    let abs = match user_path_to_abs(path_ptr, path_len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    crate::fs::truncate_path(&abs, len)
+}
+
+/// lseek(fd, offset, whence): 设置/查询文件读写偏移。
+/// whence: 0=SEEK_SET, 1=SEEK_CUR, 2=SEEK_END。返回新的绝对偏移量。
+pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> isize {
+    let file = match crate::task::current_file(fd) {
+        Some(file) => file,
+        None => return -1,
+    };
+    file.seek(offset, whence)
+}
+
+/// rename(old, new): 移动/改名(同一文件系统内可跨目录)。
+pub fn sys_rename(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize) -> isize {
+    let old = match user_path_to_abs(old_ptr, old_len) {
+        Some(p) => p,
+        None => return -1,
+    };
+    let new = match user_path_to_abs(new_ptr, new_len) {
+        Some(p) => p,
+        None => return -1,
+    };
+    crate::fs::rename(&old, &new)
+}
+
