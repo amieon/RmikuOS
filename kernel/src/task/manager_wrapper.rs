@@ -1576,16 +1576,16 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
         let stride =
             crate::task::process::stride_from_tickets(effective_tickets);
 
-        log::warn!(
-    "[stat] pid={} threads.len={} runnable={} alpha={} factor={} tickets={} eff={}",
-    pid,
-    process.threads.len(),
-    runnable_threads,
-    alpha,
-    factor,
-    tickets,
-    effective_tickets,
-);
+//         log::warn!(
+//     "[stat] pid={} threads.len={} runnable={} alpha={} factor={} tickets={} eff={}",
+//     pid,
+//     process.threads.len(),
+//     runnable_threads,
+//     alpha,
+//     factor,
+//     tickets,
+//     effective_tickets,
+// );
     
 
         SchedProcStat {
