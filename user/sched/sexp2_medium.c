@@ -26,7 +26,7 @@ static void sl_reset_state(void) {
 
 static void setup(void) {
     /* ctrl 用 fork 子进程（非 in-parent），避免被主线程打断 */
-    sl_add_jobs("ctrl", 300, 1, /*period*/10, /*cpu*/3, /*burn*/400000);
+    sl_add_jobs("ctrl", 300, 1, /*period*/8, /*cpu*/3, /*burn*/400000);
     sl_add_spin("ai",  100, 25, 12000);
     sl_add_spin("log",  50,  9, 12000);
 }
@@ -34,7 +34,7 @@ static void setup(void) {
 int main(void) {
     static const int alphas[] = {0,10,20,30,40,50,60,70,80,90,100};
     const int nalpha = 11;
-    const int nreps  = 5;
+    const int nreps  = 3;
     const unsigned long total = 6000;
 
     printf("# sexp2_medium: medium config, %d alphas x (1w+%dr), total=%lu\n",
