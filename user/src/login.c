@@ -46,7 +46,7 @@ static int get_user(const char *name, struct User *out) {
         if (line[0] && line[0] != '#') {
             char *f[8];
             int nf = split_colon(line, f, 8);
-            if (nf >= 6 && str_eq(f[0], name)) {
+            if (nf >= 6 && !strcmp(f[0], name)) {
                 out->name = f[0];
                 out->uid  = (usize) atoi(f[1]);
                 out->gid  = (usize) atoi(f[2]);
@@ -63,10 +63,6 @@ static int get_user(const char *name, struct User *out) {
     return 0;
 }
 
-static int str_eq(const char *a, const char *b) {
-    while (*a && *a == *b) { a++; b++; }
-    return *a == *b;
-}
 
 /* 若目录不存在则创建(已存在时 mkdir 报错被忽略)。返回 0 表示最终存在。 */
 static int ensure_dir(const char *path) {
@@ -108,7 +104,7 @@ int main(void) {
         for (usize i = 0; i < plen; i++) blob[total++] = pass[i];
         sha256((const unsigned char *)blob, total, dig);
         to_hex(dig, hex);
-        if (!str_eq(hex, u.hash)) { puts("login: incorrect password\n"); continue; }
+        if (strcmp(hex, u.hash)) { puts("login: incorrect password\n"); continue; }
 
         /* 建家目录并归属该用户(此时仍是 root, 可 chown) */
         ensure_dir("/home");

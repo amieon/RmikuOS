@@ -45,7 +45,7 @@ static int get_user(const char *name, struct User *out) {
         if (line[0] && line[0] != '#') {
             char *f[8];
             int nf = split_colon(line, f, 8);
-            if (nf >= 6 && str_eq(f[0], name)) {
+            if (nf >= 6 && !strcmp(f[0], name)) {
                 out->name = f[0];
                 out->uid  = (usize) atoi(f[1]);
                 out->gid  = (usize) atoi(f[2]);
@@ -62,10 +62,6 @@ static int get_user(const char *name, struct User *out) {
     return 0;
 }
 
-static int str_eq(const char *a, const char *b) {
-    while (*a && *a == *b) { a++; b++; }
-    return *a == *b;
-}
 
 static int ensure_dir(const char *path) {
     struct stat st;
@@ -96,7 +92,7 @@ static int check_pass(const struct User *u, const char *pass) {
     char hex[65];
     sha256((const unsigned char *)blob, total, dig);
     to_hex(dig, hex);
-    return str_eq(hex, u->hash);
+    return !strcmp(hex, u->hash);
 }
 
 int main(int argc, char *argv[]) {
