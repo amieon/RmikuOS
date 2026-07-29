@@ -175,7 +175,7 @@ static inline isize truncate(const char *path, usize length) {
 }
 
 static inline isize rename2(const char *oldpath, usize oldlen, const char *newpath, usize newlen) {
-    return syscall4(SYS_RENAME, (usize)oldpath, oldlen, (usize)newpath, newlen);
+    return syscall6(SYS_RENAME, (usize)oldpath, oldlen, (usize)newpath, newlen, 0, 0);
 }
 static inline isize rename(const char *oldpath, const char *newpath) {
     return rename2(oldpath, strlen(oldpath), newpath, strlen(newpath));
