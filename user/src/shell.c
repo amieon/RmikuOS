@@ -229,7 +229,7 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
 
     const char *builtins[] = {
         "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir",
-        "whoami", "chmod",
+        "whoami", "chmod", "chown",
         "shutdown", "ls", "cat", "clear", "jobs",
         "export", "env", "unset", NULL
     };
@@ -1073,6 +1073,21 @@ static int builtin_chmod(int argc, char *argv[]) {
     return 0;
 }
 
+/* chown <uid> <gid> <path>：仅 root 可改属主(内核已强制 euid==0) */
+static int builtin_chown(int argc, char *argv[]) {
+    if (argc < 4) {
+        fputs("chown: usage: chown <uid> <gid> <path>\n", stdout);
+        return 1;
+    }
+    usize uid = (usize) atoi(argv[1]);
+    usize gid = (usize) atoi(argv[2]);
+    if (chown(argv[3], uid, gid) < 0) {
+        fputs("chown: permission denied or no such file\n", stdout);
+        return 1;
+    }
+    return 0;
+}
+
 static void builtin_clear(void) {
     fputs("\x1b[2J\x1b[H", stdout);
     fflush(stdout);
@@ -1544,6 +1559,7 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "rmdir")) { return builtin_rmdir(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "whoami")) { return builtin_whoami(); }
     if (streq(exp_argv[0], "chmod")) { return builtin_chmod(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "chown")) { return builtin_chown(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "jobs")) { print_jobs(); return 0; }
     if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
     if (streq(exp_argv[0], "source") || streq(exp_argv[0], ".")) {
@@ -1739,6 +1755,7 @@ int main(void) {
     load_search_dirs();
 
     while (1) {
+        set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];
