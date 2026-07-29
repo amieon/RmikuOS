@@ -1,4 +1,5 @@
 #include "user.h"
+#include "string.h"   
 #include "SHA256.h"
 
 struct User {
@@ -45,7 +46,7 @@ static int get_user(const char *name, struct User *out) {
         if (line[0] && line[0] != '#') {
             char *f[8];
             int nf = split_colon(line, f, 8);
-            if (nf >= 6 && !strcmp(f[0], name)) {
+            if (nf >= 6 && strcmp(f[0], name) == 0) {
                 out->name = f[0];
                 out->uid  = (usize) atoi(f[1]);
                 out->gid  = (usize) atoi(f[2]);
@@ -62,6 +63,60 @@ static int get_user(const char *name, struct User *out) {
     return 0;
 }
 
+/* 读取 /etc/group(group_name:gid:members), 收集 name 所属的全部附加组 gid,
+   并以 root 身份调用 setgroups 写入当前进程。members 为逗号分隔的用户名列表。
+   返回收集到的附加组数量(不含主组, 主组由 setgid 设置)。仅当调用者仍为 root
+   (euid==0) 时 setgroups 才会成功, 否则附加组保持为空。 */
+static int initgroups(const char *name, usize primary_gid) {
+    (void)primary_gid;
+    static char buf[2048];
+    int fd = (int) open("/etc/group", O_RDONLY);
+    if (fd < 0) return 0;
+    int len = 0;
+    for (;;) {
+        int n = (int) read(fd, buf + len, sizeof(buf) - 1 - len);
+        if (n <= 0) break;
+        len += n;
+        if (len >= (int)sizeof(buf) - 1) break;
+    }
+    close(fd);
+    buf[len] = 0;
+
+    usize groups[32];
+    int ng = 0;
+    char *line = buf;
+    while (*line) {
+        char *nl = line;
+        while (*nl && *nl != '\n') nl++;
+        char saved = *nl;
+        *nl = 0;
+        if (line[0] && line[0] != '#') {
+            char *f[4];
+            int nf = split_colon(line, f, 4);
+            if (nf >= 3) {
+                usize gid = (usize) atoi(f[1]);
+                char *p = f[2];
+                while (*p) {
+                    char *q = p;
+                    while (*q && *q != ',') q++;
+                    char savedc = *q;
+                    *q = 0;
+                    if (strcmp(p, name) == 0 && ng < 32) {
+                        groups[ng++] = gid;
+                    }
+                    *q = savedc;
+                    if (savedc == 0) break;
+                    p = q + 1;
+                }
+            }
+        }
+        if (saved == 0) break;
+        *nl = saved;
+        line = nl + 1;
+    }
+    setgroups((usize) ng, groups);
+    return ng;
+}
 
 static int ensure_dir(const char *path) {
     struct stat st;
@@ -92,7 +147,7 @@ static int check_pass(const struct User *u, const char *pass) {
     char hex[65];
     sha256((const unsigned char *)blob, total, dig);
     to_hex(dig, hex);
-    return !strcmp(hex, u->hash);
+    return strcmp(hex, u->hash) == 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -125,6 +180,7 @@ int main(int argc, char *argv[]) {
 
     isize pc = fork();
     if (pc == 0) {
+        if (geteuid() == 0) initgroups(u.name, u.gid);
         setgid(u.gid);
         setuid(u.uid);
         chdir(u.home);
