@@ -1,0 +1,6 @@
+# group_name:gid:members(comma-separated user names)
+root:0:
+alice:100:
+bob:100:
+staff:50:alice
+wheel:10:alice
