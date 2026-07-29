@@ -49,7 +49,8 @@ impl TmpfsNode {
 }
 
 pub struct TmpfsInode {
-    node: TmpfsNode,    
+    node: TmpfsNode,
+    root: Arc<TmpfsDirNode>,  // 指向根目录,供跨目录 rename 时按绝对路径定位目标父目录
 }
 
 pub struct TmpfsFs {
@@ -69,8 +70,31 @@ impl TmpfsFs {
 
 impl crate::fs::mount::FileSystem for TmpfsFs {
     fn root_inode(self: Arc<Self>) -> super::InodeRef {
-        Arc::new(TmpfsInode{ node : TmpfsNode::Dir(self.root.clone()),})
+        Arc::new(TmpfsInode{ node : TmpfsNode::Dir(self.root.clone()), root: self.root.clone() })
     } 
+}
+
+impl TmpfsInode {
+    /// 从 root 出发,按绝对路径定位到目录节点。用于 rename 跨目录时定位目标父目录。
+    fn find_dir(&self, path: &str) -> Option<Arc<TmpfsDirNode>> {
+        if path == "/" || path.is_empty() {
+            return Some(self.root.clone());
+        }
+        let mut cur = self.root.clone();
+        for comp in path.trim_matches('/').split('/').filter(|s| !s.is_empty()) {
+            // 在锁作用域内先把下一个节点 clone 出来,然后让 MutexGuard 在此处 drop,
+            // 再赋值 cur —— 否则 children 借用了 cur,在其析构前不能重新给 cur 赋值。
+            let next = {
+                let children = cur.children.lock();
+                match children.get(comp) {
+                    Some(TmpfsNode::Dir(d)) => d.clone(),
+                    _ => return None,
+                }
+            };
+            cur = next;
+        }
+        Some(cur)
+    }
 }
 
 impl Inode for TmpfsInode {
@@ -100,12 +124,14 @@ impl Inode for TmpfsInode {
         if name.is_empty() || name == "." {
             return Some(Arc::new(TmpfsInode {
                 node: self.node.clone_ref(),
+                root: self.root.clone(),
             }));
         }
 
         if name == ".." {
             return Some(Arc::new(TmpfsInode {
                 node: self.node.clone_ref(),   // 兜底:返回自己
+                root: self.root.clone(),
             }));
         }
 
@@ -113,7 +139,7 @@ impl Inode for TmpfsInode {
             TmpfsNode::Dir(dir) => {
                 let dir = dir.children.lock();
                 let child = dir.get(name)?;        
-                Some(Arc::new(TmpfsInode { node: child.clone_ref() }))  
+                Some(Arc::new(TmpfsInode { node: child.clone_ref(), root: self.root.clone() }))  
             }
             TmpfsNode::File(_) => None,  
         }
@@ -181,7 +207,7 @@ impl Inode for TmpfsInode {
                     data: Arc::new(Mutex::new(Vec::new())),
                 }));
                 dir.insert(String::from(name), file_node.clone_ref());
-                Some(Arc::new(TmpfsInode { node: file_node }))
+                Some(Arc::new(TmpfsInode { node: file_node, root: self.root.clone() }))
             }
             TmpfsNode::File(_) => None,   
         }
@@ -200,7 +226,7 @@ impl Inode for TmpfsInode {
                     children: Arc::new(Mutex::new(BTreeMap::new())),
                 }));
                 dir.insert(String::from(name), dir_node.clone_ref());
-                Some(Arc::new(TmpfsInode { node: dir_node }))
+                Some(Arc::new(TmpfsInode { node: dir_node, root: self.root.clone() }))
             }
             TmpfsNode::File(_) => None,
         }
@@ -296,6 +322,62 @@ impl Inode for TmpfsInode {
             }
         }
     }
+
+    fn rename(&self, from: &str, to: &str) -> isize {
+        // self = 源所在目录; from = 源名; to = 目标完整绝对路径(可跨目录)。
+        let src_children = match &self.node {
+            TmpfsNode::Dir(d) => d.children.clone(),
+            _ => return -1,
+        };
+
+        // 解析目标父目录路径与目标名
+        let trimmed = to.trim_end_matches('/');
+        let (parent_path, name) = match trimmed.rfind('/') {
+            Some(0) => (String::from("/"), String::from(&trimmed[1..])),
+            Some(pos) => (String::from(&trimmed[..pos]), String::from(&trimmed[pos + 1..])),
+            None => (String::from("/"), String::from(trimmed)),
+        };
+
+        let tgt_dir = match self.find_dir(&parent_path) {
+            Some(d) => d,
+            None => return -1,
+        };
+
+        // 目标名若为目录则拒绝(不覆盖目录);文件则随后覆盖
+        {
+            let tc = tgt_dir.children.lock();
+            if let Some(TmpfsNode::Dir(_)) = tc.get(&name) {
+                return -1;
+            }
+        }
+
+        // 从源目录取出节点
+        let node = {
+            let mut sc = src_children.lock();
+            let n = match sc.get(from) {
+                Some(x) => x.clone_ref(),
+                None => return -1,
+            };
+            sc.remove(from);
+            n
+        };
+
+        // 插入目标目录(覆盖同名文件)
+        let mut tc = tgt_dir.children.lock();
+        tc.remove(&name);
+        tc.insert(name, node);
+        0
+    }
+
+    fn truncate_to(&self, len: usize) -> isize {
+        match &self.node {
+            TmpfsNode::File(f) => {
+                f.data.lock().resize(len, 0);
+                0
+            }
+            TmpfsNode::Dir(_) => -1,
+        }
+    }
 }
 
 
@@ -362,6 +444,33 @@ impl File for TmpfsFile {
 
     fn stat(&self) -> Stat {
         Stat::new(STAT_TYPE_FILE, self.data.lock().len(), self.mode, self.uid, self.gid)
+    }
+
+    fn seek(&self, offset: isize, whence: usize) -> isize {
+        let mut off = self.offset.lock();
+        let new = match whence {
+            0 => offset as i64,                          // SEEK_SET
+            1 => *off as i64 + offset as i64,           // SEEK_CUR
+            2 => self.data.lock().len() as i64 + offset as i64, // SEEK_END
+            _ => return -1,
+        };
+        if new < 0 {
+            return -1;
+        }
+        *off = new as usize;
+        new as isize
+    }
+
+    fn ftruncate(&self, len: usize) -> isize {
+        if !self.writable() {
+            return -1;
+        }
+        self.data.lock().resize(len, 0);
+        0
+    }
+
+    fn fsync(&self) -> isize {
+        0 // tmpfs 数据常驻内存,没有后备块设备需要刷盘
     }
 
 }
