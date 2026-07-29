@@ -216,9 +216,81 @@ fd 1 -> stdout
 
 ---
 
+### Security: Process Credentials & File Permissions
+
+RmikuOS 实现了一套**两层 POSIX 风格权限模型**：第一层是**进程凭证**（谁在运行），第二层是**文件权限**（谁能访问什么）。两层通过 `euid == 0`（超级用户）的绕过机制联动，足以支撑真实的多用户登录、setuid 提权与协作隔离的教学演示——且**多用户完全靠用户态 glue 实现，内核凭证/权限子系统一次到位、无需为加用户而改内核**。
+
+#### 进程凭证（Process Credentials）
+
+每个 PCB 持有一组 POSIX 凭证：
+
+```text
+uid / euid / gid / egid    真实 uid、有效 uid、真实 gid、有效 gid
+```
+
+* init 进程以 **root（0/0/0/0）** 启动；
+* `fork` 继承父进程全套凭证；`exec` 替换映像但**保留**凭证（除非文件带 setuid/setgid 位，见 Layer 2）；
+* `euid == 0` 即超级用户，绕过所有文件权限检查（与 Unix 一致）；
+* 提供完整的凭证读写系统调用（号段 **50–59**）：
+
+```text
+50 GETUID    51 GETEUID   52 GETGID    53 GETEGID
+54 SETUID    55 SETEUID   56 SETGID    57 SETEGID
+58 SETREUID  59 SETREGID
+```
+
+`set*` 系列按「仅 root（euid==0）可改真实 uid，或进程可把有效位降回自身真实位」的 POSIX 规则实现；C 用户库（`process.h`）与 Rust `ulib::process` 均提供封装。
+
+#### 文件权限（File Permissions）
+
+`Stat` / `Metadata` 为文件系统节点携带 `file_type / mode / uid / gid`（32 字节 `repr(C)` 布局，与用户态 `struct stat` 对齐）。三个后端行为：
+
+* **ext4**：读取磁盘原生的 uid/gid/mode；
+* **FAT**：目录映射为 `0755`、文件 `0644`，统一归属 root；
+* **tmpfs**：节点自带 `Perms { mode, uid, gid }`，创建者即当前凭证（经 `current_creds`），支持 `chmod` / `chown`。
+
+**访问检查**（`fs::check_access`）按「拥有者 / 所属组 / 其他人」三级取对应 rwx 位，逐级上报：
+
+```text
+euid == file_uid         -> 用 owner 位
+egid == file_gid         -> 用 group 位
+否则                     -> 用 other 位
+euid == 0                -> 直接放行（超级用户）
+```
+
+打开文件（`check_open`）按 `O_RDONLY/WRONLY/RDWR` 推导所需 R/W 权限，`O_EXEC` 走专用执行路径；在目录中创建/删除/改名（`check_dir_write`）要求父目录 W+X。`chmod` / `chown` 系统调用，要求 `euid==0`（chmod 或 `euid==file.uid`；chown 仅 root），并同步落盘到各后端。
+
+**setuid / setgid 提权**：`exec` 在 `O_EXEC` 路径打开目标文件后检查执行权限；若文件带 `S_ISUID` 位，则把进程 `euid` 提升为该文件的 `uid`（真实 `uid` 不变，符合 POSIX），`S_ISGID` 同理作用于 `egid`——这正是 `login` / `su` 能把普通用户提回 root 的机制。
+
+验证程序 `xx_perm.c` 覆盖：stat 属主/权限、chmod/chown 往返、降权后访问拒绝、setuid exec 提权。
+
+#### 多用户子系统（Multi-User）
+
+仅用用户态 glue + 一份数据文件即可支撑真实多用户，内核无需改动：
+
+* **`/etc/passwd`**（`name:uid:gid:home:salt:sha256hex`）是用户的唯一真相源，由 `user/rootfs/` 模板在打包镜像时烘焙进 ext4；
+* **`login`**（`/samples/login`）：读 `/etc/passwd`，用 **SHA256(salt ‖ password)** 校验口令（纯 C 实现，无外部依赖），通过后 `fork` + `setgid` + `setuid` + `chdir(home)` + `exec` 进入该用户 shell（`setgid` 必须早于 `setuid`，否则 root 特权已丢失）；
+* **`su [user]`**：root（euid==0）可自由切换；普通用户需验证目标口令；
+* **口令回显**：guest 内核的 uart / fgetc 均为只读，回显来自宿主机终端，由 `run-qemu.sh` 的 `stty -echo` 在 QEMU 启动前关闭；
+* init 进程改为从 `/samples/login` 启动，默认即为 root 登录界面。
+
+当前内置用户 `root / alice / bob`（口令即用户名），分别归属各自主组，演示「不同用户、不同家目录、不同文件权限」的隔离。
+
+**用户增删（构建期）**：根文件系统 ext4 以**只读**方式挂载（见「Read-only ext4 Rootfs」），运行时无法改写 `/etc/passwd`，因此**暂没有 `useradd` / `userdel` 等运行时工具**。新增 / 删除用户需在构建机编辑 `user/rootfs/etc/passwd`（涉及附加组时同步改 `user/rootfs/etc/group`），再 `bash user/mkfs_ext4.sh <arch>` 重烤镜像并重启。运行时热增删需等**可写 ext4** 落地（见 Roadmap）。
+
+#### 附加组（Supplementary Groups）
+
+进程可同时属于多个组：
+
+- **内核**：PCB 增加 `groups: [usize; NGROUPS_MAX]`（`NGROUPS_MAX = 32`）+ `ngroups`，`fork` 经 `fork_from` 继承；`current_groups()` / `set_current_groups()` 独立于 4 元组凭证（setuid/exec 不会误清组）。`check_access` 的组匹配扩展为「主 `egid` **或** 任一附加组命中」。
+- **系统调用**：`getgroups`（**62**）/ `setgroups`（**63**）；`setgroups` 仅特权进程（`euid == 0`）可调用。
+- **用户态 glue**：`login` / `su` 新增 `initgroups(name, gid)`，在仍为 root 时读 `/etc/group`（`group_name:gid:members` 格式）收集该用户的附加组并 `setgroups` 写入进程；`/etc/group` 随 rootfs 烘焙进镜像（见 `user/rootfs/etc/group`）。
+- **验证用例**：`xx_groups.c`（构建产物 `/samples/groups`）打印凭证与 `getgroups` 列表。演示步骤（注意：chmod/chown 仅在可写 tmpfs 生效，ext4 只读，故文件须放 `/tmp` 而非 `/home`）：在 **tmpfs（`/tmp`）** 上 `chown 0 50 /tmp/notes && chmod 0640 /tmp/notes`，再分别以 `alice` / `bob` 运行 `/samples/groups /tmp/notes`——`alice` 属 `staff`(gid 50) 故 open 成功，`bob` 不在该组被拒绝。
+
+
 ## User Programs and Shell
 
-RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init shell）通过 VFS 从 `/bin/shell` 加载。Shell 不是内核内置的玩具解释器，而是一个**支持交互式编辑、通配符展开、逻辑链、后台执行与脚本 source** 的完整用户态程序。
+RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init）通过 VFS 从 `/samples/login` 启动，登录后进入对应用户的 shell。Shell 不是内核内置的玩具解释器，而是一个**支持交互式编辑、通配符展开、逻辑链、后台执行与脚本 source** 的完整用户态程序。
 
 ### Shell 命令体系
 
@@ -228,6 +300,7 @@ RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init she
 内建：  cd  pwd  exit  help  shutdown  jobs  clear
         mkdir  touch  rm  rmdir  source  .
         export  env  unset
+        whoami  chmod  chown        
 外部：  ls  cat  echo  grep  shell  sleep ...
 ```
 
@@ -1642,7 +1715,7 @@ LoongArch64 使用 QEMU `virt` 机器和 virtio-pci 块设备。
 
 ```text
 user/
-├── rootfs/                 rootfs 目录模板(etc/motd, home, share, tmp, fat ...)
+├── rootfs/                 rootfs 目录模板(etc/passwd / etc/group / motd, home/*, share, tmp, fat ...)
 │   └── scripts/lua         lua测试文件
 ├── include/                C/C++ 用户库(分层头文件)
 │   ├── types.h             基础类型(usize / isize)
@@ -1845,7 +1918,7 @@ User Programs (httpd / udp_test / tcp_test)
 * 用户态 TFTP 客户端：slirp `tftpboot` 文件注入通道（服务器实测在 `10.0.2.2`）
 * TCP **Jacobson/Karn 自适应 RTO**（定点 SRTT/RTTVAR、队首采样、RTO-restore、阻塞式流量控制），100K 丢包实验提速 2.4–4.0×
 * 用户态 libc 补全：标准 `string.h`、`snprintf` 族（全 `static inline`，多文件链接安全）
-* 从 ext4 `/bin/shell` 启动 init shell
+* 从 `/samples/login` 启动 init（默认 root 登录界面，登录后进入对应用户 shell）
 * C 用户库（分层头文件）与 Rust 用户库 `ulib`
 * Rust 用户程序支持（单文件 rustc + cargo workspace），双架构，syscall ABI 语言无关
 * **C++ 用户程序支持**：`stdcompat.h` 桥接层，算法代码零改动移植
@@ -1858,6 +1931,12 @@ User Programs (httpd / udp_test / tcp_test)
 * **环境变量子系统**：内核 syscall 号段 45–49（`getenv` / `getenv_r` / `setenv` / `unsetenv` / `listenv` / `clearenv`）+ C 用户库 `env.h` 封装
 * shell 内建 `export` / `env` / `unset`，支持 `$VAR` / `${VAR}` / `$?` 展开（单引号保护、双引号展开），`PATH` 经 `getenv` 驱动命令搜索且可即时修改
 * 内核 `exec` 路径将 `envp` 经寄存器（`a2` / `r6`）传入 `main` 第 3 参数，`test_env.c` 全量用例（9 项）在双架构实机验证通过
+* **两层权限模型（Layer 1 进程凭证 + Layer 2 文件权限）**：PCB 持 `uid/euid/gid/egid`；
+* `Stat`/`Metadata` 携带 `mode/uid/gid`；ext4 读原生属主、FAT 映射、tmpfs 带 `Perms{mode,uid,gid}`；`check_access` 按 owner/group/other 三级 + `euid==0` 绕过；`check_open`/`check_dir_write` 派生 R/W/X 检查
+* `chmod`/`chown` 系统调用（仅 root 或属主可改），三后端统一落盘
+* **setuid / setgid 提权**：`exec` 经 `O_EXEC` 路径检查执行权限，`S_ISUID`/`S_ISGID` 位把 `euid`/`egid` 提升为文件属主；`xx_perm.c` 覆盖 stat/属主、chmod/chown 往返、降权拒绝、setuid exec 提权
+* **多用户子系统**：`/etc/passwd`（`name:uid:gid:home:salt:sha256hex`）为唯一真相源，由 rootfs 模板烘焙进镜像；`login`（`/samples/login`）用纯 C SHA256(salt‖password) 校验后 `setgid`+`setuid`+`chdir`+`exec` 进入用户 shell；`su [user]` 支持 root 自由切换 / 普通用户验密；init 从 `/bin/login` 启动
+* 内置用户 `root` / `alice` / `bob`（口令即用户名），演示多用户、多主组、不同家目录与文件权限隔离
 * 统一构建脚本 `build.py`（C / C++ / 单文件 Rust / cargo Rust 分派编译）
 * 双架构关机（riscv SiFive Test finisher / loongarch ACPI GED）
 * RISC-V / LoongArch64 SMP 启动与多核调度验证（per-hart timer、IPI reschedule、running_on 防重入）
@@ -1894,6 +1973,14 @@ virtio-net → Ethernet / ARP / IPv4 / UDP / TCP / DHCP / socket / httpd 已打�
 
 * 扩展 `stdcompat.h` 覆盖更多标准库容器与算法
 * 探索更复杂的 C++ 应用移植（如线性代数库、小型游戏引擎）
+
+---
+
+### Security & Multi-User
+
+* **Capabilities（能力机制）**：把 root 的万能特权拆为 `CAP_*` 位图、做 per-thread 检查（教学深度加分项，改动聚焦权限层、不碰磁盘格式）
+* **ACL（细粒度 ACL）**：仅当课件明确需要时才做；真 ACL 需扩展 ext4/FAT/tmpfs 三后端的磁盘元数据，ROI 低，暂搁置
+* **用户增删工具（useradd / userdel）**：待**可写 ext4** 落地；当前用户增删只能改 `user/rootfs/etc/passwd`(+`/etc/group`) 后重烤镜像，无运行时命令（根因：ext4 以只读方式挂载）
 
 ---
 
