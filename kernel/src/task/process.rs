@@ -11,6 +11,9 @@ pub type Pid = usize;
 pub const DEFAULT_TICKETS: usize = 100;
 pub const BIG_STRIDE: usize = 10_000_000;
 
+/// 附加组(supplementary groups)的最大数量(POSIX NGROUPS_MAX 通常取 32)。
+pub const NGROUPS_MAX: usize = 32;
+
 pub fn stride_from_tickets(tickets: usize) -> usize {
     let tickets = tickets.max(1);
     (BIG_STRIDE / tickets).max(1)
@@ -57,6 +60,11 @@ pub struct ProcessControlBlock {
     pub euid: usize,
     pub gid: usize,
     pub egid: usize,
+
+    /// 附加组(supplementary groups)。groups[..ngroups] 为有效组列表,
+    /// 用于文件访问检查时与文件属组匹配(任一相等即视为"组"权限)。
+    pub groups: [usize; NGROUPS_MAX],
+    pub ngroups: usize,
 
     pub exit_code: i32,
 }
@@ -106,6 +114,10 @@ impl ProcessControlBlock {
             gid: 0,
             egid: 0,
 
+            // 默认无附加组。
+            groups: [0; NGROUPS_MAX],
+            ngroups: 0,
+
             exit_code: 0,
         }
     }
@@ -128,6 +140,8 @@ impl ProcessControlBlock {
         euid: usize,
         gid: usize,
         egid: usize,
+        groups: [usize; NGROUPS_MAX],
+        ngroups: usize,
     ) -> Self {
         let tickets = parent_tickets.max(1);
         let stride = BIG_STRIDE / tickets;
@@ -169,6 +183,9 @@ impl ProcessControlBlock {
             euid,
             gid,
             egid,
+
+            groups,
+            ngroups,
 
             exit_code: 0,
         }
