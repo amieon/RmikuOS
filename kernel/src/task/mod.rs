@@ -20,6 +20,7 @@ pub const WUNTRACED: usize = 0;
 pub type Pid = usize;
 pub type Tid = usize;
 
+pub use process::NGROUPS_MAX;
 
 pub use manager_wrapper::{
     init,
@@ -88,4 +89,6 @@ pub use manager_wrapper::{
 
     current_creds,
     set_current_creds,
+    current_groups,
+    set_current_groups,
 };

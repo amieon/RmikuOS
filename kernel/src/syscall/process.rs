@@ -359,3 +359,63 @@ pub fn sys_setregid(rgid: usize, egid: usize) -> isize {
     crate::task::set_current_creds(u, ue, new_gid, new_egid);
     0
 }
+
+// getgroups(size, list):
+//   - size == 0: 返回当前附加组数量(不含主组)。
+//   - size >= ngroups: 把最多 size 个组 id 写入 list(用户态 usize 数组),
+//     返回实际数量 ngroups。
+//   - size < ngroups: 缓冲不足, 返回 -1。
+// setgroups(size, list):
+//   - 仅特权进程(euid == 0)可调用; 非特权返回 -1。
+//   - size == 0 清空附加组; 否则用 list 前 size 个组 id 覆盖。
+//   - size 超过 NGROUPS_MAX 视为非法返回 -1。
+
+pub fn sys_getgroups(size: usize, list_ptr: usize) -> isize {
+    let (groups, ngroups) = crate::task::current_groups();
+    if size == 0 {
+        return ngroups as isize;
+    }
+    if size < ngroups {
+        return -1;
+    }
+    let mut buf = [0u8; crate::task::NGROUPS_MAX * 8];
+    let mut off = 0;
+    for &g in &groups[..ngroups] {
+        buf[off..off + 8].copy_from_slice(&g.to_ne_bytes());
+        off += 8;
+    }
+    match crate::task::write_current_user_bytes(list_ptr, &buf[..off]) {
+        Some(_) => ngroups as isize,
+        None => -1,
+    }
+}
+
+pub fn sys_setgroups(size: usize, list_ptr: usize) -> isize {
+    let (_u, euid, _g, _ge) = crate::task::current_creds();
+    if euid != 0 {
+        return -1; // 仅特权进程可设置附加组
+    }
+    if size > crate::task::NGROUPS_MAX {
+        return -1;
+    }
+    if size == 0 {
+        crate::task::set_current_groups([0usize; crate::task::NGROUPS_MAX], 0);
+        return 0;
+    }
+    let need = size * core::mem::size_of::<usize>();
+    let bytes = match crate::task::read_current_user_bytes(list_ptr, need) {
+        Some(b) => b,
+        None => return -1,
+    };
+    let mut groups = [0usize; crate::task::NGROUPS_MAX];
+    let mut i = 0;
+    while i < size {
+        let off = i * core::mem::size_of::<usize>();
+        let mut arr = [0u8; 8];
+        arr.copy_from_slice(&bytes[off..off + 8]);
+        groups[i] = usize::from_ne_bytes(arr);
+        i += 1;
+    }
+    crate::task::set_current_groups(groups, size);
+    0
+}

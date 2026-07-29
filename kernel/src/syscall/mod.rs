@@ -67,6 +67,8 @@ pub const SYSCALL_SETREUID: usize = 58;
 pub const SYSCALL_SETREGID: usize = 59;
 pub const SYSCALL_CHMOD: usize = 60;
 pub const SYSCALL_CHOWN: usize = 61;
+pub const SYSCALL_GETGROUPS: usize = 62;
+pub const SYSCALL_SETGROUPS: usize = 63;
 
 
 
@@ -161,6 +163,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SETREGID => process::sys_setregid(args[0], args[1]),
         SYSCALL_CHMOD => fs::sys_chmod(args[0], args[1], args[2]),
         SYSCALL_CHOWN => fs::sys_chown(args[0], args[1], args[2], args[3]),
+        SYSCALL_GETGROUPS => process::sys_getgroups(args[0], args[1]),
+        SYSCALL_SETGROUPS => process::sys_setgroups(args[0], args[1]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

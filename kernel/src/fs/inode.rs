@@ -32,6 +32,8 @@ pub const X_OK: u16 = 1;
 /// POSIX 风格的权限检查。
 /// - euid == 0 视为超级用户, 绕过所有检查。
 /// - 否则按 拥有者 / 所属组 / 其他人 三级取对应权限位, 判断是否包含 request。
+///   "所属组"匹配条件: egid == file_gid **或** 任一附加组(groups) == file_gid。
+/// - groups 为当前进程的附加组切片(groups[..ngroups])。
 /// request 为 R_OK/W_OK/X_OK 的按位或。
 pub fn check_access(
     mode: u16,
@@ -39,6 +41,7 @@ pub fn check_access(
     file_gid: usize,
     euid: usize,
     egid: usize,
+    groups: &[usize],
     request: u16,
 ) -> bool {
     if euid == 0 {
@@ -46,7 +49,7 @@ pub fn check_access(
     }
     let perms = if euid == file_uid {
         (mode >> 6) & 7
-    } else if egid == file_gid {
+    } else if egid == file_gid || groups.iter().any(|&g| g == file_gid) {
         (mode >> 3) & 7
     } else {
         mode & 7

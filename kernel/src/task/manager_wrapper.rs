@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use log::logger;
 
 use crate::arch::{MAX_HARTS, ipi};                 
+use crate::task::process::NGROUPS_MAX;
 use crate::{lock_detect, println};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, PAGE_SIZE_BITS};
 use crate::mm::config::PAGE_SIZE;
@@ -438,6 +439,8 @@ pub fn fork_current() -> isize {
             manager.process(parent_pid).euid,
             manager.process(parent_pid).gid,
             manager.process(parent_pid).egid,
+            manager.process(parent_pid).groups,
+            manager.process(parent_pid).ngroups,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
@@ -469,6 +472,7 @@ pub fn fork_current() -> isize {
 
     child_pid as isize
 }
+
 
 
 pub fn current_tid() -> Tid {
@@ -595,10 +599,11 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     // - 若文件 mode 含 S_ISUID, 则 euid 提升为文件属主; S_ISGID 同理作用于 egid
     let elevate = {
         let (_u, euid, _g, egid) = crate::task::current_creds();
+        let (groups, ngroups) = crate::task::current_groups();
         let meta = crate::fs::lookup(path).map(|i| i.metadata());
         if let Some(m) = meta {
             if !crate::fs::inode::check_access(
-                m.mode, m.uid, m.gid, euid, egid, crate::fs::inode::X_OK,
+                m.mode, m.uid, m.gid, euid, egid, &groups[..ngroups], crate::fs::inode::X_OK,
             ) {
                 log::warn!("[exec] permission denied (no exec bit): {}", path);
                 return -1;
@@ -1882,4 +1887,24 @@ pub fn dump_task_manager_lock_state() {
         TASK_MANAGER.debug_owner(),
         TASK_MANAGER.debug_line(),
     );
+}
+
+/// 读取当前进程的附加组列表, 返回 (groups, ngroups) 的副本。
+pub fn current_groups() -> ([usize; NGROUPS_MAX], usize) {
+    let tid = processor::current_tid();
+    let manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.pid_of_tid(tid);
+    let p = manager.process(pid);
+    (p.groups, p.ngroups)
+}
+
+/// 设置当前进程的附加组列表(仅由特权进程经 setgroups 调用)。
+/// ngroups 超过上限时被截断到 NGROUPS_MAX。
+pub fn set_current_groups(groups: [usize; NGROUPS_MAX], ngroups: usize) {
+    let tid = processor::current_tid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.pid_of_tid(tid);
+    let p = manager.process_mut(pid);
+    p.groups = groups;
+    p.ngroups = ngroups.min(NGROUPS_MAX);
 }

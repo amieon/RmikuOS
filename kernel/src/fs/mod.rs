@@ -240,19 +240,21 @@ fn check_open(inode: &InodeRef, flags: usize) -> bool {
     }
     let meta = inode.metadata();
     let (_u, euid, _g, egid) = crate::task::current_creds();
+    let (groups, ngroups) = crate::task::current_groups();
     let request = if (flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR {
         W_OK
     } else {
         R_OK
     };
-    check_access(meta.mode, meta.uid, meta.gid, euid, egid, request)
+    check_access(meta.mode, meta.uid, meta.gid, euid, egid, &groups[..ngroups], request)
 }
 
 /// 在目录中创建/删除/改名的必要条件: 父目录需 写+搜索 权限(root 绕过)。
 fn check_dir_write(inode: &InodeRef) -> bool {
     let meta = inode.metadata();
     let (_u, euid, _g, egid) = crate::task::current_creds();
-    check_access(meta.mode, meta.uid, meta.gid, euid, egid, W_OK | X_OK)
+    let (groups, ngroups) = crate::task::current_groups();
+    check_access(meta.mode, meta.uid, meta.gid, euid, egid, &groups[..ngroups], W_OK | X_OK)
 }
 
 /// chmod(path, mode): 修改文件权限位。特权检查由系统调用层(sys_chmod)完成。
