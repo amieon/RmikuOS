@@ -68,6 +68,8 @@ extern "C" {
 #define SYS_SETREGID                 59
 #define SYS_CHMOD                    60
 #define SYS_CHOWN                    61
+#define SYS_GETGROUPS                62
+#define SYS_SETGROUPS                63
 
 
 

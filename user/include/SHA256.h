@@ -1,3 +1,4 @@
+#pragma once
 typedef unsigned int u32;
 #define ROR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
 #define CH(x, y, z)  (((x) & (y)) ^ (~(x) & (z)))

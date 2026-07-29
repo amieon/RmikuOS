@@ -95,6 +95,16 @@ static inline isize setegid(usize egid)   { return syscall3(SYS_SETEGID, egid, 0
 static inline isize setreuid(usize ruid, usize euid) { return syscall3(SYS_SETREUID, ruid, euid, 0); }
 static inline isize setregid(usize rgid, usize egid) { return syscall3(SYS_SETREGID, rgid, egid, 0); }
 
+/* 附加组。内核 getgroups(size, list): size==0 返回组数; size>=ngroups 时
+   把组 id 写入 list 并返回组数; size<ngroups 返回 -1。setgroups(size, list)
+   仅特权进程(euid==0)可调用, 失败返回 -1。 */
+static inline isize getgroups(usize size, usize *list) {
+    return syscall3(SYS_GETGROUPS, size, (usize)list, 0);
+}
+
+static inline isize setgroups(usize size, const usize *list) {
+    return syscall3(SYS_SETGROUPS, size, (usize)list, 0);
+}
 
 #ifdef __cplusplus
 }
