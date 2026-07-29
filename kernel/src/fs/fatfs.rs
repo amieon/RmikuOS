@@ -166,7 +166,7 @@ impl File for FatFile {
                 let size = {
                     let fs = self.fs.inner.lock();
                     let root = fs.root_dir();
-                    let r = match root.open_file(&self.path) {
+                    let r =match root.open_file(&self.path) {
                         Ok(mut f) => {
                             use fatfs::{Seek, SeekFrom};
                             f.seek(SeekFrom::End(0)).unwrap_or(0) as i64
@@ -439,8 +439,10 @@ impl Inode for FatInode {
     }
 
     fn rename(&self, from: &str, to: &str) -> isize {
+        log::warn!("[rename-debug] FatInode::rename from={} to={}", from, to);
         // self = 源所在目录; from = 源名; to = 目标完整绝对路径(可跨目录)。
         let src = to_fat_path(&join_path(&self.path, from)).to_string();
+        log::warn!("[rename-debug] fat src={}", src);
 
         // 解析目标父目录(相对 root 的路径)与目标名
         let trimmed = to.trim_end_matches('/');
@@ -451,6 +453,7 @@ impl Inode for FatInode {
         };
         let dest_parent_fat = to_fat_path(parent);
         let dest_name = name;
+        log::warn!("[rename-debug] fat parent={} name={}", dest_parent_fat, dest_name);
 
         let fs = self.fs.inner.lock();
         let root = fs.root_dir();
@@ -458,23 +461,25 @@ impl Inode for FatInode {
         // 目标若是已存在的文件,先删以支持编辑器式原子覆盖保存
         let dest_fat_full = to_fat_path(to).to_string();
         if root.open_file(&dest_fat_full).is_ok() {
+            log::warn!("[rename-debug] fat removing existing dest {}", dest_fat_full);
             let _ = root.remove(&dest_fat_full);
         }
 
         let r = if dest_parent_fat.is_empty() {
             match root.rename(&src, &root, dest_name) {
                 Ok(_) => 0,
-                Err(_) => -1,
+                Err(_) => { log::warn!("[rename-debug] fat rename(same-dir) failed"); -1 }
             }
         } else {
             match root.open_dir(dest_parent_fat) {
                 Ok(dest_dir) => match root.rename(&src, &dest_dir, dest_name) {
                     Ok(_) => 0,
-                    Err(_) => -1,
+                    Err(_) => { log::warn!("[rename-debug] fat rename failed"); -1 }
                 },
-                Err(_) => -1,
+                Err(_) => { log::warn!("[rename-debug] fat open_dir('{}') failed", dest_parent_fat); -1 }
             }
         };
+        log::warn!("[rename-debug] fat result={}", r);
         r
     }
 
