@@ -130,7 +130,7 @@ pub fn stat(path: &str) -> Option<Stat> {
 
 
 
-use alloc::{format, string::String, vec::Vec};
+use alloc::{format, string::{String, ToString}, vec::Vec};
 
 use crate::{fs::flag::O_RDONLY, io::uart::putchar_raw};
 
@@ -296,60 +296,69 @@ pub fn truncate_path(path: &str, len: usize) -> isize {
 /// rename(old, new): 移动/改名。同一文件系统内支持跨目录;跨设备返回 -1(EXDEV)。
 /// 防自环: 不允许把目录移进它自己的子目录。特权检查由系统调用层完成。
 pub fn rename(old: &str, new: &str) -> isize {
-    log::warn!("[rename-debug] enter old={} new={}", old, new);
+    log::info!("[rename-debug] enter old={} new={}", old, new);
     let old_abs = match normalize_path("/", old) {
         Some(p) => p,
-        None => { log::warn!("[rename-debug] normalize old failed"); return -1; }
+        None => { log::info!("[rename-debug] normalize old failed"); return -1; }
     };
     let new_abs = match normalize_path("/", new) {
         Some(p) => p,
-        None => { log::warn!("[rename-debug] normalize new failed"); return -1; }
+        None => { log::info!("[rename-debug] normalize new failed"); return -1; }
     };
-    log::warn!("[rename-debug] old_abs={} new_abs={}", old_abs, new_abs);
+    log::info!("[rename-debug] old_abs={} new_abs={}", old_abs, new_abs);
 
     // 跨设备检测: 两边挂载点不同则不可 rename
     let mp_old = match mount::mount_point_of(&old_abs) {
         Some( mp) => mp,
-        None => { log::warn!("[rename-debug] resolve_mount old=None"); return -1; }
+        None => { log::info!("[rename-debug] resolve_mount old=None"); return -1; }
     };
     let mp_new = match mount::mount_point_of(&new_abs) {
         Some(mp) => mp,
-        None => { log::warn!("[rename-debug] resolve_mount new=None"); return -1; }
+        None => { log::info!("[rename-debug] resolve_mount new=None"); return -1; }
     };
-    log::warn!("[rename-debug] mp_old={} mp_new={}", mp_old, mp_new);
+    log::info!("[rename-debug] mp_old={} mp_new={}", mp_old, mp_new);
     if mp_old != mp_new {
-        log::warn!("[rename-debug] cross-device EXDEV");
+        log::info!("[rename-debug] cross-device EXDEV");
         return -1; // EXDEV
     }
 
 
     // 防自环: 不允许 "/a" -> "/a/b"
     if new_abs.starts_with(&format!("{}/", old_abs)) {
-        log::warn!("[rename-debug] self-into-subdir rejected");
+        log::info!("[rename-debug] self-into-subdir rejected");
         return -1;
     }
 
     let (old_parent, old_name) = split_parent(&old_abs);
     let (new_parent, _) = split_parent(&new_abs);
-    log::warn!("[rename-debug] old_parent={} old_name={} new_parent={}", old_parent, old_name, new_parent);
+    log::info!("[rename-debug] old_parent={} old_name={} new_parent={}", old_parent, old_name, new_parent);
 
     let old_parent_inode = match path::lookup_abs_path(&old_parent) {
         Some(i) => i,
-        None => { log::warn!("[rename-debug] old_parent lookup None: {}", old_parent); return -1; }
+        None => { log::info!("[rename-debug] old_parent lookup None: {}", old_parent); return -1; }
     };
     let new_parent_inode = match path::lookup_abs_path(&new_parent) {
         Some(i) => i,
-        None => { log::warn!("[rename-debug] new_parent lookup None: {}", new_parent); return -1; }
+        None => { log::info!("[rename-debug] new_parent lookup None: {}", new_parent); return -1; }
     };
 
     // 在源目录与目标目录中改名/创建 都需要父目录的 写+搜索 权限(root 绕过)
     if !check_dir_write(&old_parent_inode) || !check_dir_write(&new_parent_inode) {
-        log::warn!("[rename-debug] check_dir_write failed");
+        log::info!("[rename-debug] check_dir_write failed");
         return -1;
     }
+    // inode 内部的 rename/find_dir/open_dir 都基于"挂载根相对路径"导航
+    // (例如 FAT 根内没有 "fat" 目录, tmpfs 根内也没有 "tmp" 目录),
+    // 而 new_abs 是带挂载前缀的绝对 VFS 路径。必须剥掉挂载点前缀再传下去,
+    // 否则 find_dir("/tmp/rntest") 会在根下找 "tmp" 失败,
+    // 而 to_fat_path("/fat") 也会留下 "fat" 导致 open_dir 失败。
+    let new_rel = {
+        let s = new_abs.strip_prefix(&mp_new).unwrap_or(&new_abs);
+        s.trim_start_matches('/').to_string()
+    };
 
-    log::warn!("[rename-debug] calling inode.rename(old_name={}, new_abs={})", old_name, new_abs);
-    let r = old_parent_inode.rename(&old_name, &new_abs);
-    log::warn!("[rename-debug] inode.rename returned {}", r);
+    log::info!("[rename-debug] calling inode.rename(old_name={}, new_abs={})", old_name, new_abs);
+    let r = old_parent_inode.rename(&old_name, &new_rel);
+    log::info!("[rename-debug] inode.rename returned {}", r);
     r
 }
