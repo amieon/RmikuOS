@@ -151,6 +151,36 @@ static inline isize fcntl(isize fd, isize cmd, isize arg) {
     return syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg);
 }
 
+
+static inline isize lseek(isize fd, isize offset, usize whence) {
+    return syscall3(SYS_LSEEK, (usize)fd, (usize)offset, whence);
+}
+
+
+static inline isize ftruncate(isize fd, usize length) {
+    return syscall3(SYS_FTRUNCATE, (usize)fd, length, 0);
+}
+
+
+static inline isize fsync(isize fd) {
+    return syscall3(SYS_FSYNC, (usize)fd, 0, 0);
+}
+
+
+static inline isize truncate2(const char *path, usize len, usize length) {
+    return syscall3(SYS_TRUNCATE, (usize)path, len, length);
+}
+static inline isize truncate(const char *path, usize length) {
+    return truncate2(path, strlen(path), length);
+}
+
+static inline isize rename2(const char *oldpath, usize oldlen, const char *newpath, usize newlen) {
+    return syscall4(SYS_RENAME, (usize)oldpath, oldlen, (usize)newpath, newlen);
+}
+static inline isize rename(const char *oldpath, const char *newpath) {
+    return rename2(oldpath, strlen(oldpath), newpath, strlen(newpath));
+}
+
 #ifdef __cplusplus
 }
 #endif

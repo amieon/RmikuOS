@@ -70,6 +70,11 @@ extern "C" {
 #define SYS_CHOWN                    61
 #define SYS_GETGROUPS                62
 #define SYS_SETGROUPS                63
+#define SYS_FSYNC                    64
+#define SYS_FTRUNCATE                65
+#define SYS_TRUNCATE                 66
+#define SYS_LSEEK                    67
+#define SYS_RENAME                   68
 
 
 
