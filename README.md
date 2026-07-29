@@ -200,10 +200,14 @@ RmikuOS 进一步实现了**进程级信号投递机制**，使内核具备向�
 * `dup2`
 * `mkdir`
 * `create`
-* `truncate`
+* `truncate`（按路径截断到指定长度，`truncate(path, len)`）
+* `ftruncate`（按 fd 截断到指定长度，`ftruncate(fd, len)`）
 * `unlink`
 * `rmdir`
 * `remove_recursive`
+* `lseek`（定位 fd 读写偏移，`lseek(fd, offset, whence)`，支持 SET / CUR / END）
+* `fsync`（刷盘，`fsync(fd)`；tmpfs 为内存 no-op，FAT 走 `BlockIo` → `BlockDevice` 真实落盘）
+* `rename`（移动 / 改名，`rename(old, new)`：同目录 / 跨目录 / 覆盖已存在文件 / 目录改名；跨设备返回 EXDEV）
 
 标准输入输出也通过 fd 统一处理：
 
@@ -212,85 +216,34 @@ fd 0 -> stdin
 fd 1 -> stdout
 ```
 
-读写权限按打开模式强制：只读句柄（`O_RDONLY`）拒绝 `write`，只写句柄（`O_WRONLY`）拒绝 `read`，在 `read` / `write` 系统调用处经 `File::readable / writable` 统一检查。
+读写权限按打开模式强制：只读句柄（`O_RDONLY`）拒绝 `write`，只写句柄（`O_WRONLY`）拒绝 `read`，在 `read` / `write` 系统调用处经 `File::readable / writable` 统一检查。`ftruncate` / `truncate` / `rename` 的写权限检查与之对齐，只查 `File::writable()`（权限系统详见后文「两层 POSIX 风格权限模型」），不做完整 `check_access`。
+
+### File Operation Syscalls: 64–68 专用号段
+
+在既有 VFS 之上，RmikuOS 补齐了一组文件**定位 / 裁剪 / 刷盘 / 改名**系统调用，与主系统调用表共用同一分发入口，独立占用号段 64–68（在权限系统号段 50–63 之后、网络号段 100–109 之前）：
+
+```text
+64 FSYNC      把打开的 fd 数据刷盘
+65 FTRUNCATE  按 fd 截断到指定长度
+66 TRUNCATE   按路径截断到指定长度
+67 LSEEK      定位 fd 读写偏移(SET / CUR / END)
+68 RENAME     移动 / 改名
+```
+
+语义要点：
+
+* **`lseek`**：复用每个打开 fd 自带的独立 offset（`TmpfsFile` / `FatFile` 各自持有 `Mutex<offset>`），`whence` 支持 `SEEK_SET` / `SEEK_CUR` / `SEEK_END`；非法 whence、负偏移、坏 fd 均返回 -1。
+* **`ftruncate` / `truncate`**：按长度裁剪文件——tmpfs 为 `Vec` resize 并补 0，FAT 为 seek + `truncate`。`ftruncate` 按 fd、`truncate` 按路径；只读 fd 拒绝裁剪（返回 -1）。
+* **`fsync`**：tmpfs 直接返回成功（数据本就在内存，无盘可刷）；FAT 走 `file.flush()` → `BlockIo::flush` → `BlockDevice::flush` 的**完整刷盘链**，是真正落盘。为支持这点，`BlockDevice` trait 新增了 `flush()` 默认空实现，`BlockIo::flush` 打通到设备。
+* **`rename`**：支持同目录改名、跨目录移动、覆盖已存在文件（编辑器「写临时文件再 rename」的原子写风格）、目录改名；跨设备（如 `/tmp → /fat`）返回 -1（EXDEV 语义）；把目录移进自己的子目录会被拒绝（防自环）。跨设备检测通过 `mount_point_of()` 比较挂载点（而非路径本身）实现。
+
+用户态经 `fs.h` 封装为 `lseek` / `ftruncate` / `fsync` / `truncate` / `rename`，经 `syscall4` 进入内核；Rust 侧经 `ulib::io` 的同名封装，体感与 POSIX 对齐。
 
 ---
 
-### Security: Process Credentials & File Permissions
-
-RmikuOS 实现了一套**两层 POSIX 风格权限模型**：第一层是**进程凭证**（谁在运行），第二层是**文件权限**（谁能访问什么）。两层通过 `euid == 0`（超级用户）的绕过机制联动，足以支撑真实的多用户登录、setuid 提权与协作隔离的教学演示——且**多用户完全靠用户态 glue 实现，内核凭证/权限子系统一次到位、无需为加用户而改内核**。
-
-#### 进程凭证（Process Credentials）
-
-每个 PCB 持有一组 POSIX 凭证：
-
-```text
-uid / euid / gid / egid    真实 uid、有效 uid、真实 gid、有效 gid
-```
-
-* init 进程以 **root（0/0/0/0）** 启动；
-* `fork` 继承父进程全套凭证；`exec` 替换映像但**保留**凭证（除非文件带 setuid/setgid 位，见 Layer 2）；
-* `euid == 0` 即超级用户，绕过所有文件权限检查（与 Unix 一致）；
-* 提供完整的凭证读写系统调用（号段 **50–59**）：
-
-```text
-50 GETUID    51 GETEUID   52 GETGID    53 GETEGID
-54 SETUID    55 SETEUID   56 SETGID    57 SETEGID
-58 SETREUID  59 SETREGID
-```
-
-`set*` 系列按「仅 root（euid==0）可改真实 uid，或进程可把有效位降回自身真实位」的 POSIX 规则实现；C 用户库（`process.h`）与 Rust `ulib::process` 均提供封装。
-
-#### 文件权限（File Permissions）
-
-`Stat` / `Metadata` 为文件系统节点携带 `file_type / mode / uid / gid`（32 字节 `repr(C)` 布局，与用户态 `struct stat` 对齐）。三个后端行为：
-
-* **ext4**：读取磁盘原生的 uid/gid/mode；
-* **FAT**：目录映射为 `0755`、文件 `0644`，统一归属 root；
-* **tmpfs**：节点自带 `Perms { mode, uid, gid }`，创建者即当前凭证（经 `current_creds`），支持 `chmod` / `chown`。
-
-**访问检查**（`fs::check_access`）按「拥有者 / 所属组 / 其他人」三级取对应 rwx 位，逐级上报：
-
-```text
-euid == file_uid         -> 用 owner 位
-egid == file_gid         -> 用 group 位
-否则                     -> 用 other 位
-euid == 0                -> 直接放行（超级用户）
-```
-
-打开文件（`check_open`）按 `O_RDONLY/WRONLY/RDWR` 推导所需 R/W 权限，`O_EXEC` 走专用执行路径；在目录中创建/删除/改名（`check_dir_write`）要求父目录 W+X。`chmod` / `chown` 系统调用，要求 `euid==0`（chmod 或 `euid==file.uid`；chown 仅 root），并同步落盘到各后端。
-
-**setuid / setgid 提权**：`exec` 在 `O_EXEC` 路径打开目标文件后检查执行权限；若文件带 `S_ISUID` 位，则把进程 `euid` 提升为该文件的 `uid`（真实 `uid` 不变，符合 POSIX），`S_ISGID` 同理作用于 `egid`——这正是 `login` / `su` 能把普通用户提回 root 的机制。
-
-验证程序 `xx_perm.c` 覆盖：stat 属主/权限、chmod/chown 往返、降权后访问拒绝、setuid exec 提权。
-
-#### 多用户子系统（Multi-User）
-
-仅用用户态 glue + 一份数据文件即可支撑真实多用户，内核无需改动：
-
-* **`/etc/passwd`**（`name:uid:gid:home:salt:sha256hex`）是用户的唯一真相源，由 `user/rootfs/` 模板在打包镜像时烘焙进 ext4；
-* **`login`**（`/samples/login`）：读 `/etc/passwd`，用 **SHA256(salt ‖ password)** 校验口令（纯 C 实现，无外部依赖），通过后 `fork` + `setgid` + `setuid` + `chdir(home)` + `exec` 进入该用户 shell（`setgid` 必须早于 `setuid`，否则 root 特权已丢失）；
-* **`su [user]`**：root（euid==0）可自由切换；普通用户需验证目标口令；
-* **口令回显**：guest 内核的 uart / fgetc 均为只读，回显来自宿主机终端，由 `run-qemu.sh` 的 `stty -echo` 在 QEMU 启动前关闭；
-* init 进程改为从 `/samples/login` 启动，默认即为 root 登录界面。
-
-当前内置用户 `root / alice / bob`（口令即用户名），分别归属各自主组，演示「不同用户、不同家目录、不同文件权限」的隔离。
-
-**用户增删（构建期）**：根文件系统 ext4 以**只读**方式挂载（见「Read-only ext4 Rootfs」），运行时无法改写 `/etc/passwd`，因此**暂没有 `useradd` / `userdel` 等运行时工具**。新增 / 删除用户需在构建机编辑 `user/rootfs/etc/passwd`（涉及附加组时同步改 `user/rootfs/etc/group`），再 `bash user/mkfs_ext4.sh <arch>` 重烤镜像并重启。运行时热增删需等**可写 ext4** 落地（见 Roadmap）。
-
-#### 附加组（Supplementary Groups）
-
-进程可同时属于多个组：
-
-- **内核**：PCB 增加 `groups: [usize; NGROUPS_MAX]`（`NGROUPS_MAX = 32`）+ `ngroups`，`fork` 经 `fork_from` 继承；`current_groups()` / `set_current_groups()` 独立于 4 元组凭证（setuid/exec 不会误清组）。`check_access` 的组匹配扩展为「主 `egid` **或** 任一附加组命中」。
-- **系统调用**：`getgroups`（**62**）/ `setgroups`（**63**）；`setgroups` 仅特权进程（`euid == 0`）可调用。
-- **用户态 glue**：`login` / `su` 新增 `initgroups(name, gid)`，在仍为 root 时读 `/etc/group`（`group_name:gid:members` 格式）收集该用户的附加组并 `setgroups` 写入进程；`/etc/group` 随 rootfs 烘焙进镜像（见 `user/rootfs/etc/group`）。
-- **验证用例**：`xx_groups.c`（构建产物 `/samples/groups`）打印凭证与 `getgroups` 列表。演示步骤（注意：chmod/chown 仅在可写 tmpfs 生效，ext4 只读，故文件须放 `/tmp` 而非 `/home`）：在 **tmpfs（`/tmp`）** 上 `chown 0 50 /tmp/notes && chmod 0640 /tmp/notes`，再分别以 `alice` / `bob` 运行 `/samples/groups /tmp/notes`——`alice` 属 `staff`(gid 50) 故 open 成功，`bob` 不在该组被拒绝。
-
-
 ## User Programs and Shell
 
-RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init）通过 VFS 从 `/samples/login` 启动，登录后进入对应用户的 shell。Shell 不是内核内置的玩具解释器，而是一个**支持交互式编辑、通配符展开、逻辑链、后台执行与脚本 source** 的完整用户态程序。
+RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init shell）通过 VFS 从 `/bin/shell` 加载。Shell 不是内核内置的玩具解释器，而是一个**支持交互式编辑、通配符展开、逻辑链、后台执行与脚本 source** 的完整用户态程序。
 
 ### Shell 命令体系
 
@@ -298,9 +251,8 @@ RmikuOS 从 ext4 rootfs 中加载用户程序，第一个用户进程（init）�
 
 ```text
 内建：  cd  pwd  exit  help  shutdown  jobs  clear
-        mkdir  touch  rm  rmdir  source  .
+        mkdir  touch  rm  rmdir  mv  rename  source  .
         export  env  unset
-        whoami  chmod  chown        
 外部：  ls  cat  echo  grep  shell  sleep ...
 ```
 
@@ -546,7 +498,11 @@ tmpfs 是一个完全活在内存中的可写文件系统，挂载于 `/tmp`，�
 mkdir              创建目录
 create (touch)     创建空文件
 write / read       文件内容读写(每个打开的 fd 独立 offset,数据共享)
-truncate           截断到 0(配合 > 覆盖)
+lseek              定位 fd 读写偏移(SET/CUR/END,复用 fd 自带 offset)
+ftruncate          按 fd 截断到指定长度(缩小保留内容、扩大补 0)
+truncate           按路径截断到指定长度
+fsync              内存 no-op(数据本就在内存,无需落盘)
+rename             移动 / 改名(同目录 / 跨目录 / 覆盖已存在文件 / 目录改名)
 unlink (rm)        删除文件
 rmdir              删除空目录
 remove_recursive   递归删除(rm -r)
@@ -557,6 +513,7 @@ remove_recursive   递归删除(rm -r)
 * **目录树共享**：`lookup` 返回子节点时 clone 的是 `Arc`，多个进程拿到同一文件即操作同一份内存——一端写、另一端可读。
 * **递归删除零额外代码**：`remove_recursive` 直接从父目录的 `BTreeMap` 中移除整个子树节点，`Arc` 连锁 drop 自动递归释放整棵子树的内存。
 * **unlink 已打开的文件**：删除只是从目录移除「名字」，若仍有进程持有该文件的 `Arc`，内存保留到最后一个 fd 关闭——与 Unix「unlink 一个 open 的文件，数据存活到 close」一致。
+* **定位 / 裁剪 / 刷盘 / 改名**：`lseek` 复用每个 fd 现有的独立 offset；`ftruncate` / `truncate` 按长度裁剪（`Vec` resize 并补 0）；`fsync` 直接返回成功（内存即真相，无需落盘）；`rename` 通过 `find_dir` 从根遍历定位目标父目录，支持跨目录移动与覆盖已存在文件（编辑器原子写风格），跨设备则返回失败。
 
 写权限的隔离也随之成立：在只读 ext4 路径下（如 `/etc`）执行写操作会被正确拒绝（`Inode` 的写方法默认返回失败，ext4 不重写它们），而 tmpfs 重写为真正的增删。一组端到端测试覆盖了建树、文件读写、`rmdir` 非空目录失败、`unlink` 目录失败、递归删除、删除不存在项失败、以及「ext4 上 mkdir 失败」等用例。
 
@@ -581,7 +538,7 @@ VFS (Inode / File)
 * **`BlockIo`** 实现 `fatfs` 要求的字节流 IO（`Read` / `Write` / `Seek`）：按字节偏移定位到扇区，非扇区对齐的写入用 read-modify-write（先读整扇区、改其中一段、再写回）。
 * **`FatFs` / `FatInode` / `FatFile`** 把 `fatfs` 的借用式 API（`File` / `Dir` 借用 `FileSystem`）适配到 VFS 的 `Inode` / `File`。由于 fatfs 的句柄借用全局 `FileSystem` 对象，无法直接塞进 `'static` 的 VFS 节点，RmikuOS 采用「路径式 inode」：`FatInode` 只存路径，每次操作在持锁块内临时打开 fatfs 句柄、用完即弃，只让纯数据（`Vec` / 元数据 / 返回码）逃出锁作用域。这与 ext4 的设计同构。
 
-支持的操作与 tmpfs 对齐：创建 / 读 / 写 / 截断 / 追加 / 建目录 / 删除 / 递归删除，并经由统一的 open flags 驱动（`>` 覆盖、`>>` 追加、`<` 读取）。写入经 `BlockIo` 落到 virtio 块设备的磁盘镜像，跨重启存活：
+支持的操作与 tmpfs 对齐：创建 / 读 / 写 / 截断 / 追加 / 建目录 / 删除 / 递归删除 / `lseek` / `ftruncate` / `fsync` / `rename`，并经由统一的 open flags 驱动（`>` 覆盖、`>>` 追加、`<` 读取）。写入经 `BlockIo` 落到 virtio 块设备的磁盘镜像，跨重启存活；其中 `fsync` 在 FAT 上走 `file.flush()` → `BlockIo::flush` → `BlockDevice::flush` 的**完整刷盘链**，是真正持久化（区别于 tmpfs 的 no-op），写入后 `fsync` 再读回可验证内容落盘：
 
 ```text
 / $ echo "hello fat" > /fat/note
@@ -948,7 +905,7 @@ syscall.h   系统调用号 + syscall3 / syscall6
 flag.h      open flags(O_RDONLY / O_WRONLY / O_RDWR / O_CREAT / O_TRUNC / O_APPEND)
 io.h        strlen + read/write + open/close/create + puts/put_char
 process.h   exit/fork/waitpid/getpid/yield/sleep + exec
-fs.h        dirent/stat + getdents/stat/chdir/getcwd + mkdir/unlink/rmdir
+fs.h        dirent/stat + getdents/stat/chdir/getcwd + mkdir/unlink/rmdir + lseek/ftruncate/fsync/truncate/rename
 mem.h       PROT_* + mmap/munmap + malloc/free/calloc
 lock.h      spinlock / mutex
 thread.h    thread_create/exit/join + 栈管理
@@ -1122,7 +1079,7 @@ ulib::number    系统调用号
 ulib::syscall   syscall3 / syscall6(架构分离,inline asm)
 ulib::io        read/write/open/close/create/puts
 ulib::process   exit/fork/waitpid/getpid/yield/exec
-ulib::fs        Stat/DirEntry + stat/getdents/mkdir/unlink/rmdir/chdir/getcwd
+ulib::fs        Stat/DirEntry + stat/getdents/mkdir/unlink/rmdir/chdir/getcwd + lseek/ftruncate/fsync/truncate/rename
 ulib::sched     tickets/alpha/SchedProcStat/get_ticks
 ```
 
@@ -1715,7 +1672,7 @@ LoongArch64 使用 QEMU `virt` 机器和 virtio-pci 块设备。
 
 ```text
 user/
-├── rootfs/                 rootfs 目录模板(etc/passwd / etc/group / motd, home/*, share, tmp, fat ...)
+├── rootfs/                 rootfs 目录模板(etc/motd, home, share, tmp, fat ...)
 │   └── scripts/lua         lua测试文件
 ├── include/                C/C++ 用户库(分层头文件)
 │   ├── types.h             基础类型(usize / isize)
@@ -1905,8 +1862,10 @@ User Programs (httpd / udp_test / tcp_test)
 * 管道 `pipe`、`dup2`；shell **多级管道** `|`、重定向 `< > >>`、管道与重定向自由组合
 * VFS 多文件系统挂载（最长前缀匹配）
 * read-only ext4 rootfs（基于 `ext4_view`）
-* 可写 tmpfs（mkdir / create / write / read / truncate / unlink / rmdir / 递归删除，挂载于 `/tmp`）
-* 可写 **FAT16** 落盘文件系统（vendored `fatfs` + `BlockIo` 适配，挂载于 `/fat`，跨重启持久化，开启 LFN）
+* 可写 tmpfs（mkdir / create / write / read / lseek / ftruncate / fsync / truncate / rename / unlink / rmdir / 递归删除，挂载于 `/tmp`）
+* 可写 **FAT16** 落盘文件系统（vendored `fatfs` + `BlockIo` 适配，挂载于 `/fat`，跨重启持久化，开启 LFN）；支持 `lseek` / `ftruncate` / `fsync` / `rename`，`fsync` 走 `BlockIo → BlockDevice` 真刷盘链
+* 文件位置 / 裁剪 / 刷盘 / 改名系统调用（号段 **64–68**：fsync / ftruncate / truncate / lseek / rename），tmpfs 与 FAT 双后端通用；权限对齐现有 `sys_write` 只查 `File::writable()`，不做完整 `check_access`；跨设备 rename 经 `mount_point_of()` 比较挂载点返回 EXDEV
+* 5 个独立用户态测试程序（`lseek_test` / `ftruncate_test` / `truncate_test` / `fsync_test` / `rename_test`）覆盖上述 syscall 的正常 / 错误路径（含 FAT 落盘组、跨设备 EXDEV、目录移入自身子目录等边界）
 * BlockDevice trait（读 + 写）、RamDisk、BlockCache
 * RISC-V virtio-mmio / LoongArch64 virtio-pci block device（读 + 写路径，多盘发现）
 * virtio-net 网卡驱动，自研 TCP/IP 协议栈（Ethernet / ARP / IPv4 / UDP / TCP / DHCP）
@@ -1918,7 +1877,7 @@ User Programs (httpd / udp_test / tcp_test)
 * 用户态 TFTP 客户端：slirp `tftpboot` 文件注入通道（服务器实测在 `10.0.2.2`）
 * TCP **Jacobson/Karn 自适应 RTO**（定点 SRTT/RTTVAR、队首采样、RTO-restore、阻塞式流量控制），100K 丢包实验提速 2.4–4.0×
 * 用户态 libc 补全：标准 `string.h`、`snprintf` 族（全 `static inline`，多文件链接安全）
-* 从 `/samples/login` 启动 init（默认 root 登录界面，登录后进入对应用户 shell）
+* 从 ext4 `/bin/shell` 启动 init shell
 * C 用户库（分层头文件）与 Rust 用户库 `ulib`
 * Rust 用户程序支持（单文件 rustc + cargo workspace），双架构，syscall ABI 语言无关
 * **C++ 用户程序支持**：`stdcompat.h` 桥接层，算法代码零改动移植
@@ -1931,12 +1890,6 @@ User Programs (httpd / udp_test / tcp_test)
 * **环境变量子系统**：内核 syscall 号段 45–49（`getenv` / `getenv_r` / `setenv` / `unsetenv` / `listenv` / `clearenv`）+ C 用户库 `env.h` 封装
 * shell 内建 `export` / `env` / `unset`，支持 `$VAR` / `${VAR}` / `$?` 展开（单引号保护、双引号展开），`PATH` 经 `getenv` 驱动命令搜索且可即时修改
 * 内核 `exec` 路径将 `envp` 经寄存器（`a2` / `r6`）传入 `main` 第 3 参数，`test_env.c` 全量用例（9 项）在双架构实机验证通过
-* **两层权限模型（Layer 1 进程凭证 + Layer 2 文件权限）**：PCB 持 `uid/euid/gid/egid`；
-* `Stat`/`Metadata` 携带 `mode/uid/gid`；ext4 读原生属主、FAT 映射、tmpfs 带 `Perms{mode,uid,gid}`；`check_access` 按 owner/group/other 三级 + `euid==0` 绕过；`check_open`/`check_dir_write` 派生 R/W/X 检查
-* `chmod`/`chown` 系统调用（仅 root 或属主可改），三后端统一落盘
-* **setuid / setgid 提权**：`exec` 经 `O_EXEC` 路径检查执行权限，`S_ISUID`/`S_ISGID` 位把 `euid`/`egid` 提升为文件属主；`xx_perm.c` 覆盖 stat/属主、chmod/chown 往返、降权拒绝、setuid exec 提权
-* **多用户子系统**：`/etc/passwd`（`name:uid:gid:home:salt:sha256hex`）为唯一真相源，由 rootfs 模板烘焙进镜像；`login`（`/samples/login`）用纯 C SHA256(salt‖password) 校验后 `setgid`+`setuid`+`chdir`+`exec` 进入用户 shell；`su [user]` 支持 root 自由切换 / 普通用户验密；init 从 `/bin/login` 启动
-* 内置用户 `root` / `alice` / `bob`（口令即用户名），演示多用户、多主组、不同家目录与文件权限隔离
 * 统一构建脚本 `build.py`（C / C++ / 单文件 Rust / cargo Rust 分派编译）
 * 双架构关机（riscv SiFive Test finisher / loongarch ACPI GED）
 * RISC-V / LoongArch64 SMP 启动与多核调度验证（per-hart timer、IPI reschedule、running_on 防重入）
@@ -1960,7 +1913,7 @@ virtio-net → Ethernet / ARP / IPv4 / UDP / TCP / DHCP / socket / httpd 已打�
 ### Filesystem
 
 * FAT 当前为 FAT16 / 单分区，可扩展 FAT32 与更深的子目录用例
-* 探索更通用的块设备写回缓存与 fsync 语义
+* `fsync` 已在 FAT 上实现完整刷盘链（`file.flush()` → `BlockIo::flush` → `BlockDevice::flush`），tmpfs 为内存 no-op；后续可探索更通用的**块设备写回缓存**（延迟写 + 脏页回收），进一步统一各后端的持久化语义
 * 可写文件系统的并发访问（当前 fatfs 单核 + 全局锁）
 
 ### Scheduler
@@ -1973,14 +1926,6 @@ virtio-net → Ethernet / ARP / IPv4 / UDP / TCP / DHCP / socket / httpd 已打�
 
 * 扩展 `stdcompat.h` 覆盖更多标准库容器与算法
 * 探索更复杂的 C++ 应用移植（如线性代数库、小型游戏引擎）
-
----
-
-### Security & Multi-User
-
-* **Capabilities（能力机制）**：把 root 的万能特权拆为 `CAP_*` 位图、做 per-thread 检查（教学深度加分项，改动聚焦权限层、不碰磁盘格式）
-* **ACL（细粒度 ACL）**：仅当课件明确需要时才做；真 ACL 需扩展 ext4/FAT/tmpfs 三后端的磁盘元数据，ROI 低，暂搁置
-* **用户增删工具（useradd / userdel）**：待**可写 ext4** 落地；当前用户增删只能改 `user/rootfs/etc/passwd`(+`/etc/group`) 后重烤镜像，无运行时命令（根因：ext4 以只读方式挂载）
 
 ---
 
