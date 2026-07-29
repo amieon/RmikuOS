@@ -18,7 +18,7 @@
 
 #define TRIAL_TICKS  6000UL
 #define WIN_TICKS    100
-#define ALPHA_STEP   5
+#define ALPHA_STEP   1
 
 static void sl_reset_state(void) {
     sl_ngroups = 0;

@@ -52,7 +52,7 @@ extern "C" {
 /* #define printf uprintf */
 
 #define SL_MAX_GROUPS  8
-#define SL_MAX_THREADS 128
+#define SL_MAX_THREADS 512
 #define SL_NAME_LEN    16
 
 /* ================= 数据类型 ================= */
@@ -508,7 +508,7 @@ static int sl_run(const sl_cfg *cfg) {
     unsigned long start_delay = cfg->start_delay ? cfg->start_delay : 80;
 
     reset_sched_stat();
-    set_sched_alpha(alpha);
+    set_sched_alpha(0);
     sl_t0 = get_ticks();
     sl_t_end = sl_t0 + cfg->total_ticks;
 
@@ -541,8 +541,15 @@ static int sl_run(const sl_cfg *cfg) {
     long d0 = (long)(sl_t0 + start_delay) - (long)get_ticks();
     if (d0 > 0) sleep((usize)d0);
 
-    printf("# schedlab win=%d total=%lu groups=%d\n",
-           sl_window, cfg->total_ticks, sl_ngroups);
+    /* 切到实验 alpha,重置统计和时间基线。
+     * 创建阶段(alpha=0)的数据不计入实验结果。 */
+    set_sched_alpha(alpha);
+    reset_sched_stat();
+    sl_t0 = get_ticks();                 // ← 重置 t0,窗口从这里开始
+    sl_t_end = sl_t0 + cfg->total_ticks;
+
+    printf("# schedlab win=%d total=%lu groups=%d alpha=%d\n",
+           sl_window, cfg->total_ticks, sl_ngroups, alpha);
 
     for (int i = 0; i < sl_ngroups; i++) {
         if (sl_groups[i].pid < 0) continue;
