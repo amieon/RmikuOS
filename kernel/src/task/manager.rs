@@ -693,7 +693,9 @@ impl TaskManager {
             // 进程之前没有 runnable 线程(如 schedlab 主线程是唯一线程且在 sleep),
             // 这次 sleep wake 让它重新可调度。重置进程 pass,
             // 让它被 pick_ready_process_by_stride 及时选中。
-            self.process_mut(pid).pass = 0;
+            if self.process(pid).tickets <= 1 {
+                self.process_mut(pid).pass = 0;
+            }
         }
 
         if should_enqueue {

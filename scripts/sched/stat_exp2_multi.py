@@ -2,19 +2,21 @@
 """
 stat_exp2.py -- Exp 2: Edge Deadline Trade-off (multi-config).
 
-Parses sexp2_multi.c output:
+Parses sexp2_edge.c output:
   # RUN config=<name> alpha=<N> rep=<M>/<total>
   W,win,alpha,pid,name,run_delta,eff_tickets,ready_threads
   D,win,alpha,jobs_delta,miss_delta,late_delta
   J,pid,name,threads,jobs,miss,late_sum,late_max,...
   S,win,alpha,jain_q,max_slowdown_q
 
-Groups by (config, alpha), aggregates across reps (mean ± std).
+Groups by (config, alpha), aggregates across reps (mean +hi/-lo).
+  hi = max(rep) - mean   (上偏差)
+  lo = mean - min(rep)   (下偏差)
 Outputs per-config tables + plots, plus cross-config comparison.
 
 Usage:
-    python3 stat_exp2.py ./logs/sched/edge/sexp2_multi.csv
-    python3 stat_exp2.py ./logs/sched/edge/sexp2_multi.csv --detail medium 40
+    python3 stat_exp2.py ./logs/sched/edge/sexp2_edge.csv
+    python3 stat_exp2.py ./logs/sched/edge/sexp2_edge.csv --detail medium 40
 """
 
 import sys
@@ -54,7 +56,6 @@ def parse(path):
             # warmup marker
             m_warm = re.search(r'# WARMUP config=(\S+) alpha=(\d+)', line)
             if m_warm:
-                # save previous formal run before starting warmup
                 if cur is not None and not in_warmup:
                     runs.append(cur)
                 in_warmup = True
@@ -64,7 +65,6 @@ def parse(path):
             # formal run marker
             m_run = re.search(r'# RUN config=(\S+) alpha=(\d+) rep=(\d+)/(\d+)', line)
             if m_run:
-                # save previous formal run before starting new one
                 if cur is not None and not in_warmup:
                     runs.append(cur)
                 in_warmup = False
@@ -78,7 +78,6 @@ def parse(path):
 
             # skip warmup data lines
             if in_warmup or cur is None:
-                # but don't skip config header lines
                 if line.startswith("#"):
                     continue
                 if in_warmup:
@@ -132,7 +131,6 @@ def parse(path):
             except (IndexError, ValueError):
                 continue
 
-    # append last run
     if cur is not None and not in_warmup:
         runs.append(cur)
 
@@ -148,7 +146,6 @@ def compute(run):
         "rep": run["rep"],
     }
 
-    # --- ctrl deadline from J ---
     for j in run["J"]:
         if j["name"] == "ctrl":
             s["jobs"] = j["jobs"]
@@ -166,19 +163,16 @@ def compute(run):
                 s["resp_std"] = 0.0
             break
 
-    # --- throughput from W (sum run_delta per task, skip first 3 windows) ---
     ws = [w for w in run["W"] if w["win"] > 3]
     for name in ["ctrl", "ai", "log"]:
         total_rd = sum(w["run_delta"] for w in ws if w["name"] == name)
         s.setdefault("work", {})[name] = total_rd
 
-    # --- CPU share from W ---
     total_all = sum(w["run_delta"] for w in ws)
     for name in ["ctrl", "ai", "log"]:
         total_name = sum(w["run_delta"] for w in ws if w["name"] == name)
         s.setdefault("share", {})[name] = total_name / total_all * 100 if total_all > 0 else 0
 
-    # --- per-window miss rate from D ---
     if run["D"]:
         rates = []
         for d in run["D"]:
@@ -192,7 +186,6 @@ def compute(run):
         s["win_miss_mean"] = 0
         s["win_miss_std"] = 0
 
-    # --- Jain from S ---
     if run["S"]:
         s["jain"] = np.mean([x["jain_q"] for x in run["S"]]) / 1000.0
     else:
@@ -202,7 +195,8 @@ def compute(run):
 
 
 def aggregate(runs):
-    """Group by (config, alpha), compute mean ± std across reps."""
+    """Group by (config, alpha), compute mean + hi/-lo across reps.
+    hi = max(rep) - mean, lo = mean - min(rep). Non-symmetric error bars."""
     from collections import defaultdict
     by_key = defaultdict(list)
     for r in runs:
@@ -216,47 +210,60 @@ def aggregate(runs):
         for key in ["miss_rate", "avg_late", "max_late", "avg_resp", "resp_std",
                      "win_miss_mean", "win_miss_std", "jain"]:
             vals = [r.get(key, 0) for r in reps]
-            row[key + "_mean"] = np.mean(vals)
-            row[key + "_std"] = np.std(vals)
+            m = np.mean(vals)
+            mx = max(vals)
+            mn = min(vals)
+            row[key + "_mean"] = m
+            row[key + "_hi"] = mx - m   # 上偏差
+            row[key + "_lo"] = m - mn    # 下偏差
 
         for name in ["ctrl", "ai", "log"]:
             vals_w = [r.get("work", {}).get(name, 0) for r in reps]
-            row["work_" + name + "_mean"] = np.mean(vals_w)
-            row["work_" + name + "_std"] = np.std(vals_w)
+            m = np.mean(vals_w)
+            row["work_" + name + "_mean"] = m
+            row["work_" + name + "_hi"] = max(vals_w) - m
+            row["work_" + name + "_lo"] = m - min(vals_w)
 
             vals_s = [r.get("share", {}).get(name, 0) for r in reps]
-            row["share_" + name + "_mean"] = np.mean(vals_s)
-            row["share_" + name + "_std"] = np.std(vals_s)
+            m = np.mean(vals_s)
+            row["share_" + name + "_mean"] = m
+            row["share_" + name + "_hi"] = max(vals_s) - m
+            row["share_" + name + "_lo"] = m - min(vals_s)
 
         stats.append(row)
     return stats
 
 
 # ------------------------------------------------------------------ print
+def fmt_err(mean, hi, lo, width_mean=7, width_err=5):
+    """Format value with +hi/-lo, e.g. '35.6 +2.1/-1.8'"""
+    return f"{mean:>{width_mean}.1f} +{hi:>{width_err}.1f}/-{lo:>{width_err}.1f}"
+
+
 def print_summary(stats):
     configs = sorted(set(s["config"] for s in stats))
 
     for config in configs:
         cs = [s for s in stats if s["config"] == config]
-        print("=" * 110)
+        print("=" * 135)
         print(f"CONFIG: {config}  ({len(cs)} alphas × {cs[0]['nreps']} reps)")
-        print("=" * 110)
-        hdr = (f"{'α':>4}  {'miss%':>7} {'±':>5}  "
-               f"{'sh_ctrl':>7} {'±':>5}  {'sh_ai':>7} {'±':>5}  {'sh_log':>7} {'±':>5}  "
+        print("=" * 135)
+        hdr = (f"{'α':>4}  {'miss%':>20}  "
+               f"{'sh_ctrl':>20}  {'sh_ai':>20}  {'sh_log':>20}  "
                f"{'avg_late':>8}  {'max_late':>8}  {'Jain':>6}")
         print(hdr)
-        print("-" * 110)
+        print("-" * 135)
 
         for s in cs:
-            print(f"{s['alpha']:>4}"
-                  f"  {s['miss_rate_mean']:>7.1f} {s['miss_rate_std']:>5.1f}"
-                  f"  {s['share_ctrl_mean']:>7.1f} {s['share_ctrl_std']:>5.1f}"
-                  f"  {s['share_ai_mean']:>7.1f} {s['share_ai_std']:>5.1f}"
-                  f"  {s['share_log_mean']:>7.1f} {s['share_log_std']:>5.1f}"
+            miss_str = fmt_err(s['miss_rate_mean'], s['miss_rate_hi'], s['miss_rate_lo'])
+            ctrl_str = fmt_err(s['share_ctrl_mean'], s['share_ctrl_hi'], s['share_ctrl_lo'])
+            ai_str = fmt_err(s['share_ai_mean'], s['share_ai_hi'], s['share_ai_lo'])
+            log_str = fmt_err(s['share_log_mean'], s['share_log_hi'], s['share_log_lo'])
+            print(f"{s['alpha']:>4}  {miss_str}  {ctrl_str}  {ai_str}  {log_str}"
                   f"  {s['avg_late_mean']:>8.1f}"
                   f"  {s['max_late_mean']:>8.0f}"
                   f"  {s['jain_mean']:>6.3f}")
-        print("=" * 110)
+        print("=" * 135)
         print()
 
 
@@ -274,8 +281,9 @@ def plot_per_config(stats, outdir="./logs/sched/edge"):
         # 1) miss rate + share dual axis
         fig, ax1 = plt.subplots(figsize=(9, 5))
         miss = [s["miss_rate_mean"] for s in cs]
-        miss_err = [s["miss_rate_std"] for s in cs]
-        ax1.errorbar(alphas, miss, yerr=miss_err, fmt="o-",
+        miss_lo = [s["miss_rate_lo"] for s in cs]
+        miss_hi = [s["miss_rate_hi"] for s in cs]
+        ax1.errorbar(alphas, miss, yerr=[miss_lo, miss_hi], fmt="o-",
                      color=COLORS["ctrl"], capsize=4, lw=2, ms=6,
                      label="ctrl miss rate (%)")
         ax1.set_xlabel("α")
@@ -287,7 +295,10 @@ def plot_per_config(stats, outdir="./logs/sched/edge"):
         ax2 = ax1.twinx()
         for name, color in [("ai", COLORS["ai"]), ("log", COLORS["log"])]:
             sh = [s[f"share_{name}_mean"] for s in cs]
-            ax2.plot(alphas, sh, "s--", color=color, lw=1.2, ms=4, label=f"{name} share %")
+            sh_lo = [s[f"share_{name}_lo"] for s in cs]
+            sh_hi = [s[f"share_{name}_hi"] for s in cs]
+            ax2.errorbar(alphas, sh, yerr=[sh_lo, sh_hi], fmt="s--",
+                         color=color, lw=1.2, ms=4, capsize=3, label=f"{name} share %")
         ax2.set_ylabel("CPU Share (%)")
         ax2.set_ylim(0, 80)
 
@@ -318,7 +329,10 @@ def plot_per_config(stats, outdir="./logs/sched/edge"):
         # 3) Jain
         fig, ax = plt.subplots(figsize=(9, 4))
         jain = [s["jain_mean"] for s in cs]
-        ax.plot(alphas, jain, "o-", color="#0891b2", lw=1.2)
+        jain_lo = [s["jain_lo"] for s in cs]
+        jain_hi = [s["jain_hi"] for s in cs]
+        ax.errorbar(alphas, jain, yerr=[jain_lo, jain_hi], fmt="o-",
+                    color="#0891b2", lw=1.2, capsize=3)
         ax.axhline(1.0, color="gray", ls="--", lw=0.8)
         ax.set_xlabel("α")
         ax.set_ylabel("Jain Fairness Index")
@@ -340,9 +354,10 @@ def plot_comparison(stats, outdir="./logs/sched/edge"):
                     key=lambda x: x["alpha"])
         alphas = [s["alpha"] for s in cs]
         miss = [s["miss_rate_mean"] for s in cs]
-        miss_err = [s["miss_rate_std"] for s in cs]
+        miss_lo = [s["miss_rate_lo"] for s in cs]
+        miss_hi = [s["miss_rate_hi"] for s in cs]
         color = CONFIG_COLORS[ci % len(CONFIG_COLORS)]
-        ax.errorbar(alphas, miss, yerr=miss_err, fmt="o-", color=color,
+        ax.errorbar(alphas, miss, yerr=[miss_lo, miss_hi], fmt="o-", color=color,
                     capsize=3, lw=1.5, ms=5, label=config)
 
     ax.set_xlabel("α", fontsize=12)
@@ -365,9 +380,8 @@ def plot_comparison(stats, outdir="./logs/sched/edge"):
         ai_sh = [s["share_ai_mean"] for s in cs]
         color = CONFIG_COLORS[ci % len(CONFIG_COLORS)]
         ax.plot(ai_sh, miss, "o-", color=color, lw=1.5, ms=5, label=config)
-        # annotate alpha at each point
         for s in cs:
-            ax.annotate(f"{s['alpha']}", 
+            ax.annotate(f"{s['alpha']}",
                         (s["share_ai_mean"], s["miss_rate_mean"]),
                         fontsize=6, alpha=0.7, ha="center", va="bottom")
 
@@ -393,7 +407,6 @@ def plot_detail(runs, config, alpha, outdir="./logs/sched/edge"):
     fig, axes = plt.subplots(3, 1, figsize=(11, 9), sharex=True)
 
     for ri, run in enumerate(reps):
-        # per-window miss rate from D
         ds = sorted(run.get("D", []), key=lambda x: x["win"])
         if ds:
             wins = [d["win"] for d in ds]
@@ -402,14 +415,12 @@ def plot_detail(runs, config, alpha, outdir="./logs/sched/edge"):
             axes[0].plot(wins, rates, ".-", lw=0.8, ms=3, alpha=0.7,
                          label=f"rep{ri+1}")
 
-        # ai run_delta from W
         ws = sorted([w for w in run.get("W", []) if w["name"] == "ai"],
                     key=lambda x: x["win"])
         if ws:
             axes[1].plot([w["win"] for w in ws], [w["run_delta"] for w in ws],
                          ".-", lw=0.8, ms=3, alpha=0.7, label=f"rep{ri+1}")
 
-        # Jain from S
         ss = sorted(run.get("S", []), key=lambda x: x["win"])
         if ss:
             axes[2].plot([s["win"] for s in ss],
@@ -439,7 +450,7 @@ def plot_detail(runs, config, alpha, outdir="./logs/sched/edge"):
 # ------------------------------------------------------------------ main
 def main():
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <sexp2_multi.csv> [--detail <config> <alpha>]")
+        print(f"Usage: {sys.argv[0]} <sexp2_edge.csv> [--detail <config> <alpha>]")
         sys.exit(1)
 
     path = sys.argv[1]
