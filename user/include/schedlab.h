@@ -303,11 +303,12 @@ static void sl_aimd_init(sl_aimd_t *a, int alpha0) {
     a->alpha = alpha0;
     a->inc = 5;
     a->backoff = 80;
-    a->safe_lateness = 0;
-    a->danger_lateness = 25;
+    a->safe_lateness = 10;    /* 原 0，允许少量迟到算安全 */
+    a->danger_lateness = 100; /* 原 25，in-parent ctrl 被打断 late_delta 基线高 */
     a->safe_windows = 0;
     a->cooldown = 0;
 }
+
 
 static int sl_policy_aimd(const sl_window_t *w, void *ud) {
     sl_aimd_t *a = (sl_aimd_t *)ud;
@@ -335,17 +336,17 @@ static int sl_policy_aimd(const sl_window_t *w, void *ud) {
         action = "down";
     } else if ((long)w->late_delta <= a->safe_lateness) {
         a->safe_windows++;
-        /* SAFE_WINDOWS_TO_PROBE_UP = 1(40 版) */
-        if (!can_probe_up) {
-            action = "late_hold";
-        } else {
+        if (a->safe_windows >= 1 && can_probe_up) {   /* SAFE=1，可改 3 */
             int na = a->alpha + a->inc;
             if (na > 100) na = 100;
             a->alpha = na;
+            a->safe_windows = 0;   /* ← 只在 probe up 后清零 */
             action = "up";
+        } else {
+            action = "hold";       /* 不清零，累积安全窗口 */
         }
-        a->safe_windows = 0;
     } else {
+
         a->safe_windows = 0;
         action = "gray";
     }
@@ -573,10 +574,13 @@ static int sl_run(const sl_cfg *cfg) {
             ? sl_t_end - get_ticks() : 0) / (unsigned long)sl_window);
         sl_measure_window(&w, win, alpha, prev_run, prev_jobs, prev_miss, prev_late);
         if (cfg->policy) {
-            alpha = cfg->policy(&w, cfg->policy_ud);
-            if (alpha < 0) alpha = 0;
-            if (alpha > 100) alpha = 100;
-            set_sched_alpha(alpha);
+            int new_alpha = cfg->policy(&w, cfg->policy_ud);
+            if (new_alpha < 0) new_alpha = 0;
+            if (new_alpha > 100) new_alpha = 100;
+            if (new_alpha != alpha) {         // ← 只在变化时才调
+                alpha = new_alpha;
+                set_sched_alpha(alpha);
+            }
         }
         printf("S,%d,%d,%d,%d\n", win, alpha, w.jain_q, w.max_slowdown_q);
     }
@@ -595,6 +599,7 @@ static int sl_run(const sl_cfg *cfg) {
         waitpid(sl_groups[i].pid, &code, 0);
     }
     printf("# done\n");
+    sleep(2);
     return 0;
 }
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 stat_exp3.py -- Exp 3: AIMD constant load, multi-config, multi-start.
+
 Handles 4 configs (light/medlo/medium/heavy) x fixed50 + aimd0/50/100.
-Medlo gets dedicated deep-dive plots; others get summary.
+Medium gets dedicated deep-dive plots; others get summary.
 
 Usage:
     python3 stat_exp3.py ./logs/sched/aimd/sexp3_aimd.csv
@@ -35,12 +36,20 @@ COLORS_MODE = {
     "aimd100": "#dc2626",
 }
 
+# exp2 实测的 edge 参考值（不同配置的 miss 急剧上升点）
+EDGE_REF = {
+    "light":  55,
+    "medlo":  45,
+    "medium": 35,
+    "heavy":  25,
+}
+
 
 # ------------------------------------------------------------------ parse
 def parse(path):
     runs = []
     cur = None
-    skip = False
+    in_warmup = False
 
     with open(path) as f:
         for line in f:
@@ -48,38 +57,32 @@ def parse(path):
             if not line:
                 continue
 
-            # warmup delimiter
+            # warmup marker
             if line.startswith("# WARMUP"):
-                if cur is not None and not skip:
+                if cur is not None and not in_warmup:
                     runs.append(cur)
-                skip = True
+                in_warmup = True
                 cur = None
                 continue
 
-            # formal run delimiter
-            # e.g. # RUN config=medlo mode=aimd alpha0=50 rep=1/5
-            # e.g. # RUN config=medlo mode=fixed alpha=50 rep=1/5
+            # formal run marker
             m = re.search(r'# RUN config=(\w+) mode=(\w+)(?: alpha0=(\d+)| alpha=(\d+)) rep=(\d+)/\d+', line)
             if m:
-                if cur is not None and not skip:
+                if cur is not None and not in_warmup:
                     runs.append(cur)
-                skip = False
+                in_warmup = False
                 config = m.group(1)
                 mode = m.group(2)
                 alpha = int(m.group(3)) if m.group(3) else int(m.group(4))
                 rep = int(m.group(5))
-                # normalize mode name
-                if mode == "aimd":
-                    mode_key = f"aimd{alpha}"
-                else:
-                    mode_key = "fixed"
+                mode_key = f"aimd{alpha}" if mode == "aimd" else "fixed"
                 cur = {
                     "config": config, "mode": mode_key, "alpha0": alpha, "rep": rep,
                     "W": [], "D": [], "A": [], "S": [], "J": [], "K": []
                 }
                 continue
 
-            if skip or cur is None:
+            if in_warmup or cur is None:
                 continue
 
             p = line.split(",")
@@ -107,7 +110,7 @@ def parse(path):
             except (IndexError, ValueError):
                 continue
 
-    if cur is not None and not skip:
+    if cur is not None and not in_warmup:
         runs.append(cur)
     return runs
 
@@ -116,7 +119,6 @@ def parse(path):
 def compute(run):
     s = {"config": run["config"], "mode": run["mode"], "alpha0": run["alpha0"], "rep": run["rep"]}
 
-    # ctrl deadline from J
     for j in run["J"]:
         if j["name"] == "ctrl":
             s["jobs"] = j["jobs"]
@@ -131,13 +133,17 @@ def compute(run):
                 s["resp_std"] = np.sqrt(max(var, 0))
             else:
                 s["resp_std"] = 0.0
+            break
 
-    # throughput from W (skip first 3 windows)
     ws = [w for w in run["W"] if w["win"] > 3]
     for name in ["ctrl", "ai", "log"]:
         s.setdefault("work", {})[name] = sum(w["run_delta"] for w in ws if w["name"] == name)
 
-    # per-window miss rate from D
+    total_all = sum(w["run_delta"] for w in ws)
+    for name in ["ctrl", "ai", "log"]:
+        total_name = sum(w["run_delta"] for w in ws if w["name"] == name)
+        s.setdefault("share", {})[name] = total_name / total_all * 100 if total_all > 0 else 0
+
     if run["D"]:
         rates = []
         for d in run["D"]:
@@ -146,8 +152,9 @@ def compute(run):
             else:
                 rates.append(0.0)
         s["win_miss"] = np.array(rates)
+    else:
+        s["win_miss"] = np.array([])
 
-    # alpha trajectory from A
     if run["A"]:
         s["alpha_traj"] = np.array([a["after"] for a in run["A"]])
         s["alpha_win"] = np.array([a["win"] for a in run["A"]])
@@ -155,10 +162,13 @@ def compute(run):
         for a in run["A"]:
             actions[a["action"]] = actions.get(a["action"], 0) + 1
         s["actions"] = actions
+    else:
+        s["alpha_traj"] = np.array([])
 
-    # Jain
     if run["S"]:
         s["jain"] = np.mean([x["jain_q"] for x in run["S"]]) / 1000.0
+    else:
+        s["jain"] = 0
 
     return s
 
@@ -176,45 +186,89 @@ def aggregate(runs, group_keys):
         row["nreps"] = len(reps)
 
         for field in ["miss_rate", "avg_late", "max_late", "resp_std", "jain"]:
-            vals = [r.get(field, 0) for r in reps if field in r or field == "jain"]
-            if vals:
-                row[f"{field}_mean"] = np.mean(vals)
-                row[f"{field}_std"] = np.std(vals)
+            vals = [r.get(field, 0) for r in reps]
+            m = np.mean(vals)
+            row[f"{field}_mean"] = m
+            row[f"{field}_hi"] = max(vals) - m
+            row[f"{field}_lo"] = m - min(vals)
 
         for name in ["ctrl", "ai", "log"]:
             vals = [r.get("work", {}).get(name, 0) for r in reps]
-            if vals:
-                row.setdefault("work", {})[f"{name}_mean"] = np.mean(vals)
-                row.setdefault("work", {})[f"{name}_std"] = np.std(vals)
+            m = np.mean(vals)
+            row.setdefault("work", {})[f"{name}_mean"] = m
+            row.setdefault("work", {})[f"{name}_hi"] = max(vals) - m
+            row.setdefault("work", {})[f"{name}_lo"] = m - min(vals)
 
-        # alpha trajectory alignment (AIMD only)
-        if "mode" in row and row["mode"].startswith("aimd"):
-            traj_list = [r["alpha_traj"] for r in reps if "alpha_traj" in r]
+            vals_s = [r.get("share", {}).get(name, 0) for r in reps]
+            m = np.mean(vals_s)
+            row.setdefault("share", {})[f"{name}_mean"] = m
+            row.setdefault("share", {})[f"{name}_hi"] = max(vals_s) - m
+            row.setdefault("share", {})[f"{name}_lo"] = m - min(vals_s)
+
+        if "mode" in row and str(row.get("mode", "")).startswith("aimd"):
+            traj_list = [r["alpha_traj"] for r in reps if len(r.get("alpha_traj", [])) > 0]
             if traj_list:
                 min_len = min(len(t) for t in traj_list)
                 aligned = np.array([t[:min_len] for t in traj_list])
                 row["alpha_mean"] = aligned.mean(axis=0)
-                row["alpha_std"] = aligned.std(axis=0)
+                row["alpha_hi"] = aligned.max(axis=0) - aligned.mean(axis=0)
+                row["alpha_lo"] = aligned.mean(axis=0) - aligned.min(axis=0)
+                # 稳态 α：后半段平均
+                half = min_len // 2
+                steady = aligned[:, half:].mean()
+                row["alpha_steady"] = steady
+                row["alpha_steady_hi"] = aligned[:, half:].max() - steady
+                row["alpha_steady_lo"] = steady - aligned[:, half:].min()
+            else:
+                row["alpha_steady"] = 0
+                row["alpha_steady_hi"] = 0
+                row["alpha_steady_lo"] = 0
+        else:
+            row["alpha_steady"] = row.get("alpha0", 0)
+            row["alpha_steady_hi"] = 0
+            row["alpha_steady_lo"] = 0
+
+        # AIMD actions 汇总
+        all_actions = {}
+        for r in reps:
+            for a, c in r.get("actions", {}).items():
+                all_actions[a] = all_actions.get(a, 0) + c
+        row["actions"] = all_actions
 
         stats.append(row)
     return stats
 
 
 # ------------------------------------------------------------------ print
+def fmt_err(mean, hi, lo, wm=7, we=5):
+    return f"{mean:>{wm}.1f} +{hi:>{we}.1f}/-{lo:>{we}.1f}"
+
+
 def print_summary(stats):
-    print("=" * 110)
+    print("=" * 165)
     print("EXPERIMENT 3: AIMD CONSTANT LOAD (multi-config, multi-start)")
-    print("=" * 110)
-    hdr = f"{'config':>8} {'mode':>8} {'α0':>4} {'miss%':>7} {'±':>5} {'ai_rd':>9} {'ctrl_rd':>9} {'Jain':>6}"
+    print("=" * 165)
+    hdr = (f"{'config':>8} {'mode':>8} {'α0':>4}  {'miss%':>20}  "
+           f"{'α_steady':>14}  {'sh_ctrl':>20}  {'sh_ai':>20}  "
+           f"{'ai_work':>8}  {'ctrl_work':>9}  {'avg_late':>8}  {'max_late':>8}  {'Jain':>6}  {'actions':>20}")
     print(hdr)
-    print("-" * 110)
+    print("-" * 165)
     for s in stats:
-        w = s.get("work", {})
-        print(f"{s.get('config',''):>8} {s.get('mode',''):>8} {s.get('alpha0',0):>4} "
-              f"{s.get('miss_rate_mean',0):>7.2f} {s.get('miss_rate_std',0):>5.2f} "
-              f"{w.get('ai_mean',0):>9.0f} {w.get('ctrl_mean',0):>9.0f} "
-              f"{s.get('jain_mean',0):>6.3f}")
-    print("=" * 110)
+        miss_s = fmt_err(s.get('miss_rate_mean',0), s.get('miss_rate_hi',0), s.get('miss_rate_lo',0))
+        alpha_s = fmt_err(s.get('alpha_steady',0), s.get('alpha_steady_hi',0), s.get('alpha_steady_lo',0), wm=5, we=3)
+        ctrl_s = fmt_err(s.get('share',{}).get('ctrl_mean',0), s.get('share',{}).get('ctrl_hi',0), s.get('share',{}).get('ctrl_lo',0))
+        ai_s = fmt_err(s.get('share',{}).get('ai_mean',0), s.get('share',{}).get('ai_hi',0), s.get('share',{}).get('ai_lo',0))
+        ai_w = s.get('work',{}).get('ai_mean',0)
+        ctrl_w = s.get('work',{}).get('ctrl_mean',0)
+        avg_l = s.get('avg_late_mean',0)
+        max_l = s.get('max_late_mean',0)
+        acts = s.get('actions', {})
+        act_str = "/".join(f"{k}:{v}" for k, v in sorted(acts.items())) if acts else "-"
+        print(f"{s.get('config',''):>8} {s.get('mode',''):>8} {s.get('alpha0',0):>4}  "
+              f"{miss_s}  {alpha_s}  {ctrl_s}  {ai_s}  "
+              f"{ai_w:>8.0f}  {ctrl_w:>9.0f}  {avg_l:>8.1f}  {max_l:>8.0f}  "
+              f"{s.get('jain_mean',0):>6.3f}  {act_str:>20}")
+    print("=" * 165)
 
 
 # ------------------------------------------------------------------ plots
@@ -232,12 +286,12 @@ def plot_miss_all(stats, outdir):
             pts = [s for s in stats if s.get("config") == cfg and s.get("mode") == mode]
             if not pts:
                 continue
-            # bar plot: one bar per mode
-            label = mode
             color = COLORS_MODE.get(mode, "#666")
             val = pts[0].get("miss_rate_mean", 0)
-            err = pts[0].get("miss_rate_std", 0)
-            ax.bar(label, val, yerr=err, capsize=4, color=color, edgecolor="black", linewidth=0.8, width=0.6)
+            hi = pts[0].get("miss_rate_hi", 0)
+            lo = pts[0].get("miss_rate_lo", 0)
+            ax.bar(mode, val, yerr=[[lo], [hi]], capsize=4, color=color,
+                   edgecolor="black", linewidth=0.8, width=0.6)
         ax.set_title(f"{cfg}")
         ax.set_ylabel("ctrl Miss Rate (%)")
         ax.set_ylim(0, 105)
@@ -249,73 +303,83 @@ def plot_miss_all(stats, outdir):
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
-def plot_alpha_traj_medlo(runs, outdir):
-    """Fig 2: medlo α trajectory for 3 AIMD starts."""
-    fig, ax = plt.subplots(figsize=(12, 4.5))
-    for mode, color in [("aimd0", COLORS_MODE["aimd0"]),
-                         ("aimd50", COLORS_MODE["aimd50"]),
-                         ("aimd100", COLORS_MODE["aimd100"])]:
-        reps = [r for r in runs if r["config"] == "medlo" and r["mode"] == mode and "alpha_traj" in r]
-        if not reps:
-            continue
-        min_len = min(len(r["alpha_traj"]) for r in reps)
-        aligned = np.array([r["alpha_traj"][:min_len] for r in reps])
-        mean = aligned.mean(axis=0)
-        std = aligned.std(axis=0)
-        x = np.arange(len(mean))
-        ax.plot(x, mean, "-", color=color, lw=1.5, label=f"α0={mode.replace('aimd','')}")
-        ax.fill_between(x, mean - std, mean + std, alpha=0.2, color=color)
-    ax.axhline(40, color="gray", ls="--", lw=1, label="knee α*=40")
-    ax.set_xlabel("Window")
-    ax.set_ylabel("α")
-    ax.set_title("Exp 3: Medlo α Trajectory (3 starts)")
-    ax.legend(); ax.set_ylim(-2, 105)
-    fig.tight_layout()
-    out = os.path.join(outdir, "exp3_alpha_traj_medlo.png")
+def plot_alpha_traj_all(runs, outdir):
+    """Fig 2: α trajectory for all configs, 3 AIMD starts."""
+    configs = ["light", "medlo", "medium", "heavy"]
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+
+    for idx, cfg in enumerate(configs):
+        ax = axes[idx]
+        for mode, color in [("aimd0", COLORS_MODE["aimd0"]),
+                             ("aimd50", COLORS_MODE["aimd50"]),
+                             ("aimd100", COLORS_MODE["aimd100"])]:
+            reps = [r for r in runs if r["config"] == cfg and r["mode"] == mode and len(r.get("alpha_traj",[])) > 0]
+            if not reps:
+                continue
+            min_len = min(len(r["alpha_traj"]) for r in reps)
+            aligned = np.array([r["alpha_traj"][:min_len] for r in reps])
+            mean = aligned.mean(axis=0)
+            lo = aligned.mean(axis=0) - aligned.min(axis=0)
+            hi = aligned.max(axis=0) - aligned.mean(axis=0)
+            x = np.arange(len(mean))
+            ax.plot(x, mean, "-", color=color, lw=1.5, label=f"α0={mode.replace('aimd','')}")
+            ax.fill_between(x, mean - lo, mean + hi, alpha=0.2, color=color)
+        edge = EDGE_REF.get(cfg, 40)
+        ax.axhline(edge, color="gray", ls="--", lw=1, label=f"exp2 edge≈{edge}")
+        ax.set_title(f"{cfg}")
+        ax.set_xlabel("Window")
+        ax.set_ylabel("α")
+        ax.legend(fontsize=8)
+        ax.set_ylim(-2, 105)
+
+    fig.suptitle("Exp 3: α Trajectory (3 starts, all configs)", fontsize=14)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    out = os.path.join(outdir, "exp3_alpha_traj_all.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
-def plot_miss_traj_medlo(runs, outdir):
-    """Fig 3: medlo per-window miss rate."""
+def plot_miss_traj_medium(runs, outdir):
+    """Fig 3: medium per-window miss rate."""
     fig, ax = plt.subplots(figsize=(12, 4.5))
     for mode, color in [("fixed", COLORS_MODE["fixed"]),
                          ("aimd0", COLORS_MODE["aimd0"]),
                          ("aimd50", COLORS_MODE["aimd50"]),
                          ("aimd100", COLORS_MODE["aimd100"])]:
-        reps = [r for r in runs if r["config"] == "medlo" and r["mode"] == mode and "win_miss" in r]
+        reps = [r for r in runs if r["config"] == "medium" and r["mode"] == mode and len(r.get("win_miss",[])) > 0]
         if not reps:
             continue
         min_len = min(len(r["win_miss"]) for r in reps)
         aligned = np.array([r["win_miss"][:min_len] for r in reps])
         mean = aligned.mean(axis=0)
-        std = aligned.std(axis=0)
+        lo = aligned.mean(axis=0) - aligned.min(axis=0)
+        hi = aligned.max(axis=0) - aligned.mean(axis=0)
         x = np.arange(len(mean))
         ax.plot(x, mean, "-", color=color, lw=1.0, label=mode)
-        ax.fill_between(x, mean - std, mean + std, alpha=0.15, color=color)
+        ax.fill_between(x, mean - lo, mean + hi, alpha=0.15, color=color)
     ax.set_xlabel("Window")
     ax.set_ylabel("ctrl Miss Rate (%)")
-    ax.set_title("Exp 3: Medlo Per-window Miss Rate")
+    ax.set_title("Exp 3: Medium Per-window Miss Rate")
     ax.legend(); ax.set_ylim(-2, 105)
     fig.tight_layout()
-    out = os.path.join(outdir, "exp3_miss_traj_medlo.png")
+    out = os.path.join(outdir, "exp3_miss_traj_medium.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
-def plot_comparison_medlo(stats, outdir):
-    """Fig 4: medlo fixed vs AIMD bar comparison."""
+def plot_comparison_medium(stats, outdir):
+    """Fig 4: medium fixed vs AIMD bar comparison."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     modes = ["fixed", "aimd0", "aimd50", "aimd100"]
     colors = [COLORS_MODE[m] for m in modes]
 
-    # left: miss rate
     ax = axes[0]
-    vals = []
-    errs = []
+    vals, los, his = [], [], []
     for m in modes:
-        s = next((x for x in stats if x.get("config") == "medlo" and x.get("mode") == m), None)
+        s = next((x for x in stats if x.get("config") == "medium" and x.get("mode") == m), None)
         vals.append(s.get("miss_rate_mean", 0) if s else 0)
-        errs.append(s.get("miss_rate_std", 0) if s else 0)
-    bars = ax.bar(range(len(modes)), vals, yerr=errs, capsize=4, color=colors,
+        his.append(s.get("miss_rate_hi", 0) if s else 0)
+        los.append(s.get("miss_rate_lo", 0) if s else 0)
+    bars = ax.bar(range(len(modes)), vals, yerr=[los, his], capsize=4, color=colors,
                   edgecolor="black", linewidth=0.8, width=0.5)
     for bar, v in zip(bars, vals):
         ax.text(bar.get_x() + bar.get_width() / 2, v + 1.5,
@@ -323,101 +387,101 @@ def plot_comparison_medlo(stats, outdir):
     ax.set_xticks(range(len(modes)))
     ax.set_xticklabels(modes)
     ax.set_ylabel("ctrl Miss Rate (%)")
-    ax.set_title("Medlo: Miss Rate")
+    ax.set_title("Medium: Miss Rate")
 
-    # right: ai throughput
     ax = axes[1]
-    vals = []
-    errs = []
+    vals, los, his = [], [], []
     for m in modes:
-        s = next((x for x in stats if x.get("config") == "medlo" and x.get("mode") == m), None)
-        vals.append(s.get("work", {}).get("ai_mean", 0) if s else 0)
-        errs.append(s.get("work", {}).get("ai_std", 0) if s else 0)
-    bars = ax.bar(range(len(modes)), vals, yerr=errs, capsize=4, color=colors,
+        s = next((x for x in stats if x.get("config") == "medium" and x.get("mode") == m), None)
+        vals.append(s.get("share", {}).get("ai_mean", 0) if s else 0)
+        his.append(s.get("share", {}).get("ai_hi", 0) if s else 0)
+        los.append(s.get("share", {}).get("ai_lo", 0) if s else 0)
+    bars = ax.bar(range(len(modes)), vals, yerr=[los, his], capsize=4, color=colors,
                   edgecolor="black", linewidth=0.8, width=0.5)
     for bar, v in zip(bars, vals):
         ax.text(bar.get_x() + bar.get_width() / 2, v + max(vals) * 0.02,
-                f"{v:.0f}", ha="center", fontsize=10, fontweight="bold")
+                f"{v:.0f}%", ha="center", fontsize=10, fontweight="bold")
     ax.set_xticks(range(len(modes)))
     ax.set_xticklabels(modes)
-    ax.set_ylabel("ai Throughput (ticks)")
-    ax.set_title("Medlo: Throughput")
+    ax.set_ylabel("ai CPU Share (%)")
+    ax.set_title("Medium: ai Share")
 
-    fig.suptitle("Exp 3: Medlo Fixed vs AIMD", fontsize=13)
+    fig.suptitle("Exp 3: Medium Fixed vs AIMD", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    out = os.path.join(outdir, "exp3_comparison_medlo.png")
+    out = os.path.join(outdir, "exp3_comparison_medium.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
-def plot_convergence_medlo(runs, outdir):
-    """Fig 5: medlo 3-start convergence overlay."""
+def plot_convergence_medium(runs, outdir):
+    """Fig 5: medium 3-start convergence overlay."""
     fig, ax = plt.subplots(figsize=(12, 4.5))
     for mode, color in [("aimd0", COLORS_MODE["aimd0"]),
                          ("aimd50", COLORS_MODE["aimd50"]),
                          ("aimd100", COLORS_MODE["aimd100"])]:
-        reps = [r for r in runs if r["config"] == "medlo" and r["mode"] == mode and "alpha_traj" in r]
+        reps = [r for r in runs if r["config"] == "medium" and r["mode"] == mode and len(r.get("alpha_traj",[])) > 0]
         if not reps:
             continue
-        for rep_idx, r in enumerate(reps):
+        for r in reps:
             alpha = r["alpha_traj"]
             x = np.arange(len(alpha))
-            ax.plot(x, alpha, "-", color=color, lw=0.6, alpha=0.4)
-        # mean
+            ax.plot(x, alpha, "-", color=color, lw=0.5, alpha=0.35)
         min_len = min(len(r["alpha_traj"]) for r in reps)
         aligned = np.array([r["alpha_traj"][:min_len] for r in reps])
         mean = aligned.mean(axis=0)
-        ax.plot(np.arange(len(mean)), mean, "-", color=color, lw=2,
-                label=f"α0={mode.replace('aimd','')} (n={len(reps)})")
-    ax.axhline(40, color="gray", ls="--", lw=1, label="knee α*=40")
-    ax.set_xlabel("Window")
-    ax.set_ylabel("α")
-    ax.set_title("Exp 3: Medlo Convergence from 3 Starts")
-    ax.legend(); ax.set_ylim(-2, 105)
+        ax.plot(np.arange(len(mean)), mean, "-", color=color, lw=2.5,
+                label=f"α0={mode.replace('aimd','')} mean (n={len(reps)})")
+    ax.axhline(EDGE_REF.get("medium", 35), color="gray", ls="--", lw=1.2,
+               label=f"exp2 edge≈{EDGE_REF.get('medium',35)}")
+    ax.set_xlabel("Window", fontsize=12)
+    ax.set_ylabel("α", fontsize=12)
+    ax.set_title("Exp 3: Medium Convergence from 3 Starts", fontsize=13)
+    ax.legend(loc="upper right", fontsize=10)
+    ax.set_ylim(-2, 105)
     fig.tight_layout()
-    out = os.path.join(outdir, "exp3_convergence_medlo.png")
+    out = os.path.join(outdir, "exp3_convergence_medium.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
 def plot_summary_config(runs, config, outdir):
-    """One summary figure per non-medlo config."""
+    """One summary figure per non-medium config."""
     fig, axes = plt.subplots(2, 2, figsize=(11, 9))
     modes = ["fixed", "aimd0", "aimd50", "aimd100"]
 
-    # top-left: miss rate bars
+    # miss rate bars
     ax = axes[0, 0]
-    vals, errs = [], []
+    vals, los, his = [], [], []
     for m in modes:
         reps = [r for r in runs if r["config"] == config and r["mode"] == m]
         if reps:
-            vals.append(np.mean([x.get("miss_rate", 0) for x in reps]))
-            errs.append(np.std([x.get("miss_rate", 0) for x in reps]))
+            v = [x.get("miss_rate", 0) for x in reps]
+            vals.append(np.mean(v)); his.append(max(v)-np.mean(v)); los.append(np.mean(v)-min(v))
         else:
-            vals.append(0); errs.append(0)
+            vals.append(0); his.append(0); los.append(0)
     colors = [COLORS_MODE[m] for m in modes]
-    ax.bar(range(len(modes)), vals, yerr=errs, capsize=4, color=colors,
+    ax.bar(range(len(modes)), vals, yerr=[los, his], capsize=4, color=colors,
            edgecolor="black", linewidth=0.8, width=0.5)
     ax.set_xticks(range(len(modes))); ax.set_xticklabels(modes, fontsize=9)
     ax.set_ylabel("miss%"); ax.set_title("Miss Rate")
 
-    # top-right: ai throughput
+    # ai share
     ax = axes[0, 1]
-    vals, errs = [], []
+    vals, los, his = [], [], []
     for m in modes:
         reps = [r for r in runs if r["config"] == config and r["mode"] == m]
         if reps:
-            vals.append(np.mean([x.get("work", {}).get("ai", 0) for x in reps]))
-            errs.append(np.std([x.get("work", {}).get("ai", 0) for x in reps]))
+            v = [x.get("share", {}).get("ai", 0) for x in reps]
+            vals.append(np.mean(v)); his.append(max(v)-np.mean(v)); los.append(np.mean(v)-min(v))
         else:
-            vals.append(0); errs.append(0)
-    ax.bar(range(len(modes)), vals, yerr=errs, capsize=4, color=colors,
+            vals.append(0); his.append(0); los.append(0)
+    ax.bar(range(len(modes)), vals, yerr=[los, his], capsize=4, color=colors,
            edgecolor="black", linewidth=0.8, width=0.5)
     ax.set_xticks(range(len(modes))); ax.set_xticklabels(modes, fontsize=9)
-    ax.set_ylabel("ai run_delta"); ax.set_title("Throughput")
+    ax.set_ylabel("ai share%"); ax.set_title("ai Share")
 
-    # bottom-left: alpha trajectory (aimd only)
+    # alpha trajectory
     ax = axes[1, 0]
     for m in ["aimd0", "aimd50", "aimd100"]:
-        reps = [r for r in runs if r["config"] == config and r["mode"] == m and "alpha_traj" in r]
+        reps = [r for r in runs if r["config"] == config and r["mode"] == m and len(r.get("alpha_traj",[])) > 0]
         if not reps:
             continue
         min_len = min(len(r["alpha_traj"]) for r in reps)
@@ -425,10 +489,12 @@ def plot_summary_config(runs, config, outdir):
         mean = aligned.mean(axis=0)
         ax.plot(np.arange(len(mean)), mean, "-", color=COLORS_MODE[m], lw=1.5,
                 label=m.replace("aimd", "α0="))
+    ax.axhline(EDGE_REF.get(config, 40), color="gray", ls="--", lw=1,
+               label=f"edge≈{EDGE_REF.get(config,40)}")
     ax.set_xlabel("Window"); ax.set_ylabel("α")
     ax.set_title("α Trajectory"); ax.legend(fontsize=9)
 
-    # bottom-right: actions pie (aimd50 reps aggregated)
+    # actions pie
     ax = axes[1, 1]
     reps = [r for r in runs if r["config"] == config and r["mode"] == "aimd50"]
     actions = {}
@@ -446,40 +512,6 @@ def plot_summary_config(runs, config, outdir):
     out = os.path.join(outdir, f"exp3_summary_{config}.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
-
-def plot_convergence_medlo_clean(runs, outdir):
-    """Fig 5b: medlo 3-start convergence, no std shading (clean overlay)."""
-    fig, ax = plt.subplots(figsize=(12, 4.5))
-    
-    for mode, color in [("aimd0", COLORS_MODE["aimd0"]),
-                         ("aimd50", COLORS_MODE["aimd50"]),
-                         ("aimd100", COLORS_MODE["aimd100"])]:
-        reps = [r for r in runs if r["config"] == "medlo" and r["mode"] == mode and "alpha_traj" in r]
-        if not reps:
-            continue
-        
-        # 每个 rep 的细线
-        for r in reps:
-            alpha = r["alpha_traj"]
-            x = np.arange(len(alpha))
-            ax.plot(x, alpha, "-", color=color, lw=0.5, alpha=0.35)
-        
-        # 均值粗线
-        min_len = min(len(r["alpha_traj"]) for r in reps)
-        aligned = np.array([r["alpha_traj"][:min_len] for r in reps])
-        mean = aligned.mean(axis=0)
-        ax.plot(np.arange(len(mean)), mean, "-", color=color, lw=2.5,
-                label=f"α0={mode.replace('aimd','')} mean (n={len(reps)})")
-    
-    ax.axhline(40, color="gray", ls="--", lw=1.2, label="knee α*=40")
-    ax.set_xlabel("Window", fontsize=12)
-    ax.set_ylabel("α", fontsize=12)
-    ax.set_title("Exp 3: Medlo Convergence from 3 Starts (clean)", fontsize=13)
-    ax.legend(loc="upper right", fontsize=10)
-    ax.set_ylim(-2, 105)
-    fig.tight_layout()
-    out = os.path.join(outdir, "exp3_convergence_medlo_clean.png")
-    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 # ------------------------------------------------------------------ main
 def main():
@@ -502,14 +534,16 @@ def main():
     # global
     plot_miss_all(stats, outdir)
 
-    # medlo deep dive
-    plot_alpha_traj_medlo(computed, outdir)
-    plot_miss_traj_medlo(computed, outdir)
-    plot_comparison_medlo(stats, outdir)
-    plot_convergence_medlo(computed, outdir)
-    plot_convergence_medlo_clean(computed, outdir)
+    # all configs alpha trajectory
+    plot_alpha_traj_all(computed, outdir)
+
+    # medium deep dive
+    plot_miss_traj_medium(computed, outdir)
+    plot_comparison_medium(stats, outdir)
+    plot_convergence_medium(computed, outdir)
+
     # other configs summary
-    for cfg in ["light", "medium", "heavy"]:
+    for cfg in ["light", "medlo", "medium", "heavy"]:
         plot_summary_config(computed, cfg, outdir)
 
     print("\nDone.")
