@@ -30,10 +30,12 @@ COLORS_CFG = {
     "heavy":   "#dc2626",
 }
 COLORS_MODE = {
-    "fixed":   "#666666",
-    "aimd0":   "#0891b2",
-    "aimd50":  "#2563eb",
-    "aimd100": "#dc2626",
+    "fixed0":   "#94a3b8",
+    "fixed50":  "#64748b",
+    "fixed100": "#475569",
+    "aimd0":    "#0891b2",
+    "aimd50":   "#2563eb",
+    "aimd100":  "#dc2626",
 }
 
 # exp2 实测的 edge 参考值（不同配置的 miss 急剧上升点）
@@ -75,7 +77,7 @@ def parse(path):
                 mode = m.group(2)
                 alpha = int(m.group(3)) if m.group(3) else int(m.group(4))
                 rep = int(m.group(5))
-                mode_key = f"aimd{alpha}" if mode == "aimd" else "fixed"
+                mode_key = f"aimd{alpha}" if mode == "aimd" else f"fixed{alpha}"
                 cur = {
                     "config": config, "mode": mode_key, "alpha0": alpha, "rep": rep,
                     "W": [], "D": [], "A": [], "S": [], "J": [], "K": []
@@ -275,7 +277,7 @@ def print_summary(stats):
 def plot_miss_all(stats, outdir):
     """Fig 1: miss rate comparison across 4 configs."""
     configs = ["light", "medlo", "medium", "heavy"]
-    modes = ["fixed", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
@@ -342,7 +344,9 @@ def plot_alpha_traj_all(runs, outdir):
 def plot_miss_traj_medium(runs, outdir):
     """Fig 3: medium per-window miss rate."""
     fig, ax = plt.subplots(figsize=(12, 4.5))
-    for mode, color in [("fixed", COLORS_MODE["fixed"]),
+    for mode, color in [("fixed0", COLORS_MODE["fixed0"]),
+                         ("fixed50", COLORS_MODE["fixed50"]),
+                         ("fixed100", COLORS_MODE["fixed100"]),
                          ("aimd0", COLORS_MODE["aimd0"]),
                          ("aimd50", COLORS_MODE["aimd50"]),
                          ("aimd100", COLORS_MODE["aimd100"])]:
@@ -369,7 +373,7 @@ def plot_miss_traj_medium(runs, outdir):
 def plot_comparison_medium(stats, outdir):
     """Fig 4: medium fixed vs AIMD bar comparison."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    modes = ["fixed", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
     colors = [COLORS_MODE[m] for m in modes]
 
     ax = axes[0]
@@ -445,7 +449,7 @@ def plot_convergence_medium(runs, outdir):
 def plot_summary_config(runs, config, outdir):
     """One summary figure per non-medium config."""
     fig, axes = plt.subplots(2, 2, figsize=(11, 9))
-    modes = ["fixed", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
 
     # miss rate bars
     ax = axes[0, 0]
