@@ -636,30 +636,3 @@ Boot HART MEDELEG           : 0x0000000000f4b509
 [93m[ WARN] [smp] failed to start hart 6[0m
 [93m[ WARN] [smp] failed to start hart 7[0m
 RmikuOS login: 
-Password: 
-
-RmikuOS shell
-commands:
-  help
-  exit
-  pwd
-  cd <path>
-  mkdir <path>
-  touch <path>
-  rm [-r] <path>
-  rmdir <path>
-  whoami              (print effective user name)
-  chmod <mode> <path> (mode is octal, e.g. 755 / 0644)
-  jobs
-  clear
-  export NAME=VALUE   (set env var; $VAR / ${VAR} / $? expands in commands)
-  env                 (print all env vars)
-  unset NAME          (remove env var)
-  variable expansion: $VAR, ${VAR}, $? (last exit code)
-    'single quotes' protect $; "double quotes" still expand $ (bash style)
-  shutdown
-
-external commands are in $PATH (/bin, /tests, /programs):
-  try: ls /bin
-
-/home/root $ 
