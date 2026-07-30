@@ -41,7 +41,7 @@ static void sl_reset_state(void) {
 
 static void setup(const cfg_t *c) {
     /* ctrl: in-parent jobs（D 行反馈），period=4, burn=180k≈1.2tick */
-    sl_add_jobs_parent("ctrl", 180, 1, /*period*/4, /*cpu*/3, /*burn*/180000);
+    sl_add_jobs_parent("ctrl", 300, 1, /*period*/5, /*cpu*/3, /*burn*/180000);
     sl_add_spin("ai",  100, c->ai,  12000);
     sl_add_spin("log",  50, c->log, 12000);
 }

@@ -517,6 +517,62 @@ def plot_summary_config(runs, config, outdir):
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
+def plot_throughput_vs_miss(stats, outdir):
+    """每个配置两张图：横轴 ai work / ai share，纵轴 ctrl miss%。6 个 mode 各一个点。
+    坐标轴自适应数据范围，留 10% 边距。"""
+    configs = ["light", "medlo", "medium", "heavy"]
+    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
+
+    for metric, xlabel, fname in [
+        ("work",  "ai Throughput (run_delta ticks)", "exp3_work_vs_miss.png"),
+        ("share", "ai CPU Share (%)",                "exp3_share_vs_miss.png"),
+    ]:
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        axes = axes.flatten()
+
+        for idx, cfg in enumerate(configs):
+            ax = axes[idx]
+            xs, ys = [], []
+            for mode in modes:
+                pts = [s for s in stats if s.get("config") == cfg and s.get("mode") == mode]
+                if not pts:
+                    continue
+                s = pts[0]
+                d = s.get(metric, {})
+                x = d.get("ai_mean", 0)
+                y = s.get("miss_rate_mean", 0)
+                x_hi = d.get("ai_hi", 0)
+                x_lo = d.get("ai_lo", 0)
+                y_hi = s.get("miss_rate_hi", 0)
+                y_lo = s.get("miss_rate_lo", 0)
+                xs.append(x); ys.append(y)
+                color = COLORS_MODE.get(mode, "#666")
+                ax.errorbar(x, y, xerr=[[x_lo], [x_hi]], yerr=[[y_lo], [y_hi]],
+                            fmt="o", color=color, ms=8, capsize=3,
+                            markeredgecolor="black", markeredgewidth=0.8, zorder=5)
+                ax.annotate(mode, (x, y), fontsize=8, ha="left", va="bottom",
+                            xytext=(6, 4), textcoords="offset points")
+
+            ax.set_title(f"{cfg}")
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel("ctrl Miss Rate (%)")
+
+            # 自适应坐标轴：留 10% 边距
+            if xs:
+                x_min, x_max = min(xs), max(xs)
+                x_span = x_max - x_min if x_max > x_min else x_max * 0.2
+                ax.set_xlim(x_min - x_span * 0.15, x_max + x_span * 0.25)
+            y_min, y_max = min(ys) if ys else 0, max(ys) if ys else 100
+            y_span = y_max - y_min if y_max > y_min else 10
+            ax.set_ylim(max(-5, y_min - y_span * 0.15), min(105, y_max + y_span * 0.25))
+            ax.grid(True, alpha=0.3)
+
+        fig.suptitle(f"Exp 3: {metric.capitalize()} vs Miss Rate (per config)", fontsize=14)
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
+        out = os.path.join(outdir, fname)
+        fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
 # ------------------------------------------------------------------ main
 def main():
     if len(sys.argv) < 2:
@@ -549,6 +605,9 @@ def main():
     # other configs summary
     for cfg in ["light", "medlo", "medium", "heavy"]:
         plot_summary_config(computed, cfg, outdir)
+
+    # throughput vs miss scatter (per config)
+    plot_throughput_vs_miss(stats, outdir)
 
     print("\nDone.")
 

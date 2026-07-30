@@ -303,8 +303,8 @@ static void sl_aimd_init(sl_aimd_t *a, int alpha0) {
     a->alpha = alpha0;
     a->inc = 5;
     a->backoff = 80;
-    a->safe_lateness = 10;    /* 原 0，允许少量迟到算安全 */
-    a->danger_lateness = 100; /* 原 25，in-parent ctrl 被打断 late_delta 基线高 */
+    a->safe_lateness = 0;  
+    a->danger_lateness = 50; /* 原 25，in-parent ctrl 被打断 late_delta 基线高 */
     a->safe_windows = 0;
     a->cooldown = 0;
 }
