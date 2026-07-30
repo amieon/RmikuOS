@@ -43,7 +43,7 @@ static void sl_reset_state(void) {
 
 static void setup(int ai, int log) {
     /* ctrl: fork 子进程（非 in-parent），period=4, burn=400k≈2.7tick */
-    sl_add_jobs("ctrl", 300, 1, /*period*/4, /*cpu*/3, /*burn*/250000);
+    sl_add_jobs("ctrl", 300, 1, /*period*/4, /*cpu*/3, /*burn*/180000);
     sl_add_spin("ai",  100, ai,  12000);
     sl_add_spin("log",  50, log, 12000);
 }
