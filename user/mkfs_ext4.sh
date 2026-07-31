@@ -126,6 +126,16 @@ if [ -d "user/build/${ARCH}/gcn" ]; then
   echo "  [gcn] -> /gcn/"
 fi
 
+# SQLite3（专门构建目录 user/build/<arch>/sqlite3/）
+if [ -d "user/build/${ARCH}/sqlite3" ]; then
+  for f in user/build/${ARCH}/sqlite3/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/programs/$base"
+    echo "  [sqlite3] $base -> /programs/$base"
+  done
+fi
+
 # Java 字节码（JVM 项目）
 for proj_dir in user/java/*; do
   [ -d "$proj_dir" ] || continue
