@@ -139,9 +139,28 @@ static int rmikuDelete(sqlite3_vfs *pVfs, const char *zName, int dirSync) {
   return SQLITE_OK;
 }
 
+/* SQLite 打开/关闭数据库时会 stat 这些辅助文件名（-journal / -wal / -shm），
+ * 但本 VFS 使用 MEMORY 日志，这些文件永不落盘创建。直接返回"不存在"，
+ * 避免无谓的 stat 触达内核并打印 [ WARN] stat failed。 */
+static int rmikuLooksLikeSqliteAux(const char *zName) {
+  static const char *const suffixes[] = {"-journal", "-wal", "-shm"};
+  int i;
+  usize n = strlen(zName);
+  for (i = 0; i < 3; i++) {
+    usize sl = strlen(suffixes[i]);
+    if (n >= sl && strncmp(zName + n - sl, suffixes[i], sl) == 0) return 1;
+  }
+  return 0;
+}
+
 static int rmikuAccess(sqlite3_vfs *pVfs, const char *zName, int flags, int *pResOut) {
   struct stat st;
   (void)pVfs; (void)flags;
+  if (rmikuLooksLikeSqliteAux(zName)) {
+    /* 这些辅助文件本就不创建，直接告知"不存在"，跳过内核 stat。 */
+    *pResOut = 0;
+    return SQLITE_OK;
+  }
   *pResOut = (stat(zName, &st) == 0) ? 1 : 0;
   return SQLITE_OK;
 }
