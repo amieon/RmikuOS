@@ -182,6 +182,55 @@ static inline int feof(FILE* fp) { return fp && (fp->flags & _F_EOF); }
 static inline int ferror(FILE* fp) { return fp && (fp->flags & _F_ERR); }
 static inline void clearerr(FILE* fp) { if (fp) fp->flags &= ~(_F_EOF | _F_ERR); }
 
+/* ---- 定位: 基于 lseek 系统调用, 考虑读/写缓冲与回退字符 ---- */
+
+/* ftell: 返回逻辑文件偏移。内核 fd 偏移可能领先/落后于逻辑位置,
+ * 需按缓冲内容修正: 写模式加上未落盘的 pos 字节; 读模式减去已读入
+ * 但未消费的 (end-pos) 字节, 以及 1 个回退字符。 */
+static inline long ftell(FILE* fp) {
+    if (!fp || fp->fd < 0) return -1;
+    isize raw = lseek(fp->fd, 0, SEEK_CUR);
+    if (raw < 0) return -1;
+    long pos = (long)raw;
+    if (fp->flags & _F_WRITE) {
+        pos += fp->pos;
+    } else {
+        pos -= (fp->end - fp->pos);
+        if (fp->ungetc != -1) pos -= 1;
+    }
+    return pos;
+}
+
+static inline int fseek(FILE* fp, long offset, int whence) {
+    if (!fp || fp->fd < 0) return -1;
+    /* 写模式先把缓冲落盘, 避免定位后覆盖或错位 */
+    if ((fp->flags & _F_WRITE) && !(fp->flags & _F_UNBUF)) _flushbuf(fp);
+    /* SEEK_CUR 时内核偏移含未消费的读缓冲, 先折算成绝对偏移再定位 */
+    if (whence == SEEK_CUR) {
+        long cur = ftell(fp);
+        if (cur < 0) return -1;
+        offset += cur;
+        whence = SEEK_SET;
+    }
+    fp->pos = 0; fp->end = 0; fp->ungetc = -1;
+    fp->flags &= ~_F_EOF;
+    if (lseek(fp->fd, (isize)offset, (usize)whence) < 0) return -1;
+    return 0;
+}
+
+static inline void rewind(FILE* fp) {
+    if (!fp) return;
+    fseek(fp, 0L, SEEK_SET);
+    fp->flags &= ~(_F_EOF | _F_ERR);
+}
+
+/* ungetc: 只保证 1 个字符回退(与 FILE.ungetc 单槽一致), 符合 C 标准最低保证 */
+static inline int ungetc(int c, FILE* fp) {
+    if (!fp || c == EOF) return EOF;
+    fp->ungetc = (unsigned char)c;
+    fp->flags &= ~_F_EOF;
+    return (unsigned char)c;
+}
 
 
 static inline FILE* freopen(const char* path, const char* mode, FILE* fp) {
