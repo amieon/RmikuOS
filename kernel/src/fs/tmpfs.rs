@@ -496,6 +496,6 @@ impl TmpfsFile {
     }
 
     pub fn is_append(&self) -> bool {
-        return (self.flags | O_APPEND) != 0;
+        return (self.flags & O_APPEND) != 0;
     }
 }
