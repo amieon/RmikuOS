@@ -692,6 +692,7 @@ def build_sqlite3(arch: str):
          "-Wl,--build-id=none", *cfg["ldflags"],
          "-T", str(cfg["linker"]),
          *link_objs,
+         "-lgcc",   # __bswapsi2 / __clzdi2 等编译器内建, nostdlib 下需手动链
          "-o", str(elf)])
 
     data = elf.read_bytes()
