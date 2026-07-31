@@ -183,14 +183,14 @@ static void sl_burn(unsigned long iters) {
 typedef struct { const sl_group_t *g; int idx; } sl_task_arg_t;
 static sl_task_arg_t sl_args[SL_MAX_GROUPS][SL_MAX_THREADS];
 
-/* 三段相位:0 轻 / 1 重 / 2 轻(锚定 sl_t0..sl_t_end 三等分,复刻 40) */
+/* 四段相位:0 轻 / 1 重 / 2 轻 / 3 重(轻重轻重) */
 static int sl_phase_now(void) {
     unsigned long span = sl_t_end - sl_t0;
-    unsigned long seg = span / 3;
+    unsigned long seg = span / 4;
     unsigned long now = get_ticks();
     unsigned long off = now > sl_t0 ? now - sl_t0 : 0;
     int ph = seg ? (int)(off / seg) : 0;
-    if (ph > 2) ph = 2;
+    if (ph > 3) ph = 3;
     return ph;
 }
 
@@ -200,10 +200,12 @@ static int sl_phase_now(void) {
 static long sl_phased_sleep(const sl_group_t *g, int idx) {
     if (!(g->flags & SL_F_PHASED)) return 0;
     if (idx >= 0 && idx < g->light_active) return 0;
-    if (sl_phase_now() == 1) return 0;         /* 重相位全员活跃 */
+    int ph = sl_phase_now();
+    if (ph == 1 || ph == 3) return 0;         /* 重相位全员活跃 */
+    /* 轻相位(0,2):睡到下一边界 */
     unsigned long span = sl_t_end - sl_t0;
-    unsigned long seg = span / 3;
-    unsigned long boundary = sl_t0 + (unsigned long)(sl_phase_now() + 1) * seg;
+    unsigned long seg = span / 4;
+    unsigned long boundary = sl_t0 + (unsigned long)(ph + 1) * seg;
     long delta = (long)boundary - (long)get_ticks();
     return delta > 0 ? delta : 1;
 }
@@ -301,10 +303,10 @@ typedef struct {
 
 static void sl_aimd_init(sl_aimd_t *a, int alpha0) {
     a->alpha = alpha0;
-    a->inc = 5;
+    a->inc = 1;
     a->backoff = 80;
     a->safe_lateness = 0;  
-    a->danger_lateness = 50; /* 原 25，in-parent ctrl 被打断 late_delta 基线高 */
+    a->danger_lateness = 25;
     a->safe_windows = 0;
     a->cooldown = 0;
 }

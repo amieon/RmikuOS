@@ -64,8 +64,8 @@ static void run_aimd(const cfg_t *c, int alpha0, int rep, unsigned long total) {
     /* 提高退避阈值：in-parent ctrl 被主线程每 100tick 打断 1tick，
      * late_delta 基线偏高。danger=25 太敏感，AIMD 一直退避到 0。
      * danger=100 让 AIMD 只在严重 miss 时退避，在 edge 附近 probe up。 */
-    aimd.danger_lateness = 100;
-    aimd.safe_lateness = 10;
+    aimd.danger_lateness = 25;
+    aimd.safe_lateness = 0;
     printf("# RUN config=%s mode=aimd alpha0=%d rep=%d/3\n", c->name, alpha0, rep);
     sl_run(&(sl_cfg){
         .total_ticks = total, .window_ticks = 100,
@@ -93,7 +93,7 @@ int main(void) {
                          .alpha0=50, .policy=0, .policy_ud=0});
 
         /* fixed 50: formal reps */
-        for (int fa = 0; fa <= 100; fa += 50) {
+        for (int fa = 0; fa <= 100; fa += 25) {
             printf("# WARMUP config=%s mode=fixed alpha=%d\n", c->name, fa);
             sl_reset_state(); setup(c);
             sl_run(&(sl_cfg){.total_ticks=total, .window_ticks=100,

@@ -31,7 +31,9 @@ COLORS_CFG = {
 }
 COLORS_MODE = {
     "fixed0":   "#94a3b8",
+    "fixed25":  "#788490",
     "fixed50":  "#64748b",
+    "fixed75":  "#50545d",
     "fixed100": "#475569",
     "aimd0":    "#0891b2",
     "aimd50":   "#2563eb",
@@ -159,10 +161,11 @@ def compute(run):
 
     if run["A"]:
         s["alpha_traj"] = np.array([a["after"] for a in run["A"]])
-        s["alpha_win"] = np.array([a["win"] for a in run["A"]])
+        s["alpha_wins"] = [a["win"] for a in run["A"]]
         actions = {}
         for a in run["A"]:
-            actions[a["action"]] = actions.get(a["action"], 0) + 1
+            if a["action"] != "hold":   # hold 不计入动作统计（重跑后每 window 都有 hold）
+                actions[a["action"]] = actions.get(a["action"], 0) + 1
         s["actions"] = actions
     else:
         s["alpha_traj"] = np.array([])
@@ -277,7 +280,7 @@ def print_summary(stats):
 def plot_miss_all(stats, outdir):
     """Fig 1: miss rate comparison across 4 configs."""
     configs = ["light", "medlo", "medium", "heavy"]
-    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
@@ -319,18 +322,34 @@ def plot_alpha_traj_all(runs, outdir):
             reps = [r for r in runs if r["config"] == cfg and r["mode"] == mode and len(r.get("alpha_traj",[])) > 0]
             if not reps:
                 continue
-            min_len = min(len(r["alpha_traj"]) for r in reps)
-            aligned = np.array([r["alpha_traj"][:min_len] for r in reps])
-            mean = aligned.mean(axis=0)
-            lo = aligned.mean(axis=0) - aligned.min(axis=0)
-            hi = aligned.max(axis=0) - aligned.mean(axis=0)
-            x = np.arange(len(mean))
-            ax.plot(x, mean, "-", color=color, lw=1.5, label=f"α0={mode.replace('aimd','')}")
-            ax.fill_between(x, mean - lo, mean + hi, alpha=0.2, color=color)
+            # 归一化 x 轴到 [0,1]：不同 run 的 window 总数差异巨大
+            # (高α时监控进程被抢占,sleep(100)跨度变大,window数少),
+            # 但实验总时间(24000 tick)相同。归一化+插值让三条线等长对齐。
+            N = 100
+            x_grid = np.linspace(0, 1, N)
+            interp_list = []
+            for r in reps:
+                wins = r.get("alpha_wins", list(range(len(r["alpha_traj"]))))
+                if len(wins) != len(r["alpha_traj"]):
+                    wins = list(range(len(r["alpha_traj"])))
+                if not wins:
+                    continue
+                wmax = max(wins) if max(wins) > 0 else 1
+                xnorm = [w / wmax for w in wins]
+                ax.plot(xnorm, r["alpha_traj"], "-", color=color, lw=0.5, alpha=0.3)
+                interp_list.append(np.interp(x_grid, xnorm, r["alpha_traj"]))
+            if interp_list:
+                aligned = np.array(interp_list)
+                mean = aligned.mean(axis=0)
+                lo = mean - aligned.min(axis=0)
+                hi = aligned.max(axis=0) - mean
+                ax.plot(x_grid, mean, "-", color=color, lw=2,
+                        label=f"α0={mode.replace('aimd','')}")
+                ax.fill_between(x_grid, mean - lo, mean + hi, alpha=0.2, color=color)
         edge = EDGE_REF.get(cfg, 40)
         ax.axhline(edge, color="gray", ls="--", lw=1, label=f"exp2 edge≈{edge}")
         ax.set_title(f"{cfg}")
-        ax.set_xlabel("Window")
+        ax.set_xlabel("Relative Time (normalized)")
         ax.set_ylabel("α")
         ax.legend(fontsize=8)
         ax.set_ylim(-2, 105)
@@ -345,7 +364,9 @@ def plot_miss_traj_medium(runs, outdir):
     """Fig 3: medium per-window miss rate."""
     fig, ax = plt.subplots(figsize=(12, 4.5))
     for mode, color in [("fixed0", COLORS_MODE["fixed0"]),
+                         ("fixed25", COLORS_MODE["fixed25"]),
                          ("fixed50", COLORS_MODE["fixed50"]),
+                         ("fixed75", COLORS_MODE["fixed75"]),
                          ("fixed100", COLORS_MODE["fixed100"]),
                          ("aimd0", COLORS_MODE["aimd0"]),
                          ("aimd50", COLORS_MODE["aimd50"]),
@@ -373,7 +394,7 @@ def plot_miss_traj_medium(runs, outdir):
 def plot_comparison_medium(stats, outdir):
     """Fig 4: medium fixed vs AIMD bar comparison."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
     colors = [COLORS_MODE[m] for m in modes]
 
     ax = axes[0]
@@ -425,18 +446,31 @@ def plot_convergence_medium(runs, outdir):
         reps = [r for r in runs if r["config"] == "medium" and r["mode"] == mode and len(r.get("alpha_traj",[])) > 0]
         if not reps:
             continue
+        # 归一化 x 轴到 [0,1] + 插值对齐（window 总数因 α 高低而异）
+        N = 100
+        x_grid = np.linspace(0, 1, N)
+        interp_list = []
         for r in reps:
-            alpha = r["alpha_traj"]
-            x = np.arange(len(alpha))
-            ax.plot(x, alpha, "-", color=color, lw=0.5, alpha=0.35)
-        min_len = min(len(r["alpha_traj"]) for r in reps)
-        aligned = np.array([r["alpha_traj"][:min_len] for r in reps])
-        mean = aligned.mean(axis=0)
-        ax.plot(np.arange(len(mean)), mean, "-", color=color, lw=2.5,
-                label=f"α0={mode.replace('aimd','')} mean (n={len(reps)})")
+            wins = r.get("alpha_wins", list(range(len(r["alpha_traj"]))))
+            if len(wins) != len(r["alpha_traj"]):
+                wins = list(range(len(r["alpha_traj"])))
+            if not wins:
+                continue
+            wmax = max(wins) if max(wins) > 0 else 1
+            xnorm = [w / wmax for w in wins]
+            ax.plot(xnorm, r["alpha_traj"], "-", color=color, lw=0.5, alpha=0.35)
+            interp_list.append(np.interp(x_grid, xnorm, r["alpha_traj"]))
+        if interp_list:
+            aligned = np.array(interp_list)
+            mean = aligned.mean(axis=0)
+            lo = mean - aligned.min(axis=0)
+            hi = aligned.max(axis=0) - mean
+            ax.plot(x_grid, mean, "-", color=color, lw=2.5,
+                    label=f"α0={mode.replace('aimd','')} mean (n={len(reps)})")
+            ax.fill_between(x_grid, mean - lo, mean + hi, alpha=0.15, color=color)
     ax.axhline(EDGE_REF.get("medium", 35), color="gray", ls="--", lw=1.2,
                label=f"exp2 edge≈{EDGE_REF.get('medium',35)}")
-    ax.set_xlabel("Window", fontsize=12)
+    ax.set_xlabel("Relative Time (normalized)", fontsize=12)
     ax.set_ylabel("α", fontsize=12)
     ax.set_title("Exp 3: Medium Convergence from 3 Starts", fontsize=13)
     ax.legend(loc="upper right", fontsize=10)
@@ -449,7 +483,7 @@ def plot_convergence_medium(runs, outdir):
 def plot_summary_config(runs, config, outdir):
     """One summary figure per non-medium config."""
     fig, axes = plt.subplots(2, 2, figsize=(11, 9))
-    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
 
     # miss rate bars
     ax = axes[0, 0]
@@ -482,20 +516,37 @@ def plot_summary_config(runs, config, outdir):
     ax.set_xticks(range(len(modes))); ax.set_xticklabels(modes, fontsize=9)
     ax.set_ylabel("ai share%"); ax.set_title("ai Share")
 
-    # alpha trajectory
+    # alpha trajectory (归一化 x 轴 + 插值对齐，window 总数因 α 高低而异)
     ax = axes[1, 0]
     for m in ["aimd0", "aimd50", "aimd100"]:
         reps = [r for r in runs if r["config"] == config and r["mode"] == m and len(r.get("alpha_traj",[])) > 0]
         if not reps:
             continue
-        min_len = min(len(r["alpha_traj"]) for r in reps)
-        aligned = np.array([r["alpha_traj"][:min_len] for r in reps])
-        mean = aligned.mean(axis=0)
-        ax.plot(np.arange(len(mean)), mean, "-", color=COLORS_MODE[m], lw=1.5,
-                label=m.replace("aimd", "α0="))
+        color = COLORS_MODE[m]
+        N = 100
+        x_grid = np.linspace(0, 1, N)
+        interp_list = []
+        for r in reps:
+            wins = r.get("alpha_wins", list(range(len(r["alpha_traj"]))))
+            if len(wins) != len(r["alpha_traj"]):
+                wins = list(range(len(r["alpha_traj"])))
+            if not wins:
+                continue
+            wmax = max(wins) if max(wins) > 0 else 1
+            xnorm = [w / wmax for w in wins]
+            ax.plot(xnorm, r["alpha_traj"], "-", color=color, lw=0.5, alpha=0.3)
+            interp_list.append(np.interp(x_grid, xnorm, r["alpha_traj"]))
+        if interp_list:
+            aligned = np.array(interp_list)
+            mean = aligned.mean(axis=0)
+            lo = mean - aligned.min(axis=0)
+            hi = aligned.max(axis=0) - mean
+            ax.plot(x_grid, mean, "-", color=color, lw=1.5,
+                    label=m.replace("aimd", "α0="))
+            ax.fill_between(x_grid, mean - lo, mean + hi, alpha=0.2, color=color)
     ax.axhline(EDGE_REF.get(config, 40), color="gray", ls="--", lw=1,
                label=f"edge≈{EDGE_REF.get(config,40)}")
-    ax.set_xlabel("Window"); ax.set_ylabel("α")
+    ax.set_xlabel("Relative Time"); ax.set_ylabel("α")
     ax.set_title("α Trajectory"); ax.legend(fontsize=9)
 
     # actions pie
@@ -521,7 +572,7 @@ def plot_throughput_vs_miss(stats, outdir):
     """每个配置两张图：横轴 ai work / ai share，纵轴 ctrl miss%。6 个 mode 各一个点。
     坐标轴自适应数据范围，留 10% 边距。"""
     configs = ["light", "medlo", "medium", "heavy"]
-    modes = ["fixed0", "fixed50", "fixed100", "aimd0", "aimd50", "aimd100"]
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
 
     for metric, xlabel, fname in [
         ("work",  "ai Throughput (run_delta ticks)", "exp3_work_vs_miss.png"),
