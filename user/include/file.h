@@ -40,6 +40,14 @@ static inline FILE* __init_stderr(void) { return &_stderr; }
 #define stdout (__init_stdout())
 #define stderr (__init_stderr())
 
+/* 静态文件对象池: fopen 从池中分配槽位, fclose 释放回池以便复用。
+ * 用 fd == -1 标记空闲槽位(裸机无 malloc, 故为固定大小池)。
+ * 注意: 三个标准流(_stdin/_stdout/_stderr)是独立全局对象, 不在池中。 */
+#define FILE_POOL_MAX 8
+static FILE _file_pool[FILE_POOL_MAX] = {
+    {-1}, {-1}, {-1}, {-1}, {-1}, {-1}, {-1}, {-1}
+};
+
 static inline int _mode_flags(const char* mode) {
     int f = 0;
     if (*mode == 'r') f |= _F_READ;
@@ -62,20 +70,28 @@ static inline FILE* fopen(const char* path, const char* mode) {
         fd = open(path, O_RDONLY);
     }
     if (fd < 0) return (FILE*)0;
-    // 裸机无 malloc，用静态池或全局变量
-    // 这里提供一个极简静态池（最多 8 个文件）
-    static FILE pool[8];
-    static int pool_used = 0;
-    if (pool_used >= 8) { close(fd); return (FILE*)0; }
-    FILE* fp = &pool[pool_used++];
-    fp->fd = fd; fp->pos = 0; fp->end = 0; fp->flags = flags; fp->ungetc = -1;
-    return fp;
+    /* 裸机无 malloc: 从静态池中找一个空闲槽位(fd < 0 表示空闲)。
+     * fclose 会把 fd 置回 -1, 因此槽位可以循环复用, 不再是"只增不回收"。 */
+    for (int i = 0; i < FILE_POOL_MAX; i++) {
+        FILE* fp = &_file_pool[i];
+        if (fp->fd < 0) {
+            fp->fd = fd; fp->pos = 0; fp->end = 0; fp->flags = flags; fp->ungetc = -1;
+            return fp;
+        }
+    }
+    /* 池满: 没有可用槽位 */
+    close(fd);
+    return (FILE*)0;
 }
+
+static inline int _flushbuf(FILE* fp);  /* 前置声明: fclose 需要先冲刷缓冲 */
 
 static inline int fclose(FILE* fp) {
     if (!fp) return EOF;
+    /* 冲刷未落盘的写缓冲, 否则不满一个缓冲块且无换行的数据会丢失 */
+    if ((fp->flags & _F_WRITE) && !(fp->flags & _F_UNBUF)) _flushbuf(fp);
     if (fp->fd >= 0) close(fp->fd);
-    fp->fd = -1; fp->flags = 0;
+    fp->fd = -1; fp->flags = 0; fp->pos = 0; fp->end = 0; fp->ungetc = -1;
     return 0;
 }
 
@@ -165,6 +181,7 @@ static inline int fputs(const char* s, FILE* fp) {
 static inline int feof(FILE* fp) { return fp && (fp->flags & _F_EOF); }
 static inline int ferror(FILE* fp) { return fp && (fp->flags & _F_ERR); }
 static inline void clearerr(FILE* fp) { if (fp) fp->flags &= ~(_F_EOF | _F_ERR); }
+
 
 
 static inline FILE* freopen(const char* path, const char* mode, FILE* fp) {
