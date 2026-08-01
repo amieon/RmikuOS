@@ -95,9 +95,40 @@ static inline int fclose(FILE* fp) {
     return 0;
 }
 
+/* 判断 fd 是否为终端(字符设备): 直接 fstat syscall 读内核 Stat.file_type。
+ * 避免 include fs.h。内核 STAT_TYPE_CHAR == 3。 */
+static inline int __file_is_tty(int fd) {
+    unsigned char kbuf[32];
+    if (syscall3(SYS_FSTAT, (usize)fd, (usize)kbuf, 0) < 0) return 0;
+    return kbuf[0] == 3;
+}
+
 static inline int _fillbuf(FILE* fp) {
     if (fp->flags & (_F_EOF | _F_ERR)) return EOF;
     fp->pos = 0; fp->end = 0;
+    if (fp->fd == 0) {
+        /* RmikuOS 内核无终端驱动(echo/行缓冲), 由 libc 对 stdin 做
+         * "行模式 + 回显", 让 sqlite3/lua 等交互程序有正常终端体验。
+         * 仅当 fd 0 是字符设备(终端)时回显; 管道/文件输入不回显。
+         * 注: 内核 read 按 "填满 buf 或遇 \\n" 返回, len=1 时逐字符返回。 */
+        int is_tty = __file_is_tty(0);
+        int i = 0;
+        while (i < BUFSIZ) {
+            unsigned char c;
+            if (read(0, (char*)&c, 1) != 1) break;
+            if (c == '\r') c = '\n';
+            fp->buf[i++] = c;
+            if (is_tty) {
+                if (c == 8 || c == 127)      write(1, "\b \b", 3);
+                else if (c == '\n')          write(1, "\n", 1);
+                else                         write(1, (char*)&c, 1);
+            }
+            if (c == '\n') break;
+        }
+        if (i == 0) { fp->flags |= _F_EOF; return EOF; }
+        fp->end = i;
+        return (unsigned char)fp->buf[fp->pos++];
+    }
     isize n = read(fp->fd, (char*)fp->buf, BUFSIZ);
     if (n < 0) { fp->flags |= _F_ERR; return EOF; }
     if (n == 0) { fp->flags |= _F_EOF; return EOF; }

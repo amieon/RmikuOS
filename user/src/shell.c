@@ -1262,35 +1262,32 @@ static void run_exec(int argc, char *argv[]){
 }
 
 static int run_external(int argc, char *argv[], int background) {
-    /* 每次外部命令前刷新命令搜索路径：使 export PATH=... 立即生效 */
+    /* Refresh PATH each time before running an external command. */
     load_search_dirs();
-    fcntl(0, F_SETFL, O_NONBLOCK);
     isize pid = fork();
     if (pid == 0) {
+        /* Child stdin must stay BLOCKING. The old code set O_NONBLOCK on
+        ** fd 0 before fork for Ctrl+C polling, and fd_flags get cloned
+        ** into the child, so interactive programs (sqlite3 shell, cat,
+        ** lua...) saw read()==0 (EOF) on stdin and exited immediately.
+        ** Reset here; per-process fd_flags so this does not affect the
+        ** parent. */
+        fcntl(0, F_SETFL, 0);
         run_exec(argc, argv);
         exit(1);
     } else if (pid > 0) {
         if (background) {
             add_job(pid, argv[0]);
             printf("[%d] %d\n", next_job_id - 1, pid);
-            fcntl(0, F_SETFL, 0);
             return 0;
         }
+        /* Foreground: block until the child exits. We no longer poll
+        ** read(0) for Ctrl+C: that consumed input chars meant for the
+        ** child from the shared terminal. Kernel signal delivery is
+        ** incomplete; Ctrl+C interrupt can come back with a kernel
+        ** Ctrl+C -> SIGINT implementation later. */
         int status = 0;
-        while (1) {
-            isize ret = waitpid(pid, &status, WNOHANG);
-            if (ret == pid) break;
-            char ch;
-            int n = read(0, &ch, 1);
-            if (n == 1 && ch == 3) {
-                kill(pid, SIGINT);
-                fputs("\n", stdout);
-                while (waitpid(pid, &status, 0) < 0) yield();
-                break;
-            }
-            yield();
-        }
-        fcntl(0, F_SETFL, 0);
+        while (waitpid(pid, &status, 0) < 0) yield();
         return WEXITSTATUS(status);
     } else {
         fputs("fork failed\n", stdout);

@@ -20,7 +20,6 @@
  * ==========================================================================*/
 
 #include "sqlite3.h"
-#include "rmiku_vfs.h"
 #include "stdio.h"
 #include "string.h"
 
