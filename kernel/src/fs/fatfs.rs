@@ -169,7 +169,7 @@ impl File for FatFile {
             };
             result
         };
-        Stat::new(STAT_TYPE_FILE, size, 0o644, 0, 0)
+        Stat::new(STAT_TYPE_FILE, size, 0o644, 0, 0).with_mtime(crate::timer::now_secs() as u32)
     }
 
     fn seek(&self, offset: isize, whence: usize) -> isize {

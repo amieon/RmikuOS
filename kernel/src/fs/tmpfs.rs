@@ -451,7 +451,7 @@ impl File for TmpfsFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_FILE, self.data.lock().len(), self.mode, self.uid, self.gid)
+        Stat::new(STAT_TYPE_FILE, self.data.lock().len(), self.mode, self.uid, self.gid).with_mtime(crate::timer::now_secs() as u32)
     }
 
     fn seek(&self, offset: isize, whence: usize) -> isize {

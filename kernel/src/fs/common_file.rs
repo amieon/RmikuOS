@@ -75,7 +75,7 @@ impl File for ReadOnlyMemFile {
 
     fn stat(&self) -> Stat {
         let (mode, uid, gid) = self.perms;
-        Stat::new(STAT_TYPE_FILE, self.data.len(), mode, uid, gid)
+        Stat::new(STAT_TYPE_FILE, self.data.len(), mode, uid, gid).with_mtime(crate::timer::now_secs() as u32)
     }
 
     fn read(&self, buf: &mut [u8]) -> isize {
@@ -143,7 +143,7 @@ impl File for ReadOnlyDirFile {
 
     fn stat(&self) -> Stat {
         let (mode, uid, gid) = self.perms;
-        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE, mode, uid, gid)
+        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE, mode, uid, gid).with_mtime(crate::timer::now_secs() as u32)
     }
 
     fn read(&self, _buf: &mut [u8]) -> isize {
