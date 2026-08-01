@@ -33,9 +33,9 @@ static void setup(void) {
     /* ctrl: in-parent jobs, period=5, burn=180k≈1.2tick */
     sl_add_jobs_parent("ctrl", 300, 1, /*period*/5, /*cpu*/3, /*burn*/180000);
     /* ai: phased spin, 25 线程, 轻相位只 3 个活跃 */
-    sl_add_spin_phased("ai", 100, 25, 12000, /*light_active*/3);
-    /* log: 普通 spin */
-    sl_add_spin("log", 50, 9, 12000);
+    sl_add_spin_phased("ai", 100, 50, 12000, /*light_active*/1);
+    /* log: 减到 3 线程（原 9），L 段 runnable 从 13 降到 7，真正轻负载 */
+    sl_add_spin("log", 50, 3, 12000);
 }
 
 static void run_mode(const char *mode, int alpha0, int is_aimd, int rep,
@@ -49,7 +49,7 @@ static void run_mode(const char *mode, int alpha0, int is_aimd, int rep,
         /* 和 exp3 一致的参数 */
         aimd.danger_lateness = 25;
         aimd.safe_lateness = 0;
-        aimd.inc = 1; 
+        aimd.inc = 5;
     }
 
     printf("# RUN mode=%s alpha0=%d rep=%d/3\n", mode, alpha0, rep);
@@ -63,13 +63,13 @@ static void run_mode(const char *mode, int alpha0, int is_aimd, int rep,
 }
 
 int main(void) {
-    const unsigned long total = 96000;
+    const unsigned long total = 240000;
     const int nreps = 3;
 
     printf("# sexp4_dyn: light-heavy-light-heavy, %d modes x (1w+%dr), total=%lu\n",
            8, nreps, total);
     printf("# ctrl=300tk,1t,p=5,burn=180k(in-parent)\n");
-    printf("# ai=100tk,25t,phased(light_active=3)  log=50tk,9t,spin\n");
+    printf("# ai=100tk,25t,phased(light_active=3)  log=50tk,3t,spin\n");
     printf("# phases: L(0-25%%) H(25-50%%) L(50-75%%) H(75-100%%)\n");
 
     /* 8 modes: fixed0/25/50/75/100 + aimd0/50/100 */
@@ -94,7 +94,7 @@ int main(void) {
             sl_aimd_init(&aimd_w, modes[mi].alpha0);
             aimd_w.danger_lateness = 25;
             aimd_w.safe_lateness = 0;
-            aimd_w.inc = 1; 
+            /* inc 不覆盖: 用 sl_aimd_init 的值(=5, 和 exp3 一致) */
         }
         sl_run(&(sl_cfg){
             .total_ticks = total, .window_ticks = 100,
