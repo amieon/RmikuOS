@@ -184,12 +184,19 @@ static inline void clearerr(FILE* fp) { if (fp) fp->flags &= ~(_F_EOF | _F_ERR);
 
 /* ---- 定位: 基于 lseek 系统调用, 考虑读/写缓冲与回退字符 ---- */
 
+/* lseek() 由 fs.h 提供, 但 file.h 不能 include fs.h（会把内核版 struct
+ * stat/dirent 带进所有用 stdio 的 TU, 与 POSIX 头冲突）。这里直接打原始
+ * syscall, 语义与 fs.h 的 lseek(fd, offset, whence) 完全一致。 */
+static inline isize __file_lseek(isize fd, isize offset, usize whence) {
+    return syscall3(SYS_LSEEK, (usize)fd, (usize)offset, whence);
+}
+
 /* ftell: 返回逻辑文件偏移。内核 fd 偏移可能领先/落后于逻辑位置,
  * 需按缓冲内容修正: 写模式加上未落盘的 pos 字节; 读模式减去已读入
  * 但未消费的 (end-pos) 字节, 以及 1 个回退字符。 */
 static inline long ftell(FILE* fp) {
     if (!fp || fp->fd < 0) return -1;
-    isize raw = lseek(fp->fd, 0, SEEK_CUR);
+    isize raw = __file_lseek(fp->fd, 0, SEEK_CUR);
     if (raw < 0) return -1;
     long pos = (long)raw;
     if (fp->flags & _F_WRITE) {
@@ -214,7 +221,7 @@ static inline int fseek(FILE* fp, long offset, int whence) {
     }
     fp->pos = 0; fp->end = 0; fp->ungetc = -1;
     fp->flags &= ~_F_EOF;
-    if (lseek(fp->fd, (isize)offset, (usize)whence) < 0) return -1;
+    if (__file_lseek(fp->fd, (isize)offset, (usize)whence) < 0) return -1;
     return 0;
 }
 
