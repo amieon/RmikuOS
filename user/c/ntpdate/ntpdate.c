@@ -77,9 +77,10 @@ int main(int argc, char *argv[]) {
         if (!ok) continue;
         unsigned long t4 = local_ntp64();
 
-        /* 64 位定点(2^-32 秒): delay/offset 全部无符号, 均为正数 */
+        /* 64 位定点(2^-32 秒)运算。注意防溢出: t2-t1 ≈ 39.9亿秒<<32 ≈ 1.7e19,
+         * 两个相加会超 2^64 回绕 —— 必须先各自 >>1 再相加(丢 0.5 单位≈0.1ns)。 */
         unsigned long delay = (t4 - t1) - (t3 - t2);
-        unsigned long offset = ((t2 - t1) + (t3 - t4)) / 2;
+        unsigned long offset = ((t2 - t1) >> 1) + ((t3 - t4) >> 1);
         if (delay < best_delay) {
             best_delay = delay;
             best_offset = offset;
@@ -96,9 +97,8 @@ int main(int argc, char *argv[]) {
                            + (unsigned long)get_time_us();
     set_wall_clock(epoch_us);
 
-    printf("[ntpdate] synced: epoch=%lu s, offset=%ld ms, delay=%lu ms\n",
+    printf("[ntpdate] synced: epoch=%lu s, delay=%lu ms\n",
            epoch_us / 1000000,
-           off_sec * 1000 + (long)((off_frac * 1000) >> 32),
            (best_delay * 1000) >> 32);
     return 0;
 }
