@@ -8,15 +8,13 @@
 #include "process.h"
 #include "string.h"
 #include "stdio.h"
-
+#include "env.h"      /* 真实 getenv/setenv: 基于 SYS_GETENV 系统调用 */
 
 /* ---- misc (inline) ---- */
 static inline void abort(void) {
     printf("abort\n");
     exit(127);
 }
-
-static inline char *getenv(const char *name) { (void)name; return (char*)0; }
 
 static inline int abs(int x) {
     return x < 0 ? -x : x;
@@ -59,6 +57,15 @@ static inline long strtol(const char *s, char **e, int b) {
 
 static inline unsigned long strtoul(const char *s, char **e, int b) {
     return (unsigned long)strtol(s, e, b);
+}
+
+/* LP64 下 long 与 long long 同宽, 直接转 */
+static inline long long strtoll(const char *s, char **e, int b) {
+    return (long long)strtol(s, e, b);
+}
+
+static inline unsigned long long strtoull(const char *s, char **e, int b) {
+    return (unsigned long long)strtoul(s, e, b);
 }
 
 static inline double strtod(const char *s, char **e) {
