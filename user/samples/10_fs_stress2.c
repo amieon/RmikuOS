@@ -92,11 +92,11 @@ static int check_stat_path(const char *path, unsigned char expected_type) {
         return -1;
     }
 
-    if (expected_type != 0 && st.file_type != expected_type) {
+    if (expected_type != 0 && stat_type_of(st.st_mode) != expected_type) {
         puts("[FAIL] stat type mismatch: ");
         puts(path);
         puts(" got=");
-        printf("%d", st.file_type);
+        printf("%d", stat_type_of(st.st_mode));
         puts(" expected=");
         printf("%d", expected_type);
         puts("\n");
@@ -106,9 +106,9 @@ static int check_stat_path(const char *path, unsigned char expected_type) {
 
     if (verbose) {
         puts("[stat] ");
-        print_type(st.file_type);
+        print_type(stat_type_of(st.st_mode));
         puts(" size=");
-        printf("%d", st.size);
+        printf("%d", st.st_size);
         puts(" ");
         puts(path);
         puts("\n");
@@ -125,11 +125,11 @@ static int check_fstat_fd(int fd, unsigned char expected_type, const char *tag) 
         return -1;
     }
 
-    if (expected_type != 0 && st.file_type != expected_type) {
+    if (expected_type != 0 && stat_type_of(st.st_mode) != expected_type) {
         puts("[FAIL] fstat type mismatch: ");
         puts(tag);
         puts(" got=");
-        printf("%d", st.file_type);
+        printf("%d", stat_type_of(st.st_mode));
         puts(" expected=");
         printf("%d", expected_type);
         puts("\n");
@@ -232,7 +232,7 @@ static int read_all_file(const char *path, int min_bytes) {
         return -1;
     }
 
-    if (st.file_type != STAT_TYPE_FILE) {
+    if (stat_type_of(st.st_mode) != STAT_TYPE_FILE) {
         fail_msg("opened path is not file", path);
         close(fd);
         return -1;
@@ -272,13 +272,13 @@ static int read_all_file(const char *path, int min_bytes) {
         return -1;
     }
 
-    if (st.size != 0 && total != (int)st.size) {
+    if (st.st_size != 0 && total != (int)st.st_size) {
         puts("[FAIL] read size != stat size: ");
         puts(path);
         puts(" read=");
         printf("%d", total);
         puts(" stat=");
-        printf("%d", st.size);
+        printf("%d", st.st_size);
         puts("\n");
         failures++;
         return -1;
@@ -336,7 +336,7 @@ static int fd_reuse_test(void) {
 static int cwd_relative_test(void) {
     char old_cwd[MAX_PATH];
 
-    if (getcwd(old_cwd, sizeof(old_cwd)) < 0) {
+    if (getcwd(old_cwd, sizeof(old_cwd)) == NULL) {
         fail_msg("getcwd failed before cwd test", 0);
         return -1;
     }
@@ -348,7 +348,7 @@ static int cwd_relative_test(void) {
 
     char cwd[MAX_PATH];
 
-    if (getcwd(cwd, sizeof(cwd)) < 0 || !streq(cwd, "/")) {
+    if (getcwd(cwd, sizeof(cwd)) == NULL || !streq(cwd, "/")) {
         fail_msg("cwd should be /", cwd);
         chdir(old_cwd);
         return -1;
@@ -360,7 +360,7 @@ static int cwd_relative_test(void) {
         return -1;
     }
 
-    if (getcwd(cwd, sizeof(cwd)) < 0 || !streq(cwd, "/bin")) {
+    if (getcwd(cwd, sizeof(cwd)) == NULL || !streq(cwd, "/bin")) {
         fail_msg("cwd should be /bin", cwd);
         chdir(old_cwd);
         return -1;
@@ -382,7 +382,7 @@ static int cwd_relative_test(void) {
         return -1;
     }
 
-    if (getcwd(cwd, sizeof(cwd)) < 0 || !streq(cwd, "/etc")) {
+    if (getcwd(cwd, sizeof(cwd)) == NULL || !streq(cwd, "/etc")) {
         fail_msg("cwd should be /etc", cwd);
         chdir(old_cwd);
         return -1;
@@ -404,7 +404,7 @@ static int cwd_relative_test(void) {
         return -1;
     }
 
-    if (getcwd(cwd, sizeof(cwd)) < 0 || !streq(cwd, "/")) {
+    if (getcwd(cwd, sizeof(cwd)) == NULL || !streq(cwd, "/")) {
         fail_msg("cwd should return to /", cwd);
         chdir(old_cwd);
         return -1;
@@ -461,7 +461,7 @@ int main(int argc, char **argv) {
     puts("\n");
 
     char cwd[MAX_PATH];
-    if (getcwd(cwd, sizeof(cwd)) >= 0) {
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
         puts("start cwd=");
         puts(cwd);
         puts("\n");

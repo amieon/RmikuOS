@@ -59,8 +59,8 @@ int main(void) {
 
     // --- 1. 创建目录树 ---
     puts("\n[1] build directory tree\n");
-    expect_ok("mkdir /tmp/haha", mkdir("/tmp/haha"));
-    expect_ok("mkdir /tmp/haha/nihao", mkdir("/tmp/haha/nihao"));
+    expect_ok("mkdir /tmp/haha", mkdir("/tmp/haha", 0777));
+    expect_ok("mkdir /tmp/haha/nihao", mkdir("/tmp/haha/nihao", 0777));
     expect_ok("touch /tmp/haha/file1", create2("/tmp/haha/file1", strlen("/tmp/haha/file1")));
     expect_exists("/tmp/haha");
     expect_exists("/tmp/haha/nihao");
@@ -122,7 +122,7 @@ int main(void) {
 
     // --- 9. 在只读 ext4 上创建应失败 ---
     puts("\n[9] write on read-only ext4 should fail\n");
-    expect_fail("mkdir /etc/foo (ext4 ro)", mkdir("/etc/foo"));
+    expect_fail("mkdir /etc/foo (ext4 ro)", mkdir("/etc/foo", 0777));
 
     // --- 总结 ---
     puts("\n=== summary ===\n");
