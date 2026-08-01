@@ -70,7 +70,7 @@ static int rmikuFileSize(sqlite3_file *p, sqlite3_int64 *pSize) {
   RmikuFile *f = (RmikuFile*)p;
   struct stat st;
   if (fstat(f->fd, &st) != 0) return SQLITE_IOERR_FSTAT;
-  *pSize = (sqlite3_int64)st.size;
+  *pSize = (sqlite3_int64)st.st_size;
   return SQLITE_OK;
 }
 

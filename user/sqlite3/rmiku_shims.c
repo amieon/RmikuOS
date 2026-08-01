@@ -11,8 +11,9 @@
  *       getpwuid      → 无 passwd 数据库, 返回 NULL（与 getenv 无值一致）
  *       symlink       → 无符号链接支持, ENOSYS（writefile() 的死路径, 恒不触发）
  *
- * 注意：本文件绝不 include fs.h / rmiku_vfs.h（它们带内核版 struct
- * stat/dirent, 与本文件的 POSIX 版冲突）。VFS 由 rmiku_vfs.c 单独编译。
+ * 注意：本文件 include fs.h（方案 A 统一后 fs.h 是用户态唯一的
+ * struct stat / struct dirent 定义, stat() 内部已翻译成 POSIX 布局）。
+ * rmiku_vfs.h 不能被本文件 include —— VFS 由 rmiku_vfs.c 单独编译。
  * ==========================================================================*/
 
 #include "syscall.h"
@@ -20,8 +21,8 @@
 #include "string.h"
 #include "stdlib.h"      /* malloc/free */
 #include "errno.h"
-#include "sys/stat.h"    /* POSIX stat(): access() 用它 */
-#include "dirent.h"
+#include "sys/stat.h"    /* → fs.h: POSIX stat() */
+#include "dirent.h"      /* → fs.h: struct dirent + DIR 声明 */
 #include "pwd.h"
 
 /* errno.h 只声明 extern, 这里给出唯一定义（lua.c 里那个是它自己 TU 的） */
@@ -87,18 +88,9 @@ struct passwd *getpwuid(uid_t uid) {
  *
  * 内核 getdents 语义（fs.h 注释 + 用户态 ls.c 验证）:
  *   返回读到的【字节数】; 缓冲内是若干等长 struct dirent（fs.h 布局,
- *   64 字节一个, 名字按 name_len 取, 不带 NUL）。因此这里用私有
- *   rk_dirent_kernel_t 对齐, 逐个翻译成 POSIX struct dirent。
+ *   64 字节一个, 名字按 name_len 取, 不带 NUL）。fs.h 的 struct dirent
+ *   就是内核布局（含 d_name 别名）, 直接用它解析, 无需翻译副本。
  * -------------------------------------------------------------------------- */
-#define RK_DIRENT_SIZE 64     /* sizeof(fs.h struct dirent) */
-
-typedef struct rk_dirent_kernel {
-    unsigned char file_type;   /* 1=文件 2=目录 */
-    unsigned char name_len;
-    unsigned char reserved[6];
-    char name[56];
-} rk_dirent_kernel_t;
-
 struct __rk_DIR {
     int fd;
     char kbuf[1024];          /* 内核格式条目缓冲 */
@@ -129,8 +121,8 @@ struct dirent *readdir(DIR *dirp) {
             d->kpos = 0;
             if (d->klen <= 0) return (struct dirent *)0;   /* 0=EOF, <0=错误 */
         }
-        rk_dirent_kernel_t *ke = (rk_dirent_kernel_t *)(d->kbuf + d->kpos);
-        d->kpos += RK_DIRENT_SIZE;
+        struct dirent *ke = (struct dirent *)(d->kbuf + d->kpos);
+        d->kpos += (isize)sizeof(struct dirent);
 
         /* 跳过 . 与 .. */
         if (ke->name_len == 1 && ke->name[0] == '.') continue;
@@ -140,10 +132,6 @@ struct dirent *readdir(DIR *dirp) {
         if (n > 255) n = 255;
         memcpy(d->cur.d_name, ke->name, (usize)n);
         d->cur.d_name[n] = '\0';
-        d->cur.d_ino = 0;
-        d->cur.d_off = 0;
-        d->cur.d_reclen = 0;
-        d->cur.d_type = ke->file_type;   /* 内核值: 1=文件 2=目录 */
         return &d->cur;
     }
 }
