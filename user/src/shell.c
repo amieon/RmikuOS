@@ -957,7 +957,7 @@ static int builtin_cd(int argc, char *argv[]) {
     return 0;
 }
 
-static int builtin_mkdir(int argc, char *argv[], 0777) {
+static int builtin_mkdir(int argc, char *argv[]) {
     if (argc < 2) {
         fputs("mkdir: missing operand\n", stdout);
         return 1;
@@ -1569,7 +1569,7 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "unset")) { return builtin_unset(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "pwd")) { return builtin_pwd(); }
     if (streq(exp_argv[0], "cd")) { return builtin_cd(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv, 0777); }
+    if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "touch")) { return builtin_create(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "rm")) { return builtin_rm(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "rmdir")) { return builtin_rmdir(exp_argc, exp_argv); }
