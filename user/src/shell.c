@@ -195,7 +195,7 @@ static int complete_path(const char *prefix, char matches[][LINE_SIZE], int max_
             file_prefix[j++] = prefix[i];
         file_prefix[j] = 0;
     } else {
-        if (getcwd(dir, sizeof(dir)) < 0) return 0;
+        if (getcwd(dir, sizeof(dir)) == NULL) return 0;
         int dlen = strlen_(dir);
         if (dlen > 0 && dir[dlen - 1] != '/') {
             dir[dlen] = '/';
@@ -426,7 +426,7 @@ static int expand_token(const char *token, char *outv[], int max_out, int is_quo
         for (int i = last_slash + 1; token[i]; i++) pat[j++] = token[i];
         pat[j] = 0;
     } else {
-        if (getcwd(dir, sizeof(dir)) < 0) return 0;
+        if (getcwd(dir, sizeof(dir)) == NULL) return 0;
         int dlen = strlen_(dir);
         if (dlen > 0 && dir[dlen - 1] != '/') {
             dir[dlen] = '/';
@@ -931,8 +931,7 @@ static void print_help(void) {
 
 static int builtin_pwd(void) {
     char buf[128];
-    isize n = getcwd(buf, sizeof(buf));
-    if (n < 0) {
+    if (getcwd(buf, sizeof(buf)) == NULL) {
         fputs("pwd: getcwd failed\n", stdout);
         return 1;
     }
@@ -952,18 +951,18 @@ static int builtin_cd(int argc, char *argv[]) {
     }
     /* 让 $PWD 反映新工作目录 */
     char cwd_buf[128];
-    if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
+    if (getcwd(cwd_buf, sizeof(cwd_buf)) != NULL) {
         setenv_s("PWD", cwd_buf, 1);
     }
     return 0;
 }
 
-static int builtin_mkdir(int argc, char *argv[]) {
+static int builtin_mkdir(int argc, char *argv[], 0777) {
     if (argc < 2) {
         fputs("mkdir: missing operand\n", stdout);
         return 1;
     }
-    if (mkdir(argv[1]) < 0) {
+    if (mkdir(argv[1], 0777) < 0) {
         fputs("mkdir: cannot create directory: ", stdout);
         fputs(argv[1], stdout);
         fputs("\n", stdout);
@@ -1570,7 +1569,7 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "unset")) { return builtin_unset(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "pwd")) { return builtin_pwd(); }
     if (streq(exp_argv[0], "cd")) { return builtin_cd(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv, 0777); }
     if (streq(exp_argv[0], "touch")) { return builtin_create(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "rm")) { return builtin_rm(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "rmdir")) { return builtin_rmdir(exp_argc, exp_argv); }
@@ -1779,7 +1778,7 @@ int main(void) {
         char cwd_buf[128];
         char prompt[128];
         int p = 0;
-        if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
+        if (getcwd(cwd_buf, sizeof(cwd_buf)) != NULL) {
             for (int i = 0; cwd_buf[i] && p < 126; i++) prompt[p++] = cwd_buf[i];
         }
         prompt[p++] = ' ';

@@ -96,21 +96,21 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            if (st.file_type == STAT_TYPE_DIR) {
+            if (stat_type_of(st.st_mode) == STAT_TYPE_DIR) {
                 fputs("dir     ", stdout);
-            } else if (st.file_type == STAT_TYPE_FILE) {
+            } else if (stat_type_of(st.st_mode) == STAT_TYPE_FILE) {
                 fputs("file    ", stdout);
-            } else if (st.file_type == STAT_TYPE_CHAR) {
+            } else if (stat_type_of(st.st_mode) == STAT_TYPE_CHAR) {
                 fputs("char    ", stdout);
             } else {
                 fputs("unknown ", stdout);
             }
 
-            printf("%d", st.size);
+            printf("%d", st.st_size);
             fputs(" ", stdout);
 
             fputs(name, stdout);
-            if (st.file_type == STAT_TYPE_DIR) {
+            if (stat_type_of(st.st_mode) == STAT_TYPE_DIR) {
                 fputs("/", stdout);
             }
             fputs("\n", stdout);
