@@ -34,7 +34,7 @@ static int page_ok(const unsigned char *buf, int p) {
 }
 
 static int path_exists(const char *path) { struct stat st; return stat(path, &st) >= 0; }
-static isize file_size(const char *path) { struct stat st; if (stat(path, &st) < 0) return -1; return (isize)st.size; }
+static isize file_size(const char *path) { struct stat st; if (stat(path, &st) < 0) return -1; return (isize)st.st_size; }
 
 int main(void) {
     puts("=== fat multicluster (sqlite-style) test ===\n");

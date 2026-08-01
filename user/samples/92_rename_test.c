@@ -27,14 +27,14 @@ static void expect_absent(const char *path) {
     if (!path_exists(path)) { puts("  PASS: absent "); puts(path); puts("\n"); pass_count++; }
     else { puts("  FAIL: should be gone but exists: "); puts(path); puts("\n"); fail_count++; }
 }
-static isize file_size(const char *path) { struct stat st; if (stat(path, &st) < 0) return -1; return (isize)st.size; }
+static isize file_size(const char *path) { struct stat st; if (stat(path, &st) < 0) return -1; return (isize)st.st_size; }
 
 int main(void) {
     puts("=== rename test ===\n");
 
     puts("\n[0] setup\n");
-    expect_ok("mkdir /tmp/rntest", mkdir("/tmp/rntest"));
-    expect_ok("mkdir /tmp/rntest/sub", mkdir("/tmp/rntest/sub"));
+    expect_ok("mkdir /tmp/rntest", mkdir("/tmp/rntest", 0777));
+    expect_ok("mkdir /tmp/rntest/sub", mkdir("/tmp/rntest/sub", 0777));
     isize fd = open_create("/tmp/rntest/a.txt", O_RDWR);
     expect_ok("create a.txt", fd);
     if (fd >= 0) { expect_eq("write 5 bytes", write(fd, "hello", 5), 5); close(fd); }
