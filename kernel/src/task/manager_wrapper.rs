@@ -1015,6 +1015,13 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
             }
         }
 
+        // SIGCHLD: 子进程退出, 通知父进程(默认忽略, 父进程 waitpid 收尸)
+        if let Some(parent) = manager.process(current_pid).parent {
+            if let Some(p) = manager.try_process_mut(parent) {
+                p.sig_pending |= 1u64 << super::SIGCHLD;
+            }
+        }
+
         // runnable_count 记账:把 Ready/Running -> Zombie/Dead 的线程数统计出来
         let mut runnable_dec = 0usize;
         for tid in tids {
