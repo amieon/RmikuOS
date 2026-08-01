@@ -74,11 +74,12 @@ pub const SYSCALL_FTRUNCATE: usize = 65;
 pub const SYSCALL_TRUNCATE: usize = 66;
 pub const SYSCALL_LSEEK: usize = 67;
 pub const SYSCALL_RENAME: usize = 68;
-pub const SYSCALL_SET_ECHO: usize = 69;   
-pub const SYSCALL_SIGNAL: usize = 70;    
-pub const SYSCALL_SET_FRONT: usize = 71; 
-pub const SYSCALL_GET_TIME_US: usize = 72;    
-pub const SYSCALL_SET_WALL_CLOCK: usize = 73; 
+pub const SYSCALL_SET_ECHO: usize = 69;   // 终端回显开关(1=开 0=关)
+pub const SYSCALL_SIGNAL: usize = 70;     // signal(sig, action): 0=DFL 1=IGN
+pub const SYSCALL_SET_FRONT: usize = 71;  // 设置前台进程 pid(Ctrl+C 投递目标)
+pub const SYSCALL_GET_TIME_US: usize = 72;    // 单调时间(微秒, 自启动起)
+pub const SYSCALL_SET_WALL_CLOCK: usize = 73; // 校准墙钟(epoch 微秒)
+pub const SYSCALL_GET_EPOCH: usize = 74;      // 墙钟秒(epoch; 未校准=0)
 
 
 
@@ -185,6 +186,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SET_FRONT => process::sys_set_front(args[0]),
         SYSCALL_GET_TIME_US => process::sys_get_time_us(),
         SYSCALL_SET_WALL_CLOCK => process::sys_set_wall_clock(args[0]),
+        SYSCALL_GET_EPOCH => process::sys_get_epoch(),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

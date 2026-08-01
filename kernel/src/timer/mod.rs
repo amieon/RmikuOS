@@ -40,7 +40,6 @@ pub fn set_wall_clock(epoch_us: u64) {
 
 /// 当前墙钟秒(epoch)。未校准返回 0。
 /// 注: Stat 时间戳(方案 C)即将使用; 在此之前仅 ntpdate 校准, 无调用点。
-#[allow(dead_code)]
 pub fn now_secs() -> u64 {
     let base = WALL_BASE.load(Ordering::Relaxed);
     if base == 0 {

@@ -88,6 +88,11 @@ pub fn sys_set_wall_clock(epoch_us: usize) -> isize {
     0
 }
 
+/// 墙钟秒(epoch)。未校准(没跑 ntpdate)返回 0。
+pub fn sys_get_epoch() -> isize {
+    crate::timer::now_secs() as isize
+}
+
 pub fn sys_kill(pid: usize, sig : usize) -> isize {
     crate::task::kill(pid, sig)
 }
