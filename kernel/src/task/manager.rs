@@ -197,20 +197,28 @@ impl TaskManager {
         if alpha < 0 || alpha > 100 {
             return -1;
         }
+        let old = self.sched_alpha;
         self.sched_alpha = alpha;
-        // alpha 变化后，旧 pass 不再公平，重置避免前几个窗口歪斜
-        for process in self.processes.iter_mut() {
-            if let Some(p) = process.as_mut() {
-                p.pass = 0;
+        // 只在 alpha 大幅变化时重置 pass(避免过渡期歪斜)。
+        // aimd 小步调整(±inc / ×backoff, 单次幅度最多 ~20)不重置,
+        // 保持 stride 累积连续; 否则 aimd 每 window 调一次, pass 反复清零,
+        // ai 的 eff 优势无法兑现成 run (实测 aimd ai_eff 高 11-25 倍但 ai_run 更低)。
+        const RESET_THRESHOLD: isize = 25;
+        if (alpha - old).abs() > RESET_THRESHOLD {
+            for process in self.processes.iter_mut() {
+                if let Some(p) = process.as_mut() {
+                    p.pass = 0;
+                }
             }
-        }
-        for thread in self.threads.iter_mut() {
-            if let Some(t) = thread.as_mut() {
-                t.pass = 0;
+            for thread in self.threads.iter_mut() {
+                if let Some(t) = thread.as_mut() {
+                    t.pass = 0;
+                }
             }
         }
         0
     }
+
 
 
     pub fn get_sched_alpha(&self) -> isize{
