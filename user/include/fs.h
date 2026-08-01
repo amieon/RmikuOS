@@ -5,7 +5,19 @@ extern "C" {
 
 
 #include "io.h"
-#include "sys/types.h"  
+#include "sys/types.h"   /* mode_t / uid_t / gid_t / time_t / off_t */
+
+/* ======================================================================
+ * 本文件是用户态唯一的 struct stat / struct dirent 定义点（方案 A 统一）。
+ *
+ *   - struct stat   是 POSIX 布局（st_mode 等），stat()/fstat() 内部
+ *                   用私有 32 字节内核布局接收 syscall 结果再翻译。
+ *   - struct dirent 保持内核 getdents 字节布局（64 字节/条, 内核契约），
+ *                   但加了 d_name 别名, 让 POSIX 代码也能直接读名字。
+ * ====================================================================== */
+
+/* ---- 目录项 ---- */
+
 #define FILE_TYPE_FILE 1
 #define FILE_TYPE_DIR  2
 
@@ -83,15 +95,20 @@ static inline char *getcwd(char *buf, usize len) {
 
 /*
  * POSIX struct stat —— 用户态唯一结构。
+ *
+ * 重要：不能把它直接当 syscall 缓冲用！内核 Stat 是 32 字节原始布局，
+ * 由下面的 stat()/fstat() 翻译成此结构（类型位并入 st_mode；mtime 在墙钟
+ * 校准后为真值, 未校准=0）。
+ * 内核布局见 rk_stat_kernel_t（与 kernel/src/fs/stat.rs 的 Stat 完全一致）。
  */
 struct stat {
     mode_t   st_mode;       /* 权限位 | S_IF* 类型位 */
     usize    st_size;       /* 文件字节数 */
     uid_t    st_uid;        /* 属主 */
     gid_t    st_gid;        /* 属组 */
-    time_t   st_mtime;      /* RmikuOS 无时间戳, 恒 0 */
-    time_t   st_atime;      /* 恒 0 */
-    time_t   st_ctime;      /* 恒 0 */
+    time_t   st_mtime;      /* 最后修改时间(epoch 秒, 墙钟校准后为真值) */
+    time_t   st_atime;      /* 教学简化: 同 mtime */
+    time_t   st_ctime;      /* 教学简化: 同 mtime */
     long     st_blksize;    /* 近似值 512 */
     long     st_blocks;     /* 恒 0 */
 };
@@ -103,7 +120,7 @@ typedef struct rk_stat_kernel {
     unsigned int   uid;        /* @4 */
     unsigned int   gid;        /* @8 */
     usize          size;       /* @16 */
-    unsigned char  reserved[4];/* @24 */
+    unsigned int   mtime;      /* @24 最后修改时间(epoch 秒, 墙钟校准后为真值) */
 } rk_stat_kernel_t;
 
 static inline int rk_stat_convert(const rk_stat_kernel_t *k, struct stat *st) {
@@ -119,7 +136,11 @@ static inline int rk_stat_convert(const rk_stat_kernel_t *k, struct stat *st) {
         case STAT_TYPE_PIPE: st->st_mode |= S_IFIFO; break;
         default:             st->st_mode |= S_IFREG; break;
     }
-    st->st_mtime = 0; st->st_atime = 0; st->st_ctime = 0;
+    /* 墙钟校准后 mtime 为真值(epoch 秒); 未校准=0。
+     * atime/ctime 教学简化: 与 mtime 相同。 */
+    st->st_mtime = (time_t)k->mtime;
+    st->st_atime = (time_t)k->mtime;
+    st->st_ctime = (time_t)k->mtime;
     st->st_blksize = 512; st->st_blocks = 0;
     return 0;
 }
