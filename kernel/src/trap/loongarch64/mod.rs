@@ -132,15 +132,22 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
         | ECODE_PPI
         | ECODE_ADEF_ADEM
         | ECODE_ALE => {
-            trap_println!(
-                "[trap] fatal exception: ecode={:#x}, esubcode={:#x}, era={:#x}, badv={:#x}, estat={:#x}",
-                cx.ecode(),
-                cx.esubcode(),
-                cx.era,
-                cx.badv,
-                cx.estat
-            );
-            panic!("fatal LoongArch exception");
+            if cx.is_from_user() {
+                /* 用户态非法内存访问 -> SIGSEGV, 只杀该进程(exit 139) */
+                crate::task::set_current_sig_pending(crate::task::SIGSEGV);
+                crate::task::do_signal();
+                panic!("SIGSEGV not fatal");
+            } else {
+                trap_println!(
+                    "[trap] fatal exception: ecode={:#x}, esubcode={:#x}, era={:#x}, badv={:#x}, estat={:#x}",
+                    cx.ecode(),
+                    cx.esubcode(),
+                    cx.era,
+                    cx.badv,
+                    cx.estat
+                );
+                panic!("fatal LoongArch exception");
+            }
         }
         _ => {
             trap_println!(

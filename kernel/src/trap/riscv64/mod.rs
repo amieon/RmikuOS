@@ -147,6 +147,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                     cx.sepc, cx.stval, crate::arch::current_hart_id()
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
+                crate::task::do_signal();   // SIGILL 致命 -> 终止进程(exit 132)
                 panic!("SIGILL not fatal");  // 不应该到达
             } else {
                 trap_println!(
@@ -165,14 +166,26 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         | CAUSE_INST_PAGE_FAULT
         | CAUSE_LOAD_PAGE_FAULT
         | CAUSE_STORE_PAGE_FAULT => {
-            trap_println!(
-                "[trap] fatal exception: code={}, sepc={:#x}, stval={:#x}, scause={:#x}",
-                code,
-                cx.sepc,
-                cx.stval,
-                cx.scause
-            );
-            panic!("fatal RISC-V exception");
+            if cx.is_from_user() {
+                /* 用户态非法内存访问 -> SIGSEGV, 只杀该进程(exit 139),
+                 * 不再整个内核 panic。 */
+                trap_println!(
+                    "[trap] SIGSEGV from user: sepc={:#x}, stval={:#x}, hart={}",
+                    cx.sepc, cx.stval, crate::arch::current_hart_id()
+                );
+                crate::task::set_current_sig_pending(crate::task::SIGSEGV);
+                crate::task::do_signal();
+                panic!("SIGSEGV not fatal");  // 不应该到达
+            } else {
+                trap_println!(
+                    "[trap] fatal exception: code={}, sepc={:#x}, stval={:#x}, scause={:#x}",
+                    code,
+                    cx.sepc,
+                    cx.stval,
+                    cx.scause
+                );
+                panic!("fatal RISC-V exception");
+            }
         }
         _ => {
             trap_println!(
