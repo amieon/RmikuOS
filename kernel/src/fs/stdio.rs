@@ -26,12 +26,15 @@ impl File for Stdin {
         let mut count = 0usize;
 
         while count < buf.len() {
-            let ch = crate::io::uart::getchar_raw();
-
+            let mut ch = crate::io::uart::getchar_raw();
+            crate::io::uart::echo_input_char(ch);
+            if ch == b'\r' {
+                ch = b'\n';
+            }
             buf[count] = ch;
             count += 1;
 
-            if ch == b'\n' || ch == b'\r' {
+            if ch == b'\n' {
                 break;
             }
         }
@@ -43,7 +46,8 @@ impl File for Stdin {
         if buf.is_empty() { return 0; }
         match crate::io::uart::try_getchar_raw() {
             Some(ch) => {
-                buf[0] = ch;
+                crate::io::uart::echo_input_char(ch);
+                buf[0] = if ch == b'\r' { b'\n' } else { ch };
                 1
             }
             None => 0,

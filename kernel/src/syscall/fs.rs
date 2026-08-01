@@ -437,3 +437,10 @@ pub fn sys_rename(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize
     crate::fs::rename(&old, &new)
 }
 
+
+/// set_echo(on): 开关终端回显(1=开 0=关)。RmikuOS shell 自带行编辑器,
+/// 提示符期间关掉回显(它自己回显); 执行外部交互命令前打开。
+pub fn sys_set_echo(on: usize) -> isize {
+    crate::io::uart::set_echo(on != 0);
+    0
+}

@@ -45,6 +45,10 @@ static inline isize open_create(const char *path, usize flags) {
 static inline isize close(int fd) {
     return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
 }
+
+static inline isize set_echo(int on) {
+    return syscall3(SYS_SET_ECHO, (usize)on, 0, 0);
+}
 #ifdef __cplusplus
 }
 #endif

@@ -75,6 +75,7 @@ extern "C" {
 #define SYS_TRUNCATE                 66
 #define SYS_LSEEK                    67
 #define SYS_RENAME                   68
+#define SYS_SET_ECHO                 69
 
 
 

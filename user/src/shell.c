@@ -671,6 +671,8 @@ static int read_line(const char *prompt, char *buf, int max_len) {
     int saved_len = 0;
     int in_history = 0;
 
+    set_echo(0);
+
     buf[0] = 0;
     history_idx = history_count;
     fputs(prompt, stdout);
@@ -1264,6 +1266,9 @@ static void run_exec(int argc, char *argv[]){
 static int run_external(int argc, char *argv[], int background) {
     /* Refresh PATH each time before running an external command. */
     load_search_dirs();
+    /* 外部命令(尤其 sqlite3/cat 这类交互程序)依赖内核回显: 打开它。
+     * 本 shell 自带行编辑器, read_line() 时已关掉, 这里重新打开。 */
+    set_echo(1);
     isize pid = fork();
     if (pid == 0) {
         /* Child stdin must stay BLOCKING. The old code set O_NONBLOCK on
@@ -1279,6 +1284,7 @@ static int run_external(int argc, char *argv[], int background) {
         if (background) {
             add_job(pid, argv[0]);
             printf("[%d] %d\n", next_job_id - 1, pid);
+            set_echo(0);   /* 回 shell 提示符, 关回显 */
             return 0;
         }
         /* Foreground: block until the child exits. We no longer poll
@@ -1288,8 +1294,10 @@ static int run_external(int argc, char *argv[], int background) {
         ** Ctrl+C -> SIGINT implementation later. */
         int status = 0;
         while (waitpid(pid, &status, 0) < 0) yield();
+        set_echo(0);   /* 回 shell 提示符, 关回显 */
         return WEXITSTATUS(status);
     } else {
+        set_echo(0);
         fputs("fork failed\n", stdout);
         return 1;
     }
