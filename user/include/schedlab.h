@@ -334,21 +334,22 @@ static int sl_policy_aimd(const sl_window_t *w, void *ud) {
         if (na < 0) na = 0;
         a->alpha = na;
         a->safe_windows = 0;
-        a->cooldown = 1;
+        a->cooldown = 3;         /* 原 1：down 后冷却 3 窗，减少退避抖动 → 减少 set_sched_alpha 调用 */
         action = "down";
     } else if ((long)w->late_delta <= a->safe_lateness) {
         a->safe_windows++;
-        if (a->safe_windows >= 1 && can_probe_up) {   /* SAFE=1，可改 3 */
+        /* 原 >=1：连续 2 个安全窗才 up，减少 α 微调频率 → 减少 set_sched_alpha 调用。
+         * 用 2 不用 3：late<=0 窗口仅 ~26%，>=3 要连续 3 个，AIMD 可能爬不到 60。 */
+        if (a->safe_windows >= 2 && can_probe_up) {
             int na = a->alpha + a->inc;
             if (na > 100) na = 100;
             a->alpha = na;
-            a->safe_windows = 0;   /* ← 只在 probe up 后清零 */
+            a->safe_windows = 0;
             action = "up";
         } else {
-            action = "hold";       /* 不清零，累积安全窗口 */
+            action = "hold";
         }
     } else {
-
         a->safe_windows = 0;
         action = "gray";
     }
@@ -356,6 +357,7 @@ static int sl_policy_aimd(const sl_window_t *w, void *ud) {
     printf("A,%d,%d,%d,%s\n", w->window_no, before, a->alpha, action);
     return a->alpha;
 }
+
 
 /* ================= 策略:SPSA-AdamW(deadline 损失版) =================
  * loss_q = miss_per_1000 + 平均迟到 ×1000(封顶 4000)。
