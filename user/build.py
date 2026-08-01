@@ -607,8 +607,9 @@ def build_sqlite3(arch: str):
     SQLite 是巨型可移植库，必须靠 -D 宏关掉宿主 OS 后端，否则会去编
     os_unix.c 撞上 pthread.h / dlfcn.h。
 
-    注意：本函数只编译 sqlite3.c + sqlite_main.c。
-    shell.c 需要 fork/exec/管道（popen/system），暂不放进来。
+    注意：本函数编译 sqlite3.c + shell.c + rmiku_vfs.c + rmiku_shims.c，
+    链出交互式 shell（sqlite3.elf）；另保留原探针 sqlite_main.c，
+    链出 sqlite3_probe.elf 作回归验证。
     """
     cfg = ARCH_CONFIG[arch]
     src_dir = USER_DIR / "sqlite3"
@@ -625,6 +626,8 @@ def build_sqlite3(arch: str):
     #  - SQLITE_OMIT_LOAD_EXTENSION : 关掉 dlopen/dlsym，避免 dlfcn.h
     #  - SQLITE_OMIT_DEPRECATED     : 去掉废弃接口，减小体积
     #  - SQLITE_OMIT_DATETIME_FUNCS : 关掉 localtime/gmtime/strftime（date.c），避免宿主时间函数
+    #  - SQLITE_OMIT_POPEN          : 去掉 popen/pclose（无管道，.import "|cmd" 报错提示）
+    #  - SQLITE_NOHAVE_SYSTEM       : 去掉 system()（无 /bin/sh，.shell/.system/edit() 不编入）
     #  - -Os                        : 9.5MB 单编译单元，默认 -O0 体积爆炸
     sqlite_cflags = [
         "-DSQLITE_OS_OTHER=1",
@@ -632,6 +635,8 @@ def build_sqlite3(arch: str):
         "-DSQLITE_OMIT_LOAD_EXTENSION",
         "-DSQLITE_OMIT_DEPRECATED",
         "-DSQLITE_OMIT_DATETIME_FUNCS",
+        "-DSQLITE_OMIT_POPEN",
+        "-DSQLITE_NOHAVE_SYSTEM",
         "-Os",
     ]
 
@@ -648,6 +653,9 @@ def build_sqlite3(arch: str):
 
     sources = {
         "sqlite3": src_dir / "sqlite3.c",
+        "shell": src_dir / "shell.c",
+        "rmiku_vfs": src_dir / "rmiku_vfs.c",
+        "rmiku_shims": src_dir / "rmiku_shims.c",
         "sqlite_main": src_dir / "sqlite_main.c",
     }
     files_hash = {k: file_sha256(v) for k, v in sources.items() if v.exists()}
@@ -674,32 +682,37 @@ def build_sqlite3(arch: str):
         run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
              str(string_src), "-o", str(string_obj)])
 
-    objs = []
+    objs = {}
     for name, src in sources.items():
         if not src.exists():
             continue
         obj = out_dir / f"{name}.o"
         run([cfg["gcc"], *cfg["cflags"], *sqlite_cflags, *common_flags, "-c",
              str(src), "-o", str(obj)])
-        objs.append(str(obj))
+        objs[name] = str(obj)
 
-    link_objs = [str(crt0_obj)] + objs + [str(runtime_obj)]
-    if string_obj:
-        link_objs.append(str(string_obj))
+    def link(elf_name, entry_obj):
+        """链接一个可执行文件: crt0 + sqlite3.o + 入口 + vfs + shims + 运行时"""
+        link_objs = [str(crt0_obj), objs["sqlite3"], entry_obj,
+                     objs["rmiku_vfs"], objs["rmiku_shims"], str(runtime_obj)]
+        if string_obj:
+            link_objs.append(str(string_obj))
+        out_elf = out_dir / elf_name
+        run([cfg["gcc"], *cfg["cflags"],
+             "-nostdlib", "-nostartfiles", "-static", "-no-pie",
+             "-Wl,--build-id=none", *cfg["ldflags"],
+             "-T", str(cfg["linker"]),
+             *link_objs,
+             "-lgcc",   # __bswapsi2 / __clzdi2 等编译器内建, nostdlib 下需手动链
+             "-o", str(out_elf)])
+        data = out_elf.read_bytes()
+        if not data:
+            raise RuntimeError(f"{elf_name} produced empty ELF")
+        print(f"[user] sqlite3: {elf_name} {len(data)} bytes (ELF)")
 
-    run([cfg["gcc"], *cfg["cflags"],
-         "-nostdlib", "-nostartfiles", "-static", "-no-pie",
-         "-Wl,--build-id=none", *cfg["ldflags"],
-         "-T", str(cfg["linker"]),
-         *link_objs,
-         "-lgcc",   # __bswapsi2 / __clzdi2 等编译器内建, nostdlib 下需手动链
-         "-o", str(elf)])
-
-    data = elf.read_bytes()
-    if not data:
-        raise RuntimeError("sqlite3 produced empty ELF")
-
-    print(f"[user] sqlite3: {len(data)} bytes (ELF)")
+    # sqlite3.elf = 交互式 shell; sqlite3_probe.elf = 原落盘探针
+    link("sqlite3.elf", objs["shell"])
+    link("sqlite3_probe.elf", objs["sqlite_main"])
 
     arch_cache = get_arch_cache(arch)
     arch_cache["sqlite3"] = files_hash
