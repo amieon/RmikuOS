@@ -594,6 +594,25 @@ static inline int puts(const char *s) {
     return 0;
 }
 
+/* ---- 缓冲模式（setvbuf 用；本实现 stderr 本就无缓冲, 其余可换模式） ---- */
+#ifndef _IONBF
+#define _IONBF 0
+#define _IOLBF 1
+#define _IOFBF 2
+#endif
+
+static inline int setvbuf(FILE *fp, char *buf, int mode, size_t size) {
+    (void)buf; (void)size;
+    if (!fp) return EOF;
+    if (mode == _IONBF) fp->flags |= _F_UNBUF;
+    else                fp->flags &= ~_F_UNBUF;
+    return 0;
+}
+
+static inline int fileno(FILE *fp) {
+    return fp ? fp->fd : -1;
+}
+
 static inline char *fgets(char *s, int size, FILE *fp) {
     if (!s || size <= 0 || !fp) return (char*)0;
     int i = 0;
@@ -605,6 +624,62 @@ static inline char *fgets(char *s, int size, FILE *fp) {
     }
     s[i] = '\0';
     return i > 0 ? s : (char*)0;
+}
+
+/* ================================================================
+ *  sscanf —— 最小实现: 仅支持 shell.c hexdb 读取器用到的
+ *  %d / %u / %x / %i 与字面量匹配。不支持宽度/精度/%s 等。
+ * ================================================================ */
+
+static inline int sscanf(const char *s, const char *fmt, ...) {
+    va_list ap;
+    int count = 0;
+    va_start(ap, fmt);
+    while (*fmt) {
+        if (*fmt == ' ') {
+            /* 格式串里的空白匹配输入里任意连续空白 */
+            while (*fmt == ' ') fmt++;
+            while (*s == ' ' || *s == '\t' || *s == '\n') s++;
+        } else if (*fmt == '%') {
+            fmt++;
+            int base = 10, neg = 0;
+            if (*fmt == 'x' || *fmt == 'X')        { base = 16; fmt++; }
+            else if (*fmt == 'd' || *fmt == 'i' ||
+                     *fmt == 'u')                  { fmt++; }
+            else if (*fmt == '%') {
+                if (*s != '%') break;
+                s++; fmt++;
+                continue;
+            } else {
+                break;   /* 不支持的转换, 终止 */
+            }
+            while (*s == ' ') s++;
+            int v = 0, any = 0;
+            if (*s == '-' && base == 10) { neg = 1; s++; }
+            for (;;) {
+                int d;
+                if      (*s >= '0' && *s <= '9') d = *s - '0';
+                else if (base == 16 && *s >= 'a' && *s <= 'f') d = *s - 'a' + 10;
+                else if (base == 16 && *s >= 'A' && *s <= 'F') d = *s - 'A' + 10;
+                else break;
+                v = v * base + d; s++; any = 1;
+            }
+            if (!any) break;                 /* 一个字符都没匹配到 */
+            if (base == 10) {
+                int *p = va_arg(ap, int *);
+                *p = neg ? -v : v;
+            } else {
+                unsigned int *p = va_arg(ap, unsigned int *);
+                *p = (unsigned int)v;
+            }
+            count++;
+        } else {
+            if (*fmt != *s) break;
+            fmt++; s++;
+        }
+    }
+    va_end(ap);
+    return count;
 }
 
 /* ================================================================
