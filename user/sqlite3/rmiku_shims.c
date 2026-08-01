@@ -75,6 +75,13 @@ int symlink(const char *target, const char *linkpath) {
     return -1;
 }
 
+/* readlink: no symlinks on RmikuOS. POSIX: EINVAL if not a symlink. */
+ssize_t readlink(const char *path, char *buf, size_t bufsiz) {
+    (void)path; (void)buf; (void)bufsiz;
+    errno = EINVAL;
+    return -1;
+}
+
 /* ----------------------------------------------------------------------------
  * getpwuid —— 无 passwd 数据库, 诚实返回 NULL（shell 的 ~ 展开退回 getenv）。
  * -------------------------------------------------------------------------- */
