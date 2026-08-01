@@ -303,7 +303,7 @@ typedef struct {
 
 static void sl_aimd_init(sl_aimd_t *a, int alpha0) {
     a->alpha = alpha0;
-    a->inc = 5;
+    a->inc = 10;
     a->backoff = 80;
     a->safe_lateness = 0;  
     a->danger_lateness = 25;

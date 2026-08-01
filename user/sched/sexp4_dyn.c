@@ -33,7 +33,7 @@ static void setup(void) {
     /* ctrl: in-parent jobs, period=5, burn=180k≈1.2tick */
     sl_add_jobs_parent("ctrl", 300, 1, /*period*/5, /*cpu*/3, /*burn*/180000);
     /* ai: phased spin, 25 线程, 轻相位只 3 个活跃 */
-    sl_add_spin_phased("ai", 100, 50, 12000, /*light_active*/5);
+    sl_add_spin_phased("ai", 100, 75, 12000, /*light_active*/7);
     /* log: 减到 3 线程（原 9），L 段 runnable 从 13 降到 7，真正轻负载 */
     sl_add_spin("log", 50, 3, 12000);
 }
@@ -49,7 +49,7 @@ static void run_mode(const char *mode, int alpha0, int is_aimd, int rep,
         /* 和 exp3 一致的参数 */
         aimd.danger_lateness = 25;
         aimd.safe_lateness = 0;
-        aimd.inc = 5;
+        aimd.inc = 10;
     }
 
     printf("# RUN mode=%s alpha0=%d rep=%d/3\n", mode, alpha0, rep);

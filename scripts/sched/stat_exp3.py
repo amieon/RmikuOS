@@ -6,7 +6,7 @@ Handles 4 configs (light/medlo/medium/heavy) x fixed50 + aimd0/50/100.
 Medium gets dedicated deep-dive plots; others get summary.
 
 Usage:
-    python3 stat_exp3.py ./logs/sched/aimd/sexp3_aimd.csv
+    python3 ./scripts/sched/stat_exp3.py ./logs/sched/aimd/sexp3_aimd.csv
 """
 
 import sys
@@ -140,13 +140,22 @@ def compute(run):
             break
 
     ws = [w for w in run["W"] if w["win"] > 3]
-    for name in ["ctrl", "ai", "log"]:
-        s.setdefault("work", {})[name] = sum(w["run_delta"] for w in ws if w["name"] == name)
 
+    # run_delta: CPU ticks allocated (W行)
+    for name in ["ctrl", "ai", "log"]:
+        s.setdefault("run", {})[name] = sum(w["run_delta"] for w in ws if w["name"] == name)
     total_all = sum(w["run_delta"] for w in ws)
     for name in ["ctrl", "ai", "log"]:
         total_name = sum(w["run_delta"] for w in ws if w["name"] == name)
         s.setdefault("share", {})[name] = total_name / total_all * 100 if total_all > 0 else 0
+
+    # burn: K行实际完成的 burn 迭代数（spin 组才有 K 行）
+    for k in run["K"]:
+        s.setdefault("work", {})[k["name"]] = k["work"]
+    # ctrl 是 jobs 组（无 K 行），用 J 行 jobs 数作为 work
+    for j in run["J"]:
+        if j["name"] == "ctrl":
+            s.setdefault("work", {})["ctrl"] = j["jobs"]
 
     if run["D"]:
         rates = []
@@ -198,11 +207,19 @@ def aggregate(runs, group_keys):
             row[f"{field}_lo"] = m - min(vals)
 
         for name in ["ctrl", "ai", "log"]:
+            # burn (K行: 实际计算量)
             vals = [r.get("work", {}).get(name, 0) for r in reps]
             m = np.mean(vals)
             row.setdefault("work", {})[f"{name}_mean"] = m
             row.setdefault("work", {})[f"{name}_hi"] = max(vals) - m
             row.setdefault("work", {})[f"{name}_lo"] = m - min(vals)
+
+            # run_delta (W行: CPU ticks)
+            vals_r = [r.get("run", {}).get(name, 0) for r in reps]
+            m = np.mean(vals_r)
+            row.setdefault("run", {})[f"{name}_mean"] = m
+            row.setdefault("run", {})[f"{name}_hi"] = max(vals_r) - m
+            row.setdefault("run", {})[f"{name}_lo"] = m - min(vals_r)
 
             vals_s = [r.get("share", {}).get(name, 0) for r in reps]
             m = np.mean(vals_s)
@@ -250,30 +267,30 @@ def fmt_err(mean, hi, lo, wm=7, we=5):
 
 
 def print_summary(stats):
-    print("=" * 165)
+    print("=" * 180)
     print("EXPERIMENT 3: AIMD CONSTANT LOAD (multi-config, multi-start)")
-    print("=" * 165)
+    print("=" * 180)
     hdr = (f"{'config':>8} {'mode':>8} {'α0':>4}  {'miss%':>20}  "
            f"{'α_steady':>14}  {'sh_ctrl':>20}  {'sh_ai':>20}  "
-           f"{'ai_work':>8}  {'ctrl_work':>9}  {'avg_late':>8}  {'max_late':>8}  {'Jain':>6}  {'actions':>20}")
+           f"{'ai_burn':>9}  {'ai_run':>8}  {'avg_late':>8}  {'max_late':>8}  {'Jain':>6}  {'actions':>20}")
     print(hdr)
-    print("-" * 165)
+    print("-" * 180)
     for s in stats:
         miss_s = fmt_err(s.get('miss_rate_mean',0), s.get('miss_rate_hi',0), s.get('miss_rate_lo',0))
         alpha_s = fmt_err(s.get('alpha_steady',0), s.get('alpha_steady_hi',0), s.get('alpha_steady_lo',0), wm=5, we=3)
         ctrl_s = fmt_err(s.get('share',{}).get('ctrl_mean',0), s.get('share',{}).get('ctrl_hi',0), s.get('share',{}).get('ctrl_lo',0))
         ai_s = fmt_err(s.get('share',{}).get('ai_mean',0), s.get('share',{}).get('ai_hi',0), s.get('share',{}).get('ai_lo',0))
-        ai_w = s.get('work',{}).get('ai_mean',0)
-        ctrl_w = s.get('work',{}).get('ctrl_mean',0)
+        ai_burn = s.get('work',{}).get('ai_mean',0)
+        ai_run = s.get('run',{}).get('ai_mean',0)
         avg_l = s.get('avg_late_mean',0)
         max_l = s.get('max_late_mean',0)
         acts = s.get('actions', {})
         act_str = "/".join(f"{k}:{v}" for k, v in sorted(acts.items())) if acts else "-"
         print(f"{s.get('config',''):>8} {s.get('mode',''):>8} {s.get('alpha0',0):>4}  "
               f"{miss_s}  {alpha_s}  {ctrl_s}  {ai_s}  "
-              f"{ai_w:>8.0f}  {ctrl_w:>9.0f}  {avg_l:>8.1f}  {max_l:>8.0f}  "
+              f"{ai_burn:>9.0f}  {ai_run:>8.0f}  {avg_l:>8.1f}  {max_l:>8.0f}  "
               f"{s.get('jain_mean',0):>6.3f}  {act_str:>20}")
-    print("=" * 165)
+    print("=" * 180)
 
 
 # ------------------------------------------------------------------ plots
@@ -569,14 +586,14 @@ def plot_summary_config(runs, config, outdir):
 
 
 def plot_throughput_vs_miss(stats, outdir):
-    """每个配置两张图：横轴 ai work / ai share，纵轴 ctrl miss%。6 个 mode 各一个点。
-    坐标轴自适应数据范围，留 10% 边距。"""
+    """每个配置两张图：横轴 ai burn / ai run，纵轴 ctrl miss%。"""
     configs = ["light", "medlo", "medium", "heavy"]
     modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
 
     for metric, xlabel, fname in [
-        ("work",  "ai Throughput (run_delta ticks)", "exp3_work_vs_miss.png"),
-        ("share", "ai CPU Share (%)",                "exp3_share_vs_miss.png"),
+        ("work",  "ai Work (burn iterations)",  "exp3_burn_vs_miss.png"),
+        ("run",   "ai CPU Time (run_delta ticks)", "exp3_run_vs_miss.png"),
+        ("share", "ai CPU Share (%)",            "exp3_share_vs_miss.png"),
     ]:
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
         axes = axes.flatten()
@@ -625,6 +642,64 @@ def plot_throughput_vs_miss(stats, outdir):
 
 
 # ------------------------------------------------------------------ main
+def plot_burn_vs_run(stats, outdir):
+    """burn vs run 散点：x=ai_run (CPU ticks), y=ai_burn (实际计算量)。
+    点在对角线上 = burn 效率一致; 偏上 = 效率高(每 tick 产出更多 burn)。"""
+    configs = ["light", "medlo", "medium", "heavy"]
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
+
+    for idx, cfg in enumerate(configs):
+        ax = axes[idx]
+        xs, ys = [], []
+        for mode in modes:
+            pts = [s for s in stats if s.get("config") == cfg and s.get("mode") == mode]
+            if not pts:
+                continue
+            s = pts[0]
+            x = s.get("run", {}).get("ai_mean", 0)
+            y = s.get("work", {}).get("ai_mean", 0)
+            x_hi = s.get("run", {}).get("ai_hi", 0)
+            x_lo = s.get("run", {}).get("ai_lo", 0)
+            y_hi = s.get("work", {}).get("ai_hi", 0)
+            y_lo = s.get("work", {}).get("ai_lo", 0)
+            xs.append(x); ys.append(y)
+            color = COLORS_MODE.get(mode, "#666")
+            ax.errorbar(x, y, xerr=[[x_lo], [x_hi]], yerr=[[y_lo], [y_hi]],
+                        fmt="o", color=color, ms=8, capsize=3,
+                        markeredgecolor="black", markeredgewidth=0.8, zorder=5)
+            ax.annotate(mode, (x, y), fontsize=8, ha="left", va="bottom",
+                        xytext=(6, 4), textcoords="offset points")
+
+        # 参考线: fixed0 的 run/burn 比
+        if xs and ys:
+            f0_stat = next((s for s in stats if s.get("config") == cfg and s.get("mode") == "fixed0"), None)
+            if f0_stat:
+                f0_run = f0_stat.get("run", {}).get("ai_mean", 0)
+                f0_burn = f0_stat.get("work", {}).get("ai_mean", 0)
+                if f0_run > 0 and f0_burn > 0:
+                    ratio = f0_burn / f0_run
+                    x_range = np.array([min(xs) * 0.9, max(xs) * 1.1])
+                    ax.plot(x_range, x_range * ratio, "--", color="gray", lw=1, alpha=0.5,
+                            label=f"fixed0 ratio={ratio:.3f}")
+            ax.set_xlim(min(xs) * 0.85, max(xs) * 1.15)
+            ax.set_ylim(min(ys) * 0.85, max(ys) * 1.15)
+
+        ax.set_title(f"{cfg}")
+        ax.set_xlabel("ai CPU Time (run_delta)")
+        ax.set_ylabel("ai Work (burn iterations)")
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle("Exp 3: Burn vs Run (efficiency: above line = more burn per tick)", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    out = os.path.join(outdir, "exp3_burn_vs_run.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+# ------------------------------------------------------------------ main
 def main():
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <sexp3_aimd.csv>"); sys.exit(1)
@@ -657,8 +732,11 @@ def main():
     for cfg in ["light", "medlo", "medium", "heavy"]:
         plot_summary_config(computed, cfg, outdir)
 
-    # throughput vs miss scatter (per config)
+    # throughput vs miss scatter (per config) — burn, run, share 三版
     plot_throughput_vs_miss(stats, outdir)
+
+    # burn vs run 散点（效率对比）
+    plot_burn_vs_run(stats, outdir)
 
     print("\nDone.")
 

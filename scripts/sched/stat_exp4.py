@@ -7,7 +7,7 @@ Key plots: α trajectory overlaid with phase boundaries,
 per-window miss rate, and phase-segmented summary.
 
 Usage:
-    python3 stat_exp4.py ./logs/sched/dyn/sexp4_dyn.csv
+    python3 ./scripts/sched/stat_exp4.py ./logs/sched/dyn/sexp4_dyn.csv
 """
 
 import sys
@@ -121,12 +121,23 @@ def compute(run):
             break
 
     ws = [w for w in run["W"] if w["win"] > 3]
+
+    # run_delta: CPU ticks allocated (W行)
     for name in ["ctrl", "ai", "log"]:
-        s.setdefault("work", {})[name] = sum(w["run_delta"] for w in ws if w["name"] == name)
+        s.setdefault("run", {})[name] = sum(w["run_delta"] for w in ws if w["name"] == name)
     total_all = sum(w["run_delta"] for w in ws)
     for name in ["ctrl", "ai", "log"]:
         total_name = sum(w["run_delta"] for w in ws if w["name"] == name)
         s.setdefault("share", {})[name] = total_name / total_all * 100 if total_all > 0 else 0
+
+    # burn: K行实际完成的 burn 迭代数（spin 组才有 K 行）
+    # 这是真正的"吞吐量"——ai 完成了多少计算
+    for k in run["K"]:
+        s.setdefault("work", {})[k["name"]] = k["work"]
+    # ctrl 是 jobs 组（无 K 行），用 J 行 jobs 数作为 work
+    for j in run["J"]:
+        if j["name"] == "ctrl":
+            s.setdefault("work", {})["ctrl"] = j["jobs"]
 
     # 逐窗口 miss rate
     if run["D"]:
@@ -167,11 +178,6 @@ def compute(run):
     else:
         s["jain"] = 0
 
-    # K 行 (ai work)
-    for k in run["K"]:
-        if k["name"] == "ai":
-            s["ai_work_k"] = k["work"]
-
     return s
 
 
@@ -193,11 +199,19 @@ def aggregate(runs):
             row[f"{field}_lo"] = m - min(vals)
 
         for name in ["ctrl", "ai", "log"]:
+            # burn (K行: 实际计算量)
             vals_w = [r.get("work", {}).get(name, 0) for r in reps]
             m = np.mean(vals_w)
             row.setdefault("work", {})[f"{name}_mean"] = m
             row.setdefault("work", {})[f"{name}_hi"] = max(vals_w) - m
             row.setdefault("work", {})[f"{name}_lo"] = m - min(vals_w)
+
+            # run_delta (W行: CPU ticks)
+            vals_r = [r.get("run", {}).get(name, 0) for r in reps]
+            m = np.mean(vals_r)
+            row.setdefault("run", {})[f"{name}_mean"] = m
+            row.setdefault("run", {})[f"{name}_hi"] = max(vals_r) - m
+            row.setdefault("run", {})[f"{name}_lo"] = m - min(vals_r)
 
             vals_s = [r.get("share", {}).get(name, 0) for r in reps]
             m = np.mean(vals_s)
@@ -232,14 +246,14 @@ def fmt_err(mean, hi, lo, wm=7, we=5):
 
 
 def print_summary(stats):
-    print("=" * 130)
+    print("=" * 145)
     print("EXPERIMENT 4: DYNAMIC LOAD (light-heavy-light-heavy)")
-    print("=" * 130)
+    print("=" * 145)
     hdr = (f"{'mode':>8} {'α0':>4}  {'miss%':>20}  "
            f"{'miss_L1':>8} {'miss_H1':>8} {'miss_L2':>8} {'miss_H2':>8}  "
-           f"{'sh_ai':>8}  {'ai_work':>8}  {'Jain':>6}")
+           f"{'sh_ai':>7}  {'ai_burn':>9}  {'ai_run':>8}  {'Jain':>6}")
     print(hdr)
-    print("-" * 130)
+    print("-" * 145)
     for s in stats:
         miss_s = fmt_err(s.get('miss_rate_mean', 0), s.get('miss_rate_hi', 0), s.get('miss_rate_lo', 0))
         l1 = s.get('miss_L1', 0)
@@ -247,11 +261,12 @@ def print_summary(stats):
         l2 = s.get('miss_L2', 0)
         h2 = s.get('miss_H2', 0)
         ai_sh = s.get('share', {}).get('ai_mean', 0)
-        ai_w = s.get('work', {}).get('ai_mean', 0)
+        ai_burn = s.get('work', {}).get('ai_mean', 0)
+        ai_run = s.get('run', {}).get('ai_mean', 0)
         print(f"{s.get('mode',''):>8} {s.get('alpha0',0):>4}  {miss_s}  "
               f"{l1:>8.1f} {h1:>8.1f} {l2:>8.1f} {h2:>8.1f}  "
-              f"{ai_sh:>8.1f}  {ai_w:>8.0f}  {s.get('jain_mean',0):>6.3f}")
-    print("=" * 130)
+              f"{ai_sh:>7.1f}  {ai_burn:>9.0f}  {ai_run:>8.0f}  {s.get('jain_mean',0):>6.3f}")
+    print("=" * 145)
 
 
 # ------------------------------------------------------------------ plots
@@ -377,8 +392,8 @@ def plot_ai_throughput(runs, outdir):
 
     add_phase_shading(ax)
     ax.set_xlabel("Window")
-    ax.set_ylabel("ai run_delta (ticks)")
-    ax.set_title("Exp 4: ai Throughput per Window")
+    ax.set_ylabel("ai run_delta (CPU ticks)")
+    ax.set_title("Exp 4: ai CPU Time per Window")
     ax.legend(loc="upper right")
     ax.set_xlim(0, gmin)
     fig.tight_layout()
@@ -443,9 +458,9 @@ def plot_work_vs_miss(stats, outdir):
         ax.annotate(mode, (x, y), fontsize=9, ha="left", va="bottom",
                     xytext=(8, 5), textcoords="offset points")
 
-    ax.set_xlabel("ai Throughput (run_delta ticks)")
+    ax.set_xlabel("ai Work (burn iterations)")
     ax.set_ylabel("ctrl Miss Rate (%)")
-    ax.set_title("Exp 4: Throughput vs Miss Rate")
+    ax.set_title("Exp 4: Work vs Miss Rate")
     if xs:
         x_span = max(xs) - min(xs) if max(xs) > min(xs) else max(xs) * 0.2
         ax.set_xlim(min(xs) - x_span * 0.15, max(xs) + x_span * 0.25)
@@ -455,6 +470,144 @@ def plot_work_vs_miss(stats, outdir):
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     out = os.path.join(outdir, "exp4_work_vs_miss.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+def plot_burn_vs_run(stats, outdir):
+    """burn vs run 散点: x=ai_run (CPU ticks), y=ai_burn (实际计算量)。
+    点在对角线上 = burn 效率一致; 偏上 = 效率高(每 tick 产出更多 burn)。"""
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    xs, ys = [], []
+    for mode in modes:
+        s = next((x for x in stats if x.get("mode") == mode), None)
+        if not s:
+            continue
+        x = s.get("run", {}).get("ai_mean", 0)
+        y = s.get("work", {}).get("ai_mean", 0)
+        x_hi = s.get("run", {}).get("ai_hi", 0)
+        x_lo = s.get("run", {}).get("ai_lo", 0)
+        y_hi = s.get("work", {}).get("ai_hi", 0)
+        y_lo = s.get("work", {}).get("ai_lo", 0)
+        xs.append(x); ys.append(y)
+        color = COLORS_MODE.get(mode, "#666")
+        ax.errorbar(x, y, xerr=[[x_lo], [x_hi]], yerr=[[y_lo], [y_hi]],
+                    fmt="o", color=color, ms=10, capsize=4,
+                    markeredgecolor="black", markeredgewidth=0.8, label=mode)
+        ax.annotate(mode, (x, y), fontsize=9, ha="left", va="bottom",
+                    xytext=(8, 5), textcoords="offset points")
+
+    # 参考线: fixed0 的 run/burn 比
+    if xs and ys:
+        f0_stat = next((s for s in stats if s.get("mode") == "fixed0"), None)
+        if f0_stat:
+            f0_run = f0_stat.get("run", {}).get("ai_mean", 0)
+            f0_burn = f0_stat.get("work", {}).get("ai_mean", 0)
+            if f0_run > 0 and f0_burn > 0:
+                ratio = f0_burn / f0_run
+                x_range = np.array([min(xs) * 0.9, max(xs) * 1.1])
+                ax.plot(x_range, x_range * ratio, "--", color="gray", lw=1, alpha=0.5,
+                        label=f"fixed0 ratio={ratio:.4f}")
+
+    ax.set_xlabel("ai CPU Time (run_delta ticks)")
+    ax.set_ylabel("ai Work (burn iterations)")
+    ax.set_title("Exp 4: Burn vs Run (efficiency: above line = more burn per tick)")
+    if xs:
+        ax.set_xlim(min(xs) * 0.85, max(xs) * 1.15)
+        ax.set_ylim(min(ys) * 0.85, max(ys) * 1.15)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    out = os.path.join(outdir, "exp4_burn_vs_run.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+def plot_run_vs_miss(stats, outdir):
+    """run_delta vs miss 散点: x=ai_run (CPU ticks), y=miss%。
+    对比 burn_vs_miss: 同样的 miss, run 和 burn 的领先幅度可能不同。"""
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    xs, ys = [], []
+    for mode in modes:
+        s = next((x for x in stats if x.get("mode") == mode), None)
+        if not s:
+            continue
+        x = s.get("run", {}).get("ai_mean", 0)
+        y = s.get("miss_rate_mean", 0)
+        x_hi = s.get("run", {}).get("ai_hi", 0)
+        x_lo = s.get("run", {}).get("ai_lo", 0)
+        y_hi = s.get("miss_rate_hi", 0)
+        y_lo = s.get("miss_rate_lo", 0)
+        xs.append(x); ys.append(y)
+        color = COLORS_MODE.get(mode, "#666")
+        ax.errorbar(x, y, xerr=[[x_lo], [x_hi]], yerr=[[y_lo], [y_hi]],
+                    fmt="o", color=color, ms=10, capsize=4,
+                    markeredgecolor="black", markeredgewidth=0.8, label=mode)
+        ax.annotate(mode, (x, y), fontsize=9, ha="left", va="bottom",
+                    xytext=(8, 5), textcoords="offset points")
+
+    ax.set_xlabel("ai CPU Time (run_delta ticks)")
+    ax.set_ylabel("ctrl Miss Rate (%)")
+    ax.set_title("Exp 4: CPU Time vs Miss Rate")
+    if xs:
+        x_span = max(xs) - min(xs) if max(xs) > min(xs) else max(xs) * 0.2
+        ax.set_xlim(min(xs) - x_span * 0.15, max(xs) + x_span * 0.25)
+    y_span = max(ys) - min(ys) if max(ys) > min(ys) else 10
+    ax.set_ylim(max(-5, min(ys) - y_span * 0.15), min(105, max(ys) + y_span * 0.25))
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    out = os.path.join(outdir, "exp4_run_vs_miss.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+def plot_burn_run_bars(stats, outdir):
+    """柱状图: 8 mode 的 ai_burn 和 ai_run 并排对比。
+    burn 和 run 的比例差异 = burn 效率差异。"""
+    modes = ["fixed0", "fixed25", "fixed50", "fixed75", "fixed100", "aimd0", "aimd50", "aimd100"]
+    n = len(modes)
+    x = np.arange(n)
+    width = 0.35
+
+    fig, ax1 = plt.subplots(figsize=(12, 5))
+
+    burn_vals, burn_los, burn_his = [], [], []
+    run_vals, run_los, run_his = [], [], []
+    for mode in modes:
+        s = next((x for x in stats if x.get("mode") == mode), None)
+        if s:
+            burn_vals.append(s.get("work", {}).get("ai_mean", 0))
+            burn_los.append(s.get("work", {}).get("ai_lo", 0))
+            burn_his.append(s.get("work", {}).get("ai_hi", 0))
+            run_vals.append(s.get("run", {}).get("ai_mean", 0))
+            run_los.append(s.get("run", {}).get("ai_lo", 0))
+            run_his.append(s.get("run", {}).get("ai_hi", 0))
+        else:
+            burn_vals.append(0); burn_los.append(0); burn_his.append(0)
+            run_vals.append(0); run_los.append(0); run_his.append(0)
+
+    colors_burn = [COLORS_MODE.get(m, "#666") for m in modes]
+    bars1 = ax1.bar(x - width/2, burn_vals, width, yerr=[burn_los, burn_his],
+                    capsize=3, color=colors_burn, edgecolor="black", linewidth=0.5,
+                    label="ai_burn (iterations)", zorder=3)
+
+    ax2 = ax1.twinx()
+    bars2 = ax2.bar(x + width/2, run_vals, width, yerr=[run_los, run_his],
+                    capsize=3, color=[c + "80" for c in colors_burn], edgecolor="black",
+                    linewidth=0.5, label="ai_run (CPU ticks)", zorder=3)
+
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(modes, fontsize=9)
+    ax1.set_ylabel("ai Burn (iterations)", color="#333")
+    ax2.set_ylabel("ai Run (CPU ticks)", color="#666")
+    ax1.set_title("Exp 4: ai Burn vs ai Run by Mode")
+    ax1.legend(loc="upper left", fontsize=9)
+    ax2.legend(loc="upper right", fontsize=9)
+    ax1.grid(True, alpha=0.2, axis="y")
+    fig.tight_layout()
+    out = os.path.join(outdir, "exp4_burn_run_bars.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
@@ -492,6 +645,9 @@ def main():
     plot_ai_throughput(computed, outdir)
     plot_phase_summary(stats, outdir)
     plot_work_vs_miss(stats, outdir)
+    plot_burn_vs_run(stats, outdir)
+    plot_run_vs_miss(stats, outdir)
+    plot_burn_run_bars(stats, outdir)
 
     print("\nDone.")
 
