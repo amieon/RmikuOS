@@ -1,10 +1,10 @@
 #ifndef RMIKU_UNISTD_H
 #define RMIKU_UNISTD_H
 
-/* POSIX <unistd.h> —— 方案 A 统一后是 fs.h 的薄壳。
+/* POSIX <unistd.h> - thin wrapper over fs.h after Plan A unification.
  * chdir/getcwd/unlink/rmdir/rename/lseek/ftruncate/fsync/truncate/chmod/chown
- * 全部由 fs.h 提供（POSIX 签名）。这里补 isatty/access（rmiku_shims.c
- * 实现）与 SEEK_* 常量。 */
+ * are all provided by fs.h (POSIX signatures). Here we add isatty/access/
+ * symlink/readlink (implemented in rmiku_shims.c) and SEEK_* constants. */
 
 #include "fs.h"
 #include "io.h"          /* read/write/close/open */
@@ -23,9 +23,15 @@ extern "C" {
 #define SEEK_END 2
 #endif
 
-/* ---- rmiku_shims.c 提供真实定义 ---- */
+/* ---- implemented in rmiku_shims.c ---- */
 extern int isatty(int);
 extern int access(const char *path, int amode);
+
+/* Symlink: not supported on RmikuOS (no symlinks in kernel FS).
+ * symlink() always fails with ENOSYS; readlink() with EINVAL.
+ * Implemented in rmiku_shims.c */
+extern int symlink(const char *target, const char *linkpath);
+extern ssize_t readlink(const char *path, char *buf, size_t bufsiz);
 
 #ifdef __cplusplus
 }

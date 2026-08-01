@@ -7,6 +7,12 @@ extern "C" {
 #include "file.h"   /* 带入 io.h → syscall.h, flag.h; 以及 FILE, stdin/stdout/stderr,
                        fopen, fclose, fgetc, fputc, fread, fwrite, fflush, fputs 等 */
 
+/* C89 <stdio.h> standard macro: max length of a filename string.
+ * shell.c uses it for output buffers (char outfile[FILENAME_MAX]). */
+#ifndef FILENAME_MAX
+#define FILENAME_MAX 512
+#endif
+
 /* ================================================================
  *  内部：向 FILE* 逐字符输出（复用 file.h 的缓冲）
  * ================================================================ */

@@ -1,10 +1,12 @@
 #ifndef RMIKU_UTIME_H
 #define RMIKU_UTIME_H
 
-/* POSIX <utime.h> —— shell.c fileio 扩展无条件 include 它（其实从不调用
- * utime()）。RmikuOS 无文件时间戳, utime() 诚实返回 0（视为成功）。 */
+/* POSIX <utime.h> - shell.c fileio extension includes it unconditionally
+ * and calls utime()/utimes() in writefile(). RmikuOS has no file
+ * timestamps, so both return 0 (treated as success). */
 
 #include "sys/types.h"   /* time_t */
+#include "time.h"        /* struct timeval */
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,7 +19,13 @@ struct utimbuf {
 
 static inline int utime(const char *path, const struct utimbuf *times) {
     (void)path; (void)times;
-    return 0;   /* 本 OS 不记录时间戳 */
+    return 0;   /* no timestamps on RmikuOS */
+}
+
+/* POSIX utimes: times[0]=access, times[1]=modification */
+static inline int utimes(const char *path, const struct timeval times[2]) {
+    (void)path; (void)times;
+    return 0;   /* no timestamps on RmikuOS */
 }
 
 #ifdef __cplusplus

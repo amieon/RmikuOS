@@ -39,7 +39,19 @@ static inline isize sleep(usize ticks) {
     return syscall3(SYS_SLEEP, ticks, 0, 0);
 }
 
+/* ---- atexit / exit: 注册退出回调, exit() 时逆序调用 ---- */
+#define ATEXIT_MAX 32
+static void (*_atexit_funcs[ATEXIT_MAX])(void);
+static int _atexit_n = 0;
+
+static inline int atexit(void (*func)(void)) {
+    if (!func || _atexit_n >= ATEXIT_MAX) return -1;
+    _atexit_funcs[_atexit_n++] = func;
+    return 0;
+}
+
 static inline void exit(int code) {
+    while (_atexit_n > 0) _atexit_funcs[--_atexit_n]();
     syscall3(SYS_EXIT, (usize)code, 0, 0);
     for (;;) {}
 }
