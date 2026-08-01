@@ -76,6 +76,10 @@ extern "C" {
 #define SYS_LSEEK                    67
 #define SYS_RENAME                   68
 #define SYS_SET_ECHO                 69
+#define SYS_SIGNAL                   70
+#define SYS_SET_FRONT                71
+#define SYS_GET_TIME_US              72
+#define SYS_SET_WALL_CLOCK           73
 
 
 

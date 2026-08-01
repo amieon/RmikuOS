@@ -19,6 +19,11 @@ static inline usize get_ticks(void) {
     return syscall3(SYS_GET_TICKS, 0, 0, 0);
 }
 
+/* 单调时间(微秒, 自启动起)——ntpdate 的本地假时钟源 */
+static inline isize get_time_us(void) {
+    return syscall3(SYS_GET_TIME_US, 0, 0, 0);
+}
+
 static inline isize hartid(){
     return syscall3(SYS_HARTID,0,0,0);
 }
