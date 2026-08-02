@@ -129,7 +129,9 @@ static int rmikuOpen(sqlite3_vfs *pVfs, const char *zName,
   f->deleteOnClose = (flags & SQLITE_OPEN_DELETEONCLOSE) ? 1 : 0;
   strncpy(f->path, zName, RMKU_MAX_PATH - 1);
   f->path[RMKU_MAX_PATH - 1] = '\0';
-  *pOutFlags = flags;
+  /* SQLite 规范: pOutFlags 允许为 NULL(调用方不需要输出 flags)。
+   * 交互 shell 的 CREATE TABLE 等路径会传 NULL —— 必须判空, 否则空指针写崩溃。 */
+  if (pOutFlags) *pOutFlags = flags;
   return SQLITE_OK;
 }
 
