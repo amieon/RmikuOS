@@ -31,10 +31,11 @@ CFG = {
     },
 }[ARCH]
 
-# TCC 主程序源文件（riscv64_FILES = CORE_FILES + riscv64 三件套, 去掉 tccrun.c）
+# TCC 主程序源文件（riscv64_FILES = CORE_FILES + riscv64 三件套）
+# 注意: 不编 tcctools.c(tcc.c 已 #include 它); tccrun.c 已启用(-run JIT, mprotect 支持)
 FILES = [
-    "tcc.c", "tcctools.c", "libtcc.c", "tccpp.c", "tccgen.c",
-    "tccdbg.c", "tccelf.c", "tccasm.c",
+    "tcc.c", "libtcc.c", "tccpp.c", "tccgen.c",
+    "tccdbg.c", "tccelf.c", "tccasm.c", "tccrun.c",
     "riscv64-gen.c", "riscv64-link.c", "riscv64-asm.c",
 ]
 
@@ -67,11 +68,17 @@ def build():
         run([CFG["gcc"], *CFG["arch"].split(), "-c", src, "-o", o])
         objs.append(o)
 
-    # 2) TCC 源码
+    # 2) libc 运行时(lib/string.c: memset/memcpy 等)
+    string_o = OUT / "string.o"
+    run([CFG["gcc"], *CFG["arch"].split(), "-fno-builtin", "-c", USER_DIR / "lib" / "string.c", "-o", string_o])
+    objs.append(string_o)
+
+    # 3) TCC 源码
     cflags = [
         *CFG["arch"].split(),
         "-nostdlib", "-nostartfiles", "-static", "-no-pie",
         "-O2", "-fno-strict-aliasing", "-Wno-unused-result",
+        "-fno-builtin",   # RmikuOS 的 strlen 等是头内联, 禁 gcc builtin 生成外部调用
         "-DONE_SOURCE=0",
         f"-I{USER_DIR / 'include'}",   # RmikuOS libc 头
         f"-I{TCC_SRC}",                 # TCC 自身头(tcc.h 等)

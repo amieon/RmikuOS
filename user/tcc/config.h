@@ -32,6 +32,9 @@
 #define CONFIG_TCC_PIC 0
 #define CONFIG_TCC_SEMLOCK 0        /* RmikuOS 无信号量锁 */
 #define CONFIG_TCC_STATIC 1
+/* -run(JIT) 已启用: RmikuOS 补了 mprotect。注意不能定义 CONFIG_SELINUX:
+ * tccrun.c 用 #ifdef CONFIG_SELINUX(定义了就走 mmap+临时文件分支),
+ * 我们要默认分支(tcc_malloc + mprotect)。 */
 #define CONFIG_TCC_PREDEFS 1
 /* 不定义 CONFIG_TCC_ASM —— riscv64-gen.c 会 #define 它, 定义会重定义警告 */
 #define CONFIG_TCC_ELFINTERP_ARMHF ""
