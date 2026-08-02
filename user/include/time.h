@@ -59,7 +59,6 @@ typedef struct timezone {
 typedef int clockid_t;
 
 
-
 static inline time_t time(time_t *t) {
     /* 墙钟秒(epoch): 校准(ntpdate)后为真值, 否则 0 */
     time_t now = (time_t)get_epoch();
@@ -112,23 +111,25 @@ static inline struct tm *gmtime_r(const time_t *t, struct tm *res) {
     int minute = (rem % 3600) / 60;
     int second = rem % 60;
     int wday = (int)((4LL + days) % 7LL);
-    long long d = days + 719468LL;
-    long long era = (d >= 0 ? d : d - 146096LL) / 146097LL;
-    long long doe = d - era * 146097LL;
-    long long yoe = (doe - doe / 146097LL * 146097LL) / 36524LL;
-    long long y = (doe - 365LL * yoe) / 365LL;
-    int year = (int)(y + era * 400LL);
-    int mon = (doe - 365LL * yoe) % 12;
-    int month = (mon * 5 + 2) / 153;
-    int mday = (doe - 365LL * yoe - month * 153 / 5) / 5 + 1;
+    long long z = days + 719468LL;
+    long long era = (z >= 0 ? z : z - 146096LL) / 146097LL;
+    long long doe = z - era * 146097LL;                              /* [0,146096] */
+    long long yoe = (doe - doe / 1460LL + doe / 36524LL - doe / 146096LL) / 365LL;  /* [0,399] */
+    long long y = yoe + era * 400LL;
+    long long doy = doe - (365LL * yoe + yoe / 4 - yoe / 100);       /* [0,365] */
+    long long mp = (5 * doy + 2) / 153;                              /* [0,11] */
+    int mday = (int)(doy - (153 * mp + 2) / 5 + 1);                  /* [1,31] */
+    int month = (int)(mp < 10 ? mp + 3 : mp - 9);                    /* [1,12] */
+    /* Hinnant 返回"调整年"(1/2 月  上一年): m<=2 时公历年 = y+1 */
+    if (month <= 2) y += 1;
     res->tm_sec = second;
     res->tm_min = minute;
     res->tm_hour = hour;
     res->tm_mday = mday;
-    res->tm_mon = month;
-    res->tm_year = year - 1900;
+    res->tm_mon = month - 1;
+    res->tm_year = (int)y - 1900;
     res->tm_wday = wday;
-    res->tm_yday = (int)days - (int)((long long)year * 365LL + (year / 4 - year / 100 + year / 400) - (long long)(era * 400));
+    res->tm_yday = (int)doy;
     res->tm_isdst = 0;
     return res;
 }
