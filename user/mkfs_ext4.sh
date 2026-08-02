@@ -25,7 +25,13 @@ fi
 
 # 确保基础目录存在
 mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/sched" \
-"$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/samples" "$ROOT/fat" "$ROOT/gcn" "$ROOT/jvm"
+"$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/samples" "$ROOT/fat" "$ROOT/gcn" "$ROOT/jvm" \
+"$ROOT/usr/lib/tcc"
+
+# TCC 系统文件: crt1/crti/crtn + libtcc1.a + libc.a + runmain.o + include(TCC 链接用户程序用)
+if [ -d "user/build/${ARCH}/tcc-sys/usr/lib/tcc" ]; then
+  cp -r user/build/${ARCH}/tcc-sys/usr/lib/tcc/* "$ROOT/usr/lib/tcc/"
+fi
 
 # 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then

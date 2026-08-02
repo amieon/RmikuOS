@@ -16,12 +16,12 @@
 /* ---- 目标架构 ---- */
 #define TCC_TARGET_RISCV64 1
 
-/* ---- 路径配置：RmikuOS 无系统目录, 全空 ---- */
+/* ---- 路径配置：指向镜像 /usr/lib/tcc(crt/库/头) ---- */
 #define CONFIG_TCC_ELFINTERP ""
-#define CONFIG_TCC_SYSINCLUDEPATHS ""
-#define CONFIG_TCC_LIBPATHS ""
-#define CONFIG_TCC_CRTPREFIX ""
-#define CONFIG_TCCDIR ""
+#define CONFIG_TCC_SYSINCLUDEPATHS "/usr/lib/tcc/include"
+#define CONFIG_TCC_LIBPATHS "/usr/lib/tcc"
+#define CONFIG_TCC_CRTPREFIX "/usr/lib/tcc"
+#define CONFIG_TCCDIR "/usr/lib/tcc"
 #define CONFIG_TCC_CROSSPREFIX ""
 
 /* ---- 功能开关 ---- */

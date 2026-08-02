@@ -24,6 +24,7 @@ ARCH = sys.argv[1] if len(sys.argv) > 1 else "riscv64"
 CFG = {
     "riscv64": {
         "gcc": "riscv64-unknown-elf-gcc",
+        "ar": "riscv64-unknown-elf-ar",
         "arch": "-march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64",
         "linker": USER_DIR / "linker-riscv64.ld",
         "crt0": USER_DIR / "lib" / "crt0_riscv64.S",
@@ -105,6 +106,47 @@ def build():
     bin_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(elf, bin_dir / "tcc.elf")
     print(f"installed -> {bin_dir / 'tcc.elf'}  (镜像里 /bin/tcc)")
+
+    # 5) TCC 的系统文件(镜像 /usr/lib/tcc): crt1/crti/crtn + libtcc1.a + libc.a + runmain.o + include
+    build_sys_files()
+
+
+def build_sys_files():
+    import shutil
+    sys_root = USER_DIR / "build" / ARCH / "tcc-sys" / "usr" / "lib" / "tcc"
+    sys_root.mkdir(parents=True, exist_ok=True)
+
+    # crt1.o = RmikuOS crt0（_start 调 main + 存 environ）
+    crt1 = sys_root / "crt1.o"
+    run([CFG["gcc"], *CFG["arch"].split(), "-c", CFG["crt0"], "-o", crt1])
+
+    # crti.o / crtn.o: 空 init/fini 段对象(TCC 链接需要存在)
+    empty_s = sys_root / "empty.S"
+    empty_s.write_text(".section .init\n.section .fini\n", encoding="utf-8")
+    for name in ("crti.o", "crtn.o"):
+        run([CFG["gcc"], *CFG["arch"].split(), "-c", empty_s, "-o", sys_root / name])
+
+    # libc.a = syscall.S + string.c（RmikuOS 用户程序的运行时; printf 等是头内联）
+    for name, src in (("_syscall.o", CFG["syscall"]), ("_string.o", USER_DIR / "lib" / "string.c")):
+        run([CFG["gcc"], *CFG["arch"].split(), "-fno-builtin", "-c", src, "-o", sys_root / name])
+    run([CFG["ar"], "rcs", sys_root / "libc.a",
+         sys_root / "_syscall.o", sys_root / "_string.o"])
+
+    # libtcc1.a: TCC 自身运行时(TCC 链接用户程序时用)
+    libtcc1_o = sys_root / "libtcc1.o"
+    run([CFG["gcc"], *CFG["arch"].split(), "-O2", "-fno-builtin", "-c",
+         TCC_SRC / "lib" / "libtcc1.c", "-o", libtcc1_o])
+    run([CFG["ar"], "rcs", sys_root / "libtcc1.a", libtcc1_o])
+
+    # runmain.o: tcc -run(JIT) 的启动 stub
+    run([CFG["gcc"], *CFG["arch"].split(), "-O2", "-fno-builtin", "-c",
+         TCC_SRC / "lib" / "runmain.c", "-o", sys_root / "runmain.o"])
+
+    # include: RmikuOS 头(用户程序 include <stdio.h> 等)
+    inc = sys_root / "include"
+    if not inc.exists():
+        shutil.copytree(USER_DIR / "include", inc)
+    print(f"tcc system files -> {sys_root}")
 
 
 if __name__ == "__main__":
