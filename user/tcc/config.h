@@ -27,12 +27,13 @@
 /* ---- 功能开关 ---- */
 #define CONFIG_TCC_BCHECK 0
 #define CONFIG_TCC_BACKTRACE 0
-#define CONFIG_TCC_PIE 0
+/* 注意: 不定义 CONFIG_TCC_PIE —— tcc.h 有 #ifdef CONFIG_TCC_PIE -> PIC 1,
+ * 定义了(哪怕 0)会与下面的 PIC 0 冲突 */
 #define CONFIG_TCC_PIC 0
 #define CONFIG_TCC_SEMLOCK 0        /* RmikuOS 无信号量锁 */
 #define CONFIG_TCC_STATIC 1
 #define CONFIG_TCC_PREDEFS 1
-#define CONFIG_TCC_ASM 1
+/* 不定义 CONFIG_TCC_ASM —— riscv64-gen.c 会 #define 它, 定义会重定义警告 */
 #define CONFIG_TCC_ELFINTERP_ARMHF ""
 
 #endif /* CONFIG_H */

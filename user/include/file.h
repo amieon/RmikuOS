@@ -84,6 +84,29 @@ static inline FILE* fopen(const char* path, const char* mode) {
     return (FILE*)0;
 }
 
+/* fdopen: 把已打开的 fd 包装成 FILE*(POSIX)。TCC(tcctools.c) 需要。
+ * 从静态池分配槽位, 复用 fopen 的池逻辑。 */
+static inline FILE* fdopen(int fd, const char* mode) {
+    if (fd < 0) return (FILE*)0;
+    int flags = _mode_flags(mode);
+    for (int i = 0; i < FILE_POOL_MAX; i++) {
+        FILE* fp = &_file_pool[i];
+        if (fp->fd < 0) {
+            fp->fd = fd; fp->pos = 0; fp->end = 0; fp->flags = flags; fp->ungetc = -1;
+            return fp;
+        }
+    }
+    close(fd);
+    return (FILE*)0;
+}
+
+/* remove: POSIX 删除文件, 即 unlink */
+static inline int remove(const char* path) {
+    usize len = 0;
+    while (path[len]) len++;
+    return (int)syscall3(SYS_UNLINK, (usize)path, len, 0);
+}
+
 static inline int _flushbuf(FILE* fp);  /* 前置声明: fclose 需要先冲刷缓冲 */
 
 static inline int fclose(FILE* fp) {

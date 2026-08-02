@@ -16,6 +16,13 @@ static inline void abort(void) {
     exit(127);
 }
 
+/* realpath: POSIX 路径规范化。RmikuOS 无符号链接、路径已规范化;
+ * 返回 NULL 让调用方 fallback 原路径(TCC 的 normalized_PATHCMP 等)。 */
+static inline char *realpath(const char *path, char *resolved) {
+    (void)path; (void)resolved;
+    return 0;
+}
+
 static inline int abs(int x) {
     return x < 0 ? -x : x;
 }
