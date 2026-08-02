@@ -69,7 +69,7 @@ static void run_adamw(int l_ratio, const char *mode, int alpha0,
 }
 
 int main(void) {
-    const unsigned long total = 96000;
+    const unsigned long total = 240000;
     const int nreps = 3;
 
     struct { int ratio; const char *name; } ratios[] = {
