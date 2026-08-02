@@ -6,7 +6,7 @@
  *   2. edge   Edge deadline trade-off   —— 刻画 trade-off(原 36_edge_deadline_arg_test)
  *   3. aimd   Adaptive alpha controller —— AIMD 恒定负载(原 37/39)
  *   4. dyn    Dynamic load experiment   —— AIMD vs 固定 α(原 40)
- *   5. adamw  SPSA-AdamW 自适应         —— 新增对照
+ *   5. adamw  SPSA-AdamW 自适应          —— 新增对照
  *
  * v2 关键架构变化(ctrl 搬进监控进程):
  *   v1 把所有负载组都 fork 成独立子进程,导致控制器在运行中拿不到
@@ -303,7 +303,7 @@ typedef struct {
 
 static void sl_aimd_init(sl_aimd_t *a, int alpha0) {
     a->alpha = alpha0;
-    a->inc = 10;
+    a->inc = 5;
     a->backoff = 80;
     a->safe_lateness = 0;  
     a->danger_lateness = 25;
