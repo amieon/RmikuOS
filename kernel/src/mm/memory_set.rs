@@ -7,7 +7,7 @@ use crate::mm::{
 };
 use crate::arch::{MEMORY_END, MEMORY_START};
 use crate::mm::page_table::{PageTable, PteFlags};
-use crate::mm::map_area::{MapArea,MapPermission,MapType};
+use crate::mm::map_area::{map_perm_to_pte_flags, MapArea, MapPermission, MapType};
 use crate::sync::spin::Mutex;
 
 
@@ -69,24 +69,28 @@ impl MemorySet {
         true
     }
 
-    /// mprotect: 改 [start, end) 所在 Area 的权限并重映射页表。找不到映射返回 false。
+    /// mprotect: [start, end) 所在 Area 的权限并重映射页表。找不到映射返回 false。
     pub fn change_permission(
         &mut self,
         start: VirtAddr,
         end: VirtAddr,
         perm: MapPermission,
     ) -> bool {
+        // mprotect 语义: 只改 [start, end) 范围内**已映射**页的 PTE 权限位。
+        // 不重映射(不分配新帧)、不碰 area 元数据——避免把整个堆从 RW 改成 RX。
+        let flags = map_perm_to_pte_flags(perm);
         let start_vpn = start.floor();
-        let area = match self
-            .areas
-            .iter_mut()
-            .find(|a| a.start_vpn() <= start_vpn && start_vpn < a.end_vpn())
-        {
-            Some(a) => a,
-            None => return false,
-        };
-        area.set_permission_and_remap(&mut lock_detect!(self.page_table), perm);
-        true
+        let end_vpn = end.ceil();
+        let mut pt = lock_detect!(self.page_table);
+        let mut any = false;
+        for vpn_id in start_vpn.0..end_vpn.0 {
+            let vpn = VirtPageNum(vpn_id);
+            if pt.translate(vpn).is_some() {
+                pt.update_flags(vpn, flags);
+                any = true;
+            }
+        }
+        any
     }
 
     pub fn translate(&self, vpn: VirtPageNum) -> Option<crate::mm::page_table::PageTableEntry> {

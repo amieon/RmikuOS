@@ -117,16 +117,6 @@ impl MapArea {
         }
     }
 
-    /// mprotect 用: 改权限并重映射页表(保持现有物理帧, 只更新 PTE 权限位)。
-    pub fn set_permission_and_remap(&mut self, page_table: &mut PageTable, perm: MapPermission) {
-        self.permission = perm;
-        let flags = map_perm_to_pte_flags(perm);
-        for vpn in self.vpn_range.clone() {
-            if let Some(pte) = page_table.translate(vpn) {
-                page_table.map(vpn, pte.ppn(), flags);
-            }
-        }
-    }
 
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range.clone() {
@@ -227,7 +217,7 @@ impl MapArea {
 
 
 #[cfg(target_arch = "riscv64")]
-fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
+pub(crate) fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
     let mut flags = PteFlags::empty();
 
     if permission.contains(MapPermission::R) {
@@ -250,7 +240,7 @@ fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
 
 #[cfg(target_arch = "loongarch64")]
 #[cfg(target_arch = "loongarch64")]
-fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
+pub(crate) fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
     let mut flags = PteFlags::MAT_CC;
 
 
