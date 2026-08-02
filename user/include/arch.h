@@ -33,6 +33,12 @@ static inline isize hartid(){
     return syscall3(SYS_HARTID,0,0,0);
 }
 
+/* 校准内核墙钟: epoch_us = 此刻的绝对 Unix 时间(微秒)。
+ * ntpdate 联网取时后调用; 之后 time()/stat 时间戳由内核单调累加。 */
+static inline isize set_wall_clock(usize epoch_us) {
+    return syscall3(SYS_SET_WALL_CLOCK, epoch_us, 0, 0);
+}
+
 #ifdef __cplusplus
 }
 #endif

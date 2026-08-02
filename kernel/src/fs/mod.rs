@@ -112,7 +112,7 @@ pub fn stat_at(cwd: &str, path: &str) -> Option<Stat> {
         InodeType::Directory => STAT_TYPE_DIR,
     };
 
-    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32)).with_mtime(crate::timer::now_secs() as u32)
+    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32).with_mtime(crate::timer::now_secs() as u32))
 }
 
 pub fn stat(path: &str) -> Option<Stat> {
@@ -124,7 +124,7 @@ pub fn stat(path: &str) -> Option<Stat> {
         InodeType::Directory => STAT_TYPE_DIR,
     };
 
-    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32)).with_mtime(crate::timer::now_secs() as u32)
+    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32).with_mtime(crate::timer::now_secs() as u32))
 }
 
 

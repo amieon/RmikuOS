@@ -58,11 +58,7 @@ typedef struct timezone {
 
 typedef int clockid_t;
 
-/* 校准内核墙钟: epoch_us = 此刻的绝对 Unix 时间(微秒)。
- * ntpdate 联网取时后调用; 之后 time()/stat 时间戳由内核单调累加。 */
-static inline isize set_wall_clock(usize epoch_us) {
-    return syscall3(SYS_SET_WALL_CLOCK, epoch_us, 0, 0);
-}
+
 
 static inline time_t time(time_t *t) {
     /* 墙钟秒(epoch): 校准(ntpdate)后为真值, 否则 0 */
