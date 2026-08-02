@@ -419,5 +419,8 @@ isize open(const char *path, usize flags, ...) {
     }
     return __rmiku_open(path, flags, mode);
 }
-void exit(int code) { __rmiku_exit(code); }
+/* exit/atexit 用 weak: -run 时 runmain.o 自带强定义(exit 走 __rt_exit 回溯、
+ * atexit 走 rt_exitfunc 表), weak 不冲突且被强版覆盖; AOT(无 runmain)用 weak 版。 */
+__attribute__((weak)) void exit(int code) { __rmiku_exit(code); }
+__attribute__((weak)) int atexit(void (*function)(void)) { return __rmiku_atexit(function); }
 

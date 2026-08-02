@@ -25,6 +25,7 @@ CFG = {
     "riscv64": {
         "gcc": "riscv64-unknown-elf-gcc",
         "ar": "riscv64-unknown-elf-ar",
+        "nm": "riscv64-unknown-elf-nm",
         "arch": "-march=rv64gc -mabi=lp64d -mcmodel=medany -mno-relax -msmall-data-limit=0 -DUSER_ARCH_RISCV64",
         "linker": USER_DIR / "linker-riscv64.ld",
         "crt0": USER_DIR / "lib" / "crt0_riscv64.S",
@@ -111,6 +112,42 @@ def build():
     build_sys_files()
 
 
+def add_libgcc_tf(libtcc1_a):
+    """把 host riscv64 libgcc.a 里提供 long double(quad)软浮点 __*tf* 和
+    __clear_cache 的目标文件合并进 libtcc1.a, 供 TCC 链接用户程序时解析。"""
+    import os, tempfile
+    try:
+        libgcc = subprocess.check_output(
+            [CFG["gcc"], "-print-libgcc-file-name"], text=True).strip()
+        if not os.path.exists(libgcc):
+            print(f"!! libgcc.a not found: {libgcc}")
+            return
+    except Exception as e:
+        print(f"!! cannot locate libgcc: {e}")
+        return
+    want = {
+        "__addtf3","__subtf3","__multf3","__divtf3","__negtf2",
+        "__extendsftf2","__extenddftf2","__trunctfsf2","__trunctfdf2",
+        "__fixtfsi","__fixunstfsi","__fixtfdi","__fixunstfdi",
+        "__floatsitf","__floatunsitf","__floatditf","__floatunditf",
+        "__eqtf2","__netf2","__lttf2","__letf2","__gttf2","__getf2","__unordtf2",
+        "__clear_cache",
+    }
+    tmp = tempfile.mkdtemp(prefix="rmiku-libgcc-")
+    subprocess.run([CFG["ar"], "x", libgcc], cwd=tmp, check=True)
+    picked = []
+    for o in sorted(os.listdir(tmp)):
+        if not o.endswith(".o"):
+            continue
+        r = subprocess.run([CFG["nm"], "--defined-only", os.path.join(tmp, o)],
+                           capture_output=True, text=True)
+        syms = {ln.split()[-1] for ln in r.stdout.splitlines() if ln.strip()}
+        if syms & want:
+            picked.append(os.path.join(tmp, o))
+    if picked:
+        subprocess.run([CFG["ar"], "rcs", str(libtcc1_a), *picked], check=True)
+        print(f"libgcc tf merged into libtcc1.a: {len(picked)} objects")
+
 def build_sys_files():
     import shutil
     sys_root = USER_DIR / "build" / ARCH / "tcc-sys" / "usr" / "lib" / "tcc"
@@ -142,6 +179,11 @@ def build_sys_files():
     run([CFG["gcc"], *CFG["arch"].split(), "-O2", "-fno-builtin", "-c",
          TCC_SRC / "lib" / "libtcc1.c", "-o", libtcc1_o])
     run([CFG["ar"], "rcs", sys_root / "libtcc1.a", libtcc1_o])
+    # 合并 libgcc 的 long double(128位 quad)软浮点 + __clear_cache 进 libtcc1.a
+    # （TCC 静态链接不自动链 libgcc, 而 _libc_extern.o / TCC 生成的代码会引用
+    #   __extenddftf2/__multf3 等 -> 由 libtcc1.a 提供, 一次解决所有程序）
+
+    add_libgcc_tf(sys_root / "libtcc1.a")
 
     # runmain.o: tcc -run(JIT) 的启动 stub
     run([CFG["gcc"], *CFG["arch"].split(), "-O2", "-fno-builtin", "-c",
