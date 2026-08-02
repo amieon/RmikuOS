@@ -22,6 +22,11 @@ static inline isize getppid(void) {
     return syscall3(SYS_GETPPID, 0, 0, 0);
 }
 
+/* 把 pid 设为前台进程(Ctrl+C 投递目标)。shell 启动后台任务后用它夺回前台。 */
+static inline isize set_front(isize pid) {
+    return syscall3(SYS_SET_FRONT, (usize)pid, 0, 0);
+}
+
 
 static inline isize fork(void) {
     return syscall3(SYS_FORK, 0, 0, 0);
