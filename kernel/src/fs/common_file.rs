@@ -100,6 +100,24 @@ impl File for ReadOnlyMemFile {
     fn write(&self, _buf: &[u8]) -> isize {
         -1
     }
+
+    /// lseek: ext4 只读文件也要支持随机读(TCC 读 .o 用 lseek+read)。
+    /// whence: 0=SET 1=CUR 2=END。越界返回 -1。
+    fn seek(&self, offset: isize, whence: usize) -> isize {
+        let mut off = self.offset.lock();
+        let data = self.data.as_slice();
+        let new = match whence {
+            0 => offset,
+            1 => *off as isize + offset,
+            2 => data.len() as isize + offset,
+            _ => return -1,
+        };
+        if new < 0 || new as usize > data.len() {
+            return -1;
+        }
+        *off = new as usize;
+        new
+    }
 }
 
 pub struct ReadOnlyDirFile {
