@@ -75,11 +75,11 @@ pub const SYSCALL_TRUNCATE: usize = 66;
 pub const SYSCALL_LSEEK: usize = 67;
 pub const SYSCALL_RENAME: usize = 68;
 pub const SYSCALL_SET_ECHO: usize = 69;  
-pub const SYSCALL_SIGNAL: usize = 70;    
+pub const SYSCALL_SIGNAL: usize = 70; 
 pub const SYSCALL_SET_FRONT: usize = 71; 
-pub const SYSCALL_GET_TIME_US: usize = 72;  
+pub const SYSCALL_GET_TIME_US: usize = 72;
 pub const SYSCALL_SET_WALL_CLOCK: usize = 73;
-pub const SYSCALL_GET_EPOCH: usize = 74;   
+pub const SYSCALL_GET_EPOCH: usize = 74; 
 
 
 
@@ -121,7 +121,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SLEEP => process::sys_sleep(args[0]),
         SYSCALL_EXEC => process::sys_exec(args[0], args[1], args[2]),
         SYSCALL_READ => fs::sys_read(args[0], args[1], args[2]),
-        SYSCALL_OPEN => fs::sys_open(args[0], args[1], args[2]),
+        SYSCALL_OPEN => fs::sys_open(args[0], args[1], args[2], args[3]),
         SYSCALL_CLOSE => fs::sys_close(args[0]),
         SYSCALL_GETDENTS => fs::sys_getdents(args[0], args[1], args[2]),
         SYSCALL_CHDIR => fs::sys_chdir(args[0], args[1]),

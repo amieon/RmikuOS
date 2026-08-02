@@ -645,7 +645,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         })
         .collect();
 
-    let file = match crate::fs::open(path, crate::fs::flag::O_EXEC) {
+    let file = match crate::fs::open(path, crate::fs::flag::O_EXEC, 0) {
         Some(file) => file,
         None => {
             log::info!("[exec] open failed: {}", path);
