@@ -88,9 +88,14 @@ pub fn sys_set_wall_clock(epoch_us: usize) -> isize {
     0
 }
 
-/// 墙钟秒(epoch)。未校准(没跑 ntpdate)返回 0。
+/// 墙钟秒(epoch)。未校准(  跑 ntpdate)返回 0。
 pub fn sys_get_epoch() -> isize {
     crate::timer::now_secs() as isize
+}
+
+/// mprotect(addr, len, prot): 修改已有映射的页权限(TCC tccrun JIT 需要)。
+pub fn sys_mprotect(addr: usize, len: usize, prot: usize) -> isize {
+    crate::task::mprotect_current(addr, len, prot)
 }
 
 pub fn sys_kill(pid: usize, sig : usize) -> isize {

@@ -22,6 +22,11 @@ static inline int munmap(void *addr, usize len) {
     return syscall3(SYS_MUNMAP, (usize)addr, len, 0);
 }
 
+/* mprotect: 修改已有映射的页权限(TCC tccrun 的 JIT 需要, W->X 切换) */
+static inline int mprotect(void *addr, usize len, int prot) {
+    return syscall3(SYS_MPROTECT, (usize)addr, len, (usize)prot);
+}
+
 
 void *memset(void *s, int c, unsigned long n);
 void *memcpy(void *dst, const void *src, unsigned long n);

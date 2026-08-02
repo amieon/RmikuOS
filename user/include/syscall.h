@@ -81,6 +81,7 @@ extern "C" {
 #define SYS_GET_TIME_US              72
 #define SYS_SET_WALL_CLOCK           73
 #define SYS_GET_EPOCH                74
+#define SYS_MPROTECT                 75
 
 
 
