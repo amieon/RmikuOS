@@ -1,8 +1,8 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
-当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端），以及用于调度器实验的 workload 与自适应控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳），以及用于调度器实验的 workload 与自适应控制器。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -103,7 +103,7 @@ loongarch64
 * VFS 与多文件系统挂载
 * ext4 rootfs / tmpfs / FAT
 * block cache
-* shell 和用户程序（C / C++ / Rust / Java / Lua）
+* shell 和用户程序（C / C++ / Rust / Java / Lua）与 SQLite 数据库
 * 调度器与调度实验框架
 * 网络协议栈（virtio-net / ARP / IPv4 / TCP / UDP / DHCP / ICMP）
 
@@ -716,6 +716,62 @@ tftp: hello.txt -> /tmp/a, 26 bytes
 
 一个与文档印象不符的实测结论：**slirp 的 TFTP 服务器在 guest 视角是 `10.0.2.2`**（与 DHCP 网关同地址），而不是某些资料里的 `10.0.2.4`——向后者发 ARP who-has 永远无人应答，改指 `10.0.2.2` 即通。ACK 直接回 `recvfrom` 的 from 地址，TFTP 的 TID 语义天然正确。
 
+### NTP 客户端：网络同步时间（墙钟 + 文件时间戳）
+
+RmikuOS 通过网络协议拿到真实世界时间：宿主机的 Python NTP 服务器 + guest 内的用户态 `ntpdate` 客户端，一次校准内核墙钟，之后 `time()` 与文件 `mtime` 都是单调累加的真实 epoch 秒。
+
+```text
+宿主机                                    QEMU guest
+┌──────────────────┐      slirp      ┌────────────────────────────┐
+│ tools/ntp_server │←─ UDP 10.0.2.2 ─│ ntpdate(5次采样最小delay)   │
+│  (RFC5905子集)   │── 123/任意端口 ─→│    │ SYS_SET_WALL_CLOCK     │
+└──────────────────┘                  │    ▼                       │
+                                      │ 内核墙钟(epoch微秒+单调累加) │
+                                      │    ├─ time()/gettimeofday  │
+                                      │    └─ Stat.mtime → st_mtime│
+                                      └────────────────────────────┘
+```
+
+#### 原理：RFC 5905 教学子集
+
+* **四时间戳**：`offset = ((T2−T1) + (T3−T4)) / 2`——请求去程与响应回程各带一次"服务器时间减客户端时间"，平均后抵消网络延迟，得到真实时钟偏移（`delay = (T4−T1) − (T3−T2)` 是往返延迟）。
+* **64 位定点**：NTP 时间戳高 32 位=秒（1900 纪元）、低 32 位=分数秒（2⁻³²）。分数秒让 delay 可测到毫秒级，否则 delay 全整数秒、"取最小"失去意义。
+* **防溢出**：两个 ≈22 亿秒级时间戳相减后相加会超 2⁶⁴——必须 `((T2−T1)>>1) + ((T3−T4)>>1)`（先移位再相加，丢 0.1ns）。
+* **最小延迟原则**：5 次采样取 delay 最小那次——网络最空闲 ≈ 去回程最对称 ≈ offset 最准。
+* **本地假时钟**：T1/T4 用 `get_time_us()`（单调微秒，自启动起，0 基准）。offset 是"服务器绝对时间 − 本地开机基准"的常数差，校准后 `墙钟 = 单调 + offset`——完美绕开"没时钟"的鸡生蛋问题。
+
+#### 墙钟与 Stat 时间戳
+
+内核 `timer` 维护墙钟：`set_wall_clock(epoch_us)` 存"校准时刻的绝对微秒 + 单调微秒快照"，`now_secs()` 单调累加（未校准返回 0）。`Stat` 新增 `mtime` 字段（复用原 reserved[4]，32 字节布局不变），各文件系统 `stat()` 填 `now_secs()`；用户态 `fs.h` 翻译层填 `st_mtime`（atime/ctime 教学简化同 mtime）。`time()`/`gettimeofday` 也改接墙钟（新 syscall `SYS_GET_EPOCH`）。
+
+#### 使用
+
+```bash
+# 宿主机（tools/ntp_server.py, RFC 5905 教学子集服务器）：
+sudo python3 tools/ntp_server.py          # 端口 123(需 root); 或 -p 12300 免 root
+```
+
+```text
+/ $ ntpdate                              # 默认 10.0.2.2:123; 或 ntpdate 12300
+[ntpdate] synced: epoch=1785658218 s, delay=2 ms
+/ $ sqlite3 /fat/test.db                 # 落盘库（CREATE TABLE 需 VFS xOpen 判 pOutFlags）
+sqlite> CREATE TABLE t(x);  INSERT INTO t VALUES(42);  .quit
+/ $ /samples/stat_time /fat/test.db
+path          : /fat/test.db
+mtime(epoch)  : 1785658405
+time()(epoch) : 1785658405
+mtime(GMT)    : 2026-08-02 08:13:25
+```
+
+QEMU slirp 关键路径：guest 发 UDP 到 `10.0.2.2:<端口>` 会被自动转发到宿主机 loopback 同名端口（无需 hostfwd），与 TFTP/DHCP 同一通道。
+
+#### 已知局限（教学取舍）
+
+* **QEMU TCG 虚拟时钟**：TCG 动态翻译下 `time` 寄存器按虚拟时间推进，负载不同可能与真实时钟速率不一致（delay 异常大时 epoch 有百秒级偏差）。真实硬件 timebase 与晶振绑定，无此问题。
+* **闰秒 / 2036 纪元回绕**：RFC 5905 用 era 判断（服务器时间戳在本地 ±68 年内则判定回绕 +2³²）处理；教学版注释说明不实现。
+* **FAT 目录项 DOS 时间戳未读**：mtime 取 stat 时刻墙钟而非磁盘持久化修改时间（需 DOS→epoch 转换，留待以后）。
+* **相关 syscall 号段**：`SYS_SET_ECHO=69`、`SYS_SIGNAL=70`、`SYS_SET_FRONT=71`、`SYS_GET_TIME_US=72`、`SYS_SET_WALL_CLOCK=73`、`SYS_GET_EPOCH=74`。
+
 ### 排障方法学：三段定位法
 
 网络问题一律按「guest 发没发对 → slirp 转没转发 → 宿主机谁收走」三段切分：
@@ -1324,6 +1380,79 @@ Lua 移植是唯一一种"官方源码一行不改、只提供桥接头文件"�
 
 
 
+### SQLite 3.50：交互式数据库 shell（官方 amalgamation 零改动）
+
+SQLite 是 RmikuOS 的嵌入式数据库：官方 `sqlite3.c` + `shell.c` amalgamation **原样编译、一行未改**，在 QEMU 里跑出完整的交互式 `sqlite>` shell，数据通过自定义 VFS 真实落盘到 FAT。
+
+#### 自定义 VFS（SQLITE_OS_OTHER）
+
+SQLite 官方的 `os_unix.c` / `os_win.c` 依赖 pthread / dlfcn 等宿主机制，因此用 `-DSQLITE_OS_OTHER=1` 整体关掉，改为 RmikuOS 自己的 VFS（`user/sqlite3/rmiku_vfs.h`）：
+
+```text
+sqlite3_file  ←→  RmikuFile{ fd, path }        把 sqlite 文件对象挂到 RmikuOS fd
+xRead / xWrite / xTruncate / xSync            全部走真实 syscall（lseek + read/write + ftruncate + fsync）
+xLock / xUnlock                               单进程 no-op
+xRandomness                                   自带 LCG
+journal/wal 探测                              -journal/-wal/-shm 后缀短路, 不触发无谓 stat
+```
+
+日志用 MEMORY 模式（`PRAGMA journal_mode=MEMORY`），主数据库文件走真实写盘——`xWrite → write syscall → FAT 驱动`，所以关掉重开数据库仍能读到数据。
+
+#### 编译宏裁剪（user/build.py）
+
+```text
+-SQLITE_OS_OTHER=1           不编 os_unix/os_win, 用 rmiku VFS
+-SQLITE_THREADSAFE=0         关线程/互斥, 避免 pthread.h
+-SQLITE_OMIT_LOAD_EXTENSION  关 dlopen/dlsym, 避免 dlfcn.h
+-SQLITE_OMIT_DEPRECATED      去掉废弃接口
+-SQLITE_OMIT_DATETIME_FUNCS  关 date.c 的宿主时间函数
+-SQLITE_OMIT_POPEN           无管道, .import "|cmd" 报错提示
+-SQLITE_NOHAVE_SYSTEM        无 /bin/sh, .shell/.system/edit() 不编入
+```
+
+#### libc 补齐：POSIX 头 + shim
+
+shell.c 是标准 POSIX 程序，依赖一组 RmikuOS 之前没有的 libc 设施，全部补齐：
+
+* **POSIX 头**（`user/include/`）：`sys/stat.h`、`sys/types.h`、`sys/time.h`、`sys/resource.h`、`unistd.h`、`dirent.h`、`pwd.h`、`fcntl.h`、`limits.h`、`memory.h`、`utime.h`
+* **stat 统一（方案 A）**：`fs.h` 成为用户态唯一 `struct stat`（POSIX `st_*` 字段 + 内部翻译内核 32 字节布局，类型位并入 `st_mode`），`sys/stat.h` 等头退化为薄壳——不再有"内核版 vs POSIX 版"双结构
+* **shim 实现**（`rmiku_shims.c`）：`isatty` / `access` / `strdup` / `opendir`/`readdir`/`closedir`（基于 SYS_GETDENTS 真实现）/ `getpwuid` / `symlink` / `readlink`
+* **file.h 增强**：FILE 池槽位回收（不再"开 8 次就满"）、`fseek`/`ftell`/`rewind`/`ungetc`（基于真实 lseek）、`sscanf`/`setvbuf`/`fileno`
+* **终端回显**：内核无终端驱动，libc 在 stdin 读取层做"行模式 + 回显"（仅字符设备回显、管道不回显），sqlite3/lua 等交互程序获得正常终端体验
+
+#### 使用
+
+```text
+/programs/sqlite3                   裸跑 → 交互式 sqlite> shell（内存库）
+/programs/sqlite3 /fat/test.db      带库文件 → 落盘数据库
+/programs/sqlite3_probe             落盘探针（建表/插入/关掉重开验证）
+```
+
+交互会话：
+
+```text
+sqlite> .tables
+sqlite> CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT);
+sqlite> INSERT INTO t(name) VALUES('miku');
+sqlite> SELECT * FROM t;
+1|miku
+sqlite> .schema
+sqlite> .quit
+```
+
+#### 与其他移植的对比
+
+| 语言/应用 | 移植方式             | 源码改动 |
+| --------- | -------------------- | -------- |
+| C         | 原生                 | 无       |
+| C++ (GCN) | 头文件替换           | 算法零改动 |
+| Rust      | 原生 no_std          | 无       |
+| Java      | 自研 JVM             | 无       |
+| Lua       | 官方源码原样编译     | 零改动   |
+| **SQLite**| **amalgamation 原样编译 + 自定义 VFS** | **零改动** |
+
+SQLite 是 RmikuOS 上最大的第三方移植（`sqlite3.c` 单文件约 9.5MB 源码），验证了"官方源码不动、靠 libc 头文件 + VFS 桥接"的移植路线在数据库这类重型依赖场景同样成立。
+
 ### 统一构建
 
 构建脚本 `user/build.py` 按来源与语言分派编译，一条 `./run.sh <arch>` 即可全部编好并打包进镜像：
@@ -1340,6 +1469,7 @@ user/c/*                      C(gcc)              /programs
 user/cpp/*                    C++(g++)            /programs
 user/gcn/*.cpp                C++(GCN)            /gcn
 user/java/*.java              Java(javac)         /jvm
+user/sqlite3/                 SQLite(自定义VFS)   /programs(sqlite3 / sqlite3_probe)
 ```
 
 ---
