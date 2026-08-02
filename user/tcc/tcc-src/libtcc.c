@@ -875,6 +875,11 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_memcheck(1);
 #endif
 
+    /* RmikuOS: 无动态链接器, TCC 产物必须静态 ELF。
+     * 默认 static_link=1 -> tccelf.c 不生成 PT_INTERP 段(内核 loader 拒绝)。
+     * 否则用户每次都要敲 -static。 */
+    s->static_link = 1;
+
 #undef gnu_ext
     s->gnu_ext = 1;
     s->tcc_ext = 1;

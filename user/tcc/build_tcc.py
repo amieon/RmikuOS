@@ -112,9 +112,10 @@ def build():
     build_sys_files()
 
 
-def add_libgcc_tf(libtcc1_a):
-    """把 host riscv64 libgcc.a 里提供 long double(quad)软浮点 __*tf* 和
-    __clear_cache 的目标文件合并进 libtcc1.a, 供 TCC 链接用户程序时解析。"""
+def add_libgcc_tf(libtcc1_a, libtcc1_o):
+    """把 host libgcc.a 中与 libtcc1.o 不重复的成员全部合并进 libtcc1.a。
+    TCC 静态链接不自动链 libgcc; 惰性提取只取被引用成员, 多放无害。
+    按符号清单筛选(tf/__clear_cache)会漏 __clzdi2 等通用辅助, 故全量去重。"""
     import os, tempfile
     try:
         libgcc = subprocess.check_output(
@@ -125,14 +126,13 @@ def add_libgcc_tf(libtcc1_a):
     except Exception as e:
         print(f"!! cannot locate libgcc: {e}")
         return
-    want = {
-        "__addtf3","__subtf3","__multf3","__divtf3","__negtf2",
-        "__extendsftf2","__extenddftf2","__trunctfsf2","__trunctfdf2",
-        "__fixtfsi","__fixunstfsi","__fixtfdi","__fixunstfdi",
-        "__floatsitf","__floatunsitf","__floatditf","__floatunditf",
-        "__eqtf2","__netf2","__lttf2","__letf2","__gttf2","__getf2","__unordtf2",
-        "__clear_cache",
-    }
+    # libtcc1.o 已有符号 + string.o 提供的(memcpy/memset) —— 跳过这些成员的 libgcc 版本
+    have = {"memcpy", "memset"}
+    r = subprocess.run([CFG["nm"], "--defined-only", str(libtcc1_o)],
+                       capture_output=True, text=True)
+    for ln in r.stdout.splitlines():
+        if ln.strip():
+            have.add(ln.split()[-1])
     tmp = tempfile.mkdtemp(prefix="rmiku-libgcc-")
     subprocess.run([CFG["ar"], "x", libgcc], cwd=tmp, check=True)
     picked = []
@@ -142,11 +142,12 @@ def add_libgcc_tf(libtcc1_a):
         r = subprocess.run([CFG["nm"], "--defined-only", os.path.join(tmp, o)],
                            capture_output=True, text=True)
         syms = {ln.split()[-1] for ln in r.stdout.splitlines() if ln.strip()}
-        if syms & want:
-            picked.append(os.path.join(tmp, o))
+        if syms & have:      # 与 libtcc1.o / string.o 重复 -> 跳过(避免 defined twice)
+            continue
+        picked.append(os.path.join(tmp, o))
     if picked:
         subprocess.run([CFG["ar"], "rcs", str(libtcc1_a), *picked], check=True)
-        print(f"libgcc tf merged into libtcc1.a: {len(picked)} objects")
+        print(f"libgcc merged into libtcc1.a: {len(picked)} objects")
 
 def build_sys_files():
     import shutil
@@ -183,7 +184,7 @@ def build_sys_files():
     # （TCC 静态链接不自动链 libgcc, 而 _libc_extern.o / TCC 生成的代码会引用
     #   __extenddftf2/__multf3 等 -> 由 libtcc1.a 提供, 一次解决所有程序）
 
-    add_libgcc_tf(sys_root / "libtcc1.a")
+    add_libgcc_tf(sys_root / "libtcc1.a", libtcc1_o)
 
     # runmain.o: tcc -run(JIT) 的启动 stub
     run([CFG["gcc"], *CFG["arch"].split(), "-O2", "-fno-builtin", "-c",

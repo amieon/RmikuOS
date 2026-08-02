@@ -424,3 +424,11 @@ isize open(const char *path, usize flags, ...) {
 __attribute__((weak)) void exit(int code) { __rmiku_exit(code); }
 __attribute__((weak)) int atexit(void (*function)(void)) { return __rmiku_atexit(function); }
 
+/* ============ TCC runmain 支持（.init_array/.fini_array 边界符号） ============
+ * runmain.o 的 run_ctors/run_dtors 引用 _init_array_start/_fini_array_start 等,
+ * 但 TCC 链接器(tccelf.c)不生成这些符号 -> -run 链接 unresolved(静默失败)。
+ * RmikuOS 无构造函数机制 -> 空数组, 循环 0 次; weak 让位给将来可能的强定义。 */
+__attribute__((weak)) void (*_init_array_start[])(int, char **, char **) = { 0 };
+__attribute__((weak)) void (*_init_array_end[])(int, char **, char **)   = { 0 };
+__attribute__((weak)) void (*_fini_array_start[])(void) = { 0 };
+__attribute__((weak)) void (*_fini_array_end[])(void)   = { 0 };
