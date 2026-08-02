@@ -6,7 +6,7 @@
  *   2. edge   Edge deadline trade-off   —— 刻画 trade-off(原 36_edge_deadline_arg_test)
  *   3. aimd   Adaptive alpha controller —— AIMD 恒定负载(原 37/39)
  *   4. dyn    Dynamic load experiment   —— AIMD vs 固定 α(原 40)
- *   5. adamw  SPSA-AdamW 自适应          —— 新增对照
+ *   5. adamw  SPSA-AdamW 自适应         —— 新增对照
  *
  * v2 关键架构变化(ctrl 搬进监控进程):
  *   v1 把所有负载组都 fork 成独立子进程,导致控制器在运行中拿不到
@@ -123,6 +123,10 @@ static sl_gstats_t sl_gstats[SL_MAX_GROUPS];
 static int         sl_ngroups;
 static unsigned long sl_t0, sl_t_end;
 static int         sl_window;
+/* 相位比例: L段占每个L-H周期的比例(千分比),0=等分(25/25/25/25)。
+ * 例: 800=40/10/40/10(L占80%), 200=10/40/10/40(H占80%)。
+ * 每个 L-H 周期各占 span/2,L段 = half*ratio/1000,H段 = half*(1-ratio/1000)。 */
+static int         sl_l_ratio_permil = 0;
 
 /* ================= 负载注册 ================= */
 
@@ -186,9 +190,19 @@ static sl_task_arg_t sl_args[SL_MAX_GROUPS][SL_MAX_THREADS];
 /* 四段相位:0 轻 / 1 重 / 2 轻 / 3 重(轻重轻重) */
 static int sl_phase_now(void) {
     unsigned long span = sl_t_end - sl_t0;
-    unsigned long seg = span / 4;
     unsigned long now = get_ticks();
     unsigned long off = now > sl_t0 ? now - sl_t0 : 0;
+    if (sl_l_ratio_permil > 0) {
+        /* 非等分: 每个L-H周期各占 span/2 */
+        unsigned long half = span / 2;
+        unsigned long l_seg = half * (unsigned long)sl_l_ratio_permil / 1000;
+        if (off < l_seg) return 0;        /* L1 */
+        if (off < half) return 1;         /* H1 */
+        if (off < half + l_seg) return 2; /* L2 */
+        return 3;                          /* H2 */
+    }
+    /* 等分(默认) */
+    unsigned long seg = span / 4;
     int ph = seg ? (int)(off / seg) : 0;
     if (ph > 3) ph = 3;
     return ph;
@@ -204,8 +218,15 @@ static long sl_phased_sleep(const sl_group_t *g, int idx) {
     if (ph == 1 || ph == 3) return 0;         /* 重相位全员活跃 */
     /* 轻相位(0,2):睡到下一边界 */
     unsigned long span = sl_t_end - sl_t0;
-    unsigned long seg = span / 4;
-    unsigned long boundary = sl_t0 + (unsigned long)(ph + 1) * seg;
+    unsigned long boundary;
+    if (sl_l_ratio_permil > 0) {
+        unsigned long half = span / 2;
+        unsigned long l_seg = half * (unsigned long)sl_l_ratio_permil / 1000;
+        boundary = sl_t0 + (ph == 0 ? l_seg : half + l_seg);
+    } else {
+        unsigned long seg = span / 4;
+        boundary = sl_t0 + (unsigned long)(ph + 1) * seg;
+    }
     long delta = (long)boundary - (long)get_ticks();
     return delta > 0 ? delta : 1;
 }
