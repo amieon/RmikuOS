@@ -120,7 +120,7 @@ static int rmikuOpen(sqlite3_vfs *pVfs, const char *zName,
   }
   /* 注意：打开时绝不截断。SQLite 通过 xTruncate 自行管理文件长度。 */
 
-  int fd = (int)open(zName, (usize)oflags);
+  int fd = (int)open(zName, (usize)oflags, 0644);
   if (fd < 0) return SQLITE_CANTOPEN;
 
   memset(f, 0, sizeof(*f));

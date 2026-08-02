@@ -1284,7 +1284,8 @@ static int run_external(int argc, char *argv[], int background) {
         if (background) {
             add_job(pid, argv[0]);
             printf("[%d] %d\n", next_job_id - 1, pid);
-            set_echo(0);   /* 回 shell 提示符, 关回显 */
+            set_echo(0);          /* 回 shell 提示符, 关回显 */
+            set_front(getpid());  /* 后台任务不占前台: Ctrl+C 回 shell */
             return 0;
         }
         /* Foreground: block until the child exits. We no longer poll
@@ -1393,9 +1394,9 @@ static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[])
     if (seg->outfile[0]) {
         isize fd;
         if (seg->append)
-            fd = open(seg->outfile, O_CREAT | O_APPEND | O_WRONLY);
+            fd = open(seg->outfile, O_CREAT | O_APPEND | O_WRONLY, 0644);
         else
-            fd = open(seg->outfile, O_CREAT | O_TRUNC | O_WRONLY);
+            fd = open(seg->outfile, O_CREAT | O_TRUNC | O_WRONLY, 0644);
         if (fd < 0) {
             printf("cannot open %s for output\n", seg->outfile);
             exit(1);
@@ -1775,6 +1776,8 @@ int main(void) {
     fputs("\nRmikuOS shell\n", stdout);
     print_help();
     load_search_dirs();
+
+    signal(SIGINT, SIG_IGN);
 
     while (1) {
         set_my_tickets(1);
