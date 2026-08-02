@@ -1,4 +1,10 @@
-#pragma once
+/* mymath.h — fdlibm 全精度数学库，
+ *
+ * 常数来源: fdlibm 1.3 / 1.5 (Sun Microsystems, 1993-2004)
+ */
+
+
+
 #include <stdint.h>
 
 /* ======================================================================== */
@@ -1112,6 +1118,11 @@ static inline double ldexp(double x, int n) {
 
 static inline float ldexpf(float x, int n) {
     return (float)((double)x * mm_pow(2.0, (double)n));
+}
+
+/* long double 版(riscv64 = 128 位 quad): 教学简化经 double 计算(TCC tccpp.c 需要) */
+static inline long double ldexpl(long double x, int n) {
+    return (long double)ldexp((double)x, n);
 }
 
 static inline double frexp(double x, int *exp) {

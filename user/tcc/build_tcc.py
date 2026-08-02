@@ -51,6 +51,15 @@ def run(cmd, **kw):
 
 
 def build():
+    # 0) 生成 tccdefs_.h（tccpp.c 编译必需, 由 TCC 自带 c2str 转换 include/tccdefs.h）
+    #    c2str 是宿主程序(文本级替换), 用宿主 cc 编译后跑一次即可。
+    defs_h = TCC_SRC / "tccdefs_.h"
+    if not defs_h.exists():
+        c2str = TCC_SRC / "c2str"
+        run(["cc", "-DC2STR", TCC_SRC / "conftest.c", "-o", c2str])
+        run([c2str, TCC_SRC / "include" / "tccdefs.h", defs_h])
+        print(f"[tcc] generated {defs_h}")
+
     objs = []
     # 1) crt0 / syscall 汇编
     for name, src in (("crt0", CFG["crt0"]), ("syscall", CFG["syscall"])):
