@@ -1245,6 +1245,34 @@ fn mmap_prot_to_perm(prot: usize) -> Option<crate::mm::MapPermission> {
 }
 
 
+/// mprotect(addr, len, prot): 修改已有映射的权限(TCC tccrun 的 JIT 需要)。
+pub fn mprotect_current(addr: usize, len: usize, prot: usize) -> isize {
+    let perm = match mmap_prot_to_perm(prot) {
+        Some(perm) => perm,
+        None => return -1,
+    };
+    if len == 0 {
+        return -1;
+    }
+    let start = crate::mm::align_down(addr, crate::mm::config::PAGE_SIZE);
+    let end = crate::mm::align_up(
+        addr.checked_add(len).unwrap_or(usize::MAX),
+        crate::mm::config::PAGE_SIZE,
+    );
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.current_pid();
+    let process = manager.process_mut(pid);
+    if process.user_space.change_permission(
+        crate::mm::VirtAddr(start),
+        crate::mm::VirtAddr(end),
+        perm,
+    ) {
+        0
+    } else {
+        -1
+    }
+}
+
 pub fn mmap_current(len: usize, prot: usize) -> isize {
     let perm = match mmap_prot_to_perm(prot) {
         Some(perm) => perm,

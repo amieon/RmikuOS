@@ -62,6 +62,7 @@ pub use manager_wrapper::{
 
     mmap_current,
     munmap_current,
+    mprotect_current,
 
     set_sched_alpha_current,
     get_sched_alpha_current,

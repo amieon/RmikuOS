@@ -69,6 +69,26 @@ impl MemorySet {
         true
     }
 
+    /// mprotect: 改 [start, end) 所在 Area 的权限并重映射页表。找不到映射返回 false。
+    pub fn change_permission(
+        &mut self,
+        start: VirtAddr,
+        end: VirtAddr,
+        perm: MapPermission,
+    ) -> bool {
+        let start_vpn = start.floor();
+        let area = match self
+            .areas
+            .iter_mut()
+            .find(|a| a.start_vpn() <= start_vpn && start_vpn < a.end_vpn())
+        {
+            Some(a) => a,
+            None => return false,
+        };
+        area.set_permission_and_remap(&mut lock_detect!(self.page_table), perm);
+        true
+    }
+
     pub fn translate(&self, vpn: VirtPageNum) -> Option<crate::mm::page_table::PageTableEntry> {
         lock_detect!(self.page_table).translate(vpn)
     }
