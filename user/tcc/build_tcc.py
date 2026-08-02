@@ -126,11 +126,16 @@ def build_sys_files():
     for name in ("crti.o", "crtn.o"):
         run([CFG["gcc"], *CFG["arch"].split(), "-c", empty_s, "-o", sys_root / name])
 
-    # libc.a = syscall.S + string.c（RmikuOS 用户程序的运行时; printf 等是头内联）
+    # libc.a = syscall.S + string.c + libc_extern.c
+    # （printf 等是头内联; libc_extern 把公共 API 具现化为真实符号,
+    #   TCC 编译用户程序时对 static inline 生成外部引用, 靠它解析）
     for name, src in (("_syscall.o", CFG["syscall"]), ("_string.o", USER_DIR / "lib" / "string.c")):
         run([CFG["gcc"], *CFG["arch"].split(), "-fno-builtin", "-c", src, "-o", sys_root / name])
+    _extern = USER_DIR / "tcc" / "libc_extern.c"
+    run([CFG["gcc"], *CFG["arch"].split(), "-fno-builtin", "-I", USER_DIR / "include",
+         "-c", _extern, "-o", sys_root / "_libc_extern.o"])
     run([CFG["ar"], "rcs", sys_root / "libc.a",
-         sys_root / "_syscall.o", sys_root / "_string.o"])
+         sys_root / "_syscall.o", sys_root / "_string.o", sys_root / "_libc_extern.o"])
 
     # libtcc1.a: TCC 自身运行时(TCC 链接用户程序时用)
     libtcc1_o = sys_root / "libtcc1.o"
