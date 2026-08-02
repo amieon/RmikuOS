@@ -75,6 +75,8 @@ static inline unsigned long long strtoull(const char *s, char **e, int b) {
     return (unsigned long long)strtoul(s, e, b);
 }
 
+
+
 static inline double strtod(const char *s, char **e) {
     double n = 0.0, sign = 1.0, frac = 0.1;
 
@@ -110,7 +112,13 @@ static inline double strtod(const char *s, char **e) {
     return sign * n;
 }
 
+static inline float strtof(const char *s, char **e) {
+    return (float)strtod(s, e);
+}
 
+static inline long double strtold(const char *s, char **e) {
+    return (long double)strtod(s, e);   /* 教学简化: 经 double 计算 */
+}
 
 static unsigned int _seed = 1;
 

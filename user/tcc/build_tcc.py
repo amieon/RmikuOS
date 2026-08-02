@@ -95,7 +95,7 @@ def build():
         CFG["gcc"], *CFG["arch"].split(),
         "-nostdlib", "-nostartfiles", "-static", "-no-pie",
         "-Wl,--build-id=none", "-Wl,--no-relax",
-        "-T", CFG["linker"], *objs, "-o", elf,
+        "-T", CFG["linker"], *objs, "-lgcc", "-o", elf,
     ])
     print(f"\nOK: {elf}")
 

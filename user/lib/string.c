@@ -1,4 +1,7 @@
 
+/* errno: POSIX 全局错误码(errno.h 已声明, 这里提供定义) */
+int errno = 0;
+
 void *memset(void *s, int c, unsigned long n) {
     unsigned char *p = (unsigned char *)s;
     while (n--) {
