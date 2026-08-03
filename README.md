@@ -1,8 +1,8 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
-当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳），以及用于调度器实验的 workload 与自适应控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳）、TCC 0.9.28（系统内 C 编译器，AOT + JIT 自托管工具链），以及用于调度器实验的 workload 与自适应控制器。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -399,6 +399,55 @@ Shell 支持用户态环境变量与 `$?`（上一条命令退出码）的读取
 * 变量展开在引号保护下进行：`echo "$FOO | bar"` 不会被误判为管道。
 
 `export` 设置的环境变量在 shell `exec` 外部命令时，随内核经寄存器传入的 `envp` 透传给子进程（详见下节「Environment Variable Syscalls」）。shell 的命令搜索目录也从环境变量 `PATH`（`getenv("PATH")`，按 `:` 切分，回退 `/bin /tests /programs`）读取，因此 `export PATH=/bin:/tests` 等修改即时生效。
+
+---
+
+### TCC：系统内的 C 编译器（自托管工具链）
+
+TCC（Tiny C Compiler）0.9.28 移植——RmikuOS 能**在自己的系统里现场编译并运行 C 程序**，形成「内核写 C → 系统里编译 C → 运行 C」的完整自托管闭环。
+
+#### 用法
+
+```
+tcc hello.c -o hello && ./hello    # AOT: 编译出 ELF, 内核加载执行
+tcc hello.c -run                   # JIT: 编译进内存直接执行
+```
+
+`/codes/` 内置 12 个测试程序（镜像 overlay 带进），`scripts/tcc_test.sh` 顺序执行——**12/12 全过**。
+
+#### 系统文件布局（`/usr/lib/tcc`）
+
+| 文件 | 作用 |
+|---|---|
+| `crt1.o` / `crti.o` / `crtn.o` | 启动（复用 crt0，`_start`→main→exit）/ 空 .init/.fini |
+| `libc.a` | syscall.o + string.o + **libc_extern.o** |
+| `libtcc1.a` | TCC 运行时 + **libgcc 软浮点合并**（long double 等） |
+| `runmain.o` | `-run`（JIT）启动 stub |
+| `include/` | RmikuOS 头 + TCC 编译器配套头（stddef/stdarg/stdbool…） |
+
+#### 三个关键设计
+
+**① libc 具现化（libc_extern.c）**：RmikuOS 的 libc 全是**头内联 static inline**（无真实符号），而 TCC 对 `static inline` 不内联、生成外部引用 → `unresolved printf`。解法：把全部头内联函数重命名（`__rmiku_*`）后 include（宿主 gcc 内联消化内部依赖链），再为公共 API 生成非 static 转发打进 libc.a。顺序必须是「**重命名 → include → undef → 转发**」——include 放重命名前会 redefinition。
+
+**② libgcc 全量合并**：TCC 静态链接**不自动链 libgcc**（`TCC_LIBGCC` 只在动态链接生效）→ long double（128 位 quad）软浮点 `__*tf*`、`__clzdi2` 等全部 unresolved。解法：`add_libgcc_tf()` 把 host libgcc.a 全量展开、**与 libtcc1.o 去重**后合并进 libtcc1.a——TCC 惰性提取只取被引用的成员，多放无害，一次解决所有编译期辅助符号。
+
+**③ 全局 `_stdout`（短输出不丢）**：标准流从「每编译单元一份 static」改为**全局唯一**（定义在 string.o）。否则 printf（某 TU）与 exit 的 flush（string.o）各用各的 `_stdout` 实例，flush 落空——短输出（<BUFSIZ）且无换行就丢失。crt0 调 main 后 `call exit`（flush 标准流再退出）。
+
+#### 其他适配（踩坑实录）
+
+- **静态 ELF**：libtcc.c `tcc_new()` 默认 `static_link=1`——否则产物带 `PT_INTERP`，内核 loader 拒绝；
+- **weak 符号化解冲突**：runmain.o 自带强 `exit`/`atexit`（-run 专属）→ libc 侧用 `__attribute__((weak))` 让位；`.init_array`/`.fini_array` 边界符号 TCC 不生成 → 提供 weak 空数组，否则 `-run` reloc 静默失败；
+- **mprotect 系统调用**（JIT 需要）：`PageTable::update_flags` 只改已有 PTE 的权限位，**不重映射、不分配新帧**——`map()` 是 assert 未映射语义，直接重映射会 panic；
+- **open() 三参 mode 打通内核**：O_CREAT 创建文件后 `chmod(mode)`，POSIX 真语义（用户态变参 → syscall6 → 内核）；
+- **`__sync_*` 原子符号**：lock.h 用 gcc 内建原子，TCC 不识别 → string.c 用 riscv64 `amoswap.w.aq`/loongarch64 `amswap_db.w` 提供真实符号；
+- **stdint.h**：裸机工具链无 libc 版 → TCC 专用最小版（只进 `/usr/lib/tcc/include`，gcc 程序继续用编译器内置）。
+
+#### 已知局限
+
+- `-run` 走 runmain 的 exit，不 flush 无换行缓冲——`-run` 输出建议带 `
+`；
+- 用户程序显式 `exit()`（头内联）不 flush——次要路径；
+- TCC 的 `static inline` 不内联是特性不是 bug，靠 libc_extern 转发兜底。
 
 ---
 
