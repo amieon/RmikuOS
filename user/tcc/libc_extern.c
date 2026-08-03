@@ -10,7 +10,7 @@
  */
 #include <stdarg.h>
 
-/* ---- ① 重命名: 所有头内 static inline 函数(8 头全覆盖) ---- */
+/* ---- ① 重命名: 所有头内 static inline 函数(9 头全覆盖) ---- */
 #define __pf_putc __rmiku___pf_putc
 #define __pf_puts __rmiku___pf_puts
 #define __pf_u64 __rmiku___pf_u64
@@ -160,6 +160,45 @@
 #define open_create __rmiku_open_create
 #define close __rmiku_close
 #define set_echo __rmiku_set_echo
+#define mm_sqrt __rmiku_mm_sqrt
+#define mm_exp __rmiku_mm_exp
+#define mm_expm1 __rmiku_mm_expm1
+#define mm_log __rmiku_mm_log
+#define mm_fabs __rmiku_mm_fabs
+#define mm_copysign __rmiku_mm_copysign
+#define mm_hi_part __rmiku_mm_hi_part
+#define mm_scalbn __rmiku_mm_scalbn
+#define mm_rem_pio2 __rmiku_mm_rem_pio2
+#define mm_kernel_sin __rmiku_mm_kernel_sin
+#define mm_kernel_cos __rmiku_mm_kernel_cos
+#define mm_kernel_tan __rmiku_mm_kernel_tan
+#define mm_sin __rmiku_mm_sin
+#define mm_cos __rmiku_mm_cos
+#define mm_tan __rmiku_mm_tan
+#define mm_sincos __rmiku_mm_sincos
+#define mm_asin __rmiku_mm_asin
+#define mm_acos __rmiku_mm_acos
+#define mm_atan __rmiku_mm_atan
+#define mm_atan2 __rmiku_mm_atan2
+#define mm_sinh __rmiku_mm_sinh
+#define mm_cosh __rmiku_mm_cosh
+#define mm_tanh __rmiku_mm_tanh
+#define mm_log2 __rmiku_mm_log2
+#define mm_log10 __rmiku_mm_log10
+#define mm_ceil __rmiku_mm_ceil
+#define mm_floor __rmiku_mm_floor
+#define mm_fmod __rmiku_mm_fmod
+#define mm_modf __rmiku_mm_modf
+#define mm_pow __rmiku_mm_pow
+#define sincos __rmiku_sincos
+#define modf __rmiku_modf
+#define sincosf __rmiku_sincosf
+#define modff __rmiku_modff
+#define ldexp __rmiku_ldexp
+#define ldexpf __rmiku_ldexpf
+#define ldexpl __rmiku_ldexpl
+#define frexp __rmiku_frexp
+#define frexpf __rmiku_frexpf
 
 /* ---- ② include: 必须在重命名宏生效期间展开, 否则头里的定义用真名,
  *                与后面的转发冲突(redefinition of 'printf') ---- */
@@ -170,6 +209,7 @@
 #include <process.h>
 #include <lock.h>
 #include <io.h>
+#include <math.h>
 
 /* ---- ③ 取消重命名(转发函数要用真名) ---- */
 #undef __pf_putc
@@ -321,6 +361,45 @@
 #undef open_create
 #undef close
 #undef set_echo
+#undef mm_sqrt
+#undef mm_exp
+#undef mm_expm1
+#undef mm_log
+#undef mm_fabs
+#undef mm_copysign
+#undef mm_hi_part
+#undef mm_scalbn
+#undef mm_rem_pio2
+#undef mm_kernel_sin
+#undef mm_kernel_cos
+#undef mm_kernel_tan
+#undef mm_sin
+#undef mm_cos
+#undef mm_tan
+#undef mm_sincos
+#undef mm_asin
+#undef mm_acos
+#undef mm_atan
+#undef mm_atan2
+#undef mm_sinh
+#undef mm_cosh
+#undef mm_tanh
+#undef mm_log2
+#undef mm_log10
+#undef mm_ceil
+#undef mm_floor
+#undef mm_fmod
+#undef mm_modf
+#undef mm_pow
+#undef sincos
+#undef modf
+#undef sincosf
+#undef modff
+#undef ldexp
+#undef ldexpf
+#undef ldexpl
+#undef frexp
+#undef frexpf
 /* ============ stdio ============ */
 int printf(const char *fmt, ...) {
     va_list ap; va_start(ap, fmt);
@@ -433,3 +512,18 @@ __attribute__((weak)) void (*_init_array_start[])(int, char **, char **) = { 0 }
 __attribute__((weak)) void (*_init_array_end[])(int, char **, char **)   = { 0 };
 __attribute__((weak)) void (*_fini_array_start[])(void) = { 0 };
 __attribute__((weak)) void (*_fini_array_end[])(void)   = { 0 };
+
+/* ============ math（用户代码经宏 pow->mm_pow 等展开, 转��� mm_ 系列） ============ */
+double mm_pow(double x, double y) { return __rmiku_mm_pow(x, y); }
+double mm_sqrt(double x) { return __rmiku_mm_sqrt(x); }
+double mm_fabs(double x) { return __rmiku_mm_fabs(x); }
+double mm_sin(double x) { return __rmiku_mm_sin(x); }
+double mm_cos(double x) { return __rmiku_mm_cos(x); }
+double mm_tan(double x) { return __rmiku_mm_tan(x); }
+double mm_log(double x) { return __rmiku_mm_log(x); }
+double mm_exp(double x) { return __rmiku_mm_exp(x); }
+double mm_floor(double x) { return __rmiku_mm_floor(x); }
+double mm_ceil(double x) { return __rmiku_mm_ceil(x); }
+double mm_fmod(double x, double y) { return __rmiku_mm_fmod(x, y); }
+double mm_atan2(double y, double x) { return __rmiku_mm_atan2(y, x); }
+
