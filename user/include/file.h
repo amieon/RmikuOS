@@ -4,6 +4,7 @@ extern "C" {
 #endif
 
 #include "io.h"
+#include "errno.h"   /* errno/ENOENT —— fopen 失败路径要设置(POSIX: 文件不存在=ENOENT) */
 
 #define EOF        (-1)
 #define SEEK_SET   0
@@ -72,7 +73,10 @@ static inline FILE* fopen(const char* path, const char* mode) {
     } else {
         fd = open(path, O_RDONLY);
     }
-    if (fd < 0) return (FILE*)0;
+    if (fd < 0) {
+        errno = ENOENT;   /* 最常见原因: 文件不存在。kilo 等靠 errno==ENOENT 区分"新文件" */
+        return (FILE*)0;
+    }
     /* 裸机无 malloc: 从静态池中找一个空闲槽位(fd < 0 表示空闲)。
      * fclose 会把 fd 置回 -1, 因此槽位可以循环复用, 不再是"只增不回收"。 */
     for (int i = 0; i < FILE_POOL_MAX; i++) {
@@ -83,6 +87,7 @@ static inline FILE* fopen(const char* path, const char* mode) {
         }
     }
     /* 池满: 没有可用槽位 */
+    errno = ENFILE;
     close(fd);
     return (FILE*)0;
 }
