@@ -17,7 +17,6 @@
  */
 #include "user.h"
 #include "stdlib.h"
-#include "env.h"
 
 /* ================= 对象 ================= */
 typedef enum {
@@ -103,6 +102,7 @@ static Env *g_global = NULL;       /* 全局环境(永远可达) */
 
 static void gc_mark_obj(Obj *o);
 static void gc_mark_env(Env *e);
+static void gc_sweep_envs(void);   /* 在 struct Env 定义后实现 */
 
 static void gc_collect(void) {
     /* mark */
@@ -123,13 +123,7 @@ static void gc_collect(void) {
     }
     n_objs = w;
     /* sweep envs */
-    w = 0;
-    for (int i = 0; i < n_envs; i++) {
-        Env *e = g_envs[i];
-        if (e->gc) { e->gc = 0; g_envs[w++] = e; }
-        else { free(e->names); free(e->vals); free(e); }
-    }
-    n_envs = w;
+    gc_sweep_envs();
     alloc_count = 0;
 }
 
@@ -185,6 +179,16 @@ struct Env {
     int n, cap;
     int gc;                  /* GC 标记 */
 };
+
+static void gc_sweep_envs(void) {
+    int w = 0;
+    for (int i = 0; i < n_envs; i++) {
+        Env *e = g_envs[i];
+        if (e->gc) { e->gc = 0; g_envs[w++] = e; }
+        else { free(e->names); free(e->vals); free(e); }
+    }
+    n_envs = w;
+}
 
 static Env *env_new(Env *parent) {
     Env *e = (Env *)malloc(sizeof(Env));
