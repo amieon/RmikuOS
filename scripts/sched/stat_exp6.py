@@ -124,7 +124,7 @@ def parse(path, default_ratio=None):
             tag = p[0]
             try:
                 if tag == "W" and len(p) >= 8:
-                    cur["W"].append({"win": int(p[1]), "name": p[4],
+                    cur["W"].append({"win": int(p[1]), "alpha": int(p[2]), "name": p[4],
                                    "run_delta": int(p[5]), "eff_tickets": int(p[6]),
                                    "ready_threads": int(p[7])})
                 elif tag == "D" and len(p) >= 6:
@@ -190,8 +190,23 @@ def compute(run):
         s["alpha_traj"] = np.array([a["after"] for a in run["A"]])
         s["alpha_wins"] = np.array([a["win"] for a in run["A"]])
     else:
-        s["alpha_traj"] = np.array([])
-        s["alpha_wins"] = np.array([])
+        # Fallback: 从 W 行提取 alpha（probe 值,±delta 震荡 around 实际 α）
+        # AdamW 无 A 行时用此路径; 取相邻窗口均值平滑 SPSA 扰动
+        w_alpha = [(w["win"], w.get("alpha", 0)) for w in run["W"] if w["name"] == "ctrl"]
+        if w_alpha:
+            wins = [x[0] for x in w_alpha]
+            alphas = [x[1] for x in w_alpha]
+            # 2-window 移动平均平滑 probe±delta 扰动
+            if len(alphas) >= 2:
+                smoothed = [(alphas[i] + alphas[i+1]) // 2 for i in range(len(alphas)-1)]
+                s["alpha_traj"] = np.array(smoothed)
+                s["alpha_wins"] = np.array(wins[:-1])
+            else:
+                s["alpha_traj"] = np.array(alphas)
+                s["alpha_wins"] = np.array(wins)
+        else:
+            s["alpha_traj"] = np.array([])
+            s["alpha_wins"] = np.array([])
 
     if run["S"]:
         s["jain"] = np.mean([x["jain_q"] for x in run["S"]]) / 1000.0
@@ -424,6 +439,231 @@ def plot_burn_vs_miss_per_ratio(stats, outdir):
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
+# ---------- AdamW 独立图 ----------
+
+def plot_adamw_alpha_traj(computed, outdir):
+    """AdamW 三起点 α 轨迹,每个 ratio 一张。"""
+    n = len(RATIOS)
+    fig, axes = plt.subplots(1, n, figsize=(6*n, 5))
+    if n == 1: axes = [axes]
+
+    for idx, ratio in enumerate(RATIOS):
+        ax = axes[idx]
+        for mode, color in [("adamw0", COLORS_MODE["adamw0"]),
+                             ("adamw50", COLORS_MODE["adamw50"]),
+                             ("adamw100", COLORS_MODE["adamw100"])]:
+            reps = [r for r in computed if r["ratio"] == ratio and r["mode"] == mode
+                    and len(r.get("alpha_traj", [])) > 0]
+            if not reps:
+                continue
+            all_lens = [len(r["alpha_traj"]) for r in reps]
+            gmin = min(all_lens)
+            aligned = np.array([r["alpha_traj"][:gmin] for r in reps])
+            mean = aligned.mean(axis=0)
+            x = np.arange(gmin)
+            for r in reps:
+                ax.plot(x, r["alpha_traj"][:gmin], "-", color=color, lw=0.4, alpha=0.3)
+            ax.plot(x, mean, "-", color=color, lw=2, label=f"{mode} (n={len(reps)})")
+
+        max_w = max((max(r.get("alpha_wins", [0]).max() if len(r.get("alpha_wins", [])) > 0 else 0,
+                    0) for r in reps if reps), default=100)
+        pb = phase_bounds_for_ratio(ratio, max_w)
+        add_phase_shading(ax, pb, 105)
+        ax.axhline(25, color="gray", ls=":", lw=1, label="target=25")
+        ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
+        ax.set_xlabel("Window")
+        ax.set_ylabel("α")
+        ax.set_ylim(-2, 105)
+        ax.legend(fontsize=8)
+
+    fig.suptitle("Exp 6: AdamW α Trajectory (3 starts)", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(outdir, "exp6_adamw_alpha_traj.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+def plot_adamw_miss_traj(computed, outdir):
+    """AdamW 逐窗口 miss rate,每个 ratio 一张。"""
+    n = len(RATIOS)
+    fig, axes = plt.subplots(1, n, figsize=(6*n, 5))
+    if n == 1: axes = [axes]
+
+    for idx, ratio in enumerate(RATIOS):
+        ax = axes[idx]
+        for mode in ["fixed0", "fixed25", "fixed50"] + ADAMW_MODES:
+            reps = [r for r in computed if r["ratio"] == ratio and r["mode"] == mode
+                    and len(r.get("win_miss", [])) > 0]
+            if not reps:
+                continue
+            min_len = min(len(r["win_miss"]) for r in reps)
+            aligned = np.array([r["win_miss"][:min_len] for r in reps])
+            mean = aligned.mean(axis=0)
+            x = np.arange(len(mean))
+            color = COLORS_MODE.get(mode, "#666")
+            ls = "--" if mode.startswith("adamw") else "-"
+            ax.plot(x, mean, ls, color=color, lw=1.5, label=mode)
+
+        pb = phase_bounds_for_ratio(ratio, min_len)
+        add_phase_shading(ax, pb, 105)
+        ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
+        ax.set_xlabel("Window")
+        ax.set_ylabel("ctrl Miss Rate (%)")
+        ax.set_ylim(-2, 105)
+        ax.legend(fontsize=7)
+        ax.set_xlim(0, min_len)
+
+    fig.suptitle("Exp 6: AdamW Miss Rate Trajectory", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(outdir, "exp6_adamw_miss_traj.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+def plot_adamw_burn_vs_miss(computed, stats, outdir):
+    """AdamW 独立 burn vs miss 散点,每个 ratio 一张。"""
+    n = len(RATIOS)
+    fig, axes = plt.subplots(1, n, figsize=(6*n, 5))
+    if n == 1: axes = [axes]
+
+    for idx, ratio in enumerate(RATIOS):
+        ax = axes[idx]
+        modes_to_plot = ["fixed0", "fixed25", "fixed50"] + ADAMW_MODES
+        xs, ys = [], []
+        for mode in modes_to_plot:
+            s = stats.get((ratio, mode))
+            if not s:
+                continue
+            x = s.get("work", {}).get("ai_mean", 0)
+            y = s.get("miss_rate_mean", 0)
+            x_hi = s.get("work", {}).get("ai_hi", 0)
+            x_lo = s.get("work", {}).get("ai_lo", 0)
+            y_hi = s.get("miss_rate_hi", 0)
+            y_lo = s.get("miss_rate_lo", 0)
+            xs.append(x); ys.append(y)
+            color = COLORS_MODE.get(mode, "#666")
+            marker = "s" if mode.startswith("adamw") else "o"
+            ax.errorbar(x, y, xerr=[[x_lo], [x_hi]], yerr=[[y_lo], [y_hi]],
+                        fmt=marker, color=color, ms=9, capsize=3,
+                        markeredgecolor="black", markeredgewidth=0.8, label=mode)
+            ax.annotate(mode, (x, y), fontsize=8, ha="left", va="bottom",
+                        xytext=(6, 4), textcoords="offset points")
+        ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
+        ax.set_xlabel("ai Burn (iterations)")
+        ax.set_ylabel("ctrl Miss Rate (%)")
+        if xs:
+            x_span = max(xs) - min(xs) if max(xs) > min(xs) else max(xs) * 0.2
+            ax.set_xlim(min(xs) - x_span * 0.15, max(xs) + x_span * 0.25)
+        y_span = max(ys) - min(ys) if max(ys) > min(ys) else 10
+        ax.set_ylim(max(-5, min(ys) - y_span * 0.15), min(105, max(ys) + y_span * 0.25))
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle("Exp 6: AdamW Burn vs Miss (standalone)", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(outdir, "exp6_adamw_burn_vs_miss.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+def plot_adamw_actions(computed, outdir):
+    """AdamW actions 分布柱状图(up/down/hold)。"""
+    from collections import Counter
+
+    n = len(RATIOS)
+    fig, axes = plt.subplots(1, n, figsize=(6*n, 4))
+    if n == 1: axes = [axes]
+
+    for idx, ratio in enumerate(RATIOS):
+        ax = axes[idx]
+        modes_present = []
+        up_vals, down_vals, hold_vals = [], [], []
+        for mode in ADAMW_MODES:
+            reps = [r for r in computed if r["ratio"] == ratio and r["mode"] == mode]
+            if not reps:
+                continue
+            # 从原始 run 的 A 行统计 actions
+            total_up = total_down = total_hold = 0
+            for r in reps:
+                # alpha_traj 长度 = A 行数; actions 从 traj 差分推断
+                traj = r.get("alpha_traj", [])
+                wins = r.get("alpha_wins", [])
+                if len(traj) < 2:
+                    continue
+                for i in range(1, len(traj)):
+                    if traj[i] > traj[i-1]: total_up += 1
+                    elif traj[i] < traj[i-1]: total_down += 1
+                    else: total_hold += 1
+            if total_up + total_down + total_hold == 0:
+                continue
+            modes_present.append(mode)
+            up_vals.append(total_up)
+            down_vals.append(total_down)
+            hold_vals.append(total_hold)
+
+        if not modes_present:
+            ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (no data)")
+            continue
+
+        x = np.arange(len(modes_present))
+        w = 0.25
+        ax.bar(x - w, up_vals, w, color="#16a34a", label="up", edgecolor="black", linewidth=0.5)
+        ax.bar(x, down_vals, w, color="#dc2626", label="down", edgecolor="black", linewidth=0.5)
+        ax.bar(x + w, hold_vals, w, color="#94a3b8", label="hold", edgecolor="black", linewidth=0.5)
+        ax.set_xticks(x)
+        ax.set_xticklabels(modes_present, fontsize=9)
+        ax.set_ylabel("Count")
+        ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
+        ax.legend(fontsize=8)
+
+    fig.suptitle("Exp 6: AdamW Actions Distribution", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(outdir, "exp6_adamw_actions.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
+def plot_adamw_phase_burn(computed, stats, outdir):
+    """AdamW vs fixed25 分相位 ai_burn 对比柱状图。"""
+    n = len(RATIOS)
+    fig, axes = plt.subplots(1, n, figsize=(6*n, 4))
+    if n == 1: axes = [axes]
+
+    for idx, ratio in enumerate(RATIOS):
+        ax = axes[idx]
+        # 从 W 行按相位统计 ai run_delta
+        modes_to_plot = ["fixed25"] + ADAMW_MODES
+        x = np.arange(4)
+        width = 0.8 / len(modes_to_plot)
+
+        for mi, mode in enumerate(modes_to_plot):
+            reps = [r for r in computed if r["ratio"] == ratio and r["mode"] == mode]
+            if not reps:
+                continue
+            max_w = max((max(w["win"] for w in r.get("W", [(0,)])) for r in reps), default=100)
+            pb = phase_bounds_for_ratio(ratio, max_w)
+            phase_burns = []
+            for pi in range(4):
+                lo, hi = pb[pi], pb[pi+1]
+                vals = []
+                for r in reps:
+                    ws_ai = [w for w in r.get("W", []) if w["name"] == "ai" and lo < w["win"] <= hi]
+                    if ws_ai:
+                        vals.append(sum(w["run_delta"] for w in ws_ai))
+                phase_burns.append(np.mean(vals) if vals else 0)
+            offset = (mi - (len(modes_to_plot)-1)/2) * width
+            color = COLORS_MODE.get(mode, "#666")
+            ax.bar(x + offset, phase_burns, width*0.9, color=color,
+                   edgecolor="black", linewidth=0.4, label=mode)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(PHASE_NAMES)
+        ax.set_ylabel("ai run_delta (CPU ticks)")
+        ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
+        ax.legend(fontsize=8)
+
+    fig.suptitle("Exp 6: AdamW ai CPU Time by Phase", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(outdir, "exp6_adamw_phase_burn.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
 # ------------------------------------------------------------------ main
 def main():
     if len(sys.argv) < 2:
@@ -461,6 +701,13 @@ def main():
     plot_alpha_traj_adamw_vs_aimd(computed, outdir)
     plot_advantage_adamw_vs_aimd(stats, outdir)
     plot_burn_vs_miss_per_ratio(stats, outdir)
+
+    # AdamW 独立图
+    plot_adamw_alpha_traj(computed, outdir)
+    plot_adamw_miss_traj(computed, outdir)
+    plot_adamw_burn_vs_miss(computed, stats, outdir)
+    plot_adamw_actions(computed, outdir)
+    plot_adamw_phase_burn(computed, stats, outdir)
 
     print("\nDone.")
 

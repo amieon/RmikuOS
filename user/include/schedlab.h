@@ -417,6 +417,7 @@ static long long sl_deadline_loss(const sl_window_t *w) {
 static int sl_policy_adamw(const sl_window_t *w, void *ud) {
     sl_adamw_t *s = (sl_adamw_t *)ud;
     long long loss = sl_deadline_loss(w);
+    int before = s->alpha;
 
     if (s->prev_probe != 0 && s->prev_loss >= 0) {
         long long g = (loss - s->prev_loss) * 1024
@@ -447,6 +448,15 @@ static int sl_policy_adamw(const sl_window_t *w, void *ud) {
     else if (s->alpha - s->delta < 0)   s->prev_probe =  1;
     else s->prev_probe = (w->window_no & 1) ? 1 : -1;
     s->prev_loss = loss;
+
+    /* A 行: 输出 AdamW 的 α 决策轨迹
+     * before=更新前 α, after=更新后 α(实际值,不含 SPSA 扰动)
+     * action: up/down/hold + probe 方向(probe+/probe-) */
+    const char *action;
+    if (s->alpha > before)      action = "up";
+    else if (s->alpha < before) action = "down";
+    else                        action = "hold";
+    printf("A,%d,%d,%d,%s\n", w->window_no, before, s->alpha, action);
 
     int probe = s->alpha + s->prev_probe * s->delta;
     if (probe < 0) probe = 0;
