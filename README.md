@@ -1558,6 +1558,18 @@ user/sqlite3/                 SQLite(自定义VFS)   /programs(sqlite3 / sqlite3
 
 ![process&thread map](docs/images/process.png)
 
+### 彩蛋：Brainfuck 解释器（8 指令的抽象语言）
+
+凑数的抽象语言彩蛋——**不算第六种用户态语言**（真正支持的语言是上面五个），只是一个 8 指令的图灵完备玩具解释器（`/programs/brainfuck`）：
+
+```
+/programs/brainfuck /codes/hello.bf     # Hello World!
+/programs/brainfuck /codes/mult.bf      # d（10x10 循环乘法）
+/programs/brainfuck /codes/echo.bf      # 读 4 个字符原样回显（测 ',' 指令）
+```
+
+实现要点：磁带 `malloc(30000)`、**括号配对预处理 jump 表**（一遍扫描算出每个 `[` 的匹配 `]`，执行时 O(1) 跳转）、纯用户态零新头文件（只依赖 `user.h`）。`/codes/` 里带 3 个示例程序。踩过的一个雷：RmikuOS 用户栈只有 64KB，源缓冲必须上堆（64KB 局部数组会撑爆栈）。
+
 ## Scheduler
 
 RmikuOS 实现了基于 stride scheduling 的调度器，并在其上加入了 **alpha-scaled scheduling** 机制，用于在「进程级公平」和「线程级并行度」之间连续调节。alpha 既可以手动固定，也可以由用户态的 **AIMD 自适应控制器**根据 deadline 反馈在运行时动态调整。
