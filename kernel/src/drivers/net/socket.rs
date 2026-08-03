@@ -77,19 +77,30 @@ pub fn socket_bind(fd: usize, port: u16) -> bool {
     if fd >= table.len() || table[fd].is_none() {
         return false;
     }
-    for s in table.iter().flatten() {
-        let p = match s {
-            Socket::Udp(u) => u.local_port,
-            Socket::Tcp(t) => t.local_port,
-            Socket::Raw(_) => continue
-        };
-        if p == port {
+    let used = |p: u16| {
+        table.iter().flatten().any(|s| match s {
+            Socket::Udp(u) => u.local_port == p,
+            Socket::Tcp(t) => t.local_port == p,
+            Socket::Raw(_) => false,
+        })
+    };
+    /* 端口 0 = 请求内核自动分配（POSIX bind 语义）。
+     * 注意不能直接赋 0: 未绑定 socket 的默认 local_port 也是 0, 会撞冲突检查。 */
+    let actual = if port == 0 {
+        let mut p = 20000u16;
+        while p < 65535 && used(p) {
+            p += 1;
+        }
+        p
+    } else {
+        if used(port) {
             return false;
         }
-    }
+        port
+    };
     match &mut table[fd] {
-        Some(Socket::Udp(u)) => { u.local_port = port; true }
-        Some(Socket::Tcp(t)) => { t.local_port = port; true }
+        Some(Socket::Udp(u)) => { u.local_port = actual; true }
+        Some(Socket::Tcp(t)) => { t.local_port = actual; true }
         Some(Socket::Raw(_)) => true,   // RAW 无端口,bind 视为成功 no-op
         _ => false,
     }

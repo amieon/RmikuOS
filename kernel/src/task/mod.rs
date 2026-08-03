@@ -62,6 +62,7 @@ pub use manager_wrapper::{
 
     mmap_current,
     munmap_current,
+    mprotect_current,
 
     set_sched_alpha_current,
     get_sched_alpha_current,
@@ -80,6 +81,10 @@ pub use manager_wrapper::{
     kill,
     do_signal,
     set_current_sig_pending,
+    sig_set,
+    set_front,
+    front_pid,
+    kill_front_sigint,
 
     env_get_current_value,
     env_unset_current_value,

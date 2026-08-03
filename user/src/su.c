@@ -121,7 +121,7 @@ static int initgroups(const char *name, usize primary_gid) {
 static int ensure_dir(const char *path) {
     struct stat st;
     if (stat(path, &st) == 0) return 0;
-    return (int) mkdir(path);
+    return (int) mkdir(path, 0777);
 }
 
 /* 读一行(不回显)。返回字符数, 出错返回 -1。 */

@@ -33,7 +33,7 @@ static void dump(const char *path) {
 static isize file_size(const char *path) {
     struct stat st;
     if (stat(path, &st) < 0) return -1;
-    return (isize)st.size;
+    return (isize)st.st_size;
 }
 
 static void test_truncate(const char *dir) {

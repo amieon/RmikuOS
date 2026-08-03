@@ -77,8 +77,40 @@ pub fn sys_get_ticks() -> isize {
     crate::timer::ticks().try_into().unwrap()
 }
 
+/// 单调时间(微秒, 自启动起)——ntpdate 的本地假时钟源。
+pub fn sys_get_time_us() -> isize {
+    crate::timer::monotonic_us() as isize
+}
+
+/// 校准墙钟: epoch_us = 此刻的绝对 Unix 时间(微秒)。
+pub fn sys_set_wall_clock(epoch_us: usize) -> isize {
+    crate::timer::set_wall_clock(epoch_us as u64);
+    0
+}
+
+/// 墙钟秒(epoch)。未校准(  跑 ntpdate)返回 0。
+pub fn sys_get_epoch() -> isize {
+    crate::timer::now_secs() as isize
+}
+
+/// mprotect(addr, len, prot): 修改已有映射的页权限(TCC tccrun JIT 需要)。
+pub fn sys_mprotect(addr: usize, len: usize, prot: usize) -> isize {
+    crate::task::mprotect_current(addr, len, prot)
+}
+
 pub fn sys_kill(pid: usize, sig : usize) -> isize {
     crate::task::kill(pid, sig)
+}
+
+/// signal(sig, action): 设置信号处置(0=SIG_DFL 1=SIG_IGN), 返回旧处置或 -1。
+pub fn sys_signal(sig: usize, action: usize) -> isize {
+    crate::task::sig_set(sig, action)
+}
+
+/// set_front(pid): 把 pid 设为前台进程(Ctrl+C 投递目标)。
+pub fn sys_set_front(pid: usize) -> isize {
+    crate::task::set_front(pid);
+    0
 }
 
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {

@@ -19,13 +19,13 @@ static void expect_eq(const char *what, isize got, isize want) {
     else { puts("  FAIL: "); puts(what); puts(" (want "); printf("%d", (int)want); puts(", got "); printf("%d", (int)got); puts(")\n"); fail_count++; }
 }
 static int path_exists(const char *path) { struct stat st; return stat(path, &st) >= 0; }
-static isize file_size(const char *path) { struct stat st; if (stat(path, &st) < 0) return -1; return (isize)st.size; }
+static isize file_size(const char *path) { struct stat st; if (stat(path, &st) < 0) return -1; return (isize)st.st_size; }
 
 int main(void) {
     puts("=== ftruncate test ===\n");
 
     puts("\n[0] setup\n");
-    expect_ok("mkdir /tmp/fttest", mkdir("/tmp/fttest"));
+    expect_ok("mkdir /tmp/fttest", mkdir("/tmp/fttest", 0777));
 
     puts("\n[1] ftruncate shrink & extend\n");
     isize fd = open_create("/tmp/fttest/a.txt", O_RDWR);

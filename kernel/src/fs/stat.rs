@@ -6,7 +6,9 @@ pub struct Stat {
     pub uid: u32,
     pub gid: u32,
     pub size: usize,
-    pub reserved: [u8; 4],
+    /// 最后修改时间(epoch 秒)。未校准墙钟(未跑 ntpdate)时为 0。
+    /// 复用原 reserved[4], 保持 32 字节布局不变。
+    pub mtime: u32,
 }
 
 pub const STAT_TYPE_FILE: u8 = 1;
@@ -39,7 +41,13 @@ impl Stat {
             uid,
             gid,
             size,
-            reserved: [0; 4],
+            mtime: 0,
         }
+    }
+
+    /// 链式设置修改时间(epoch 秒), 供各文件系统在 stat() 时填墙钟真值。
+    pub fn with_mtime(mut self, t: u32) -> Self {
+        self.mtime = t;
+        self
     }
 }

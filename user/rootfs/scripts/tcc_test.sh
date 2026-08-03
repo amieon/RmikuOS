@@ -1,0 +1,12 @@
+tcc /codes/t01_basics.c -o /tmp/t01 && /tmp/t01
+tcc /codes/t02_string.c -o /tmp/t02 && /tmp/t02
+tcc /codes/t03_struct.c -o /tmp/t03 && /tmp/t03
+tcc /codes/t04_recursion.c -o /tmp/t04 && /tmp/t04
+tcc /codes/t05_malloc.c -o /tmp/t05 && /tmp/t05
+tcc /codes/t06_qsort.c -o /tmp/t06 && /tmp/t06
+tcc /codes/t07_file.c -o /tmp/t07 && /tmp/t07
+tcc /codes/t08_math.c -o /tmp/t08 && /tmp/t08
+tcc /codes/t09_args.c -o /tmp/t09 && /tmp/t09
+tcc /codes/t10_ldouble.c -o /tmp/t10 && /tmp/t10
+tcc /codes/t11_perf.c -o /tmp/t11 && /tmp/t11
+tcc /codes/t12_combo.c -o /tmp/t12 && /tmp/t12

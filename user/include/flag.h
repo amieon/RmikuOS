@@ -7,6 +7,7 @@ extern "C" {
 #define O_CREAT    0x40
 #define O_TRUNC    0x200
 #define O_APPEND   0x400 
+#define O_BINARY   0       /* POSIX 无此标志; TCC 兼容 */
 
 
 #define O_NONBLOCK  2048

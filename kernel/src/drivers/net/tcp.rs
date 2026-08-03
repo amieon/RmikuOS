@@ -877,12 +877,19 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
             let mut table = SOCKET_TABLE.lock();
             match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
                 Some(t) => {
-                    if let Some(chunk) = t.rx_queue.pop_front() {
+                    if let Some(mut chunk) = t.rx_queue.pop_front() {
                         if chunk.is_empty() && t.rst {
                             return -1;
                         }
                         let n = chunk.len().min(out.len());
                         out[..n].copy_from_slice(&chunk[..n]);
+                        /* POSIX 语义: recv 只消费 n 字节, 剩余留在队列头,
+                         * 下次 recv 继续读——否则整块弹出会让"小缓冲逐次读"的
+                         * 客户端(如 HTTP 头逐字节解析)丢数据。 */
+                        if chunk.len() > n {
+                            chunk.drain(..n);
+                            t.rx_queue.push_front(chunk);
+                        }
                         return n as isize;
                     }
                     match t.state {

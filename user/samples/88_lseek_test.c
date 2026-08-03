@@ -24,7 +24,7 @@ int main(void) {
     puts("=== lseek test ===\n");
 
     puts("\n[0] setup\n");
-    expect_ok("mkdir /tmp/lstest", mkdir("/tmp/lstest"));
+    expect_ok("mkdir /tmp/lstest", mkdir("/tmp/lstest", 0777));
 
     puts("\n[1] lseek SET/CUR/END\n");
     isize fd = open_create("/tmp/lstest/a.txt", O_RDWR);

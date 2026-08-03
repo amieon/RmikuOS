@@ -4,6 +4,7 @@ extern "C" {
 #endif
 
 #include "io.h"
+#include "errno.h"   /* errno/ENOENT —— fopen 失败路径要设置(POSIX: 文件不存在=ENOENT) */
 
 #define EOF        (-1)
 #define SEEK_SET   0
@@ -28,9 +29,12 @@ typedef struct {
     int ungetc;
 } FILE;
 
-static FILE _stdin  = {0, {0}, 0, 0, _F_READ, -1};
-static FILE _stdout = {1, {0}, 0, 0, _F_WRITE, -1};
-static FILE _stderr = {2, {0}, 0, 0, _F_WRITE | _F_UNBUF, -1};
+/* 三个标准流是【全局唯一】对象(定义在 lib/string.o, 所有程序都链)。
+ * 不能是每 TU 一份的 static: printf(某 TU)与 exit 的 flush(string.o)
+ * 若各用各的 _stdout 实例, flush 会落空——短输出无换行就丢了。 */
+extern FILE _stdin;
+extern FILE _stdout;
+extern FILE _stderr;
 
 static inline FILE* __init_stdin(void)  { return &_stdin; }
 static inline FILE* __init_stdout(void) { return &_stdout; }
@@ -39,6 +43,14 @@ static inline FILE* __init_stderr(void) { return &_stderr; }
 #define stdin  (__init_stdin())
 #define stdout (__init_stdout())
 #define stderr (__init_stderr())
+
+/* 静态文件对象池: fopen 从池中分配槽位, fclose 释放回池以便复用。
+ * 用 fd == -1 标记空闲槽位(裸机无 malloc, 故为固定大小池)。
+ * 注意: 三个标准流(_stdin/_stdout/_stderr)是独立全局对象, 不在池中。 */
+#define FILE_POOL_MAX 8
+static FILE _file_pool[FILE_POOL_MAX] = {
+    {-1}, {-1}, {-1}, {-1}, {-1}, {-1}, {-1}, {-1}
+};
 
 static inline int _mode_flags(const char* mode) {
     int f = 0;
@@ -61,27 +73,65 @@ static inline FILE* fopen(const char* path, const char* mode) {
     } else {
         fd = open(path, O_RDONLY);
     }
-    if (fd < 0) return (FILE*)0;
-    // 裸机无 malloc，用静态池或全局变量
-    // 这里提供一个极简静态池（最多 8 个文件）
-    static FILE pool[8];
-    static int pool_used = 0;
-    if (pool_used >= 8) { close(fd); return (FILE*)0; }
-    FILE* fp = &pool[pool_used++];
-    fp->fd = fd; fp->pos = 0; fp->end = 0; fp->flags = flags; fp->ungetc = -1;
-    return fp;
+    if (fd < 0) {
+        errno = ENOENT;   /* 最常见原因: 文件不存在。kilo 等靠 errno==ENOENT 区分"新文件" */
+        return (FILE*)0;
+    }
+    /* 裸机无 malloc: 从静态池中找一个空闲槽位(fd < 0 表示空闲)。
+     * fclose 会把 fd 置回 -1, 因此槽位可以循环复用, 不再是"只增不回收"。 */
+    for (int i = 0; i < FILE_POOL_MAX; i++) {
+        FILE* fp = &_file_pool[i];
+        if (fp->fd < 0) {
+            fp->fd = fd; fp->pos = 0; fp->end = 0; fp->flags = flags; fp->ungetc = -1;
+            return fp;
+        }
+    }
+    /* 池满: 没有可用槽位 */
+    errno = ENFILE;
+    close(fd);
+    return (FILE*)0;
 }
+
+/* fdopen: 把已打开的 fd 包装成 FILE*(POSIX)。TCC(tcctools.c) 需要。
+ * 从静态池分配槽位, 复用 fopen 的池逻辑。 */
+static inline FILE* fdopen(int fd, const char* mode) {
+    if (fd < 0) return (FILE*)0;
+    int flags = _mode_flags(mode);
+    for (int i = 0; i < FILE_POOL_MAX; i++) {
+        FILE* fp = &_file_pool[i];
+        if (fp->fd < 0) {
+            fp->fd = fd; fp->pos = 0; fp->end = 0; fp->flags = flags; fp->ungetc = -1;
+            return fp;
+        }
+    }
+    close(fd);
+    return (FILE*)0;
+}
+
+/* remove: POSIX 删除文件。直接走 syscall, 不依赖 fs.h 的 unlink
+ * (file.h 常先于 fs.h 被 include, static inline 函数需先声明才能调)。 */
+static inline int remove(const char* path) {
+    usize len = 0;
+    while (path[len]) len++;
+    return (int)syscall3(SYS_UNLINK, (usize)path, len, 0);
+}
+
+static inline int _flushbuf(FILE* fp);  /* 前置声明: fclose 需要先冲刷缓冲 */
 
 static inline int fclose(FILE* fp) {
     if (!fp) return EOF;
+    /* 冲刷未落盘的写缓冲, 否则不满一个缓冲块且无换行的数据会丢失 */
+    if ((fp->flags & _F_WRITE) && !(fp->flags & _F_UNBUF)) _flushbuf(fp);
     if (fp->fd >= 0) close(fp->fd);
-    fp->fd = -1; fp->flags = 0;
+    fp->fd = -1; fp->flags = 0; fp->pos = 0; fp->end = 0; fp->ungetc = -1;
     return 0;
 }
 
 static inline int _fillbuf(FILE* fp) {
     if (fp->flags & (_F_EOF | _F_ERR)) return EOF;
     fp->pos = 0; fp->end = 0;
+    /* 终端回显已由内核 line discipline 负责(SYS_SET_ECHO 控制),
+     * 这里只做普通缓冲读取(内核 read 对终端攒行到 \n 返回)。 */
     isize n = read(fp->fd, (char*)fp->buf, BUFSIZ);
     if (n < 0) { fp->flags |= _F_ERR; return EOF; }
     if (n == 0) { fp->flags |= _F_EOF; return EOF; }
@@ -165,6 +215,63 @@ static inline int fputs(const char* s, FILE* fp) {
 static inline int feof(FILE* fp) { return fp && (fp->flags & _F_EOF); }
 static inline int ferror(FILE* fp) { return fp && (fp->flags & _F_ERR); }
 static inline void clearerr(FILE* fp) { if (fp) fp->flags &= ~(_F_EOF | _F_ERR); }
+
+/* ---- 定位: 基于 lseek 系统调用, 考虑读/写缓冲与回退字符 ---- */
+
+/* lseek() 由 fs.h 提供, 但 file.h 不能 include fs.h（会把内核版 struct
+ * stat/dirent 带进所有用 stdio 的 TU, 与 POSIX 头冲突）。这里直接打原始
+ * syscall, 语义与 fs.h 的 lseek(fd, offset, whence) 完全一致。 */
+static inline isize __file_lseek(isize fd, isize offset, usize whence) {
+    return syscall3(SYS_LSEEK, (usize)fd, (usize)offset, whence);
+}
+
+/* ftell: 返回逻辑文件偏移。内核 fd 偏移可能领先/落后于逻辑位置,
+ * 需按缓冲内容修正: 写模式加上未落盘的 pos 字节; 读模式减去已读入
+ * 但未消费的 (end-pos) 字节, 以及 1 个回退字符。 */
+static inline long ftell(FILE* fp) {
+    if (!fp || fp->fd < 0) return -1;
+    isize raw = __file_lseek(fp->fd, 0, SEEK_CUR);
+    if (raw < 0) return -1;
+    long pos = (long)raw;
+    if (fp->flags & _F_WRITE) {
+        pos += fp->pos;
+    } else {
+        pos -= (fp->end - fp->pos);
+        if (fp->ungetc != -1) pos -= 1;
+    }
+    return pos;
+}
+
+static inline int fseek(FILE* fp, long offset, int whence) {
+    if (!fp || fp->fd < 0) return -1;
+    /* 写模式先把缓冲落盘, 避免定位后覆盖或错位 */
+    if ((fp->flags & _F_WRITE) && !(fp->flags & _F_UNBUF)) _flushbuf(fp);
+    /* SEEK_CUR 时内核偏移含未消费的读缓冲, 先折算成绝对偏移再定位 */
+    if (whence == SEEK_CUR) {
+        long cur = ftell(fp);
+        if (cur < 0) return -1;
+        offset += cur;
+        whence = SEEK_SET;
+    }
+    fp->pos = 0; fp->end = 0; fp->ungetc = -1;
+    fp->flags &= ~_F_EOF;
+    if (__file_lseek(fp->fd, (isize)offset, (usize)whence) < 0) return -1;
+    return 0;
+}
+
+static inline void rewind(FILE* fp) {
+    if (!fp) return;
+    fseek(fp, 0L, SEEK_SET);
+    fp->flags &= ~(_F_EOF | _F_ERR);
+}
+
+/* ungetc: 只保证 1 个字符回退(与 FILE.ungetc 单槽一致), 符合 C 标准最低保证 */
+static inline int ungetc(int c, FILE* fp) {
+    if (!fp || c == EOF) return EOF;
+    fp->ungetc = (unsigned char)c;
+    fp->flags &= ~_F_EOF;
+    return (unsigned char)c;
+}
 
 
 static inline FILE* freopen(const char* path, const char* mode, FILE* fp) {

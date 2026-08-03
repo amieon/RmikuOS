@@ -339,8 +339,9 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
     if source.suffix == ".c":
         link_objects.append(str(crt0_obj))
     link_objects.append(str(obj))
-    if source.suffix == ".c":
-        link_objects.append(str(runtime_obj))
+    # runtime(syscall.o) 所有程序都链: string.o 现在依赖 syscall3(exit flush 链),
+    # .S 纯汇编程序(如 02_raw) 也要有 syscall 运行时
+    link_objects.append(str(runtime_obj))
     if has_string:
         link_objects.append(str(string_obj))
 
@@ -599,6 +600,126 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
     put_arch_cache(arch, arch_cache)
 
 
+def build_sqlite3(arch: str):
+    """
+    专门构建 SQLite3。
+
+    源码放在 user/sqlite3/（已移出 user/c/，因此不会被 build_c_projects 扫到）。
+    SQLite 是巨型可移植库，必须靠 -D 宏关掉宿主 OS 后端，否则会去编
+    os_unix.c 撞上 pthread.h / dlfcn.h。
+
+    注意：本函数编译 sqlite3.c + shell.c + rmiku_vfs.c + rmiku_shims.c，
+    链出交互式 shell（sqlite3.elf）；另保留原探针 sqlite_main.c，
+    链出 sqlite3_probe.elf 作回归验证。
+    """
+    cfg = ARCH_CONFIG[arch]
+    src_dir = USER_DIR / "sqlite3"
+    if not src_dir.exists():
+        print(f"[user] no sqlite3 dir at {src_dir}, skip")
+        return
+
+    out_dir = BUILD_DIR / arch / "sqlite3"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # SQLite 专用编译宏：
+    #  - SQLITE_OS_OTHER=1          : 不编 os_unix/os_win，改用应用提供的 sqlite3_os_init/os_end
+    #  - SQLITE_THREADSAFE=0        : 关掉线程/互斥，避免 pthread.h
+    #  - SQLITE_OMIT_LOAD_EXTENSION : 关掉 dlopen/dlsym，避免 dlfcn.h
+    #  - SQLITE_OMIT_DEPRECATED     : 去掉废弃接口，减小体积
+    #  - SQLITE_OMIT_DATETIME_FUNCS : 关掉 localtime/gmtime/strftime（date.c），避免宿主时间函数
+    #  - SQLITE_OMIT_POPEN          : 去掉 popen/pclose（无管道，.import "|cmd" 报错提示）
+    #  - SQLITE_NOHAVE_SYSTEM       : 去掉 system()（无 /bin/sh，.shell/.system/edit() 不编入）
+    #  - -Os                        : 9.5MB 单编译单元，默认 -O0 体积爆炸
+    sqlite_cflags = [
+        "-DSQLITE_OS_OTHER=1",
+        "-DSQLITE_THREADSAFE=0",
+        "-DSQLITE_OMIT_LOAD_EXTENSION",
+        "-DSQLITE_OMIT_DEPRECATED",
+        "-DSQLITE_OMIT_DATETIME_FUNCS",
+        "-DSQLITE_OMIT_POPEN",
+        "-DSQLITE_NOHAVE_SYSTEM",
+        "-Os",
+    ]
+
+    common_flags = [
+        "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
+        "-fno-pic", "-fno-pie", "-nostdlib", "-nostartfiles", "-static",
+        "-I", str(INCLUDE_DIR),
+        "-I", str(src_dir),
+    ]
+
+    # ---- 增量编译检查：把 cflags 也并进缓存键（flags 变了必须重建）----
+    arch_cache = get_arch_cache(arch)
+    sql_cache = arch_cache.get("sqlite3", {})
+
+    sources = {
+        "sqlite3": src_dir / "sqlite3.c",
+        "shell": src_dir / "shell.c",
+        "rmiku_vfs": src_dir / "rmiku_vfs.c",
+        "rmiku_shims": src_dir / "rmiku_shims.c",
+        "sqlite_main": src_dir / "sqlite_main.c",
+    }
+    files_hash = {k: file_sha256(v) for k, v in sources.items() if v.exists()}
+    files_hash["__shared_deps__"] = shared_deps_hash(arch)
+    files_hash["__cflags__"] = repr(sqlite_cflags)
+
+    elf = out_dir / "sqlite3.elf"
+    if sql_cache == files_hash and elf.exists():
+        print(f"[user] cache hit sqlite3")
+        return
+
+    # ---- 真正编译 ----
+    crt0_obj = out_dir / "_crt0.o"
+    runtime_obj = out_dir / "_syscall.o"
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["crt0"]), "-o", str(crt0_obj)])
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["runtime"]), "-o", str(runtime_obj)])
+
+    string_obj = None
+    string_src = LIB_DIR / "string.c"
+    if string_src.exists():
+        string_obj = out_dir / "_string.o"
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(string_src), "-o", str(string_obj)])
+
+    objs = {}
+    for name, src in sources.items():
+        if not src.exists():
+            continue
+        obj = out_dir / f"{name}.o"
+        run([cfg["gcc"], *cfg["cflags"], *sqlite_cflags, *common_flags, "-c",
+             str(src), "-o", str(obj)])
+        objs[name] = str(obj)
+
+    def link(elf_name, entry_obj):
+        """链接一个可执行文件: crt0 + sqlite3.o + 入口 + vfs + shims + 运行时"""
+        link_objs = [str(crt0_obj), objs["sqlite3"], entry_obj,
+                     objs["rmiku_vfs"], objs["rmiku_shims"], str(runtime_obj)]
+        if string_obj:
+            link_objs.append(str(string_obj))
+        out_elf = out_dir / elf_name
+        run([cfg["gcc"], *cfg["cflags"],
+             "-nostdlib", "-nostartfiles", "-static", "-no-pie",
+             "-Wl,--build-id=none", *cfg["ldflags"],
+             "-T", str(cfg["linker"]),
+             *link_objs,
+             "-lgcc",   # __bswapsi2 / __clzdi2 等编译器内建, nostdlib 下需手动链
+             "-o", str(out_elf)])
+        data = out_elf.read_bytes()
+        if not data:
+            raise RuntimeError(f"{elf_name} produced empty ELF")
+        print(f"[user] sqlite3: {elf_name} {len(data)} bytes (ELF)")
+
+    # sqlite3.elf = 交互式 shell; sqlite3_probe.elf = 原落盘探针
+    link("sqlite3.elf", objs["shell"])
+    link("sqlite3_probe.elf", objs["sqlite_main"])
+
+    arch_cache = get_arch_cache(arch)
+    arch_cache["sqlite3"] = files_hash
+    put_arch_cache(arch, arch_cache)
+
+
 def build_cpp_projects(arch: str):
     cpp_root = USER_DIR / "cpp"
     if not cpp_root.exists():
@@ -773,6 +894,7 @@ def main():
     build_rust_workspace(args.arch)
     build_cpp_projects(args.arch)
     build_c_projects(args.arch)
+    build_sqlite3(args.arch)
     build_gcn(args.arch)
     build_java_projects(args.arch)
 

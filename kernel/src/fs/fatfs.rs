@@ -51,7 +51,7 @@ impl FatFile {
         Self { fs, path, offset: Mutex::new(0), flags }
     }
     pub fn is_append(&self) -> bool {
-        return (self.flags | O_APPEND) != 0;
+        return (self.flags & O_APPEND) != 0;
     }
 }
 
@@ -79,16 +79,26 @@ impl File for FatFile {
                     if file.seek(SeekFrom::Start(cur)).is_err() {
                         -1
                     } else {
-                        match file.read(buf) {
-                            Ok(n) => n as isize,
-                            Err(_) => -1,
+                        // FAT crate 的 read 一次最多读一个簇,必须循环直到填满 buf 或 EOF
+                        let mut total: usize = 0;
+                        let mut err = false;
+                        loop {
+                            match file.read(&mut buf[total..]) {
+                                Ok(r) => {
+                                    if r == 0 { break; }
+                                    total += r;
+                                    if total >= buf.len() { break; }
+                                }
+                                Err(_) => { err = true; break; }
+                            }
                         }
+                        if err { -1 } else { total as isize }
                     }
                 }
                 Err(_) => -1,
             };
-            result  
-        }; 
+            result
+        };
 
         if n > 0 {
             *off += n as u64;
@@ -108,22 +118,28 @@ impl File for FatFile {
                     use fatfs::{Write, Seek, SeekFrom};
 
                     let seek_target = if self.is_append() {
-                        SeekFrom::End(0)    
+                        SeekFrom::End(0)
                     } else {
-                        SeekFrom::Start(cur)   
+                        SeekFrom::Start(cur)
                     };
 
                     match file.seek(seek_target) {
                         Ok(new_pos) => {
-    
-                            match file.write(buf) {
-                                Ok(written) => {
-                                    let _ = file.flush();
-                
-                                    (written as isize, new_pos + written as u64)
+                            // FAT crate 的 write 一次最多写一个簇,必须循环直到写完整个 buf
+                            let mut total: usize = 0;
+                            let mut err = false;
+                            loop {
+                                match file.write(&buf[total..]) {
+                                    Ok(w) => {
+                                        if w == 0 { break; }
+                                        total += w;
+                                        if total >= buf.len() { break; }
+                                    }
+                                    Err(_) => { err = true; break; }
                                 }
-                                Err(_) => (-1, cur),
                             }
+                            let _ = file.flush();
+                            if err { (-1, cur) } else { (total as isize, new_pos + total as u64) }
                         }
                         Err(_) => (-1, cur),
                     }
@@ -153,7 +169,7 @@ impl File for FatFile {
             };
             result
         };
-        Stat::new(STAT_TYPE_FILE, size, 0o644, 0, 0)
+        Stat::new(STAT_TYPE_FILE, size, 0o644, 0, 0).with_mtime(crate::timer::now_secs() as u32)
     }
 
     fn seek(&self, offset: isize, whence: usize) -> isize {

@@ -212,6 +212,13 @@ impl PageTable {
         *pte = PageTableEntry::new(ppn, flags.union(PteFlags::V));
     }
 
+    /// mprotect 用: 只改已有 PTE 的权限位, 不重新映射(不分配新帧)。
+    pub fn update_flags(&mut self, vpn: VirtPageNum, flags: PteFlags) {
+        let pte = self.find_pte(vpn).expect("update_flags: pte not found");
+        assert!(pte.is_valid(), "update_flags: vpn {:?} is invalid", vpn);
+        *pte = PageTableEntry::new(pte.ppn(), flags.union(PteFlags::V));
+    }
+
     pub fn unmap(&mut self, vpn: VirtPageNum) {
         let pte = self.find_pte(vpn).expect("pte not found");
         assert!(pte.is_valid(), "vpn {:?} is invalid", vpn);

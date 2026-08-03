@@ -117,6 +117,7 @@ impl MapArea {
         }
     }
 
+
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range.clone() {
             page_table.unmap(vpn);
@@ -216,7 +217,7 @@ impl MapArea {
 
 
 #[cfg(target_arch = "riscv64")]
-fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
+pub(crate) fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
     let mut flags = PteFlags::empty();
 
     if permission.contains(MapPermission::R) {
@@ -239,7 +240,7 @@ fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
 
 #[cfg(target_arch = "loongarch64")]
 #[cfg(target_arch = "loongarch64")]
-fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
+pub(crate) fn map_perm_to_pte_flags(permission: MapPermission) -> PteFlags {
     let mut flags = PteFlags::MAT_CC;
 
 

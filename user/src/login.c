@@ -122,7 +122,7 @@ static int initgroups(const char *name, usize primary_gid) {
 static int ensure_dir(const char *path) {
     struct stat st;
     if (stat(path, &st) == 0) return 0;   /* 已存在 */
-    return (int) mkdir(path);             /* 不存在则尝试创建 */
+    return (int) mkdir(path, 0777);             /* 不存在则尝试创建 */
 }
 
 /* 读一行(到 \n/\r 为止), 不回显。返回字符数, 出错返回 -1。 */

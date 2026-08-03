@@ -8,7 +8,7 @@
 #include "process.h"
 #include "string.h"
 #include "stdio.h"
-
+#include "env.h"      /* 真实 getenv/setenv: 基于 SYS_GETENV 系统调用 */
 
 /* ---- misc (inline) ---- */
 static inline void abort(void) {
@@ -16,7 +16,12 @@ static inline void abort(void) {
     exit(127);
 }
 
-static inline char *getenv(const char *name) { (void)name; return (char*)0; }
+/* realpath: POSIX 路径规范化。RmikuOS 无符号链接、路径已规范化;
+ * 返回 NULL 让调用方 fallback 原路径(TCC 的 normalized_PATHCMP 等)。 */
+static inline char *realpath(const char *path, char *resolved) {
+    (void)path; (void)resolved;
+    return 0;
+}
 
 static inline int abs(int x) {
     return x < 0 ? -x : x;
@@ -61,6 +66,17 @@ static inline unsigned long strtoul(const char *s, char **e, int b) {
     return (unsigned long)strtol(s, e, b);
 }
 
+/* LP64 下 long 与 long long 同宽, 直接转 */
+static inline long long strtoll(const char *s, char **e, int b) {
+    return (long long)strtol(s, e, b);
+}
+
+static inline unsigned long long strtoull(const char *s, char **e, int b) {
+    return (unsigned long long)strtoul(s, e, b);
+}
+
+
+
 static inline double strtod(const char *s, char **e) {
     double n = 0.0, sign = 1.0, frac = 0.1;
 
@@ -96,7 +112,13 @@ static inline double strtod(const char *s, char **e) {
     return sign * n;
 }
 
+static inline float strtof(const char *s, char **e) {
+    return (float)strtod(s, e);
+}
 
+static inline long double strtold(const char *s, char **e) {
+    return (long double)strtod(s, e);   /* 教学简化: 经 double 计算 */
+}
 
 static unsigned int _seed = 1;
 

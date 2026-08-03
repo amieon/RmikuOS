@@ -64,7 +64,8 @@ pub fn sys_write(fd: usize, user_buf: usize, len: usize) -> isize {
     file.write(&kbuf)
 }
 
-pub fn sys_open(path_ptr: usize, len: usize, flags: usize) -> isize {
+/// open(path, len, flags, mode): mode 在 O_CREAT 创建文件时设权限位(POSIX)。
+pub fn sys_open(path_ptr: usize, len: usize, flags: usize, mode: usize) -> isize {
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
         Some(bytes) => bytes,
         None => return -1,
@@ -77,7 +78,7 @@ pub fn sys_open(path_ptr: usize, len: usize, flags: usize) -> isize {
 
     let cwd = crate::task::current_cwd();
 
-    let file = match crate::fs::open_at(&cwd, path, flags) {
+    let file = match crate::fs::open_at(&cwd, path, flags, mode) {
         Some(file) => file,
         None => {
             log::info!("[fs] open failed: cwd={}, path={}", cwd, path);
@@ -437,3 +438,10 @@ pub fn sys_rename(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize
     crate::fs::rename(&old, &new)
 }
 
+
+/// set_echo(on): 开关终端回显(1=开 0=关)。RmikuOS shell 自带行编辑器,
+/// 提示符期间关掉回显(它自己回显); 执行外部交互命令前打开。
+pub fn sys_set_echo(on: usize) -> isize {
+    crate::io::uart::set_echo(on != 0);
+    0
+}

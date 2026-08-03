@@ -25,7 +25,13 @@ fi
 
 # 确保基础目录存在
 mkdir -p "$ROOT/programs" "$ROOT/bin" "$ROOT/etc" "$ROOT/home" "$ROOT/tmp" "$ROOT/sched" \
-"$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/samples" "$ROOT/fat" "$ROOT/gcn" "$ROOT/jvm"
+"$ROOT/dev" "$ROOT/proc" "$ROOT/tests" "$ROOT/samples" "$ROOT/fat" "$ROOT/gcn" "$ROOT/jvm" \
+"$ROOT/usr/lib/tcc"
+
+# TCC 系统文件: crt1/crti/crtn + libtcc1.a + libc.a + runmain.o + include(TCC 链接用户程序用)
+if [ -d "user/build/${ARCH}/tcc-sys/usr/lib/tcc" ]; then
+  cp -r user/build/${ARCH}/tcc-sys/usr/lib/tcc/* "$ROOT/usr/lib/tcc/"
+fi
 
 # 如果用户没有提供 motd，就生成默认 motd
 if [ ! -f "$ROOT/etc/motd" ]; then
@@ -124,6 +130,16 @@ if [ -d "user/build/${ARCH}/gcn" ]; then
     cp "$f" "$ROOT/gcn/$base"
   done
   echo "  [gcn] -> /gcn/"
+fi
+
+# SQLite3（专门构建目录 user/build/<arch>/sqlite3/）
+if [ -d "user/build/${ARCH}/sqlite3" ]; then
+  for f in user/build/${ARCH}/sqlite3/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/programs/$base"
+    echo "  [sqlite3] $base -> /programs/$base"
+  done
 fi
 
 # Java 字节码（JVM 项目）

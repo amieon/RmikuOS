@@ -470,6 +470,9 @@ pub fn fork_current() -> isize {
     // 新增：fork 产生了新的就绪线程，通知其他核
     ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
+    // fork 出的子进程成为前台进程（Ctrl+C 投递目标）
+    set_front(child_pid);
+
     child_pid as isize
 }
 
@@ -642,7 +645,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         })
         .collect();
 
-    let file = match crate::fs::open(path, crate::fs::flag::O_EXEC) {
+    let file = match crate::fs::open(path, crate::fs::flag::O_EXEC, 0) {
         Some(file) => file,
         None => {
             log::info!("[exec] open failed: {}", path);
@@ -1005,6 +1008,20 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
 
         manager.process_mut(current_pid).exit_code = exit_code;
 
+        // 前台进程退出 → 前台交还父进程（Ctrl+C 投递目标回退）
+        if FRONT_PID.load(Ordering::Relaxed) == current_pid {
+            if let Some(parent) = manager.process(current_pid).parent {
+                FRONT_PID.store(parent, Ordering::Relaxed);
+            }
+        }
+
+        // SIGCHLD: 子进程退出, 通知父进程(默认忽略, 父进程 waitpid 收尸)
+        if let Some(parent) = manager.process(current_pid).parent {
+            if let Some(p) = manager.try_process_mut(parent) {
+                p.sig_pending |= 1u64 << super::SIGCHLD;
+            }
+        }
+
         // runnable_count 记账:把 Ready/Running -> Zombie/Dead 的线程数统计出来
         let mut runnable_dec = 0usize;
         for tid in tids {
@@ -1227,6 +1244,34 @@ fn mmap_prot_to_perm(prot: usize) -> Option<crate::mm::MapPermission> {
     Some(perm)
 }
 
+
+/// mprotect(addr, len, prot): 修改已有映射的权限(TCC tccrun 的 JIT 需要)。
+pub fn mprotect_current(addr: usize, len: usize, prot: usize) -> isize {
+    let perm = match mmap_prot_to_perm(prot) {
+        Some(perm) => perm,
+        None => return -1,
+    };
+    if len == 0 {
+        return -1;
+    }
+    let start = crate::mm::align_down(addr, crate::mm::config::PAGE_SIZE);
+    let end = crate::mm::align_up(
+        addr.checked_add(len).unwrap_or(usize::MAX),
+        crate::mm::config::PAGE_SIZE,
+    );
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.current_pid();
+    let process = manager.process_mut(pid);
+    if process.user_space.change_permission(
+        crate::mm::VirtAddr(start),
+        crate::mm::VirtAddr(end),
+        perm,
+    ) {
+        0
+    } else {
+        -1
+    }
+}
 
 pub fn mmap_current(len: usize, prot: usize) -> isize {
     let perm = match mmap_prot_to_perm(prot) {
@@ -1747,6 +1792,44 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     new_fd as isize
 }
 
+/// 前台进程 pid（Ctrl+C 的投递目标）。单终端简化模型:
+/// fork 时设为子进程, 子进程退出时回父; shell 可用 SYS_SET_FRONT 夺回。
+static FRONT_PID: AtomicUsize = AtomicUsize::new(1);
+
+pub fn set_front(pid: usize) {
+    FRONT_PID.store(pid, core::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn front_pid() -> usize {
+    FRONT_PID.load(core::sync::atomic::Ordering::Relaxed)
+}
+
+/// Ctrl+C 投递: 向前台进程发 SIGINT（该进程不忽略则默认终止）。
+pub fn kill_front_sigint() {
+    let pid = front_pid();
+    if pid != 0 {
+        let _ = kill(pid, super::SIGINT);
+    }
+}
+
+/// signal(sig, action): 设置信号处置。action: 0=SIG_DFL, 1=SIG_IGN,
+/// 其他(自定义 handler)不支持返回 -1。SIGKILL 不可忽略。返回旧处置(0/1)或 -1。
+pub fn sig_set(sig: usize, action: usize) -> isize {
+    if sig >= 64 || sig == super::SIGKILL {
+        return -1;
+    }
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let process = manager.process_mut(pid);
+    let old = if (process.sig_ignored >> sig) & 1 == 1 { 1 } else { 0 };
+    match action {
+        0 => process.sig_ignored &= !(1u64 << sig),
+        1 => process.sig_ignored |= 1u64 << sig,
+        _ => return -1,
+    }
+    old
+}
+
 pub fn kill(pid: usize, sig: usize) -> isize {
     if sig >= 64 {
         return -1;
@@ -1785,10 +1868,12 @@ pub fn do_signal() {
     let process = manager.process_mut(current_pid);
     let pending = process.sig_pending;
     if pending == 0 { return; }
-    
+
+    /* 致命信号默认终止; 被进程忽略的(SIG_IGN)不终止, 只清 pending */
     let fatal_bits = pending & super::FATAL_SIG_MASK;
-    if fatal_bits != 0 {
-        let sig = fatal_bits.trailing_zeros() as usize;
+    let effective = fatal_bits & !process.sig_ignored;
+    if effective != 0 {
+        let sig = effective.trailing_zeros() as usize;
         process.sig_pending = 0;
         drop(manager);
         crate::task::exit_current_and_run_next(128 + sig as i32);

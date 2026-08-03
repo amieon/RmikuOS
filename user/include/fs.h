@@ -5,6 +5,16 @@ extern "C" {
 
 
 #include "io.h"
+#include "sys/types.h"   /* mode_t / uid_t / gid_t / time_t / off_t */
+
+/* ======================================================================
+ * 本文件是用户态唯一的 struct stat / struct dirent 定义点（方案 A 统一）。
+ *
+ *   - struct stat   是 POSIX 布局（st_mode 等），stat()/fstat() 内部
+ *                   用私有 32 字节内核布局接收 syscall 结果再翻译。
+ *   - struct dirent 保持内核 getdents 字节布局（64 字节/条, 内核契约），
+ *                   但加了 d_name 别名, 让 POSIX 代码也能直接读名字。
+ * ====================================================================== */
 
 /* ---- 目录项 ---- */
 
@@ -12,10 +22,13 @@ extern "C" {
 #define FILE_TYPE_DIR  2
 
 struct dirent {
-    unsigned char file_type;
-    unsigned char name_len;
+    unsigned char file_type;   /* 1=文件 2=目录（内核值） */
+    unsigned char name_len;    /* 名字长度, name 不带 NUL */
     unsigned char reserved[6];
-    char name[56];
+    union {
+        char name[56];         /* 内核字段名 */
+        char d_name[56];       /* POSIX 别名（布局相同） */
+    };
 };
 
 static inline isize getdents(int fd, struct dirent *buf, usize len) {
@@ -28,12 +41,14 @@ static inline isize chdir2(const char *path, usize len) {
     return syscall3(SYS_CHDIR, (usize)path, len, 0);
 }
 
-static inline isize chdir(const char *path) {
-    return chdir2(path, strlen(path));
+static inline int chdir(const char *path) {
+    return (int)chdir2(path, strlen(path));
 }
 
-static inline isize getcwd(char *buf, usize len) {
-    return syscall3(SYS_GETCWD, (usize)buf, len, 0);
+/* POSIX 语义: 成功返回 buf, 失败返回 NULL */
+static inline char *getcwd(char *buf, usize len) {
+    if (syscall3(SYS_GETCWD, (usize)buf, len, 0) < 0) return (char *)0;
+    return buf;
 }
 
 /* ---- 文件元信息 ---- */
@@ -41,27 +56,25 @@ static inline isize getcwd(char *buf, usize len) {
 #define STAT_TYPE_FILE 1
 #define STAT_TYPE_DIR  2
 #define STAT_TYPE_CHAR 3
+#define STAT_TYPE_PIPE 4
 
-/*
- * 必须与内核 kernel/src/fs/stat.rs 的 Stat(repr(C)) 字节布局完全一致,
- * 因为 sys_stat / sys_fstat 直接把 size_of(Stat) 个字节拷到用户态。
- *
- *   file_type : u8   @0
- *   mode      : u16  @2  (1 字节对齐填充)
- *   uid       : u32  @4
- *   gid       : u32  @8
- *   size      : usize @16 (4 字节对齐填充)
- *   reserved  : u8[4] @24
- *   总大小 32 字节(8 字节对齐)。
- */
-struct stat {
-    unsigned char file_type;
-    unsigned short mode;
-    unsigned int uid;
-    unsigned int gid;
-    usize size;
-    unsigned char reserved[4];
-};
+/* ---- 文件类型位（POSIX, 并入 st_mode 高 4 位） ---- */
+#define S_IFMT   0170000
+#define S_IFSOCK 0140000
+#define S_IFLNK  0120000
+#define S_IFREG  0100000
+#define S_IFBLK  0060000
+#define S_IFDIR  0040000
+#define S_IFCHR  0020000
+#define S_IFIFO  0010000
+
+#define S_ISREG(m)  (((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m)  (((m) & S_IFMT) == S_IFDIR)
+#define S_ISCHR(m)  (((m) & S_IFMT) == S_IFCHR)
+#define S_ISBLK(m)  (((m) & S_IFMT) == S_IFBLK)
+#define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
+#define S_ISLNK(m)  (((m) & S_IFMT) == S_IFLNK)
+#define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
 
 /* ---- 权限位(低 12 位, 与内核 S_* 常量一致)。注意: C 八进制用前导 0, 不是 0o。 ---- */
 #define S_IRWXU 0700
@@ -80,26 +93,98 @@ struct stat {
 #define S_ISGID 02000
 #define S_ISVTX 01000
 
+/*
+ * POSIX struct stat —— 用户态唯一结构。
+ *
+ * 重要：不能把它直接当 syscall 缓冲用！内核 Stat 是 32 字节原始布局，
+ * 由下面的 stat()/fstat() 翻译成此结构（类型位并入 st_mode；mtime 在墙钟
+ * 校准后为真值, 未校准=0）。
+ * 内核布局见 rk_stat_kernel_t（与 kernel/src/fs/stat.rs 的 Stat 完全一致）。
+ */
+struct stat {
+    mode_t   st_mode;       /* 权限位 | S_IF* 类型位 */
+    usize    st_size;       /* 文件字节数 */
+    uid_t    st_uid;        /* 属主 */
+    gid_t    st_gid;        /* 属组 */
+    time_t   st_mtime;      /* 最后修改时间(epoch 秒, 墙钟校准后为真值) */
+    time_t   st_atime;      /* 教学简化: 同 mtime */
+    time_t   st_ctime;      /* 教学简化: 同 mtime */
+    long     st_blksize;    /* 近似值 512 */
+    long     st_blocks;     /* 恒 0 */
+};
+
+/* 内核 Stat 的私有字节布局（32 字节, 必须与 kernel/src/fs/stat.rs 一致） */
+typedef struct rk_stat_kernel {
+    unsigned char file_type;   /* @0 */
+    unsigned short mode;       /* @2 */
+    unsigned int   uid;        /* @4 */
+    unsigned int   gid;        /* @8 */
+    usize          size;       /* @16 */
+    unsigned int   mtime;      /* @24 最后修改时间(epoch 秒, 墙钟校准后为真值) */
+} rk_stat_kernel_t;
+
+static inline int rk_stat_convert(const rk_stat_kernel_t *k, struct stat *st) {
+    if (!st) return -1;
+    st->st_size = (usize)k->size;
+    st->st_uid  = (uid_t)k->uid;
+    st->st_gid  = (gid_t)k->gid;
+    st->st_mode = (mode_t)k->mode;
+    /* 合并类型位: 内核 mode 只有权限位, 不合并则 S_ISDIR() 永远假 */
+    switch (k->file_type) {
+        case STAT_TYPE_DIR:  st->st_mode |= S_IFDIR; break;
+        case STAT_TYPE_CHAR: st->st_mode |= S_IFCHR; break;
+        case STAT_TYPE_PIPE: st->st_mode |= S_IFIFO; break;
+        default:             st->st_mode |= S_IFREG; break;
+    }
+    /* 墙钟校准后 mtime 为真值(epoch 秒); 未校准=0。
+     * atime/ctime 教学简化: 与 mtime 相同。 */
+    st->st_mtime = (time_t)k->mtime;
+    st->st_atime = (time_t)k->mtime;
+    st->st_ctime = (time_t)k->mtime;
+    st->st_blksize = 512; st->st_blocks = 0;
+    return 0;
+}
+
+/* 把 st_mode 还原为 STAT_TYPE_* 码（1/2/3/4）。
+ * 兼容旧代码里直接读 st.file_type 的写法:
+ *   st.file_type == STAT_TYPE_DIR  →  stat_type_of(st.st_mode) == STAT_TYPE_DIR */
+static inline int stat_type_of(mode_t m) {
+    if (S_ISDIR(m))  return STAT_TYPE_DIR;
+    if (S_ISCHR(m))  return STAT_TYPE_CHAR;
+    if (S_ISFIFO(m)) return STAT_TYPE_PIPE;
+    return STAT_TYPE_FILE;
+}
+
 static inline isize stat2(const char *path, usize len, struct stat *st) {
-    return syscall3(SYS_STAT, (usize)path, len, (usize)st);
+    rk_stat_kernel_t k;
+    isize r = syscall3(SYS_STAT, (usize)path, len, (usize)&k);
+    if (r < 0) return r;
+    return (isize)rk_stat_convert(&k, st);
 }
 
-static inline isize stat(const char *path, struct stat *st) {
-    return stat2(path, strlen(path), st);
+static inline int stat(const char *path, struct stat *st) {
+    return (int)stat2(path, strlen(path), st);
 }
 
-static inline isize fstat(int fd, struct stat *st) {
-    return syscall3(SYS_FSTAT, (usize)fd, (usize)st, 0);
+/* 本 OS 无符号链接, lstat 与 stat 行为一致 */
+static inline int lstat(const char *path, struct stat *st) {
+    return stat(path, st);
 }
 
+static inline int fstat(int fd, struct stat *st) {
+    rk_stat_kernel_t k;
+    isize r = syscall3(SYS_FSTAT, (usize)fd, (usize)&k, 0);
+    if (r < 0) return -1;
+    return rk_stat_convert(&k, st);
+}
 
 /* chmod(path, mode): 修改文件权限位(低 12 位)。仅 root 或文件属主可改。 */
 static inline isize chmod2(const char *path, usize len, usize mode) {
     return syscall3(SYS_CHMOD, (usize)path, len, mode);
 }
 
-static inline isize chmod(const char *path, usize mode) {
-    return chmod2(path, strlen(path), mode);
+static inline int chmod(const char *path, mode_t mode) {
+    return (int)chmod2(path, strlen(path), (usize)mode);
 }
 
 /*
@@ -109,34 +194,36 @@ static inline isize chown2(const char *path, usize len, usize uid, usize gid) {
     return syscall6(SYS_CHOWN, (usize)path, len, uid, gid, 0, 0);
 }
 
-static inline isize chown(const char *path, usize uid, usize gid) {
-    return chown2(path, strlen(path), uid, gid);
+static inline int chown(const char *path, uid_t uid, gid_t gid) {
+    return (int)chown2(path, strlen(path), (usize)uid, (usize)gid);
 }
 
 /* ---- 目录 / 文件增删 ---- */
 
+/* POSIX 签名: mkdir(path, mode)。内核不记录新建目录的权限, mode 忽略。 */
 static inline isize mkdir2(const char *path, usize len) {
     return syscall3(SYS_MKDIR, (usize)path, len, 0);
 }
 
-static inline isize mkdir(const char *path) {
-    return mkdir2(path, strlen(path));
+static inline int mkdir(const char *path, mode_t mode) {
+    (void)mode;
+    return (int)mkdir2(path, strlen(path));
 }
 
 static inline isize unlink2(const char *path, usize len) {
     return syscall3(SYS_UNLINK, (usize)path, len, 0);
 }
 
-static inline isize unlink(const char *path) {
-    return unlink2(path, strlen(path));
+static inline int unlink(const char *path) {
+    return (int)unlink2(path, strlen(path));
 }
 
 static inline isize rmdir2(const char *path, usize len) {
     return syscall3(SYS_RMDIR, (usize)path, len, 0);
 }
 
-static inline isize rmdir(const char *path) {
-    return rmdir2(path, strlen(path));
+static inline int rmdir(const char *path) {
+    return (int)rmdir2(path, strlen(path));
 }
 
 static inline isize remove_recursive2(const char *path, usize len) {
@@ -147,38 +234,36 @@ static inline isize remove_recursive(const char *path) {
     return remove_recursive2(path, strlen(path));
 }
 
-static inline isize fcntl(isize fd, isize cmd, isize arg) {
-    return syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg);
+static inline int fcntl(int fd, int cmd, int arg) {
+    return (int)syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg);
 }
 
-
-static inline isize lseek(isize fd, isize offset, usize whence) {
-    return syscall3(SYS_LSEEK, (usize)fd, (usize)offset, whence);
+static inline off_t lseek(int fd, off_t offset, int whence) {
+    return (off_t)syscall3(SYS_LSEEK, (usize)fd, (usize)offset, (usize)whence);
 }
 
-
-static inline isize ftruncate(isize fd, usize length) {
-    return syscall3(SYS_FTRUNCATE, (usize)fd, length, 0);
+static inline int ftruncate(int fd, off_t length) {
+    return (int)syscall3(SYS_FTRUNCATE, (usize)fd, (usize)length, 0);
 }
 
-
-static inline isize fsync(isize fd) {
-    return syscall3(SYS_FSYNC, (usize)fd, 0, 0);
+static inline int fsync(int fd) {
+    return (int)syscall3(SYS_FSYNC, (usize)fd, 0, 0);
 }
-
 
 static inline isize truncate2(const char *path, usize len, usize length) {
     return syscall3(SYS_TRUNCATE, (usize)path, len, length);
 }
-static inline isize truncate(const char *path, usize length) {
-    return truncate2(path, strlen(path), length);
+
+static inline int truncate(const char *path, off_t length) {
+    return (int)truncate2(path, strlen(path), (usize)length);
 }
 
 static inline isize rename2(const char *oldpath, usize oldlen, const char *newpath, usize newlen) {
     return syscall6(SYS_RENAME, (usize)oldpath, oldlen, (usize)newpath, newlen, 0, 0);
 }
-static inline isize rename(const char *oldpath, const char *newpath) {
-    return rename2(oldpath, strlen(oldpath), newpath, strlen(newpath));
+
+static inline int rename(const char *oldpath, const char *newpath) {
+    return (int)rename2(oldpath, strlen(oldpath), newpath, strlen(newpath));
 }
 
 #ifdef __cplusplus

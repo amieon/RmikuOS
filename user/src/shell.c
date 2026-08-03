@@ -195,7 +195,7 @@ static int complete_path(const char *prefix, char matches[][LINE_SIZE], int max_
             file_prefix[j++] = prefix[i];
         file_prefix[j] = 0;
     } else {
-        if (getcwd(dir, sizeof(dir)) < 0) return 0;
+        if (getcwd(dir, sizeof(dir)) == NULL) return 0;
         int dlen = strlen_(dir);
         if (dlen > 0 && dir[dlen - 1] != '/') {
             dir[dlen] = '/';
@@ -426,7 +426,7 @@ static int expand_token(const char *token, char *outv[], int max_out, int is_quo
         for (int i = last_slash + 1; token[i]; i++) pat[j++] = token[i];
         pat[j] = 0;
     } else {
-        if (getcwd(dir, sizeof(dir)) < 0) return 0;
+        if (getcwd(dir, sizeof(dir)) == NULL) return 0;
         int dlen = strlen_(dir);
         if (dlen > 0 && dir[dlen - 1] != '/') {
             dir[dlen] = '/';
@@ -670,6 +670,8 @@ static int read_line(const char *prompt, char *buf, int max_len) {
     for (int i = 0; i < LINE_SIZE; i++) saved_line[i] = 0;
     int saved_len = 0;
     int in_history = 0;
+
+    set_echo(0);
 
     buf[0] = 0;
     history_idx = history_count;
@@ -931,8 +933,7 @@ static void print_help(void) {
 
 static int builtin_pwd(void) {
     char buf[128];
-    isize n = getcwd(buf, sizeof(buf));
-    if (n < 0) {
+    if (getcwd(buf, sizeof(buf)) == NULL) {
         fputs("pwd: getcwd failed\n", stdout);
         return 1;
     }
@@ -952,7 +953,7 @@ static int builtin_cd(int argc, char *argv[]) {
     }
     /* 让 $PWD 反映新工作目录 */
     char cwd_buf[128];
-    if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
+    if (getcwd(cwd_buf, sizeof(cwd_buf)) != NULL) {
         setenv_s("PWD", cwd_buf, 1);
     }
     return 0;
@@ -963,7 +964,7 @@ static int builtin_mkdir(int argc, char *argv[]) {
         fputs("mkdir: missing operand\n", stdout);
         return 1;
     }
-    if (mkdir(argv[1]) < 0) {
+    if (mkdir(argv[1], 0777) < 0) {
         fputs("mkdir: cannot create directory: ", stdout);
         fputs(argv[1], stdout);
         fputs("\n", stdout);
@@ -1263,37 +1264,41 @@ static void run_exec(int argc, char *argv[]){
 }
 
 static int run_external(int argc, char *argv[], int background) {
-    /* 每次外部命令前刷新命令搜索路径：使 export PATH=... 立即生效 */
+    /* Refresh PATH each time before running an external command. */
     load_search_dirs();
-    fcntl(0, F_SETFL, O_NONBLOCK);
+    /* 外部命令(尤其 sqlite3/cat 这类交互程序)依赖内核回显: 打开它。
+     * 本 shell 自带行编辑器, read_line() 时已关掉, 这里重新打开。 */
+    set_echo(1);
     isize pid = fork();
     if (pid == 0) {
+        /* Child stdin must stay BLOCKING. The old code set O_NONBLOCK on
+        ** fd 0 before fork for Ctrl+C polling, and fd_flags get cloned
+        ** into the child, so interactive programs (sqlite3 shell, cat,
+        ** lua...) saw read()==0 (EOF) on stdin and exited immediately.
+        ** Reset here; per-process fd_flags so this does not affect the
+        ** parent. */
+        fcntl(0, F_SETFL, 0);
         run_exec(argc, argv);
         exit(1);
     } else if (pid > 0) {
         if (background) {
             add_job(pid, argv[0]);
             printf("[%d] %d\n", next_job_id - 1, pid);
-            fcntl(0, F_SETFL, 0);
+            set_echo(0);          /* 回 shell 提示符, 关回显 */
+            set_front(getpid());  /* 后台任务不占前台: Ctrl+C 回 shell */
             return 0;
         }
+        /* Foreground: block until the child exits. We no longer poll
+        ** read(0) for Ctrl+C: that consumed input chars meant for the
+        ** child from the shared terminal. Kernel signal delivery is
+        ** incomplete; Ctrl+C interrupt can come back with a kernel
+        ** Ctrl+C -> SIGINT implementation later. */
         int status = 0;
-        while (1) {
-            isize ret = waitpid(pid, &status, WNOHANG);
-            if (ret == pid) break;
-            char ch;
-            int n = read(0, &ch, 1);
-            if (n == 1 && ch == 3) {
-                kill(pid, SIGINT);
-                fputs("\n", stdout);
-                while (waitpid(pid, &status, 0) < 0) yield();
-                break;
-            }
-            yield();
-        }
-        fcntl(0, F_SETFL, 0);
+        while (waitpid(pid, &status, 0) < 0) yield();
+        set_echo(0);   /* 回 shell 提示符, 关回显 */
         return WEXITSTATUS(status);
     } else {
+        set_echo(0);
         fputs("fork failed\n", stdout);
         return 1;
     }
@@ -1389,9 +1394,9 @@ static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[])
     if (seg->outfile[0]) {
         isize fd;
         if (seg->append)
-            fd = open(seg->outfile, O_CREAT | O_APPEND | O_WRONLY);
+            fd = open(seg->outfile, O_CREAT | O_APPEND | O_WRONLY, 0644);
         else
-            fd = open(seg->outfile, O_CREAT | O_TRUNC | O_WRONLY);
+            fd = open(seg->outfile, O_CREAT | O_TRUNC | O_WRONLY, 0644);
         if (fd < 0) {
             printf("cannot open %s for output\n", seg->outfile);
             exit(1);
@@ -1772,6 +1777,8 @@ int main(void) {
     print_help();
     load_search_dirs();
 
+    signal(SIGINT, SIG_IGN);
+
     while (1) {
         set_my_tickets(1);
         reap_jobs();
@@ -1779,7 +1786,7 @@ int main(void) {
         char cwd_buf[128];
         char prompt[128];
         int p = 0;
-        if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
+        if (getcwd(cwd_buf, sizeof(cwd_buf)) != NULL) {
             for (int i = 0; cwd_buf[i] && p < 126; i++) prompt[p++] = cwd_buf[i];
         }
         prompt[p++] = ' ';

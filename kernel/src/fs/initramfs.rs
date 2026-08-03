@@ -218,7 +218,7 @@ impl File for MemFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_FILE, self.data.len(), 0o644, 0, 0)
+        Stat::new(STAT_TYPE_FILE, self.data.len(), 0o644, 0, 0).with_mtime(crate::timer::now_secs() as u32)
     }
 }
 
@@ -283,7 +283,7 @@ impl File for DirFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE, 0o755, 0, 0)
+        Stat::new(STAT_TYPE_DIR, self.entries.len() * DIRENT_SIZE, 0o755, 0, 0).with_mtime(crate::timer::now_secs() as u32)
     }
 
 }

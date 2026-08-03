@@ -77,31 +77,31 @@ int main(void) {
     struct stat st;
     if (stat("perm_t", &st) != 0) { printf("[FATAL] stat perm_t failed\n"); return 1; }
     printf("  file_type=%d(1=FILE) uid=%d gid=%d mode=0%o size=%d\n",
-           st.file_type, st.uid, st.gid, st.mode & 07777, (int)st.size);
-    g_fails += check("[1] file_type", st.file_type, STAT_TYPE_FILE);
-    g_fails += check("[1] uid(root)", st.uid, 0);
-    g_fails += check("[1] gid(root)", st.gid, 0);
-    g_fails += check("[1] mode 0644", st.mode & 07777, 0644);
+           stat_type_of(st.st_mode), st.st_uid, st.st_gid, st.st_mode & 07777, (int)st.st_size);
+    g_fails += check("[1] file_type", stat_type_of(st.st_mode), STAT_TYPE_FILE);
+    g_fails += check("[1] uid(root)", st.st_uid, 0);
+    g_fails += check("[1] gid(root)", st.st_gid, 0);
+    g_fails += check("[1] mode 0644", st.st_mode & 07777, 0644);
 
     /* ---------- 2. chmod 往返 ---------- */
     printf("\n=== 2. chmod 往返(root) ===\n");
     g_fails += check("[2] chmod 0600", chmod("perm_t", 0600), 0);
     stat("perm_t", &st);
-    g_fails += check("[2] mode now 0600", st.mode & 07777, 0600);
+    g_fails += check("[2] mode now 0600", st.st_mode & 07777, 0600);
     g_fails += check("[2] chmod 0644 back", chmod("perm_t", 0644), 0);
     stat("perm_t", &st);
-    g_fails += check("[2] mode back 0644", st.mode & 07777, 0644);
+    g_fails += check("[2] mode back 0644", st.st_mode & 07777, 0644);
 
     /* ---------- 3. chown 往返 ---------- */
     printf("\n=== 3. chown 往返(root) ===\n");
     g_fails += check("[3] chown 100:100", chown("perm_t", 100, 100), 0);
     stat("perm_t", &st);
-    g_fails += check("[3] uid now 100", st.uid, 100);
-    g_fails += check("[3] gid now 100", st.gid, 100);
+    g_fails += check("[3] uid now 100", st.st_uid, 100);
+    g_fails += check("[3] gid now 100", st.st_gid, 100);
     g_fails += check("[3] chown 0:0 back", chown("perm_t", 0, 0), 0);
     stat("perm_t", &st);
-    g_fails += check("[3] uid back 0", st.uid, 0);
-    g_fails += check("[3] gid back 0", st.gid, 0);
+    g_fails += check("[3] uid back 0", st.st_uid, 0);
+    g_fails += check("[3] gid back 0", st.st_gid, 0);
 
     /* 把 perm_t 设成 root 所有的 0600, 用作后面的访问检查目标 */
     chmod("perm_t", 0600);
@@ -166,8 +166,8 @@ int main(void) {
     } else {
         /* 确认 setuid 位确实被置上 */
         stat("/tmp/xx_perm_su", &st);
-        if ((st.mode & 04000) != 04000) {
-            printf("[6] S_ISUID 未置上(mode=0%o), 跳过\n", st.mode & 07777);
+        if ((st.st_mode & 04000) != 04000) {
+            printf("[6] S_ISUID 未置上(mode=0%o), 跳过\n", st.st_mode & 07777);
         } else {
             isize pc = fork();
             if (pc == 0) {

@@ -1,8 +1,8 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua / Scheme** 六种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
-当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端），以及用于调度器实验的 workload 与自适应控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳）、TCC 0.9.28（系统内 C 编译器，AOT + JIT 自托管工具链）、kilo 编辑器（ANSI 全屏编辑 + 语法高亮）、Scheme（从零手写的 Lisp 方言，尾调用优化 + 标记清除 GC），以及用于调度器实验的 workload 与自适应控制器。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -103,7 +103,7 @@ loongarch64
 * VFS 与多文件系统挂载
 * ext4 rootfs / tmpfs / FAT
 * block cache
-* shell 和用户程序（C / C++ / Rust / Java / Lua）
+* shell 和用户程序（C / C++ / Rust / Java / Lua）与 SQLite 数据库
 * 调度器与调度实验框架
 * 网络协议栈（virtio-net / ARP / IPv4 / TCP / UDP / DHCP / ICMP）
 
@@ -399,6 +399,86 @@ Shell 支持用户态环境变量与 `$?`（上一条命令退出码）的读取
 * 变量展开在引号保护下进行：`echo "$FOO | bar"` 不会被误判为管道。
 
 `export` 设置的环境变量在 shell `exec` 外部命令时，随内核经寄存器传入的 `envp` 透传给子进程（详见下节「Environment Variable Syscalls」）。shell 的命令搜索目录也从环境变量 `PATH`（`getenv("PATH")`，按 `:` 切分，回退 `/bin /tests /programs`）读取，因此 `export PATH=/bin:/tests` 等修改即时生效。
+
+---
+
+### TCC：系统内的 C 编译器（自托管工具链）
+
+TCC（Tiny C Compiler）0.9.28 移植——RmikuOS 能**在自己的系统里现场编译并运行 C 程序**，形成「内核写 C → 系统里编译 C → 运行 C」的完整自托管闭环。
+
+#### 用法
+
+```
+tcc hello.c -o hello && ./hello    # AOT: 编译出 ELF, 内核加载执行
+tcc hello.c -run                   # JIT: 编译进内存直接执行
+```
+
+`/codes/` 内置 12 个测试程序（镜像 overlay 带进），`scripts/tcc_test.sh` 顺序执行——**12/12 全过**。
+
+#### 系统文件布局（`/usr/lib/tcc`）
+
+| 文件 | 作用 |
+|---|---|
+| `crt1.o` / `crti.o` / `crtn.o` | 启动（复用 crt0，`_start`→main→exit）/ 空 .init/.fini |
+| `libc.a` | syscall.o + string.o + **libc_extern.o** |
+| `libtcc1.a` | TCC 运行时 + **libgcc 软浮点合并**（long double 等） |
+| `runmain.o` | `-run`（JIT）启动 stub |
+| `include/` | RmikuOS 头 + TCC 编译器配套头（stddef/stdarg/stdbool…） |
+
+#### 三个关键设计
+
+**① libc 具现化（libc_extern.c）**：RmikuOS 的 libc 全是**头内联 static inline**（无真实符号），而 TCC 对 `static inline` 不内联、生成外部引用 → `unresolved printf`。解法：把全部头内联函数重命名（`__rmiku_*`）后 include（宿主 gcc 内联消化内部依赖链），再为公共 API 生成非 static 转发打进 libc.a。顺序必须是「**重命名 → include → undef → 转发**」——include 放重命名前会 redefinition。
+
+**② libgcc 全量合并**：TCC 静态链接**不自动链 libgcc**（`TCC_LIBGCC` 只在动态链接生效）→ long double（128 位 quad）软浮点 `__*tf*`、`__clzdi2` 等全部 unresolved。解法：`add_libgcc_tf()` 把 host libgcc.a 全量展开、**与 libtcc1.o 去重**后合并进 libtcc1.a——TCC 惰性提取只取被引用的成员，多放无害，一次解决所有编译期辅助符号。
+
+**③ 全局 `_stdout`（短输出不丢）**：标准流从「每编译单元一份 static」改为**全局唯一**（定义在 string.o）。否则 printf（某 TU）与 exit 的 flush（string.o）各用各的 `_stdout` 实例，flush 落空——短输出（<BUFSIZ）且无换行就丢失。crt0 调 main 后 `call exit`（flush 标准流再退出）。
+
+#### 其他适配（踩坑实录）
+
+- **静态 ELF**：libtcc.c `tcc_new()` 默认 `static_link=1`——否则产物带 `PT_INTERP`，内核 loader 拒绝；
+- **weak 符号化解冲突**：runmain.o 自带强 `exit`/`atexit`（-run 专属）→ libc 侧用 `__attribute__((weak))` 让位；`.init_array`/`.fini_array` 边界符号 TCC 不生成 → 提供 weak 空数组，否则 `-run` reloc 静默失败；
+- **mprotect 系统调用**（JIT 需要）：`PageTable::update_flags` 只改已有 PTE 的权限位，**不重映射、不分配新帧**——`map()` 是 assert 未映射语义，直接重映射会 panic；
+- **open() 三参 mode 打通内核**：O_CREAT 创建文件后 `chmod(mode)`，POSIX 真语义（用户态变参 → syscall6 → 内核）；
+- **`__sync_*` 原子符号**：lock.h 用 gcc 内建原子，TCC 不识别 → string.c 用 riscv64 `amoswap.w.aq`/loongarch64 `amswap_db.w` 提供真实符号；
+- **stdint.h**：裸机工具链无 libc 版 → TCC 专用最小版（只进 `/usr/lib/tcc/include`，gcc 程序继续用编译器内置）。
+
+#### 已知局限
+
+- `-run` 走 runmain 的 exit，不 flush 无换行缓冲——`-run` 输出建议带 `
+`；
+- 用户程序显式 `exit()`（头内联）不 flush——次要路径；
+- TCC 的 `static inline` 不内联是特性不是 bug，靠 libc_extern 转发兜底。
+
+---
+
+### kilo：全屏编辑器（与 TCC 组成开发闭环）
+
+kilo（antirez 的经典教学编辑器，1308 行单文件 C）移植——与 TCC 配合，在 RmikuOS 内完成**「编辑 → 编译 → 运行」完整开发闭环**：
+
+```
+kilo hello.c          # 写代码（ANSI 全屏 + C 语法高亮）
+tcc hello.c -o hello && ./hello    # 编译并运行
+```
+
+#### 适配要点（踩坑实录）
+
+- **termios 最小模拟**（`include/termios.h`）：RmikuOS 无完整 termios，只把 `c_lflag` 的 `ECHO` 位映射到内核 `set_echo()`（raw 模式 = 关回显）；VMIN/VTIME 忽略（内核 read 天然逐字符）；`OPOST/CS8` 等标志只定义供位运算。
+- **回车 = `\n`（ICRNL）**：内核 stdin read 把回车统一转成 `\n`（`stdio.rs` 的 ICRNL），kilo 原版只认 `\r` → 回车会被 insert 成裸 LF、屏幕错乱。修复：`case ENTER` 加 `case '\n'` 同判。
+- **窗口固定 80x24**：无 ioctl(TIOCGWINSZ)/DSR 查询，`getWindowSize` 返回固定尺寸。
+- **退出恢复终端**：RmikuOS crt0 的 exit 不跑 `atexit`，kilo 的 `atexit(editorAtExit)` 失效——Ctrl+Q/Ctrl+Z 退出前显式 `disableRawMode`。
+- **Ctrl+S/Q 备选键**：Ctrl+S(0x13)/Ctrl+Q(0x11) 是 XON/XOFF 软件流控字符，QEMU 串口 + 宿主终端常吞 → 加备选 **Ctrl+X 保存 / Ctrl+Z 退出**（0x18/0x1A 不被流控占用）。
+- 其他：`getline`→`fgets`（无 getline）、`ftruncate` 用真实实现（内核有 `sys_ftruncate`）、`isatty`/`__sync_*` 补 weak 符号。
+
+#### 按键速查
+
+| 键 | 功能 |
+|---|---|
+| 方向键 / PageUp / PageDown | 光标移动、翻页 |
+| Enter | 换行（`\r`/`\n` 均识别） |
+| Backspace / Del | 删除 |
+| **Ctrl-S / Ctrl-X** | 保存 |
+| **Ctrl-Q / Ctrl-Z** | 退出（未保存连按两次确认） |
+| Ctrl-F | 搜索 |
 
 ---
 
@@ -715,6 +795,97 @@ tftp: hello.txt -> /tmp/a, 26 bytes
 ```
 
 一个与文档印象不符的实测结论：**slirp 的 TFTP 服务器在 guest 视角是 `10.0.2.2`**（与 DHCP 网关同地址），而不是某些资料里的 `10.0.2.4`——向后者发 ARP who-has 永远无人应答，改指 `10.0.2.2` 即通。ACK 直接回 `recvfrom` 的 from 地址，TFTP 的 TID 语义天然正确。
+
+### NTP 客户端：网络同步时间（墙钟 + 文件时间戳）
+
+RmikuOS 通过网络协议拿到真实世界时间：宿主机的 Python NTP 服务器 + guest 内的用户态 `ntpdate` 客户端，一次校准内核墙钟，之后 `time()` 与文件 `mtime` 都是单调累加的真实 epoch 秒。
+
+```text
+宿主机                                    QEMU guest
+┌──────────────────┐      slirp      ┌────────────────────────────┐
+│ tools/ntp_server │←─ UDP 10.0.2.2 ─│ ntpdate(5次采样最小delay)   │
+│  (RFC5905子集)   │── 123/任意端口 ─→│    │ SYS_SET_WALL_CLOCK     │
+└──────────────────┘                  │    ▼                       │
+                                      │ 内核墙钟(epoch微秒+单调累加) │
+                                      │    ├─ time()/gettimeofday  │
+                                      │    └─ Stat.mtime → st_mtime│
+                                      └────────────────────────────┘
+```
+
+#### 原理：RFC 5905 教学子集
+
+* **四时间戳**：`offset = ((T2−T1) + (T3−T4)) / 2`——请求去程与响应回程各带一次"服务器时间减客户端时间"，平均后抵消网络延迟，得到真实时钟偏移（`delay = (T4−T1) − (T3−T2)` 是往返延迟）。
+* **64 位定点**：NTP 时间戳高 32 位=秒（1900 纪元）、低 32 位=分数秒（2⁻³²）。分数秒让 delay 可测到毫秒级，否则 delay 全整数秒、"取最小"失去意义。
+* **防溢出**：两个 ≈22 亿秒级时间戳相减后相加会超 2⁶⁴——必须 `((T2−T1)>>1) + ((T3−T4)>>1)`（先移位再相加，丢 0.1ns）。
+* **最小延迟原则**：5 次采样取 delay 最小那次——网络最空闲 ≈ 去回程最对称 ≈ offset 最准。
+* **本地假时钟**：T1/T4 用 `get_time_us()`（单调微秒，自启动起，0 基准）。offset 是"服务器绝对时间 − 本地开机基准"的常数差，校准后 `墙钟 = 单调 + offset`——完美绕开"没时钟"的鸡生蛋问题。
+
+#### 墙钟与 Stat 时间戳
+
+内核 `timer` 维护墙钟：`set_wall_clock(epoch_us)` 存"校准时刻的绝对微秒 + 单调微秒快照"，`now_secs()` 单调累加（未校准返回 0）。`Stat` 新增 `mtime` 字段（复用原 reserved[4]，32 字节布局不变），各文件系统 `stat()` 填 `now_secs()`；用户态 `fs.h` 翻译层填 `st_mtime`（atime/ctime 教学简化同 mtime）。`time()`/`gettimeofday` 也改接墙钟（新 syscall `SYS_GET_EPOCH`）。
+
+#### 使用
+
+```bash
+# 宿主机（tools/ntp_server.py, RFC 5905 教学子集服务器）：
+sudo python3 tools/ntp_server.py          # 端口 123(需 root); 或 -p 12300 免 root
+```
+
+```text
+/ $ ntpdate                              # 默认 10.0.2.2:123; 或 ntpdate 12300
+[ntpdate] synced: epoch=1785658218 s, delay=2 ms
+/ $ sqlite3 /fat/test.db                 # 落盘库（CREATE TABLE 需 VFS xOpen 判 pOutFlags）
+sqlite> CREATE TABLE t(x);  INSERT INTO t VALUES(42);  .quit
+/ $ /samples/stat_time /fat/test.db
+path          : /fat/test.db
+mtime(epoch)  : 1785658405
+time()(epoch) : 1785658405
+mtime(GMT)    : 2026-08-02 08:13:25
+```
+
+QEMU slirp 关键路径：guest 发 UDP 到 `10.0.2.2:<端口>` 会被自动转发到宿主机 loopback 同名端口（无需 hostfwd），与 TFTP/DHCP 同一通道。
+
+#### 已知局限（教学取舍）
+
+* **QEMU TCG 虚拟时钟**：TCG 动态翻译下 `time` 寄存器按虚拟时间推进，负载不同可能与真实时钟速率不一致（delay 异常大时 epoch 有百秒级偏差）。真实硬件 timebase 与晶振绑定，无此问题。
+* **闰秒 / 2036 纪元回绕**：RFC 5905 用 era 判断（服务器时间戳在本地 ±68 年内则判定回绕 +2³²）处理；教学版注释说明不实现。
+* **FAT 目录项 DOS 时间戳未读**：mtime 取 stat 时刻墙钟而非磁盘持久化修改时间（需 DOS→epoch 转换，留待以后）。
+* **相关 syscall 号段**：`SYS_SET_ECHO=69`、`SYS_SIGNAL=70`、`SYS_SET_FRONT=71`、`SYS_GET_TIME_US=72`、`SYS_SET_WALL_CLOCK=73`、`SYS_GET_EPOCH=74`。
+
+### wget：TCP 客户端从 host 拉文件（网络栈的下载闭环）
+
+`user/c/wget/wget.c`（约 150 行）——用自研 TCP 栈发 `HTTP/1.0 GET`，把响应体存进 FAT：
+
+```
+wget http://10.0.2.2:8000/hello.txt /fat/hi.txt   # URL 形式(默认端口 80)
+wget http://10.0.2.2:8000                          # 无路径 -> GET /
+wget 10.0.2.2 8000 /hello.txt /fat/hi.txt          # 旧三参形式(兼容)
+```
+
+流程：`socket → connect → send GET（HTTP/1.0 + Connection: close）→ 收响应头（缓冲找 \r\n\r\n）→ 收 body 到连接关闭 → write 落盘`。host 侧 `python3 -m http.server 8000` 即服务端——guest 访问 `10.0.2.2:8000` 经 slirp 转发到 host loopback（与 NTP 同款通道，无需 hostfwd）。
+
+实测输出：
+
+```
+[tcp] fd 1 established
+wget: HTTP/1.0 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.4
+Content-Length: 17
+...
+/ $ cat /fat/hi.txt
+hello from host!
+```
+
+#### 顺带把内核 recv 改成 POSIX 语义
+
+wget 调试暴露了内核一个 API 简化：`tcp::recv_data` 原来**弹出整个 TCP chunk、只返回请求长度**——逐字节读的客户端（如 HTTP 头解析）会丢数据。已修复为 POSIX 语义：消费 n 字节后 `chunk.drain(..n) + push_front` 把剩余放回队列头，下次 recv 继续读。UDP 数据报语义本就正确、未动。**现在任意读法（大块/逐字节）都安全**。
+
+#### 踩坑两个
+
+* **双重 htons**：`addr_of` 内部已 `htons(port)`，再套一层会转回主机序——8000(0x1F40) 变 16415，SYN 发错端口。tcp_test 直传端口所以从没暴露；
+* **整块弹出丢数据**：见上——客户端必须大块读（现已在 API 侧根治）。
+
+---
 
 ### 排障方法学：三段定位法
 
@@ -1324,6 +1495,98 @@ Lua 移植是唯一一种"官方源码一行不改、只提供桥接头文件"�
 
 
 
+### Scheme：从零手写的微型 Lisp（TCO + 标记清除 GC）
+
+Scheme 是 RmikuOS 的第六种用户态语言——**从零手写**（`user/c/scheme/scheme.c`，约 850 行 C），不移植任何现成实现。语言本体：S 表达式读取器（`'` 糖、`;` 注释、字符串、多行括号补全）、环境链与闭包、特殊形式（`quote if define lambda begin set! cond let and or`）、内建（算术/比较/列表/谓词/IO）、交互 REPL + 文件模式。两个"正经语言"的标配：
+
+**① 尾调用优化（TCO）**——Scheme 的灵魂。`eval` 用主循环而非纯递归：尾位置的 lambda 调用直接 `e=body; env=new; continue` 迭代，**不压栈**。关键在 **tail 标志从特殊形式传播**：`if`/`cond`/`let`/`begin`/`and`/`or` 的尾分支都要把 tail 置 1，否则尾表达式会被当"非尾"求值、重新递归——100 万层直接爆 64KB 用户栈。修复后 `(loop 1000000 0)` 平稳跑完。
+
+**② 标记-清除 GC（mark-sweep）**——6MB 用户堆逼出来的。无 GC 时 TCO 循环每轮泄漏 Env + cons，100 万次 = 300MB → `malloc` 返回 NULL → 空指针崩。GC 根集：全局环境 + eval 主循环活跃（表达式/环境）+ REPL 当前输入；每 2 万次分配在**主循环顶部**触发（递归子调用期间不触发，避免扫描未完成的中间值）；sweep 回收未标记的 Obj/Env，符号字符串归 intern 表持有不回收。
+
+```text
+/programs/scheme /codes/scm_tco.scm    # sum 1..1000000 = 500000500000（TCO + GC 同框）
+/programs/scheme /codes/scm_fib.scm    # fib(20)=6765 + cond 分级 + let
+/programs/scheme /codes/scm_hello.scm  # Hello, RmikuScheme! + 闭包加法器
+/programs/scheme                       # 交互 REPL
+```
+
+踩坑实录（跨语言移植的通用教训）：C 的字符串字面量指针 ≠ intern 表指针——特殊形式必须**预 intern 后按指针比较**（Python 验证器靠语言级字符串 intern 掩盖了这个差异）；TCO 主循环里嵌 `for`（cond 子句）时 `continue` 属于内层循环——要用 `matched + break` 跳出；无 GC 的深循环在受限堆上必然耗尽——"教学 OS 无 GC"只适合短程序。
+
+---
+
+### SQLite 3.50：交互式数据库 shell（官方 amalgamation 零改动）
+
+SQLite 是 RmikuOS 的嵌入式数据库：官方 `sqlite3.c` + `shell.c` amalgamation **原样编译、一行未改**，在 QEMU 里跑出完整的交互式 `sqlite>` shell，数据通过自定义 VFS 真实落盘到 FAT。
+
+#### 自定义 VFS（SQLITE_OS_OTHER）
+
+SQLite 官方的 `os_unix.c` / `os_win.c` 依赖 pthread / dlfcn 等宿主机制，因此用 `-DSQLITE_OS_OTHER=1` 整体关掉，改为 RmikuOS 自己的 VFS（`user/sqlite3/rmiku_vfs.h`）：
+
+```text
+sqlite3_file  ←→  RmikuFile{ fd, path }        把 sqlite 文件对象挂到 RmikuOS fd
+xRead / xWrite / xTruncate / xSync            全部走真实 syscall（lseek + read/write + ftruncate + fsync）
+xLock / xUnlock                               单进程 no-op
+xRandomness                                   自带 LCG
+journal/wal 探测                              -journal/-wal/-shm 后缀短路, 不触发无谓 stat
+```
+
+日志用 MEMORY 模式（`PRAGMA journal_mode=MEMORY`），主数据库文件走真实写盘——`xWrite → write syscall → FAT 驱动`，所以关掉重开数据库仍能读到数据。
+
+#### 编译宏裁剪（user/build.py）
+
+```text
+-SQLITE_OS_OTHER=1           不编 os_unix/os_win, 用 rmiku VFS
+-SQLITE_THREADSAFE=0         关线程/互斥, 避免 pthread.h
+-SQLITE_OMIT_LOAD_EXTENSION  关 dlopen/dlsym, 避免 dlfcn.h
+-SQLITE_OMIT_DEPRECATED      去掉废弃接口
+-SQLITE_OMIT_DATETIME_FUNCS  关 date.c 的宿主时间函数
+-SQLITE_OMIT_POPEN           无管道, .import "|cmd" 报错提示
+-SQLITE_NOHAVE_SYSTEM        无 /bin/sh, .shell/.system/edit() 不编入
+```
+
+#### libc 补齐：POSIX 头 + shim
+
+shell.c 是标准 POSIX 程序，依赖一组 RmikuOS 之前没有的 libc 设施，全部补齐：
+
+* **POSIX 头**（`user/include/`）：`sys/stat.h`、`sys/types.h`、`sys/time.h`、`sys/resource.h`、`unistd.h`、`dirent.h`、`pwd.h`、`fcntl.h`、`limits.h`、`memory.h`、`utime.h`
+* **stat 统一（方案 A）**：`fs.h` 成为用户态唯一 `struct stat`（POSIX `st_*` 字段 + 内部翻译内核 32 字节布局，类型位并入 `st_mode`），`sys/stat.h` 等头退化为薄壳——不再有"内核版 vs POSIX 版"双结构
+* **shim 实现**（`rmiku_shims.c`）：`isatty` / `access` / `strdup` / `opendir`/`readdir`/`closedir`（基于 SYS_GETDENTS 真实现）/ `getpwuid` / `symlink` / `readlink`
+* **file.h 增强**：FILE 池槽位回收（不再"开 8 次就满"）、`fseek`/`ftell`/`rewind`/`ungetc`（基于真实 lseek）、`sscanf`/`setvbuf`/`fileno`
+* **终端回显**：内核无终端驱动，libc 在 stdin 读取层做"行模式 + 回显"（仅字符设备回显、管道不回显），sqlite3/lua 等交互程序获得正常终端体验
+
+#### 使用
+
+```text
+/programs/sqlite3                   裸跑 → 交互式 sqlite> shell（内存库）
+/programs/sqlite3 /fat/test.db      带库文件 → 落盘数据库
+/programs/sqlite3_probe             落盘探针（建表/插入/关掉重开验证）
+```
+
+交互会话：
+
+```text
+sqlite> .tables
+sqlite> CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT);
+sqlite> INSERT INTO t(name) VALUES('miku');
+sqlite> SELECT * FROM t;
+1|miku
+sqlite> .schema
+sqlite> .quit
+```
+
+#### 与其他移植的对比
+
+| 语言/应用 | 移植方式             | 源码改动 |
+| --------- | -------------------- | -------- |
+| C         | 原生                 | 无       |
+| C++ (GCN) | 头文件替换           | 算法零改动 |
+| Rust      | 原生 no_std          | 无       |
+| Java      | 自研 JVM             | 无       |
+| Lua       | 官方源码原样编译     | 零改动   |
+| **SQLite**| **amalgamation 原样编译 + 自定义 VFS** | **零改动** |
+
+SQLite 是 RmikuOS 上最大的第三方移植（`sqlite3.c` 单文件约 9.5MB 源码），验证了"官方源码不动、靠 libc 头文件 + VFS 桥接"的移植路线在数据库这类重型依赖场景同样成立。
+
 ### 统一构建
 
 构建脚本 `user/build.py` 按来源与语言分派编译，一条 `./run.sh <arch>` 即可全部编好并打包进镜像：
@@ -1340,6 +1603,7 @@ user/c/*                      C(gcc)              /programs
 user/cpp/*                    C++(g++)            /programs
 user/gcn/*.cpp                C++(GCN)            /gcn
 user/java/*.java              Java(javac)         /jvm
+user/sqlite3/                 SQLite(自定义VFS)   /programs(sqlite3 / sqlite3_probe)
 ```
 
 ---
@@ -1347,6 +1611,18 @@ user/java/*.java              Java(javac)         /jvm
 ### Process&Thread Map
 
 ![process&thread map](docs/images/process.png)
+
+### 彩蛋：Brainfuck 解释器（8 指令的抽象语言）
+
+凑数的抽象语言彩蛋——**不算第六种用户态语言**（真正支持的语言是上面五个），只是一个 8 指令的图灵完备玩具解释器（`/programs/brainfuck`）：
+
+```
+/programs/brainfuck /codes/hello.bf     # Hello World!
+/programs/brainfuck /codes/mult.bf      # d（10x10 循环乘法）
+/programs/brainfuck /codes/echo.bf      # 读 4 个字符原样回显（测 ',' 指令）
+```
+
+实现要点：磁带 `malloc(30000)`、**括号配对预处理 jump 表**（一遍扫描算出每个 `[` 的匹配 `]`，执行时 O(1) 跳转）、纯用户态零新头文件（只依赖 `user.h`）。`/codes/` 里带 3 个示例程序。踩过的一个雷：RmikuOS 用户栈只有 64KB，源缓冲必须上堆（64KB 局部数组会撑爆栈）。
 
 ## Scheduler
 

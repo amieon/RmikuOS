@@ -1,4 +1,26 @@
 use crate::arch;
+use core::sync::atomic::{AtomicBool, Ordering};
+
+static ECHO_ENABLED: AtomicBool = AtomicBool::new(true);
+
+pub fn set_echo(on: bool) {
+    ECHO_ENABLED.store(on, Ordering::Relaxed);
+}
+
+pub fn echo_input_char(ch: u8) {
+    if !ECHO_ENABLED.load(Ordering::Relaxed) {
+        return;
+    }
+    match ch {
+        b'\r' => putchar_raw(b'\n'),
+        8 | 127 => {
+            putchar_raw(8);
+            putchar_raw(b' ');
+            putchar_raw(8);
+        }
+        _ => putchar_raw(ch),
+    }
+}
 
 pub struct Uart {
     base: usize,

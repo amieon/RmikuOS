@@ -173,6 +173,9 @@ static inline char *strerror(int err) {
     }
 }
 
+/* strdup: 由 rmiku_shims.c 提供实现（需要 malloc, 不便 inline 进 string.h） */
+extern char *strdup(const char *s);
+
 #ifdef __cplusplus
 }
 #endif

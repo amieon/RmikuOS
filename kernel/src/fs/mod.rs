@@ -41,15 +41,17 @@ pub fn lookup_at(cwd: &str, path: &str) -> Option<InodeRef> {
     path::lookup_path_at(cwd, path)
 }
 
-pub fn open_at(cwd: &str, path: &str, flags: usize) -> Option<FileRef> {
+pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Option<FileRef> {
     let inode = match path::lookup_path_at(cwd, path) {
         Some(i) => i,
         None => {
             // 文件不存在
             if flags & O_CREAT != 0 {
-                // 算出绝对路径,复用 create_file
+                // 算出绝对路径,复用 create_file; 创建后按 mode 设权限位
                 let abs = path::normalize_path(cwd, path)?;
-                create_file(&abs)?
+                let inode = create_file(&abs)?;
+                inode.chmod((mode & 0o777) as u16);
+                inode
             } else {
                 return None;
             }
@@ -67,12 +69,14 @@ pub fn open_at(cwd: &str, path: &str, flags: usize) -> Option<FileRef> {
     inode.open(flags)
 }
 
-pub fn open(path: &str, flags: usize) -> Option<FileRef> {
+pub fn open(path: &str, flags: usize, mode: usize) -> Option<FileRef> {
     let inode = match path::lookup_abs_path(path) {
         Some(i) => i,
         None => {
             if flags & O_CREAT != 0 {
-                create_file(path)?      // open 的 path 已是绝对路径
+                let inode = create_file(path)?;   // open 的 path 已是绝对路径
+                inode.chmod((mode & 0o777) as u16);
+                inode
             } else {
                 return None;
             }
@@ -112,7 +116,7 @@ pub fn stat_at(cwd: &str, path: &str) -> Option<Stat> {
         InodeType::Directory => STAT_TYPE_DIR,
     };
 
-    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32))
+    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32).with_mtime(crate::timer::now_secs() as u32))
 }
 
 pub fn stat(path: &str) -> Option<Stat> {
@@ -124,7 +128,7 @@ pub fn stat(path: &str) -> Option<Stat> {
         InodeType::Directory => STAT_TYPE_DIR,
     };
 
-    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32))
+    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32).with_mtime(crate::timer::now_secs() as u32))
 }
 
 

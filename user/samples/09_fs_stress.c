@@ -13,9 +13,9 @@ static void print_stat(const char *path) {
         return;
     }
     put_char(' ');
-    print_file_type_char(st.file_type);
+    print_file_type_char(stat_type_of(st.st_mode));
     puts(" size=");
-    printf("%d", st.size);
+    printf("%d", st.st_size);
 }
 
 // 列出目录下所有条目（ls 风格）
@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
 
     // 预先获取当前工作目录（用于参考）
     char cwd_buf[256];
-    if (getcwd(cwd_buf, sizeof(cwd_buf)) >= 0) {
+    if (getcwd(cwd_buf, sizeof(cwd_buf)) != NULL) {
         puts("当前工作目录: ");
         puts(cwd_buf);
         puts("\n");
