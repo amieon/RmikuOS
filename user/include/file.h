@@ -28,9 +28,12 @@ typedef struct {
     int ungetc;
 } FILE;
 
-static FILE _stdin  = {0, {0}, 0, 0, _F_READ, -1};
-static FILE _stdout = {1, {0}, 0, 0, _F_WRITE, -1};
-static FILE _stderr = {2, {0}, 0, 0, _F_WRITE | _F_UNBUF, -1};
+/* 三个标准流是【全局唯一】对象(定义在 lib/string.o, 所有程序都链)。
+ * 不能是每 TU 一份的 static: printf(某 TU)与 exit 的 flush(string.o)
+ * 若各用各的 _stdout 实例, flush 会落空——短输出无换行就丢了。 */
+extern FILE _stdin;
+extern FILE _stdout;
+extern FILE _stderr;
 
 static inline FILE* __init_stdin(void)  { return &_stdin; }
 static inline FILE* __init_stdout(void) { return &_stdout; }
@@ -100,7 +103,8 @@ static inline FILE* fdopen(int fd, const char* mode) {
     return (FILE*)0;
 }
 
-/* remove: POSIX 删除文件, 即 unlink */
+/* remove: POSIX 删除文件。直接走 syscall, 不依赖 fs.h 的 unlink
+ * (file.h 常先于 fs.h 被 include, static inline 函数需先声明才能调)。 */
 static inline int remove(const char* path) {
     usize len = 0;
     while (path[len]) len++;

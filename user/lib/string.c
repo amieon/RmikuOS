@@ -2,9 +2,14 @@
 /* exit: POSIX 退出——先冲刷标准流缓冲再退出, 否则短输出(<BUFSIZ)且无换行
  * 会滞留缓冲, 进程退出(直接 syscall)时丢失。
  * weak: runmain.o(-run) 自带强 exit 时让位。 */
- 
 #include "../include/file.h"
 #include "../include/stdio.h"
+
+/* 三个标准流的唯一定义（file.h 里是 extern 声明）。
+ * FILE 池(fopen 用)仍每 TU 一份, 但 stdout/stderr 必须跨 TU 共享。 */
+FILE _stdin  = {0, {0}, 0, 0, _F_READ, -1};
+FILE _stdout = {1, {0}, 0, 0, _F_WRITE, -1};
+FILE _stderr = {2, {0}, 0, 0, _F_WRITE | _F_UNBUF, -1};
 
 void exit(int code) __attribute__((weak));
 void exit(int code) {

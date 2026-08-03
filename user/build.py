@@ -339,8 +339,9 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
     if source.suffix == ".c":
         link_objects.append(str(crt0_obj))
     link_objects.append(str(obj))
-    if source.suffix == ".c":
-        link_objects.append(str(runtime_obj))
+    # runtime(syscall.o) 所有程序都链: string.o 现在依赖 syscall3(exit flush 链),
+    # .S 纯汇编程序(如 02_raw) 也要有 syscall 运行时
+    link_objects.append(str(runtime_obj))
     if has_string:
         link_objects.append(str(string_obj))
 
