@@ -1,8 +1,8 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
-当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳）、TCC 0.9.28（系统内 C 编译器，AOT + JIT 自托管工具链），以及用于调度器实验的 workload 与自适应控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳）、TCC 0.9.28（系统内 C 编译器，AOT + JIT 自托管工具链）、kilo 编辑器（ANSI 全屏编辑 + 语法高亮），以及用于调度器实验的 workload 与自适应控制器。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -448,6 +448,37 @@ tcc hello.c -run                   # JIT: 编译进内存直接执行
 `；
 - 用户程序显式 `exit()`（头内联）不 flush——次要路径；
 - TCC 的 `static inline` 不内联是特性不是 bug，靠 libc_extern 转发兜底。
+
+---
+
+### kilo：全屏编辑器（与 TCC 组成开发闭环）
+
+kilo（antirez 的经典教学编辑器，1308 行单文件 C）移植——与 TCC 配合，在 RmikuOS 内完成**「编辑 → 编译 → 运行」完整开发闭环**：
+
+```
+kilo hello.c          # 写代码（ANSI 全屏 + C 语法高亮）
+tcc hello.c -o hello && ./hello    # 编译并运行
+```
+
+#### 适配要点（踩坑实录）
+
+- **termios 最小模拟**（`include/termios.h`）：RmikuOS 无完整 termios，只把 `c_lflag` 的 `ECHO` 位映射到内核 `set_echo()`（raw 模式 = 关回显）；VMIN/VTIME 忽略（内核 read 天然逐字符）；`OPOST/CS8` 等标志只定义供位运算。
+- **回车 = `\n`（ICRNL）**：内核 stdin read 把回车统一转成 `\n`（`stdio.rs` 的 ICRNL），kilo 原版只认 `\r` → 回车会被 insert 成裸 LF、屏幕错乱。修复：`case ENTER` 加 `case '\n'` 同判。
+- **窗口固定 80x24**：无 ioctl(TIOCGWINSZ)/DSR 查询，`getWindowSize` 返回固定尺寸。
+- **退出恢复终端**：RmikuOS crt0 的 exit 不跑 `atexit`，kilo 的 `atexit(editorAtExit)` 失效——Ctrl+Q/Ctrl+Z 退出前显式 `disableRawMode`。
+- **Ctrl+S/Q 备选键**：Ctrl+S(0x13)/Ctrl+Q(0x11) 是 XON/XOFF 软件流控字符，QEMU 串口 + 宿主终端常吞 → 加备选 **Ctrl+X 保存 / Ctrl+Z 退出**（0x18/0x1A 不被流控占用）。
+- 其他：`getline`→`fgets`（无 getline）、`ftruncate` 用真实实现（内核有 `sys_ftruncate`）、`isatty`/`__sync_*` 补 weak 符号。
+
+#### 按键速查
+
+| 键 | 功能 |
+|---|---|
+| 方向键 / PageUp / PageDown | 光标移动、翻页 |
+| Enter | 换行（`\r`/`\n` 均识别） |
+| Backspace / Del | 删除 |
+| **Ctrl-S / Ctrl-X** | 保存 |
+| **Ctrl-Q / Ctrl-Z** | 退出（未保存连按两次确认） |
+| Ctrl-F | 搜索 |
 
 ---
 
