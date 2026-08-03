@@ -32,11 +32,18 @@ int main(int argc, char **argv) {
         printf("brainfuck: cannot open %s\n", argv[1]);
         return 1;
     }
-    char src[65536];
-    size_t len = fread(src, 1, sizeof(src), fp);
+    /* 源缓冲用堆(malloc): RmikuOS 用户栈只有 64KB, 64KB 局部数组会撑爆栈 */
+    char *src = (char *)malloc(65536);
+    if (!src) {
+        printf("brainfuck: malloc failed\n");
+        fclose(fp);
+        return 1;
+    }
+    size_t len = fread(src, 1, 65536, fp);
     fclose(fp);
     if (len == 0) {
         printf("brainfuck: empty program\n");
+        free(src);
         return 1;
     }
 
@@ -44,6 +51,7 @@ int main(int argc, char **argv) {
     unsigned char *tape = (unsigned char *)malloc(TAPE_SIZE);
     if (!tape) {
         printf("brainfuck: malloc failed\n");
+        free(src);
         return 1;
     }
     memset(tape, 0, TAPE_SIZE);
@@ -53,6 +61,7 @@ int main(int argc, char **argv) {
     if (!jump) {
         printf("brainfuck: malloc failed\n");
         free(tape);
+        free(src);
         return 1;
     }
     for (size_t i = 0; i < len; i++) jump[i] = -1;
@@ -62,6 +71,7 @@ int main(int argc, char **argv) {
         printf("brainfuck: malloc failed\n");
         free(tape);
         free(jump);
+        free(src);
         return 1;
     }
     int sp = 0;
@@ -130,11 +140,13 @@ int main(int argc, char **argv) {
 
     free(tape);
     free(jump);
+    free(src);
     return 0;
 
 fail:
     free(tape);
     free(jump);
     if (stack) free(stack);
+    free(src);
     return 1;
 }
