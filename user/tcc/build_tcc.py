@@ -194,6 +194,14 @@ def build_sys_files():
     inc = sys_root / "include"
     if not inc.exists():
         shutil.copytree(USER_DIR / "include", inc)
+    # TCC 编译器配套头: stddef/stdarg/stdbool/stdalign/tgmath 等(gcc 内置提供,
+    # TCC 需要从源码 include/ 拷——否则 user.h->types.h include <stddef.h> 找不到)
+    for h in sorted((TCC_SRC / "include").glob("*.h")):
+        if not (inc / h.name).exists():
+            shutil.copy(h, inc)
+    # TCC 专用 stdint.h(裸机工具链无 libc 版; gcc 用内置, 不放 user/include)
+    if not (inc / "stdint.h").exists():
+        shutil.copy(USER_DIR / "tcc" / "stdint.h", inc)
     print(f"tcc system files -> {sys_root}")
 
 
