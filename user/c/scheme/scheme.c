@@ -16,6 +16,8 @@
  *   scheme /codes/xxx.scm  执行脚本文件
  */
 #include "user.h"
+#include "stdlib.h"
+#include "env.h"
 
 /* ================= 对象 ================= */
 typedef enum {
@@ -27,6 +29,7 @@ typedef struct Env Env;
 typedef struct Obj Obj;
 struct Obj {
     ObjType type;
+    int gc;                  /* GC 标记(可达性) */
     union {
         long num;                    /* T_NUM */
         char *sym;                   /* T_SYM: intern 符号, 指针即身份 */
@@ -83,9 +86,81 @@ static void init_special_symbols(void) {
 }
 
 /* ================= 构造 ================= */
+/* ---- GC: 标记-清除(mark-sweep) ----
+ * 背景: 无 GC 时 TCO 循环每轮泄漏 Env+cons, 100 万次 = 300MB, 6MB 用户堆必爆。
+ * 根集: 全局环境 + eval 主循环活跃(e/env) + REPL 当前表达式(expr)。
+ * 触发: 每 GC_THRESHOLD 次对象分配, 在 eval 主循环顶部检查(递归子调用不触发,
+ *       避免扫描到求值中未完成的中间值)。 */
+static Obj **g_objs = NULL; static int n_objs = 0, cap_objs = 0;
+static Env **g_envs = NULL; static int n_envs = 0, cap_envs = 0;
+static int alloc_count = 0;
+#define GC_THRESHOLD 20000
+
+static Obj *gc_root_expr = NULL;   /* REPL/run_file 当前表达式 */
+static Obj *gc_root_e = NULL;      /* eval 主循环当前表达式 */
+static Env *gc_root_env = NULL;    /* eval 主循环当前环境 */
+static Env *g_global = NULL;       /* 全局环境(永远可达) */
+
+static void gc_mark_obj(Obj *o);
+static void gc_mark_env(Env *e);
+
+static void gc_collect(void) {
+    /* mark */
+    gc_mark_env(g_global);
+    gc_mark_obj(gc_root_expr);
+    gc_mark_obj(gc_root_e);
+    gc_mark_env(gc_root_env);
+    /* sweep objs */
+    int w = 0;
+    for (int i = 0; i < n_objs; i++) {
+        Obj *o = g_objs[i];
+        if (o->gc) { o->gc = 0; g_objs[w++] = o; }
+        else {
+            if (o->type == T_STR) free(o->u.str);
+            if (o->type == T_LAMBDA) free(o->u.lambda.params);
+            free(o);
+        }
+    }
+    n_objs = w;
+    /* sweep envs */
+    w = 0;
+    for (int i = 0; i < n_envs; i++) {
+        Env *e = g_envs[i];
+        if (e->gc) { e->gc = 0; g_envs[w++] = e; }
+        else { free(e->names); free(e->vals); free(e); }
+    }
+    n_envs = w;
+    alloc_count = 0;
+}
+
+static void gc_register_obj(Obj *o) {
+    if (n_objs >= cap_objs) {
+        cap_objs = cap_objs ? cap_objs * 2 : 1024;
+        Obj **nt = (Obj **)realloc(g_objs, sizeof(Obj *) * cap_objs);
+        if (!nt) return;
+        g_objs = nt;
+    }
+    g_objs[n_objs++] = o;
+    alloc_count++;
+}
+
+static void gc_register_env(Env *e) {
+    if (n_envs >= cap_envs) {
+        cap_envs = cap_envs ? cap_envs * 2 : 256;
+        Env **nt = (Env **)realloc(g_envs, sizeof(Env *) * cap_envs);
+        if (!nt) return;
+        g_envs = nt;
+    }
+    g_envs[n_envs++] = e;
+    alloc_count++;
+}
+
 static Obj *obj_new(ObjType t) {
     Obj *o = (Obj *)malloc(sizeof(Obj));
+    if (!o) return NULL;
     o->type = t;
+    o->gc = 0;
+    gc_register_obj(o);
     return o;
 }
 static Obj *num(long v)      { Obj *o = obj_new(T_NUM);  o->u.num = v; return o; }
@@ -108,15 +183,38 @@ struct Env {
     char **names;
     Obj **vals;
     int n, cap;
+    int gc;                  /* GC 标记 */
 };
 
 static Env *env_new(Env *parent) {
     Env *e = (Env *)malloc(sizeof(Env));
+    if (!e) return NULL;
     e->parent = parent;
     e->names = NULL;
     e->vals = NULL;
     e->n = e->cap = 0;
+    e->gc = 0;
+    gc_register_env(e);
     return e;
+}
+
+static void gc_mark_obj(Obj *o) {
+    if (!o || o->gc) return;
+    o->gc = 1;
+    if (o->type == T_PAIR) {
+        gc_mark_obj(o->u.pair.car);
+        gc_mark_obj(o->u.pair.cdr);
+    } else if (o->type == T_LAMBDA) {
+        gc_mark_obj(o->u.lambda.body);
+        gc_mark_env(o->u.lambda.env);
+    }
+}
+
+static void gc_mark_env(Env *e) {
+    if (!e || e->gc) return;
+    e->gc = 1;
+    gc_mark_env(e->parent);
+    for (int i = 0; i < e->n; i++) gc_mark_obj(e->vals[i]);
 }
 
 static void env_def(Env *e, char *name, Obj *val) {
@@ -295,6 +393,12 @@ static Obj *eval_list(Obj *args, Env *env) {
 
 static Obj *eval(Obj *e, Env *env, int tail) {
     for (;;) {
+        if (alloc_count > GC_THRESHOLD) {
+            gc_root_e = e;
+            gc_root_env = env;
+            gc_collect();
+        }
+        if (!e) return NULL;
         switch (e->type) {
         case T_NUM: case T_STR: case T_BOOL: case T_NIL:
             return e;
@@ -629,6 +733,7 @@ static void install_builtin(Env *env, char *name, Obj *(*fn)(Obj *)) {
 
 static Env *global_env(void) {
     Env *e = env_new(NULL);
+    g_global = e;              /* GC 根: 每次 gc_collect 从它 mark */
     install_builtin(e, "+", bi_add);
     install_builtin(e, "-", bi_sub);
     install_builtin(e, "*", bi_mul);
@@ -693,7 +798,9 @@ static void repl(Env *env) {
         while (1) {
             Obj *expr = read_expr(src);
             if (!expr) break;
+            gc_root_expr = expr;                 /* GC 根 */
             Obj *r = eval(expr, env, 0);
+            gc_root_expr = NULL;
             if (r) { print_obj(r); printf("\n"); }
             /* 一行可能有多个表达式(如 (define...) (define...))——循环 */
             if (src[src_pos] == '\0') break;
@@ -717,7 +824,9 @@ static int run_file(Env *env, char *path) {
     for (;;) {
         Obj *expr = read_expr(src);
         if (!expr) break;
+        gc_root_expr = expr;                 /* GC 根 */
         Obj *r = eval(expr, env, 0);
+        gc_root_expr = NULL;
         if (!r) return 1;
         if (src[src_pos] == '\0') break;
     }
