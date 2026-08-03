@@ -29,6 +29,10 @@ struct termios {
 #define INPCK  0x0004
 #define ISTRIP 0x0008
 #define IXON   0x0010
+/* c_oflag */
+#define OPOST  0x0001   /* 输出后处理——RmikuOS 无实际效果, 定义供位运算 */
+/* c_cflag */
+#define CS8    0x0030   /* 8 位字符——RmikuOS 固定, 定义供位运算 */
 /* c_lflag */
 #define ISIG   0x0001
 #define ICANON 0x0002

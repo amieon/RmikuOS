@@ -46,7 +46,7 @@ void __sync_lock_release(int *ptr) {
 }
 
 /* isatty: 0/1/2(标准流)是终端, 其余 fd 视为文件(kilo 等编辑器需要) */
-int isatty(int fd) {
+__attribute__((weak)) int isatty(int fd) {
     return fd >= 0 && fd <= 2;
 }
 
