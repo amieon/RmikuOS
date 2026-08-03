@@ -111,6 +111,10 @@ struct editorConfig {
 
 static struct editorConfig E;
 
+/* RmikuOS 适配: 备选保存/退出键(Ctrl+X=0x18, Ctrl+Z=0x1A)。
+ * QEMU 串口 + 宿主终端的 XON/XOFF 软件流控会吞 Ctrl+S(0x13)/Ctrl+Q(0x11)。 */
+#define CTRL_KEY(k) ((k) & 0x1f)
+
 enum KEY_ACTION{
         KEY_NULL = 0,       /* NULL */
         CTRL_C = 3,         /* Ctrl-c */
@@ -804,10 +808,12 @@ int editorOpen(char *filename) {
 int editorSave(void) {
     int len;
     char *buf = editorRowsToString(&len);
-    /* RmikuOS: 无 ftruncate; O_TRUNC 打开即截断(教学简化) */
-    int fd = open(E.filename,O_RDWR|O_CREAT|O_TRUNC,0644);
+        int fd = open(E.filename,O_RDWR|O_CREAT,0644);
     if (fd == -1) goto writeerr;
 
+    /* Use truncate + a single write(2) call in order to make saving
+     * a bit safer, under the limits of what we can do in a small editor. */
+    if (ftruncate(fd,len) == -1) goto writeerr;
     if (write(fd,buf,len) != len) goto writeerr;
 
     close(fd);
@@ -1164,7 +1170,8 @@ void editorProcessKeypress(int fd) {
 
     int c = editorReadKey(fd);
     switch(c) {
-    case ENTER:         /* Enter */
+    case ENTER:         /* Enter (\r) */
+    case '\n':         /* RmikuOS: 内核 ICRNL 把回车转成 \n, 必须同判(否则 insert 成裸 LF 屏幕乱) */
         editorInsertNewline();
         break;
     case CTRL_C:        /* Ctrl-c */
@@ -1172,6 +1179,7 @@ void editorProcessKeypress(int fd) {
          * to the edited file. */
         break;
     case CTRL_Q:        /* Ctrl-q */
+    case CTRL_KEY('z'): /* 备选退出: 同上, XOFF 吞 Ctrl+Q 时用 (0x1A 不被流控占用) */
         /* Quit if the file was already saved. */
         if (E.dirty && quit_times) {
             editorSetStatusMessage("WARNING!!! File has unsaved changes. "
@@ -1179,9 +1187,12 @@ void editorProcessKeypress(int fd) {
             quit_times--;
             return;
         }
+        /* RmikuOS: crt0 的 exit 不跑 atexit(editorAtExit), 显式恢复终端 */
+        disableRawMode(STDIN_FILENO);
         exit(0);
         break;
     case CTRL_S:        /* Ctrl-s */
+    case CTRL_KEY('x'): /* 备选保存: QEMU 串口/宿主终端的 XON/XOFF 流控会吞 Ctrl+S(0x13) */
         editorSave();
         break;
     case CTRL_F:
