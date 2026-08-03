@@ -63,6 +63,25 @@ static char *intern(char *s) {
     return copy;
 }
 
+/* ---- 特殊形式预 intern 符号: C 的字符串字面量指针 != intern 表指针,
+ * 必须预 intern 后按指针比较(与 Python 验证器的语言级 intern 语义对齐) ---- */
+static char *S_quote, *S_if, *S_define, *S_lambda, *S_begin,
+            *S_set, *S_cond, *S_else, *S_let, *S_and, *S_or;
+
+static void init_special_symbols(void) {
+    S_quote  = intern("quote");
+    S_if     = intern("if");
+    S_define = intern("define");
+    S_lambda = intern("lambda");
+    S_begin  = intern("begin");
+    S_set    = intern("set!");
+    S_cond   = intern("cond");
+    S_else   = intern("else");
+    S_let    = intern("let");
+    S_and    = intern("and");
+    S_or     = intern("or");
+}
+
 /* ================= 构造 ================= */
 static Obj *obj_new(ObjType t) {
     Obj *o = (Obj *)malloc(sizeof(Obj));
@@ -320,10 +339,10 @@ static Obj *eval(Obj *e, Env *env, int tail) {
         char *h = head->u.sym;
 
         /* ---- 特殊形式 ---- */
-        if (h == "quote") {
+        if (h == S_quote) {
             return e->u.pair.cdr->u.pair.car;   /* (quote x) */
         }
-        if (h == "if") {
+        if (h == S_if) {
             Obj *cond = eval(e->u.pair.cdr->u.pair.car, env, 0);
             if (!cond) return NULL;
             int truth = !(cond->type == T_BOOL && cond->u.num == 0);
@@ -335,7 +354,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             e = branch;
             continue;                                /* TCO: 尾位置 */
         }
-        if (h == "begin") {
+        if (h == S_begin) {
             Obj *body = e->u.pair.cdr;
             while (body->type == T_PAIR && body->u.pair.cdr->type == T_PAIR) {
                 Obj *r = eval(body->u.pair.car, env, 0);
@@ -346,7 +365,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             e = body->u.pair.car;                    /* 最后一项: 尾位置 */
             continue;
         }
-        if (h == "define") {
+        if (h == S_define) {
             Obj *target = e->u.pair.cdr->u.pair.car;   /* 符号 或 (f params...) */
             Obj *rest = e->u.pair.cdr->u.pair.cdr;
             if (target->type == T_SYM) {
@@ -375,7 +394,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             printf("scheme: bad define\n");
             return NULL;
         }
-        if (h == "lambda") {
+        if (h == S_lambda) {
             Obj *params = e->u.pair.cdr->u.pair.car;
             Obj *body = e->u.pair.cdr->u.pair.cdr;   /* (body...) */
             int n = 0;
@@ -391,7 +410,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             fn->u.lambda.env = env;                   /* 闭包: 捕获定义环境 */
             return fn;
         }
-        if (h == "set!") {
+        if (h == S_set) {
             Obj *name = e->u.pair.cdr->u.pair.car;
             Obj *val = eval(e->u.pair.cdr->u.pair.cdr->u.pair.car, env, 0);
             if (!val) return NULL;
@@ -401,13 +420,13 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             }
             return nil_obj();
         }
-        if (h == "cond") {
+        if (h == S_cond) {
             Obj *clauses = e->u.pair.cdr;
             int matched = 0;
             for (; clauses->type == T_PAIR; clauses = clauses->u.pair.cdr) {
                 Obj *cl = clauses->u.pair.car;
                 Obj *test = cl->u.pair.car;
-                if (test->type == T_SYM && test->u.sym == "else") {
+                if (test->type == T_SYM && test->u.sym == S_else) {
                     Obj *body = cl->u.pair.cdr;
                     while (body->type == T_PAIR && body->u.pair.cdr->type == T_PAIR) {
                         Obj *r = eval(body->u.pair.car, env, 0);
@@ -433,7 +452,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             if (matched) continue;                    /* 命中: 尾位置走主循环 */
             return nil_obj();                         /* 无子句命中 */
         }
-        if (h == "let") {
+        if (h == S_let) {
             Obj *binds = e->u.pair.cdr->u.pair.car;
             Obj *body = e->u.pair.cdr->u.pair.cdr;
             Env *n = env_new(env);
@@ -447,7 +466,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             env = n;
             continue;                                /* TCO: 尾位置 */
         }
-        if (h == "and") {
+        if (h == S_and) {
             Obj *args = e->u.pair.cdr;
             if (args->type == T_NIL) return boolean(1);
             for (; args->u.pair.cdr->type == T_PAIR; args = args->u.pair.cdr) {
@@ -457,7 +476,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             }
             e = args->u.pair.car; continue;          /* 最后一项尾位置 */
         }
-        if (h == "or") {
+        if (h == S_or) {
             Obj *args = e->u.pair.cdr;
             if (args->type == T_NIL) return boolean(0);
             for (; args->u.pair.cdr->type == T_PAIR; args = args->u.pair.cdr) {
@@ -697,6 +716,7 @@ static int run_file(Env *env, char *path) {
 }
 
 int main(int argc, char **argv) {
+    init_special_symbols();      /* 特殊形式名预 intern, eval 按指针比较 */
     Env *env = global_env();
     if (argc >= 2)
         return run_file(env, argv[1]);
