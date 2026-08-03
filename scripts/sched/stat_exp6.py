@@ -178,6 +178,15 @@ def compute(run):
         if j["name"] == "ctrl":
             s.setdefault("work", {})["ctrl"] = j["jobs"]
 
+    # 逐窗口 ai run_delta + win 号（供分相位统计用）
+    ai_ws = sorted([w for w in run["W"] if w["name"] == "ai"], key=lambda x: x["win"])
+    if ai_ws:
+        s["win_ai_rd"] = [w["run_delta"] for w in ai_ws]
+        s["win_ai_wins"] = [w["win"] for w in ai_ws]
+    else:
+        s["win_ai_rd"] = []
+        s["win_ai_wins"] = []
+
     if run["D"]:
         s["win_miss"] = np.array([
             d["miss_delta"] / d["jobs_delta"] * 100.0 if d["jobs_delta"] > 0 else 0.0
@@ -636,16 +645,20 @@ def plot_adamw_phase_burn(computed, stats, outdir):
             reps = [r for r in computed if r["ratio"] == ratio and r["mode"] == mode]
             if not reps:
                 continue
-            max_w = max((max(w["win"] for w in r.get("W", [(0,)])) for r in reps), default=100)
+            # 从 compute() 存的 win_ai_wins 取 max
+            all_wins = [w for r in reps for w in r.get("win_ai_wins", [])]
+            max_w = max(all_wins) if all_wins else 100
             pb = phase_bounds_for_ratio(ratio, max_w)
             phase_burns = []
             for pi in range(4):
                 lo, hi = pb[pi], pb[pi+1]
                 vals = []
                 for r in reps:
-                    ws_ai = [w for w in r.get("W", []) if w["name"] == "ai" and lo < w["win"] <= hi]
-                    if ws_ai:
-                        vals.append(sum(w["run_delta"] for w in ws_ai))
+                    wins = r.get("win_ai_wins", [])
+                    rds = r.get("win_ai_rd", [])
+                    seg = [rds[i] for i in range(len(wins)) if lo < wins[i] <= hi]
+                    if seg:
+                        vals.append(sum(seg))
                 phase_burns.append(np.mean(vals) if vals else 0)
             offset = (mi - (len(modes_to_plot)-1)/2) * width
             color = COLORS_MODE.get(mode, "#666")
