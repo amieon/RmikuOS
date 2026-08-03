@@ -10,10 +10,8 @@ _start:
 
     call main
 
-    mv      a0, a0
-    li      a7, 0
-    ecall
-
+    /* exit(code): 冲刷标准流缓冲后 syscall 退出(短输出无换行不丢) */
+    call exit
 1:
     j 1b
 

@@ -419,9 +419,10 @@ isize open(const char *path, usize flags, ...) {
     }
     return __rmiku_open(path, flags, mode);
 }
-/* exit/atexit 用 weak: -run 时 runmain.o 自带强定义(exit 走 __rt_exit 回溯、
- * atexit 走 rt_exitfunc 表), weak 不冲突且被强版覆盖; AOT(无 runmain)用 weak 版。 */
-__attribute__((weak)) void exit(int code) { __rmiku_exit(code); }
+/* atexit 用 weak: -run 时 runmain.o 自带强定义(走 rt_exitfunc 表),
+ * weak 不冲突且被强版覆盖; AOT(无 runmain)用 weak 版。
+ * 注意: exit 不再在此转发——lib/string.c 提供带 flush 的 weak exit
+ * (短输出无换行不丢失), 避免双 weak 定义。 */
 __attribute__((weak)) int atexit(void (*function)(void)) { return __rmiku_atexit(function); }
 
 /* ============ TCC runmain 支持（.init_array/.fini_array 边界符号） ============

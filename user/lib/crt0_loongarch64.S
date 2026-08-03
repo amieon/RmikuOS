@@ -9,9 +9,8 @@ _start:
 
     bl      main
 
-    addi.d  $r11, $r0, 0
-    syscall 0
-
+    /* exit(code): 冲刷标准流缓冲后 syscall 退出 */
+    bl      exit
 1:
     b 1b
 
