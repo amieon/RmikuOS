@@ -352,7 +352,8 @@ static Obj *eval(Obj *e, Env *env, int tail) {
                                    : rest->u.pair.cdr->u.pair.car);
             if (!branch) return boolean(0);          /* 无 else 且为假 */
             e = branch;
-            continue;                                /* TCO: 尾位置 */
+            tail = 1;                                /* TCO: 尾位置(传播标志) */
+            continue;
         }
         if (h == S_begin) {
             Obj *body = e->u.pair.cdr;
@@ -363,6 +364,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             }
             if (body->type == T_NIL) return nil_obj();
             e = body->u.pair.car;                    /* 最后一项: 尾位置 */
+            tail = 1;
             continue;
         }
         if (h == S_define) {
@@ -449,7 +451,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
                     e = body->u.pair.car; matched = 1; break;   /* 尾位置 */
                 }
             }
-            if (matched) continue;                    /* 命中: 尾位置走主循环 */
+            if (matched) { tail = 1; continue; }     /* 命中: 尾位置走主循环 */
             return nil_obj();                         /* 无子句命中 */
         }
         if (h == S_let) {
@@ -464,7 +466,8 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             }
             e = body_of(body);
             env = n;
-            continue;                                /* TCO: 尾位置 */
+            tail = 1;                                /* TCO: 尾位置 */
+            continue;
         }
         if (h == S_and) {
             Obj *args = e->u.pair.cdr;
@@ -474,7 +477,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
                 if (!v) return NULL;
                 if (v->type == T_BOOL && v->u.num == 0) return boolean(0);
             }
-            e = args->u.pair.car; continue;          /* 最后一项尾位置 */
+            e = args->u.pair.car; tail = 1; continue; /* 最后一项尾位置 */
         }
         if (h == S_or) {
             Obj *args = e->u.pair.cdr;
@@ -484,7 +487,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
                 if (!v) return NULL;
                 if (!(v->type == T_BOOL && v->u.num == 0)) return v;
             }
-            e = args->u.pair.car; continue;          /* 最后一项尾位置 */
+            e = args->u.pair.car; tail = 1; continue; /* 最后一项尾位置 */
         }
 
         /* ---- 普通函数调用 (h 是函数名) ---- */
@@ -605,7 +608,13 @@ static Obj *bi_eq(Obj *a) {
     return boolean(x == y);   /* 符号/布尔/对象指针 */
 }
 static Obj *bi_list(Obj *a) { return a; }
-static Obj *bi_display(Obj *a) { print_obj(a->u.pair.car); return nil_obj(); }
+static Obj *bi_display(Obj *a) {
+    /* 字符串原样输出(不带引号), 其他类型走 print_obj */
+    Obj *v = a->u.pair.car;
+    if (v->type == T_STR) printf("%s", v->u.str);
+    else print_obj(v);
+    return nil_obj();
+}
 static Obj *bi_newline(Obj *a) { printf("\n"); return nil_obj(); }
 static Obj *bi_exit(Obj *a) {
     exit(a->type == T_PAIR && a->u.pair.car->type == T_NUM ? (int)a->u.pair.car->u.num : 0);
