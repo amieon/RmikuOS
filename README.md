@@ -852,6 +852,41 @@ QEMU slirp 关键路径：guest 发 UDP 到 `10.0.2.2:<端口>` 会被自动转�
 * **FAT 目录项 DOS 时间戳未读**：mtime 取 stat 时刻墙钟而非磁盘持久化修改时间（需 DOS→epoch 转换，留待以后）。
 * **相关 syscall 号段**：`SYS_SET_ECHO=69`、`SYS_SIGNAL=70`、`SYS_SET_FRONT=71`、`SYS_GET_TIME_US=72`、`SYS_SET_WALL_CLOCK=73`、`SYS_GET_EPOCH=74`。
 
+### wget：TCP 客户端从 host 拉文件（网络栈的下载闭环）
+
+`user/c/wget/wget.c`（约 150 行）——用自研 TCP 栈发 `HTTP/1.0 GET`，把响应体存进 FAT：
+
+```
+wget http://10.0.2.2:8000/hello.txt /fat/hi.txt   # URL 形式(默认端口 80)
+wget http://10.0.2.2:8000                          # 无路径 -> GET /
+wget 10.0.2.2 8000 /hello.txt /fat/hi.txt          # 旧三参形式(兼容)
+```
+
+流程：`socket → connect → send GET（HTTP/1.0 + Connection: close）→ 收响应头（缓冲找 \r\n\r\n）→ 收 body 到连接关闭 → write 落盘`。host 侧 `python3 -m http.server 8000` 即服务端——guest 访问 `10.0.2.2:8000` 经 slirp 转发到 host loopback（与 NTP 同款通道，无需 hostfwd）。
+
+实测输出：
+
+```
+[tcp] fd 1 established
+wget: HTTP/1.0 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.4
+Content-Length: 17
+...
+/ $ cat /fat/hi.txt
+hello from host!
+```
+
+#### 顺带把内核 recv 改成 POSIX 语义
+
+wget 调试暴露了内核一个 API 简化：`tcp::recv_data` 原来**弹出整个 TCP chunk、只返回请求长度**——逐字节读的客户端（如 HTTP 头解析）会丢数据。已修复为 POSIX 语义：消费 n 字节后 `chunk.drain(..n) + push_front` 把剩余放回队列头，下次 recv 继续读。UDP 数据报语义本就正确、未动。**现在任意读法（大块/逐字节）都安全**。
+
+#### 踩坑两个
+
+* **双重 htons**：`addr_of` 内部已 `htons(port)`，再套一层会转回主机序——8000(0x1F40) 变 16415，SYN 发错端口。tcp_test 直传端口所以从没暴露；
+* **整块弹出丢数据**：见上——客户端必须大块读（现已在 API 侧根治）。
+
+---
+
 ### 排障方法学：三段定位法
 
 网络问题一律按「guest 发没发对 → slirp 转没转发 → 宿主机谁收走」三段切分：
