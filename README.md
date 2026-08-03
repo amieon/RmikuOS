@@ -1,8 +1,8 @@
 # RmikuOS
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua** 五种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
+RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua / Scheme** 六种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
-当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳）、TCC 0.9.28（系统内 C 编译器，AOT + JIT 自托管工具链）、kilo 编辑器（ANSI 全屏编辑 + 语法高亮），以及用于调度器实验的 workload 与自适应控制器。
+当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳）、TCC 0.9.28（系统内 C 编译器，AOT + JIT 自托管工具链）、kilo 编辑器（ANSI 全屏编辑 + 语法高亮）、Scheme（从零手写的 Lisp 方言，尾调用优化 + 标记清除 GC），以及用于调度器实验的 workload 与自适应控制器。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -1459,6 +1459,25 @@ liolib.c 部分    临时文件、popen（管道进程）
 Lua 移植是唯一一种"官方源码一行不改、只提供桥接头文件"的方式——这得益于 Lua 5.4 源码的干净设计（纯 C89、无平台 ifdef、所有系统依赖都经 `luaconf.h` 的 `luai_*` 宏集中配置）。
 
 
+
+### Scheme：从零手写的微型 Lisp（TCO + 标记清除 GC）
+
+Scheme 是 RmikuOS 的第六种用户态语言——**从零手写**（`user/c/scheme/scheme.c`，约 850 行 C），不移植任何现成实现。语言本体：S 表达式读取器（`'` 糖、`;` 注释、字符串、多行括号补全）、环境链与闭包、特殊形式（`quote if define lambda begin set! cond let and or`）、内建（算术/比较/列表/谓词/IO）、交互 REPL + 文件模式。两个"正经语言"的标配：
+
+**① 尾调用优化（TCO）**——Scheme 的灵魂。`eval` 用主循环而非纯递归：尾位置的 lambda 调用直接 `e=body; env=new; continue` 迭代，**不压栈**。关键在 **tail 标志从特殊形式传播**：`if`/`cond`/`let`/`begin`/`and`/`or` 的尾分支都要把 tail 置 1，否则尾表达式会被当"非尾"求值、重新递归——100 万层直接爆 64KB 用户栈。修复后 `(loop 1000000 0)` 平稳跑完。
+
+**② 标记-清除 GC（mark-sweep）**——6MB 用户堆逼出来的。无 GC 时 TCO 循环每轮泄漏 Env + cons，100 万次 = 300MB → `malloc` 返回 NULL → 空指针崩。GC 根集：全局环境 + eval 主循环活跃（表达式/环境）+ REPL 当前输入；每 2 万次分配在**主循环顶部**触发（递归子调用期间不触发，避免扫描未完成的中间值）；sweep 回收未标记的 Obj/Env，符号字符串归 intern 表持有不回收。
+
+```text
+/programs/scheme /codes/scm_tco.scm    # sum 1..1000000 = 500000500000（TCO + GC 同框）
+/programs/scheme /codes/scm_fib.scm    # fib(20)=6765 + cond 分级 + let
+/programs/scheme /codes/scm_hello.scm  # Hello, RmikuScheme! + 闭包加法器
+/programs/scheme                       # 交互 REPL
+```
+
+踩坑实录（跨语言移植的通用教训）：C 的字符串字面量指针 ≠ intern 表指针——特殊形式必须**预 intern 后按指针比较**（Python 验证器靠语言级字符串 intern 掩盖了这个差异）；TCO 主循环里嵌 `for`（cond 子句）时 `continue` 属于内层循环——要用 `matched + break` 跳出；无 GC 的深循环在受限堆上必然耗尽——"教学 OS 无 GC"只适合短程序。
+
+---
 
 ### SQLite 3.50：交互式数据库 shell（官方 amalgamation 零改动）
 
