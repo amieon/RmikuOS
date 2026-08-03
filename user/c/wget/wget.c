@@ -27,7 +27,8 @@ int main(int argc, char **argv) {
     int fd = socket_tcp();
     if (fd < 0) { printf("wget: socket failed\n"); return 1; }
 
-    struct sockaddr_in srv = addr_of(parse_ip(ip), htons((unsigned short)port));
+    /* addr_of 内部已 htons(port) —— 不要再套 htons, 否则双重转换变回主机序 */
+    struct sockaddr_in srv = addr_of(parse_ip(ip), (unsigned short)port);
     if (connect(fd, &srv, sizeof srv) < 0) {
         printf("wget: connect %s:%d failed\n", ip, port);
         return 1;
