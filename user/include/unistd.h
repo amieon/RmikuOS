@@ -25,6 +25,12 @@ extern "C" {
 
 /* ---- implemented in rmiku_shims.c ---- */
 extern int isatty(int);
+
+/* 标准流文件描述符(kilo 等需要) */
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+
 extern int access(const char *path, int amode);
 
 /* Symlink: not supported on RmikuOS (no symlinks in kernel FS).
