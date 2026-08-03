@@ -1,12 +1,13 @@
 /*
  * schedlab.h —— RmikuOS 调度实验框架
  *
- * 覆盖五个实验(CLI 与原 tests/ 对齐,见 schedlab.c):
+ * 覆盖六个实验(CLI 与原 tests/ 对齐,见 schedlab.c):
  *   1. mech   Alpha mechanism test      —— 验证机制(原 35_alpha_arg_test)
  *   2. edge   Edge deadline trade-off   —— 刻画 trade-off(原 36_edge_deadline_arg_test)
  *   3. aimd   Adaptive alpha controller —— AIMD 恒定负载(原 37/39)
  *   4. dyn    Dynamic load experiment   —— AIMD vs 固定 α(原 40)
- *   5. adamw  SPSA-AdamW 自适应         —— 新增对照
+ *   5. phase  Phase ratio experiment    —— L/H 相位比例对 AIMD 优势的影响(临时新增)
+ *   6. adamw  SPSA-AdamW 自适应          —— 梯度优化对照
  *
  * v2 关键架构变化(ctrl 搬进监控进程):
  *   v1 把所有负载组都 fork 成独立子进程,导致控制器在运行中拿不到
@@ -21,19 +22,21 @@
  * 输出 CSV(全部原始量,推导交给宿主机 Python):
  *   W,win,alpha,pid,name,run_delta,eff_tickets,ready_threads
  *   D,win,alpha,jobs_delta,miss_delta,late_delta      (仅 in-parent jobs 组)
- *   A,win,alpha_before,alpha_after,action             (AIMD 决策轨迹)
+ *   A,win,alpha_before,alpha_after,action             (控制器决策轨迹:AIMD 和 AdamW 都输出)
  *   J,pid,name,threads,jobs,miss,late_sum,late_max,resp_sum,resp_sumsq,resp_min,resp_max
  *   K,pid,name,threads,work                           (spin 组收尾:吞吐 work)
  *   S,win,next_alpha,jain_q,max_slowdown_q
  *
  * v2 相对 v1.1 的变更:
  *   + in-parent jobs 组(SL_F_IN_PARENT),D/A 行,窗口 deadline 差分进 sl_window_t
- *   + AIMD 策略(逐行移植 40_dynamic_load_exp.c:INC=5,BACKOFF=80,
- *     滞回 0/25 tick,分档 900/500,冷却 1,late-probe 保护 3 窗口)
+ *   + AIMD 策略(INC=5,BACKOFF=80%,滞回 0/25 tick,分档 900/500,
+ *     cooldown=3, safe_windows>=2——调参减少 set_sched_alpha 调用频率)
  *   + AdamW 的 loss 改为 deadline 损失(miss_per_1000 + 平均迟到,与 AIMD 同信号竞技)
+ *   + AdamW 也输出 A 行(before/after/action=up/down/hold)——首版漏掉,α 轨迹拿不到
  *   + spin 组 work 计数(K 行);J 行补 late_max/resp_sumsq(exp2 jitter 用)
  *   + dyn 相位改为 40 的"活跃子集"方案(轻相位只 light_active 个线程活跃),
  *     移除 v1 的中途加入/退出组
+ *   + sl_l_ratio_permil 全局变量: 非等分相位比例(exp5 用,0=等分 25/25/25/25)
  *   + cfg.start_delay(默认 80 tick,对齐原 START_DELAY_TICKS)
  *   - 移除 hill 策略(占位基线,真实基线是你的 AIMD)
  *   ! SL_MAX_THREADS 64 -> 128(容纳 ai=100 的原配置)
