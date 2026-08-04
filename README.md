@@ -24,23 +24,6 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 
 ![RmikuOS shell](docs/images/rmikuos_shell.png)
 
-### ext4 Rootfs
-
-![ext4 rootfs](docs/images/ext4_rootfs.png)
-
-### Arch Map
-
-![arch map](docs/images/arch.png)
-
-
-### Adaptive Alpha Controller (AIMD)
-
-![adaptive alpha trace](logs/figs_adaptive3/adaptive_alpha_trace_1_25_9_init75_run28.png)
-
-
-### Dynamic Load: AIMD vs Fixed Alpha
-
-![dynamic load comparison](logs/figs_dynamic_laod/dynamic_load_alpha_miss_work.png)
 
 ### TCP: Jacobson/Karn vs Fixed RTO（丢包率扫描）
 

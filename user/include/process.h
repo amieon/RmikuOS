@@ -5,6 +5,7 @@ extern "C" {
 
 
 #include "io.h"
+#include "file.h"   /* fflush(stdout/stderr): exit 前必须冲刷缓冲! */
 #define WNOHANG 1
 #define WUNTRACED 0
 
@@ -57,6 +58,12 @@ static inline int atexit(void (*func)(void)) {
 
 static inline void exit(int code) {
     while (_atexit_n > 0) _atexit_funcs[--_atexit_n]();
+    /* 必须先冲刷标准流缓冲再退出: 否则 printf 等写入 stdout 缓冲的
+     * 内容(如 abort 的 "abort\n"、lua panic 前的部分输出)会随进程
+     * 直接 syscall 退出而丢失。crt0 链接的是 string.c 的 weak exit,
+     * 但源码内联调用的 exit() 是这里的 static 版本, 必须同样 flush。 */
+    fflush(stdout);
+    fflush(stderr);
     syscall3(SYS_EXIT, (usize)code, 0, 0);
     for (;;) {}
 }

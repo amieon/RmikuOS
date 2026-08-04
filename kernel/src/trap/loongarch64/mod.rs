@@ -133,6 +133,18 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
         | ECODE_ADEF_ADEM
         | ECODE_ALE => {
             if cx.is_from_user() {
+                trap_println!(
+                    "[trap] SIGSEGV from user: era={:#x}, badv={:#x}, estat={:#x}, \
+                    ra={:#x}, sp={:#x}, a0={:#x}, a1={:#x}, hart={}",
+                    cx.era,
+                    cx.badv,
+                    cx.estat,
+                    cx.r[1],   // ra: 跳飞前的返回地址(调用点)
+                    cx.r[3],   // sp: 崩溃时栈指针
+                    cx.r[4],   // a0
+                    cx.r[5],   // a1
+                    crate::arch::current_hart_id()
+                );
                 /* 用户态非法内存访问 -> SIGSEGV, 只杀该进程(exit 139) */
                 crate::task::set_current_sig_pending(crate::task::SIGSEGV);
                 crate::task::do_signal();
