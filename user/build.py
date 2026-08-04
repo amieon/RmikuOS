@@ -769,7 +769,7 @@ def build_tcc(arch: str):
 
     arch_backend = {
         "riscv64": ["riscv64-gen.c", "riscv64-link.c", "riscv64-asm.c"],
-        "loongarch64": ["loongarch64-gen.c", "loongarch64-link.c"],
+        "loongarch64": ["loongarch64-gen.c", "loongarch64-link.c", "loongarch64-asm.c"],
     }
     if arch not in arch_backend:
         print(f"[user] tcc: TCC 0.9.28 has no {arch} backend (no {arch}-gen.c), skip")
@@ -806,12 +806,22 @@ def build_tcc(arch: str):
     objs.append(string_o)
 
     # 3) TCC 源码
+    # 显式指定 TCC target(不依赖 __loongarch__/__riscv 自动检测,
+    # 防止 tcc.h 分支缺失或工具链宏异常导致编成错误架构)
+    tcc_target_def = {
+        "riscv64": "-DTCC_TARGET_RISCV64",
+        "loongarch64": "-DTCC_TARGET_LOONGARCH64",
+    }.get(arch)
     cflags = [
         *cfg["cflags"],
         "-nostdlib", "-nostartfiles", "-static", "-no-pie",
         "-O2", "-fno-strict-aliasing", "-Wno-unused-result",
         "-fno-builtin",   # RmikuOS 的 strlen 等是头内联, 禁 gcc builtin 生成外部调用
         "-DONE_SOURCE=0",
+    ]
+    if tcc_target_def:
+        cflags.append(tcc_target_def)
+    cflags += [
         f"-I{INCLUDE_DIR}",   # RmikuOS libc 头
         f"-I{tcc_src}",       # TCC 自身头(tcc.h 等)
         f"-I{tcc_dir}",       # 手工 config.h
