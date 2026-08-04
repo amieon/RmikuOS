@@ -2,7 +2,10 @@
  * config.h —— RmikuOS 用的 TCC 手工配置（仿 configure 生成物）
  *
  * 关键决策：
- *   - TCC_TARGET_RISCV64      选 riscv64 后端
+ *   - 目标架构【不在此处硬编码】: 由编译��令行 -DTCC_TARGET_<ARCH> 决定
+ *     (build.py 的 build_tcc 按 arch 传入)。硬编码 TCC_TARGET_RISCV64 会
+ *     导致 loongarch64 构建时 RISCV64 与 LOONGARCH64 同时定义,
+ *     tcc -v 显示 riscv64。
  *   - CONFIG_TCC_ELFINTERP "" 不写 PT_INTERP（内核 loader 拒绝动态链接段）
  *   - CONFIG_TCC_SEMLOCK 0    RmikuOS 无 sem/pthread 锁, 单线程
  *   - CONFIG_TCC_STATIC 1     静态
@@ -12,9 +15,6 @@
 #define CONFIG_H
 
 #define TCC_VERSION "0.9.28"
-
-/* ---- 目标架构 ---- */
-#define TCC_TARGET_RISCV64 1
 
 /* ---- 路径配置：指向镜像 /usr/lib/tcc(crt/库/头) ---- */
 #define CONFIG_TCC_ELFINTERP ""
@@ -36,7 +36,7 @@
  * tccrun.c 用 #ifdef CONFIG_SELINUX(定义了就走 mmap+临时文件分支),
  * 我们要默认分支(tcc_malloc + mprotect)。 */
 #define CONFIG_TCC_PREDEFS 1
-/* 不定义 CONFIG_TCC_ASM —— riscv64-gen.c 会 #define 它, 定义会重定义警告 */
+/* 不定义 CONFIG_TCC_ASM —— 后端 gen.c 会 #define 它, 定义会重定义警告 */
 #define CONFIG_TCC_ELFINTERP_ARMHF ""
 
 #endif /* CONFIG_H */
