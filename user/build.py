@@ -32,6 +32,8 @@ ARCH_CONFIG = {
     "riscv64": {
         "gcc": "riscv64-unknown-elf-gcc",
         "gxx": "riscv64-unknown-elf-g++",
+        "ar": "riscv64-unknown-elf-ar",
+        "nm": "riscv64-unknown-elf-nm",
         "objcopy": "riscv64-unknown-elf-objcopy",
         "objdump": "riscv64-unknown-elf-objdump",
         "linker": USER_DIR / "linker-riscv64.ld",
@@ -59,6 +61,8 @@ ARCH_CONFIG = {
     "loongarch64": {
         "gcc": "loongarch64-unknown-linux-gnu-gcc",
         "gxx": "loongarch64-unknown-linux-gnu-g++",
+        "ar": "loongarch64-unknown-linux-gnu-ar",
+        "nm": "loongarch64-unknown-linux-gnu-nm",
         "objcopy": "loongarch64-unknown-linux-gnu-objcopy",
         "objdump": "loongarch64-unknown-linux-gnu-objdump",
         "linker": USER_DIR / "linker-loongarch64.ld",
@@ -720,6 +724,211 @@ def build_sqlite3(arch: str):
     put_arch_cache(arch, arch_cache)
 
 
+# ==================== TCC 构建(从 user/tcc/build_tcc.py 融合) ====================
+
+def gen_tccdefs(src: Path, dst: Path):
+    """等价于 TCC 官方 c2str: 把 include/tccdefs.h 逐字节转义为 C 字符串字面量序列。
+
+    转义规则(与 TCC conftest.c 的 C2STR 分支一致):
+      \\n  ->  \\\\n\"\\n\"    (换行结束当前字符串字面量, 下一行重新开引号)
+      \"   ->  \\\\"
+      \\\\  ->  \\\\\\\\
+    其他字节原样(含非 ASCII, 按字节处理保证 UTF-8 注释不被破坏)。
+    输出无前缀/后缀, tccpp.c 里 #include 后紧跟 ", -1);", 相邻字符串字面量
+    自动拼接成一个 char*, 正好是 cstr_cat 的第二个参数。
+    """
+    data = src.read_bytes()
+    out = bytearray(b'"')          # 开引号: 第一个字符串从这里开始(c2str 同款)
+    for c in data:
+        if c == 0x0A:            # \n
+            out += b'\\n"\n"'
+        elif c == 0x22:          # "
+            out += b'\\"'
+        elif c == 0x5C:          # backslash
+            out += b'\\\\'
+        else:
+            out.append(c)
+    out += b'"'                  # 补闭合引号: 最后一个字符串完整闭合(不依赖调用方)
+    dst.write_bytes(out)
+
+
+def build_tcc(arch: str):
+    """交叉编译 TCC 0.9.28 → /programs/tcc(镜像 /bin/tcc)。
+
+    策略(与 user/tcc/build_tcc.py 一致):
+      - 编 TCC 主程序(tcc.c libtcc.c tccpp.c tccgen.c tccdbg.c tccelf.c
+        tccasm.c tccrun.c + <arch>-gen/link/asm.c)
+      - 链接用 crt0 + syscall.S + 标准 ldscript(与其它用户程序一致)
+      - 部署 tcc.elf 到 build/<arch>/bin/ 并生成 tcc-sys 系统文件
+        (crt1/crti/crtn + libc.a + libtcc1.a + runmain.o + include)
+    TCC 0.9.28 源码只带 riscv64 后端(无 loongarch64-gen.c), loongarch64 跳过。
+    """
+    cfg = ARCH_CONFIG[arch]
+    tcc_dir = USER_DIR / "tcc"
+    tcc_src = tcc_dir / "tcc-src"
+
+    arch_backend = {
+        "riscv64": ["riscv64-gen.c", "riscv64-link.c", "riscv64-asm.c"],
+    }
+    if arch not in arch_backend:
+        print(f"[user] tcc: TCC 0.9.28 has no {arch} backend (no {arch}-gen.c), skip")
+        return
+
+    files = [
+        "tcc.c", "libtcc.c", "tccpp.c", "tccgen.c",
+        "tccdbg.c", "tccelf.c", "tccasm.c", "tccrun.c",
+        *arch_backend[arch],
+    ]
+
+    out = BUILD_DIR / arch / "tcc"
+    out.mkdir(parents=True, exist_ok=True)
+
+    # 0) 生成 tccdefs_.h(tccpp.c 编译必需)
+    #    TCC 官方用 conftest.c(c2str 宿主程序)做文本级转换; tcc-src 里
+    #    conftest.c 可能缺失(仓库未含), 用 python 等价实现, 逐字节转义,
+    #    输出与 c2str 完全一致(tccpp.c #include 后作为 cstr_cat 字符串参数)。
+    defs_h = tcc_src / "tccdefs_.h"
+    if not defs_h.exists():
+        gen_tccdefs(tcc_src / "include" / "tccdefs.h", defs_h)
+        print(f"[user][tcc] generated {defs_h}")
+
+    objs = []
+    # 1) crt0 / syscall 汇编
+    for name, src in (("crt0", cfg["crt0"]), ("syscall", cfg["runtime"])):
+        o = out / f"{name}.o"
+        run([cfg["gcc"], *cfg["cflags"], "-c", src, "-o", o])
+        objs.append(o)
+
+    # 2) libc 运行时(string.c: memset/memcpy 等)
+    string_o = out / "string.o"
+    run([cfg["gcc"], *cfg["cflags"], "-fno-builtin", "-c", LIB_DIR / "string.c", "-o", string_o])
+    objs.append(string_o)
+
+    # 3) TCC 源码
+    cflags = [
+        *cfg["cflags"],
+        "-nostdlib", "-nostartfiles", "-static", "-no-pie",
+        "-O2", "-fno-strict-aliasing", "-Wno-unused-result",
+        "-fno-builtin",   # RmikuOS 的 strlen 等是头内联, 禁 gcc builtin 生成外部调用
+        "-DONE_SOURCE=0",
+        f"-I{INCLUDE_DIR}",   # RmikuOS libc 头
+        f"-I{tcc_src}",       # TCC 自身头(tcc.h 等)
+        f"-I{tcc_dir}",       # 手工 config.h
+    ]
+    for f in files:
+        o = out / (Path(f).stem + ".o")
+        run([cfg["gcc"], *cflags, "-c", tcc_src / f, "-o", o])
+        objs.append(o)
+
+    # 4) 链接
+    elf = out / "tcc.elf"
+    run([
+        cfg["gcc"], *cfg["cflags"],
+        "-nostdlib", "-nostartfiles", "-static", "-no-pie",
+        "-Wl,--build-id=none", "-Wl,--no-relax",
+        "-T", cfg["linker"], *objs, "-lgcc", "-o", elf,
+    ])
+    print(f"[user][tcc] OK: {elf}")
+
+    # 5) 进镜像: mkfs_ext4.sh 收 build/<arch>/bin/*.elf -> /bin/tcc
+    bin_dir = BUILD_DIR / arch / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(elf, bin_dir / "tcc.elf")
+    print(f"[user][tcc] installed -> {bin_dir / 'tcc.elf'}  (镜像 /bin/tcc)")
+
+    # 6) TCC 系统文件(镜像 /usr/lib/tcc)
+    build_tcc_sys_files(arch, tcc_dir, tcc_src)
+
+
+def build_tcc_sys_files(arch: str, tcc_dir: Path, tcc_src: Path):
+    """生成 /usr/lib/tcc: crt1/crti/crtn + libc.a + libtcc1.a + runmain.o + include。"""
+    cfg = ARCH_CONFIG[arch]
+    sys_root = BUILD_DIR / arch / "tcc-sys" / "usr" / "lib" / "tcc"
+    sys_root.mkdir(parents=True, exist_ok=True)
+
+    # crt1.o = RmikuOS crt0(_start 调 main + 存 environ)
+    run([cfg["gcc"], *cfg["cflags"], "-c", cfg["crt0"], "-o", sys_root / "crt1.o"])
+
+    # crti.o / crtn.o: 空 init/fini 段对象(TCC 链接需要存在)
+    empty_s = sys_root / "empty.S"
+    empty_s.write_text(".section .init\n.section .fini\n", encoding="utf-8")
+    for name in ("crti.o", "crtn.o"):
+        run([cfg["gcc"], *cfg["cflags"], "-c", empty_s, "-o", sys_root / name])
+
+    # libc.a = syscall.S + string.c + libc_extern.c
+    # (printf 等是头内联; libc_extern 把公共 API 具现为真实符号,
+    #  TCC 编译用户程序时对 static inline 生成外部引用, 靠它解析)
+    for name, src in (("_syscall.o", cfg["runtime"]), ("_string.o", LIB_DIR / "string.c")):
+        run([cfg["gcc"], *cfg["cflags"], "-fno-builtin", "-c", src, "-o", sys_root / name])
+    run([cfg["gcc"], *cfg["cflags"], "-fno-builtin", "-I", INCLUDE_DIR,
+         "-c", tcc_dir / "libc_extern.c", "-o", sys_root / "_libc_extern.o"])
+    run([cfg["ar"], "rcs", sys_root / "libc.a",
+         sys_root / "_syscall.o", sys_root / "_string.o", sys_root / "_libc_extern.o"])
+
+    # libtcc1.a: TCC 自身运行时(TCC 链接用户程序时用)
+    libtcc1_o = sys_root / "libtcc1.o"
+    run([cfg["gcc"], *cfg["cflags"], "-O2", "-fno-builtin", "-c",
+         tcc_src / "lib" / "libtcc1.c", "-o", libtcc1_o])
+    run([cfg["ar"], "rcs", sys_root / "libtcc1.a", libtcc1_o])
+    # 合并 libgcc 的 long double(128位 quad)软浮点 + __clear_cache 进 libtcc1.a
+    # (TCC 静态链接不自动链 libgcc, 而 _libc_extern.o / TCC 生成的代码会引用
+    #  __extenddftf2/__multf3 等 -> 由 libtcc1.a 提供, 一次解决所有程序)
+    _tcc_merge_libgcc(cfg, sys_root / "libtcc1.a", libtcc1_o)
+
+    # runmain.o: tcc -run(JIT) 的启动 stub
+    run([cfg["gcc"], *cfg["cflags"], "-O2", "-fno-builtin", "-c",
+         tcc_src / "lib" / "runmain.c", "-o", sys_root / "runmain.o"])
+
+    # include: RmikuOS 头(用户程序 include <stdio.h> 等)
+    inc = sys_root / "include"
+    if not inc.exists():
+        shutil.copytree(INCLUDE_DIR, inc)
+    # TCC 编译器配套头: stddef/stdarg/stdbool/stdalign/tgmath 等
+    for h in sorted((tcc_src / "include").glob("*.h")):
+        if not (inc / h.name).exists():
+            shutil.copy(h, inc)
+    # TCC 专用 stdint.h(裸机工具链无 libc 版)
+    if not (inc / "stdint.h").exists():
+        shutil.copy(tcc_dir / "stdint.h", inc)
+    print(f"[user][tcc] system files -> {sys_root}")
+
+
+def _tcc_merge_libgcc(cfg: dict, libtcc1_a: Path, libtcc1_o: Path):
+    """把 host libgcc.a 中与 libtcc1.o/string.o 不重复的成员合并进 libtcc1.a。
+    按符号清单去重, 全量提取多放无害。"""
+    import tempfile
+    try:
+        libgcc = subprocess.check_output(
+            [cfg["gcc"], "-print-libgcc-file-name"], text=True).strip()
+        if not os.path.exists(libgcc):
+            print(f"[user][tcc] !! libgcc.a not found: {libgcc}")
+            return
+    except Exception as e:
+        print(f"[user][tcc] !! cannot locate libgcc: {e}")
+        return
+    have = {"memcpy", "memset"}   # libtcc1.o 已有 + string.o 提供的
+    r = subprocess.run([cfg["nm"], "--defined-only", str(libtcc1_o)],
+                       capture_output=True, text=True)
+    for ln in r.stdout.splitlines():
+        if ln.strip():
+            have.add(ln.split()[-1])
+    tmp = tempfile.mkdtemp(prefix="rmiku-libgcc-")
+    subprocess.run([cfg["ar"], "x", libgcc], cwd=tmp, check=True)
+    picked = []
+    for o in sorted(os.listdir(tmp)):
+        if not o.endswith(".o"):
+            continue
+        r = subprocess.run([cfg["nm"], "--defined-only", os.path.join(tmp, o)],
+                           capture_output=True, text=True)
+        syms = {ln.split()[-1] for ln in r.stdout.splitlines() if ln.strip()}
+        if syms & have:      # 与 libtcc1.o / string.o 重复 -> 跳过(defined twice)
+            continue
+        picked.append(os.path.join(tmp, o))
+    if picked:
+        subprocess.run([cfg["ar"], "rcs", str(libtcc1_a), *picked], check=True)
+        print(f"[user][tcc] libgcc merged into libtcc1.a: {len(picked)} objects")
+
+
 def build_cpp_projects(arch: str):
     cpp_root = USER_DIR / "cpp"
     if not cpp_root.exists():
@@ -894,6 +1103,7 @@ def main():
     build_rust_workspace(args.arch)
     build_cpp_projects(args.arch)
     build_c_projects(args.arch)
+    build_tcc(args.arch)
     build_sqlite3(args.arch)
     build_gcn(args.arch)
     build_java_projects(args.arch)
