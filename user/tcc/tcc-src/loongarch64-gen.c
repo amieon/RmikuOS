@@ -19,7 +19,8 @@
 
 // Number of registers available to allocator:
 #define NB_REGS 19 // r4-r11 aka a0-a7, f0-f7 aka fa0-fa7, xxx, ra, sp
-#define CONFIG_TCC_ASM
+/* 阶段 1: 无 loongarch64-asm.c, 不启用内联汇编(CONFIG_TCC_ASM) */
+/* #define CONFIG_TCC_ASM */
 
 #define TREG_R(x) (x) // x = 0..7
 #define TREG_F(x) (x + 8) // x = 0..7
@@ -55,6 +56,43 @@
 #define USING_GLOBALS
 #include "tcc.h"
 #include <assert.h>
+
+/* ---- LoongArch ELF relocations (also defined in loongarch64-link.c,
+   #ifndef-protected there; needed here because gen.c compiles as its own
+   translation unit and R_LARCH_* is not in elf.h) ---- */
+#ifndef R_LARCH_NONE
+#define R_LARCH_NONE          0
+#define R_LARCH_32            1
+#define R_LARCH_64            2
+#define R_LARCH_RELATIVE      3
+#define R_LARCH_COPY          4
+#define R_LARCH_JUMP_SLOT     5
+#define R_LARCH_IRELATIVE    12
+#define R_LARCH_ADD8         47
+#define R_LARCH_ADD16        48
+#define R_LARCH_ADD24        49
+#define R_LARCH_ADD32        50
+#define R_LARCH_ADD64        51
+#define R_LARCH_SUB8         52
+#define R_LARCH_SUB16        53
+#define R_LARCH_SUB24        54
+#define R_LARCH_SUB32        55
+#define R_LARCH_SUB64        56
+#define R_LARCH_B16          64
+#define R_LARCH_B21          65
+#define R_LARCH_B26          66
+#define R_LARCH_ABS_HI20     67
+#define R_LARCH_ABS_LO12     68
+#define R_LARCH_PCALA_HI20   71
+#define R_LARCH_PCALA_LO12   72
+#define R_LARCH_GOT_PC_HI20  75
+#define R_LARCH_GOT_PC_LO12  76
+#define R_LARCH_GOT_HI20     79
+#define R_LARCH_GOT_LO12     80
+#define R_LARCH_TLS_LE_HI20  83
+#define R_LARCH_TLS_LE_LO12  84
+#define R_LARCH_32_PCREL     99
+#endif
 
 #define XLEN 8
 
@@ -131,6 +169,7 @@
 #define O_MOVGR2FR_D 0x0114a980u
 #define O_MOVFR2GR_D 0x0114b80cu
 #define O_MOVFR2GR_S 0x0114b40cu
+#define O_MOVCF2FR   0x0114d400u   /* movcf2fr.d fd, fcc0 (fcc 固定 0) */
 #define O_FFINT_D_L  0x011d2800u
 #define O_FTINTRZ_L_D 0x011aa800u
 #define O_FCVT_S_D   0x01191800u
@@ -540,6 +579,55 @@ static void gen_bounds_epilog(void)
 }
 
 #endif
+
+/* ---- prolog/epilog helpers ---- */
+static int func_sub_sp_offset, num_va_regs, func_va_list_ofs;
+
+/* ---- argument classification (from riscv64-gen.c) ---- */
+static void reg_pass_rec(CType *type, int *rc, int *fieldofs, int ofs)
+{
+    if ((type->t & VT_BTYPE) == VT_STRUCT) {
+        Sym *f;
+        if (type->ref->type.t == VT_UNION)
+          rc[0] = -1;
+        else for (f = type->ref->next; f; f = f->next)
+          reg_pass_rec(&f->type, rc, fieldofs, ofs + f->c);
+    } else if (type->t & VT_ARRAY) {
+        if (type->ref->c < 0 || type->ref->c > 2)
+          rc[0] = -1;
+        else {
+            int a, sz = type_size(&type->ref->type, &a);
+            reg_pass_rec(&type->ref->type, rc, fieldofs, ofs);
+            if (rc[0] > 2 || (rc[0] == 2 && type->ref->c > 1))
+              rc[0] = -1;
+            else if (type->ref->c == 2 && rc[0] && rc[1] == RC_FLOAT) {
+              rc[++rc[0]] = RC_FLOAT;
+              fieldofs[rc[0]] = ((ofs + sz) << 4)
+                                | (type->ref->type.t & VT_BTYPE);
+            } else if (type->ref->c == 2)
+              rc[0] = -1;
+        }
+    } else if (rc[0] == 2 || rc[0] < 0 || (type->t & VT_BTYPE) == VT_LDOUBLE)
+      rc[0] = -1;
+    else if (!rc[0] || rc[1] == RC_FLOAT || is_float(type->t)) {
+      rc[++rc[0]] = is_float(type->t) ? RC_FLOAT : RC_INT;
+      fieldofs[rc[0]] = (ofs << 4) | ((type->t & VT_BTYPE) == VT_PTR ? VT_LLONG : type->t & VT_BTYPE);
+    } else
+      rc[0] = -1;
+}
+
+static void reg_pass(CType *type, int *prc, int *fieldofs, int named)
+{
+    prc[0] = 0;
+    reg_pass_rec(type, prc, fieldofs, 0);
+    if (prc[0] <= 0 || !named) {
+        int align, size = type_size(type, &align);
+        prc[0] = (size + 7) >> 3;
+        prc[1] = prc[2] = RC_INT;
+        fieldofs[1] = (0 << 4) | (size <= 1 ? VT_BYTE : size <= 2 ? VT_SHORT : size <= 4 ? VT_INT : VT_LLONG);
+        fieldofs[2] = (8 << 4) | (size <= 9 ? VT_BYTE : size <= 10 ? VT_SHORT : size <= 12 ? VT_INT : VT_LLONG);
+    }
+}
 
 /* LoongArch LP64D argument passing:
    - first 8 integer args in r4..r11 (a0..a7)
@@ -1371,3 +1459,32 @@ ST_FUNC void gen_clear_cache(void)
     o(0x002ae000u);  /* ibar 0 */
 }
 #endif /* !TARGET_DEFS_ONLY */
+
+/* increment tcov counter (LoongArch: pcalau12i + addi.d + ld.d + addi.d + st.d) */
+ST_FUNC void gen_increment_tcov (SValue *sv)
+{
+    int r1, r2;
+    Sym label = {0};
+    label.type.t = VT_VOID | VT_STATIC;
+
+    vpushv(sv);
+    vtop->r = r1 = get_reg(RC_INT);
+    r2 = get_reg(RC_INT);
+    r1 = ireg(r1);
+    r2 = ireg(r2);
+    greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
+    put_extern_sym(&label, cur_text_section, ind, 0);
+    oli20(O_PCADDU12I, r1, 0);          /* pcalau12i r1, %pc_hi20(sym) */
+    greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+    o2ri(O_ADDI_D, r1, r1, 0);          /* addi.d r1, r1, %pc_lo12(sym) */
+    o2ri(O_LD_D, r2, r1, 0);            /* ld.d r2, r1, 0 */
+    o2ri(O_ADDI_D, r2, r2, 1);          /* addi.d r2, r2, 1 */
+    greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
+    label.c = 0; /* force new local ELF symbol */
+    put_extern_sym(&label, cur_text_section, ind, 0);
+    oli20(O_PCADDU12I, r1, 0);
+    greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+    o2ri(O_ADDI_D, r1, r1, 0);
+    o2ri(O_ST_D, r2, r1, 0);            /* st.d r2, r1, 0 */
+    vpop();
+}

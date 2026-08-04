@@ -221,7 +221,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
 
     switch(type) {
     case R_LARCH_ADD8:
-        write8le(ptr, read8le(ptr) + val);
+        *ptr += val;
         return;
     case R_LARCH_ADD16:
         write16le(ptr, read16le(ptr) + val);
@@ -236,7 +236,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         write64le(ptr, read64le(ptr) + val);
         return;
     case R_LARCH_SUB8:
-        write8le(ptr, read8le(ptr) - val);
+        *ptr -= val;
         return;
     case R_LARCH_SUB16:
         write16le(ptr, read16le(ptr) - val);
