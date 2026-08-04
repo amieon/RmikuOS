@@ -1,0 +1,1373 @@
+/*
+ *  LoongArch64 code generator for TCC
+ *
+ *  Translated from riscv64-gen.c.  LoongArch instruction encoding:
+ *    3R:    rd[4:0] | rj[9:5] | rk[14:10]
+ *    2RI12: rd[4:0] | rj[9:5] | imm12[21:10]
+ *    shift: rd[4:0] | rj[9:5] | ui5/6[15:10]
+ *    branch:rd[4:0] | rj[9:5] | offs16[25:10]  (offs = byte offset >> 2)
+ *    jirl:  rd[4:0] | rj[9:5] | offs16[25:10]
+ *    lu12i.d / pcalau12i: rd[4:0] | si20[24:5]
+ *
+ *  Register mapping (LP64D):
+ *    TCC int regs 0..7   -> r4..r11 (a0-a7, argument regs)
+ *    TCC float regs 8..15 -> f0..f7 (fa0-fa7)
+ *    TREG_RA -> r1, TREG_SP -> r3
+ */
+
+#ifdef TARGET_DEFS_ONLY
+
+// Number of registers available to allocator:
+#define NB_REGS 19 // r4-r11 aka a0-a7, f0-f7 aka fa0-fa7, xxx, ra, sp
+#define CONFIG_TCC_ASM
+
+#define TREG_R(x) (x) // x = 0..7
+#define TREG_F(x) (x + 8) // x = 0..7
+
+// Register classes sorted from more general to more precise:
+#define RC_INT (1 << 0)
+#define RC_FLOAT (1 << 1)
+#define RC_R(x) (1 << (2 + (x))) // x = 0..7
+#define RC_F(x) (1 << (10 + (x))) // x = 0..7
+
+#define RC_IRET (RC_R(0)) // int return register class
+#define RC_IRE2 (RC_R(1)) // int 2nd return register class
+#define RC_FRET (RC_F(0)) // float return register class
+
+#define REG_IRET (TREG_R(0)) // int return register number
+#define REG_IRE2 (TREG_R(1)) // int 2nd return register number
+#define REG_FRET (TREG_F(0)) // float return register number
+
+#define PTR_SIZE 8
+
+#define LDOUBLE_SIZE 16
+#define LDOUBLE_ALIGN 16
+
+#define MAX_ALIGN 16
+
+#define CHAR_IS_UNSIGNED
+
+/* define if return values need to be extended explicitely
+   at caller side (for interfacing with non-TCC compilers) */
+#define PROMOTE_RET
+
+#else
+#define USING_GLOBALS
+#include "tcc.h"
+#include <assert.h>
+
+#define XLEN 8
+
+#define TREG_RA 17
+#define TREG_SP 18
+
+/* ---- instruction encodings (verified from gcc 15 objdump) ---- */
+/* 3R */
+#define O_ADD_D  0x00108000u
+#define O_SUB_D  0x00118000u
+#define O_AND    0x00148000u
+#define O_OR     0x00150000u
+#define O_XOR    0x00158000u
+#define O_SLL_D  0x00188000u
+#define O_SRL_D  0x00190000u
+#define O_SRA_D  0x00198000u
+#define O_MUL_D  0x001d8000u
+#define O_DIV_D  0x00220000u
+#define O_MOD_D  0x00228000u
+#define O_DIV_DU 0x00230000u
+#define O_MOD_DU 0x00238000u
+#define O_SLT    0x00120000u
+#define O_SLTU   0x00128000u
+#define O_FADD_D 0x01010000u
+#define O_FSUB_D 0x01030000u
+#define O_FMUL_D 0x01050000u
+#define O_FDIV_D 0x01070000u
+#define O_FADD_S 0x01008000u
+/* 2RI12 */
+#define O_ADDI_D 0x02c00000u
+#define O_ADDI_W 0x02800000u
+#define O_ANDI   0x03400000u
+#define O_ORI    0x03800000u
+#define O_XORI   0x03c00000u
+#define O_SLTUI  0x02400000u
+#define O_LD_B   0x28000000u
+#define O_LD_H   0x28400000u
+#define O_LD_W   0x28800000u
+#define O_LD_D   0x28c00000u
+#define O_ST_B   0x28800000u   /* 0x28c00000 - 0x00400000? see below */
+#define O_ST_H   0x28c00000u
+#define O_ST_W   0x29800000u
+#define O_ST_D   0x29c00000u
+#define O_FLD_S  0x2b000000u
+#define O_FLD_D  0x2b800000u
+#define O_FST_S  0x2b400000u
+#define O_FST_D  0x2bc00000u
+#define O_LDPTR_W 0x24000000u
+#define O_LDPTR_D 0x26000000u
+#define O_STPTR_W 0x25000000u
+#define O_STPTR_D 0x27000000u
+/* shift */
+#define O_SLLI_W 0x00408000u
+#define O_SLLI_D 0x00410000u
+#define O_SRLI_D 0x00450000u
+#define O_SRAI_D 0x00490000u
+/* branch / jump */
+#define O_B      0x50000000u
+#define O_BL     0x54000000u
+#define O_BEQ    0x58000000u
+#define O_BNE    0x5c000000u
+#define O_BLT    0x60000000u
+#define O_BGE    0x64000000u
+#define O_BLTU   0x68000000u
+#define O_BGEU   0x6c000000u
+#define O_JIRL   0x4c000000u
+#define O_BEQZ   0x58000000u
+#define O_BNEZ   0x44000000u
+/* load-address / misc */
+#define O_LU12I_D 0x14000000u
+#define O_PCADDU12I 0x16000000u
+#define O_NOP    0x03400000u
+/* float moves / conversions */
+#define O_MOVGR2FR_D 0x0114a980u
+#define O_MOVFR2GR_D 0x0114b80cu
+#define O_MOVFR2GR_S 0x0114b40cu
+#define O_FFINT_D_L  0x011d2800u
+#define O_FTINTRZ_L_D 0x011aa800u
+#define O_FCVT_S_D   0x01191800u
+#define O_FCVT_D_S   0x01192400u
+
+ST_DATA const char * const target_machine_defs =
+    "__loongarch__\0"
+    "__loongarch64\0"
+    "__loongarch_lp64\0"
+    "__loongarch_soft_float 0\0"
+    ;
+
+ST_DATA const int reg_classes[NB_REGS] = {
+  RC_INT | RC_R(0),
+  RC_INT | RC_R(1),
+  RC_INT | RC_R(2),
+  RC_INT | RC_R(3),
+  RC_INT | RC_R(4),
+  RC_INT | RC_R(5),
+  RC_INT | RC_R(6),
+  RC_INT | RC_R(7),
+  RC_FLOAT | RC_F(0),
+  RC_FLOAT | RC_F(1),
+  RC_FLOAT | RC_F(2),
+  RC_FLOAT | RC_F(3),
+  RC_FLOAT | RC_F(4),
+  RC_FLOAT | RC_F(5),
+  RC_FLOAT | RC_F(6),
+  RC_FLOAT | RC_F(7),
+  0,
+  1 << TREG_RA,
+  1 << TREG_SP
+};
+
+#if defined(CONFIG_TCC_BCHECK)
+static addr_t func_bound_offset;
+static unsigned long func_bound_ind;
+ST_DATA int func_bound_add_epilog;
+#endif
+
+static int ireg(int r)
+{
+    if (r == TREG_RA)
+      return 1; // ra
+    if (r == TREG_SP)
+      return 3; // sp
+    assert(r >= 0 && r < 8);
+    return r + 4;  // tccrX --> aX == r(4+X)
+}
+
+static int is_ireg(int r)
+{
+    return (unsigned)r < 8 || r == TREG_RA || r == TREG_SP;
+}
+
+static int freg(int r)
+{
+    assert(r >= 8 && r < 16);
+    return r - 8;  // tccfX --> faX == fX
+}
+
+static int is_freg(int r)
+{
+    return r >= 8 && r < 16;
+}
+
+/* emit 32-bit instruction */
+ST_FUNC void o(unsigned int c)
+{
+    int ind1 = ind + 4;
+    if (nocode_wanted)
+        return;
+    if (ind1 > cur_text_section->data_allocated)
+        section_realloc(cur_text_section, ind1);
+    write32le(cur_text_section->data + ind, c);
+    ind = ind1;
+}
+
+/* 3R: rd[4:0] rj[9:5] rk[14:10] */
+static void o3r(uint32_t base, int rd, int rj, int rk)
+{
+    o(base | (rk << 10) | (rj << 5) | rd);
+}
+
+/* 2RI12: rd[4:0] rj[9:5] imm12[21:10] */
+static void o2ri(uint32_t base, int rd, int rj, int imm12)
+{
+    o(base | ((imm12 & 0xfff) << 10) | (rj << 5) | rd);
+}
+
+/* shift: rd[4:0] rj[9:5] ui5/6[15:10] */
+static void oshift(uint32_t base, int rd, int rj, int ui)
+{
+    o(base | ((ui & 0x3f) << 10) | (rj << 5) | rd);
+}
+
+/* branch: rd[4:0] rj[9:5] offs16[25:10], offs = byte offset >> 2 */
+static void obranch(uint32_t base, int rj, int rd, int offs)
+{
+    o(base | ((offs & 0xffff) << 10) | (rj << 5) | rd);
+}
+
+/* jirl rd, rj, offs */
+static void ojirl(int rd, int rj, int offs)
+{
+    o(O_JIRL | ((offs & 0xffff) << 10) | (rj << 5) | rd);
+}
+
+/* lu12i.d / pcalau12i: rd[4:0] si20[24:5] */
+static void oli20(uint32_t base, int rd, int si20)
+{
+    o(base | ((si20 & 0xfffff) << 5) | rd);
+}
+
+/* move: or rd, rj, r0 */
+static void omove(int rd, int rj)
+{
+    o3r(O_OR, rd, rj, 0);
+}
+
+/* 12-bit signed check */
+static int imm12_ok(int64_t v)
+{
+    return v >= -2048 && v <= 2047;
+}
+
+/* ---- register save/restore for calls: LoongArch stores args to stack
+   frame in prolog, we keep the same scheme as riscv64 (s0 = fp) ---- */
+
+// Patch all branches in list pointed to by t to branch to a:
+ST_FUNC void gsym_addr(int t_, int a_)
+{
+    uint32_t t = t_;
+    uint32_t a = a_;
+    while (t) {
+        unsigned char *ptr = cur_text_section->data + t;
+        uint32_t next = read32le(ptr);
+        uint32_t r = a - t;   /* byte offset */
+        int offs;
+        if ((r + (1 << 17)) & ~((1U << 18) - 4))
+          tcc_error("out-of-range branch chain");
+        offs = (int)(r >> 2);
+        if (offs == 1) {
+            write32le(ptr, O_NOP);   /* fall through -> nop */
+        } else {
+            write32le(ptr, O_B | ((offs & 0xffff) << 10));
+        }
+        t = next;
+    }
+}
+/* Load the address of sv (symbol / local) into a register, return reg.
+   new_fc receives the residual 12-bit offset (usually 0). */
+static int load_symofs(int r, SValue *sv, int forstore, int *new_fc)
+{
+    int rr;
+    int fc = sv->c.i, v = sv->r & VT_VALMASK;
+    if (sv->r & VT_SYM) {
+        Sym label = {0};
+        assert(v == VT_CONST);
+        rr = is_ireg(r) ? ireg(r) : 5;
+        /* pcalau12i rr, %pc_hi20(sym) ; addi.d rr, rr, %pc_lo12(sym) */
+        greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, sv->c.i);
+        oli20(O_PCADDU12I, rr, 0);
+        label.type.t = VT_VOID | VT_STATIC;
+        if (!nocode_wanted)
+            put_extern_sym(&label, cur_text_section, ind, 0);
+        greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+        o2ri(O_ADDI_D, rr, rr, 0);
+        *new_fc = 0;
+        return rr;
+    } else if (v == VT_LOCAL || v == VT_LLOCAL) {
+        rr = 22; /* fp */
+        if (fc != sv->c.i)
+          tcc_error("unimp: store(giant local off) (0x%lx)", (long)sv->c.i);
+        if (!imm12_ok(fc)) {
+            rr = is_ireg(r) ? ireg(r) : 5;
+            oli20(O_LU12I_D, rr, (int)((fc + 0x800) >> 12));
+            o2ri(O_ADDI_D, rr, rr, fc);
+            o3r(O_ADD_D, rr, rr, 22);
+            *new_fc = 0;
+        }
+    } else
+      tcc_error("uhh");
+    return rr;
+}
+
+/* Load 64-bit constant into register rr (lu12i.d + ori + lu32i.d) */
+static void load_large_constant(int rr, int fc, int hi32)
+{
+    int v;
+    v = (int)(((uint32_t)fc + 0x800) >> 12);
+    oli20(O_LU12I_D, rr, v);
+    o2ri(O_ORI, rr, rr, fc);
+    if (hi32) {
+        o(0x13000000u | ((hi32 & 0xfffff) << 5) | rr);  /* lu32i.d */
+    }
+}
+
+ST_FUNC void load(int r, SValue *sv)
+{
+    int fr = sv->r;
+    int v = fr & VT_VALMASK;
+    int rr = is_ireg(r) ? ireg(r) : freg(r);
+    int fc = sv->c.i;
+    int bt = sv->type.t & VT_BTYPE;
+    int align, size;
+    if (fr & VT_LVAL) {
+        uint32_t opcode;
+        int br;
+        size = type_size(&sv->type, &align);
+        assert(!is_freg(r) || bt == VT_FLOAT || bt == VT_DOUBLE);
+        if (bt == VT_PTR || bt == VT_FUNC)
+          size = PTR_SIZE;
+        if (is_freg(r))
+            opcode = (size == 4) ? O_FLD_S : O_FLD_D;
+        else
+            opcode = size == 1 ? O_LD_B : size == 2 ? O_LD_H
+                   : size == 4 ? O_LD_W : O_LD_D;
+        if (v == VT_LOCAL || (fr & VT_SYM)) {
+            br = load_symofs(r, sv, 0, &fc);
+        } else if (v < VT_CONST) {
+            br = ireg(v);
+            fc = 0;
+        } else if (v == VT_LLOCAL) {
+            br = load_symofs(r, sv, 0, &fc);
+            o2ri(O_LD_D, rr, br, fc);
+            br = rr;
+            fc = 0;
+        } else if (v == VT_CONST) {
+            int64_t si = sv->c.i;
+            br = rr;
+            load_large_constant(rr, (int)si, (int)((uint64_t)si >> 32));
+            fc = 0;
+        } else {
+            tcc_error("unimp: load(non-local lval)");
+        }
+        o2ri(opcode, rr, br, fc);
+    } else if (v == VT_CONST) {
+        int rb = 0;
+        if (is_float(sv->type.t) && bt != VT_LDOUBLE) {
+            /* load float/double constant: move bit pattern from int reg */
+            uint64_t val = sv->c.i;
+            load_large_constant(6, (int)val, (int)((uint64_t)val >> 32));
+            o(O_MOVGR2FR_D | (rr << 5) | (6 << 10));  /* movgr2fr.d rr, t0 */
+            return;
+        }
+        assert(is_ireg(r) || bt == VT_LDOUBLE);
+        if (fr & VT_SYM) {
+            rb = load_symofs(r, sv, 0, &fc);
+        } else if (!imm12_ok(fc)) {
+            int64_t si = sv->c.i;
+            load_large_constant(rr, (int)si, (int)((uint64_t)si >> 32));
+            fc = 0;
+            rb = rr;
+        } else {
+            rb = 0;  /* zero */
+        }
+        o2ri(O_ADDI_D, rr, rb, fc);
+    } else if (v == VT_LOCAL) {
+        int br = load_symofs(r, sv, 0, &fc);
+        assert(is_ireg(r));
+        o2ri(O_ADDI_D, rr, br, fc);
+    } else if (v < VT_CONST) { /* reg-reg */
+        if (is_freg(r) && is_freg(v)) {
+            o3r(O_FADD_D, rr, freg(v), 0);
+        } else if (is_ireg(r) && is_ireg(v)) {
+            omove(rr, ireg(v));
+        } else {
+            if (is_ireg(r))  /* float -> int */
+                o(O_MOVFR2GR_D | (rr << 5) | ((is_freg(v) ? freg(v) : 0) << 10));
+            else  /* int -> float */
+                o(O_MOVGR2FR_D | (rr << 5) | ((is_ireg(v) ? ireg(v) : 0) << 10));
+        }
+    } else if (v == VT_CMP) {
+        int op = vtop->cmp_op;
+        int a = vtop->cmp_r & 0xff;
+        int b = (vtop->cmp_r >> 8) & 0xff;
+        int inv = 0;
+        switch (op) {
+            case TOK_ULT:
+            case TOK_UGE:
+            case TOK_ULE:
+            case TOK_UGT:
+            case TOK_LT:
+            case TOK_GE:
+            case TOK_LE:
+            case TOK_GT:
+                if (op & 1) { inv = 1; op--; }
+                if ((op & 7) == 6) { int t = a; a = b; b = t; inv ^= 1; }
+                o3r((op > TOK_UGT) ? O_SLTU : O_SLT, rr, a, b);
+                if (inv)
+                    o2ri(O_XORI, rr, rr, 1);
+                break;
+            case TOK_NE:
+            case TOK_EQ:
+                if (rr != a || b)
+                    o3r(O_SUB_D, rr, a, b);
+                if (op == TOK_NE)
+                    o3r(O_SLTU, rr, 0, rr);
+                else
+                    o2ri(O_SLTUI, rr, rr, 1);
+                break;
+        }
+    } else if ((v & ~1) == VT_JMP) {
+        int t = v & 1;
+        assert(is_ireg(r));
+        o2ri(O_ADDI_D, rr, 0, t);
+        gjmp_addr(ind + 8);
+        gsym(fc);
+        o2ri(O_ADDI_D, rr, 0, t ^ 1);
+    } else
+      tcc_error("unimp: load(non-const)");
+}
+
+ST_FUNC void store(int r, SValue *sv)
+{
+    int fr = sv->r & VT_VALMASK;
+    int rr = is_ireg(r) ? ireg(r) : freg(r), ptrreg;
+    int fc = sv->c.i;
+    int bt = sv->type.t & VT_BTYPE;
+    int align, size = type_size(&sv->type, &align);
+    uint32_t opcode;
+    assert(!is_float(bt) || is_freg(r) || bt == VT_LDOUBLE);
+    if (bt == VT_LDOUBLE)
+      size = align = 8;
+    if (bt == VT_STRUCT)
+      tcc_error("unimp: store(struct)");
+    if (size > 8)
+      tcc_error("unimp: large sized store");
+    assert(sv->r & VT_LVAL);
+    if (is_freg(r))
+        opcode = (size == 4) ? O_FST_S : O_FST_D;
+    else
+        opcode = size == 1 ? O_ST_B : size == 2 ? O_ST_H
+               : size == 4 ? O_ST_W : O_ST_D;
+    if (fr == VT_LOCAL || (sv->r & VT_SYM)) {
+        ptrreg = load_symofs(-1, sv, 1, &fc);
+    } else if (fr < VT_CONST) {
+        ptrreg = ireg(fr);
+        fc = 0;
+    } else if (fr == VT_CONST) {
+        int64_t si = sv->c.i;
+        ptrreg = 5;  /* t0 */
+        load_large_constant(ptrreg, (int)si, (int)((uint64_t)si >> 32));
+        fc = 0;
+    } else
+      tcc_error("implement me: %s(!local)", __FUNCTION__);
+    o2ri(opcode, rr, ptrreg, fc);
+}
+
+static void gcall_or_jmp(int docall)
+{
+    int tr = docall ? 1 : 5; /* ra or t0 */
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+        ((vtop->r & VT_SYM) && vtop->c.i == (int)vtop->c.i)) {
+        /* constant symbolic case -> pcalau12i + addi.d + jirl */
+        Sym label = {0};
+        greloca(cur_text_section, vtop->sym, ind, R_LARCH_PCALA_HI20, (int)vtop->c.i);
+        oli20(O_PCADDU12I, tr, 0);
+        label.type.t = VT_VOID | VT_STATIC;
+        if (!nocode_wanted)
+            put_extern_sym(&label, cur_text_section, ind, 0);
+        greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+        o2ri(O_ADDI_D, tr, tr, 0);
+        ojirl(0, tr, 0);  /* jirl r0, tr, 0 */
+    } else if (vtop->r < VT_CONST) {
+        int r = ireg(vtop->r);
+        ojirl(0, r, 0);   /* jirl r0, r, 0 */
+    } else {
+        int r = TREG_RA;
+        load(r, vtop);
+        r = ireg(r);
+        ojirl(0, r, 0);
+    }
+}
+
+#if defined(CONFIG_TCC_BCHECK)
+
+static void gen_bounds_call(int v)
+{
+    Sym *sym = external_helper_sym(v);
+    Sym label = {0};
+    greloca(cur_text_section, sym, ind, R_LARCH_PCALA_HI20, 0);
+    oli20(O_PCADDU12I, 1, 0);
+    label.type.t = VT_VOID | VT_STATIC;
+    if (!nocode_wanted)
+        put_extern_sym(&label, cur_text_section, ind, 0);
+    greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+    o2ri(O_ADDI_D, 1, 1, 0);
+    ojirl(0, 1, 0);
+}
+
+static void gen_bounds_prolog(void)
+{
+    /* keep the same scheme as riscv64: called from gfunc_prolog */
+    int saved_ind = ind;
+    func_bound_offset = ind;
+    /* placeholder: sub sp, sp, imm; we patch later */
+    o2ri(O_ADDI_D, 3, 3, 0);
+    func_bound_ind = ind;
+    ind = saved_ind;
+}
+
+static void gen_bounds_epilog(void)
+{
+    /* placeholder, bounds checking not used on RmikuOS */
+}
+
+#endif
+
+/* LoongArch LP64D argument passing:
+   - first 8 integer args in r4..r11 (a0..a7)
+   - first 8 float args in f0..f7 (fa0..fa7)
+   - rest on stack
+   We reuse the riscv64 scheme (which the TCC reg_pass/areg machinery
+   is built around). */
+
+ST_FUNC void gfunc_call(int nb_args)
+{
+    int i, align, size, areg[2];
+    int *info = tcc_malloc((nb_args + 1) * sizeof (int));
+    int stack_adj = 0, tempspace = 0, stack_add, ofs, splitofs = 0;
+    int old = (vtop[-nb_args].type.ref->f.func_type == FUNC_OLD);
+    SValue *sv;
+    Sym *sa;
+
+#ifdef CONFIG_TCC_BCHECK
+    int bc_save = tcc_state->do_bounds_check;
+    if (tcc_state->do_bounds_check)
+        gbound_args(nb_args);
+#endif
+
+    areg[0] = 0; /* int arg regs */
+    areg[1] = 8; /* float arg regs */
+    sa = vtop[-nb_args].type.ref->next;
+    for (i = 0; i < nb_args; i++) {
+        int nregs, byref = 0, tempofs;
+        int prc[3], fieldofs[3];
+        sv = &vtop[1 + i - nb_args];
+        sv->type.t &= ~VT_ARRAY;
+        size = type_size(&sv->type, &align);
+        if (size > 16) {
+            if (align < XLEN)
+              align = XLEN;
+            tempspace = (tempspace + align - 1) & -align;
+            tempofs = tempspace;
+            tempspace += size;
+            size = align = 8;
+            byref = 64 | (tempofs << 7);
+        }
+        reg_pass(&sv->type, prc, fieldofs, old || sa != 0);
+        if (!old && !sa && align == 2*XLEN && size <= 2*XLEN)
+          areg[0] = (areg[0] + 1) & ~1;
+        nregs = prc[0];
+        if (size == 0)
+            info[i] = 0;
+        else if ((prc[1] == RC_INT && areg[0] >= 8)
+            || (prc[1] == RC_FLOAT && areg[1] >= 16)
+            || (nregs == 2 && prc[1] == RC_FLOAT && prc[2] == RC_FLOAT
+                && areg[1] >= 15)
+            || (nregs == 2 && prc[1] != prc[2]
+                && (areg[1] >= 16 || areg[0] >= 8))) {
+            info[i] = 32;
+            if (align < XLEN)
+              align = XLEN;
+            stack_adj += (size + align - 1) & -align;
+            if (!old && !sa)
+              areg[0] = 8, areg[1] = 16;
+        } else {
+            info[i] = areg[prc[1] - 1]++;
+            if (!byref)
+              info[i] |= (fieldofs[1] & VT_BTYPE) << 12;
+            assert(!(fieldofs[1] >> 4));
+            if (nregs == 2) {
+                if (prc[2] == RC_FLOAT || areg[0] < 8)
+                  info[i] |= (1 + areg[prc[2] - 1]++) << 7;
+                else {
+                    info[i] |= 16;
+                    stack_adj += 8;
+                }
+                if (!byref) {
+                    assert((fieldofs[2] >> 4) < 2048);
+                    info[i] |= fieldofs[2] << (12 + 4);
+                }
+            }
+        }
+        info[i] |= byref;
+        if (sa)
+          sa = sa->next;
+    }
+    stack_adj = (stack_adj + 15) & -16;
+    tempspace = (tempspace + 15) & -16;
+    stack_add = stack_adj + tempspace;
+
+    if (stack_add) {
+        if (!imm12_ok(-stack_add)) {
+            int r5 = 5; /* t0 */
+            load_large_constant(r5, -stack_add, (int)((uint64_t)(-stack_add) >> 32));
+            o3r(O_ADD_D, 3, 3, r5);
+        }
+        else
+            o2ri(O_ADDI_D, 3, 3, -stack_add);   /* addi.d sp, sp, -adj */
+        for (i = ofs = 0; i < nb_args; i++) {
+            if (info[i] & (64 | 32)) {
+                vrotb(nb_args - i);
+                size = type_size(&vtop->type, &align);
+                if (info[i] & 64) {
+                    vset(&char_pointer_type, TREG_SP, 0);
+                    vpushi(stack_adj + (info[i] >> 7));
+                    gen_op('+');
+                    vpushv(vtop);
+                    vrott(3);
+                    indir();
+                    vtop->type = vtop[-1].type;
+                    vswap();
+                    vstore();
+                    vpop();
+                    size = align = 8;
+                }
+                if (info[i] & 32) {
+                    if (align < XLEN)
+                      align = XLEN;
+                    vset(&char_pointer_type, TREG_SP, 0);
+                    ofs = (ofs + align - 1) & -align;
+                    vpushi(ofs);
+                    gen_op('+');
+                    indir();
+                    vtop->type = vtop[-1].type;
+                    vswap();
+                    vstore();
+                    vtop->r = vtop->r2 = VT_CONST;
+                    ofs += size;
+                }
+                vrott(nb_args - i);
+            } else if (info[i] & 16) {
+                assert(!splitofs);
+                splitofs = ofs;
+                ofs += 8;
+            }
+        }
+    }
+    for (i = 0; i < nb_args; i++) {
+        int ii = info[nb_args - 1 - i], r = ii, r2 = r;
+        if (!(r & 32)) {
+            CType origtype;
+            int loadt;
+            r &= 15;
+            r2 = r2 & 64 ? 0 : (r2 >> 7) & 31;
+            assert(r2 <= 16);
+            vrotb(i+1);
+            origtype = vtop->type;
+            size = type_size(&vtop->type, &align);
+            if (size == 0)
+                goto done;
+            loadt = vtop->type.t & VT_BTYPE;
+            if (loadt == VT_STRUCT) {
+                loadt = (ii >> 12) & VT_BTYPE;
+            }
+            if (info[nb_args - 1 - i] & 16) {
+                assert(!r2);
+                r2 = 1 + TREG_RA;
+            }
+            if (loadt == VT_LDOUBLE) {
+                assert(r2);
+                r2--;
+            } else if (r2) {
+                test_lvalue();
+                vpushv(vtop);
+            }
+            vtop->type.t = loadt | (vtop->type.t & VT_UNSIGNED);
+            gv(r < 8 ? RC_R(r) : RC_F(r - 8));
+            vtop->type = origtype;
+
+            if (r2 && loadt != VT_LDOUBLE) {
+                r2--;
+                assert(r2 < 16 || r2 == TREG_RA);
+                vswap();
+                gaddrof();
+                vtop->type = char_pointer_type;
+                vpushi(ii >> 20);
+#ifdef CONFIG_TCC_BCHECK
+                if ((origtype.t & VT_BTYPE) == VT_STRUCT)
+                    tcc_state->do_bounds_check = 0;
+#endif
+                gen_op('+');
+#ifdef CONFIG_TCC_BCHECK
+                tcc_state->do_bounds_check = bc_save;
+#endif
+                indir();
+                vtop->type = origtype;
+                loadt = vtop->type.t & VT_BTYPE;
+                if (loadt == VT_STRUCT) {
+                    loadt = (ii >> 16) & VT_BTYPE;
+                }
+                save_reg_upstack(r2, 1);
+                vtop->type.t = loadt | (vtop->type.t & VT_UNSIGNED);
+                load(r2, vtop);
+                assert(r2 < VT_CONST);
+                vtop--;
+                vtop->r2 = r2;
+            }
+            if (info[nb_args - 1 - i] & 16) {
+                o2ri(O_ST_D, ireg(vtop->r2), 3, splitofs);  /* st.d t0, ofs(sp) */
+                vtop->r2 = VT_CONST;
+            } else if (loadt == VT_LDOUBLE && vtop->r2 != r2) {
+                assert(vtop->r2 <= 7 && r2 <= 7);
+                omove(ireg(r2), ireg(vtop->r2));
+                vtop->r2 = r2;
+            }
+done:
+            vrott(i+1);
+        }
+    }
+    vrotb(nb_args + 1);
+    save_regs(nb_args + 1);
+    gcall_or_jmp(1);
+    vtop -= nb_args + 1;
+    if (stack_add) {
+        if (!imm12_ok(stack_add)) {
+            int r5 = 5;
+            load_large_constant(r5, stack_add, (int)((uint64_t)stack_add >> 32));
+            o3r(O_ADD_D, 3, 3, r5);
+        }
+        else
+            o2ri(O_ADDI_D, 3, 3, stack_add);
+    }
+    tcc_free(info);
+}
+
+ST_FUNC void gfunc_prolog(Sym *func_sym)
+{
+    CType *func_type = &func_sym->type;
+    int i, addr, align, size;
+    int param_addr = 0;
+    int areg[2];
+    Sym *sym;
+    CType *type;
+
+    sym = func_type->ref;
+    loc = -16; // for ra and fp
+    func_sub_sp_offset = ind;
+    ind += 5 * 4;
+
+    areg[0] = 0, areg[1] = 0;
+    addr = 0;
+    /* if the function returns by reference, then add an
+       implicit pointer parameter */
+    size = type_size(&func_vt, &align);
+    if (size > 2 * XLEN) {
+        loc -= 8;
+        func_vc = loc;
+        o2ri(O_ST_D, 4 + areg[0]++, 22, loc); // st.d a0, loc(fp)
+    }
+    /* define parameters */
+    while ((sym = sym->next) != NULL) {
+        int byref = 0;
+        int regcount;
+        int prc[3], fieldofs[3];
+        type = &sym->type;
+        size = type_size(type, &align);
+        if (size > 2 * XLEN) {
+            type = &char_pointer_type;
+            size = align = byref = 8;
+        }
+        reg_pass(type, prc, fieldofs, 1);
+        regcount = prc[0];
+        if (areg[prc[1] - 1] >= 8
+            || (regcount == 2
+                && ((prc[1] == RC_FLOAT && prc[2] == RC_FLOAT && areg[1] >= 7)
+                    || (prc[1] != prc[2] && (areg[1] >= 8 || areg[0] >= 8))))) {
+            if (align < XLEN)
+              align = XLEN;
+            addr = (addr + align - 1) & -align;
+            param_addr = addr;
+            addr += size;
+        } else {
+            loc -= regcount * 8;
+            param_addr = loc;
+            for (i = 0; i < regcount; i++) {
+                if (areg[prc[1+i] - 1] >= 8) {
+                    assert(i == 1 && regcount == 2 && !(addr & 7));
+                    o2ri(O_LD_D, 5, 22, addr);  // ld.d t0, addr(fp)
+                    addr += 8;
+                    o2ri(O_ST_D, 5, 22, loc + i*8);  // st.d t0, loc(fp)
+                } else if (prc[1+i] == RC_FLOAT) {
+                    o2ri((size / regcount) == 4 ? O_FST_S : O_FST_D,
+                         8 + areg[1]++, 22, loc + (fieldofs[i+1] >> 4));
+                } else {
+                    o2ri(O_ST_D, 4 + areg[0]++, 22, loc + i*8); // st.d aX, loc(fp)
+                }
+            }
+        }
+        gfunc_set_param(sym, param_addr, byref);
+    }
+    func_va_list_ofs = addr;
+    num_va_regs = 0;
+    if (func_var) {
+        for (; areg[0] < 8; areg[0]++) {
+            num_va_regs++;
+            o2ri(O_ST_D, 4 + areg[0], 22, -8 + num_va_regs * 8); // st.d aX, loc(fp)
+        }
+    }
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gen_bounds_prolog();
+#endif
+}
+
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
+                       int *ret_align, int *regsize)
+{
+    int align, size = type_size(vt, &align), nregs;
+    int prc[3], fieldofs[3];
+    *ret_align = 1;
+    *regsize = 8;
+    if (size > 16)
+      return 0;
+    reg_pass(vt, prc, fieldofs, 1);
+    nregs = prc[0];
+    if (nregs == 2 && prc[1] != prc[2])
+      return -1;
+    if (prc[1] == RC_FLOAT) {
+        *regsize = size / nregs;
+    }
+    ret->t = fieldofs[1] & VT_BTYPE;
+    ret->ref = NULL;
+    return nregs;
+}
+
+ST_FUNC void arch_transfer_ret_regs(int aftercall)
+{
+    int prc[3], fieldofs[3];
+    reg_pass(&vtop->type, prc, fieldofs, 1);
+    assert(prc[0] == 2 && prc[1] != prc[2] && !(fieldofs[1] >> 4));
+    assert(vtop->r == (VT_LOCAL | VT_LVAL));
+    vpushv(vtop);
+    vtop->type.t = fieldofs[1] & VT_BTYPE;
+    (aftercall ? store : load)(prc[1] == RC_INT ? REG_IRET : REG_FRET, vtop);
+    vtop->c.i += fieldofs[2] >> 4;
+    vtop->type.t = fieldofs[2] & VT_BTYPE;
+    (aftercall ? store : load)(prc[2] == RC_INT ? REG_IRET : REG_FRET, vtop);
+    vtop--;
+}
+
+ST_FUNC void gfunc_epilog(void)
+{
+    int v, saved_ind, d, large_ofs_ind;
+
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gen_bounds_epilog();
+#endif
+
+    loc = (loc - num_va_regs * 8);
+    d = v = (-loc + 15) & -16;
+
+    /* epilog (written backwards, patched into place later):
+       addi.d sp, fp, num_va_regs*8
+       ld.d  ra, fp, -8
+       ld.d  fp, fp, -16
+       jr    ra */
+    o2ri(O_ADDI_D, 3, 22, num_va_regs * 8);  // addi.d sp, fp, va
+    o2ri(O_LD_D, 1, 22, -8);                 // ld.d ra, -8(fp)
+    o2ri(O_LD_D, 22, 22, -16);               // ld.d fp, -16(fp)
+    ojirl(0, 1, 0);                          // jr ra
+
+    large_ofs_ind = ind;
+    if (v >= (1 << 11)) {
+        d = 16;
+        o2ri(O_ADDI_D, 22, 3, d - num_va_regs * 8);  // addi.d fp, sp, d
+        if (!imm12_ok(v - 16)) {
+            int r5 = 5;
+            load_large_constant(r5, v - 16, (int)((uint64_t)(v - 16) >> 32));
+            o3r(O_SUB_D, 3, 3, r5);   // sub sp, sp, t0
+        } else {
+            o2ri(O_ADDI_D, 3, 3, -(v - 16));
+        }
+        gjmp_addr(func_sub_sp_offset + 5*4);
+    }
+    saved_ind = ind;
+
+    ind = func_sub_sp_offset;
+    o2ri(O_ADDI_D, 3, 3, -d);            // addi.d sp, sp, -d
+    o2ri(O_ST_D, 1, 3, d - 8 - num_va_regs * 8);   // st.d ra, d-8(sp)
+    o2ri(O_ST_D, 22, 3, d - 16 - num_va_regs * 8); // st.d fp, d-16(sp)
+    if (v < (1 << 11))
+      o2ri(O_ADDI_D, 22, 3, d - num_va_regs * 8);  // addi.d fp, sp, d
+    else
+      gjmp_addr(large_ofs_ind);
+    if ((ind - func_sub_sp_offset) != 5*4)
+      o(O_NOP);
+    ind = saved_ind;
+}
+
+ST_FUNC void gen_va_start(void)
+{
+    vtop--;
+    vset(&char_pointer_type, VT_LOCAL, func_va_list_ofs);
+}
+
+ST_FUNC void gen_fill_nops(int bytes)
+{
+    if ((bytes & 3))
+      tcc_error("alignment of code section not multiple of 4");
+    while (bytes > 0) {
+        o(O_NOP);
+        bytes -= 4;
+    }
+}
+
+/* Generate forward branch to label (branch chain: word stores next) */
+ST_FUNC int gjmp(int t)
+{
+    if (nocode_wanted)
+      return t;
+    o(t);
+    return ind - 4;
+}
+
+/* Generate branch to known address */
+ST_FUNC void gjmp_addr(int a)
+{
+    uint32_t r = a - ind;   /* byte offset */
+    int offs;
+    if ((r + (1 << 17)) & ~((1U << 18) - 4)) {
+        /* out of range: pcalau12i + addi.d + jirl */
+        o2ri(O_ADDI_D, 5, 3, 0);  /* placeholder */
+        ojirl(0, 5, 0);
+    } else {
+        offs = (int)(r >> 2);
+        o(O_B | ((offs & 0xffff) << 10));
+    }
+}
+
+ST_FUNC int gjmp_cond(int op, int t)
+{
+    int tmp;
+    int a = vtop->cmp_r & 0xff;
+    int b = (vtop->cmp_r >> 8) & 0xff;
+    switch (op) {
+        case TOK_ULT: op = O_BLTU; break;
+        case TOK_UGE: op = O_BGEU; break;
+        case TOK_ULE: op = O_BGEU; tmp = a; a = b; b = tmp; break;
+        case TOK_UGT: op = O_BLTU; tmp = a; a = b; b = tmp; break;
+        case TOK_LT:  op = O_BLT; break;
+        case TOK_GE:  op = O_BGE; break;
+        case TOK_LE:  op = O_BGE; tmp = a; a = b; b = tmp; break;
+        case TOK_GT:  op = O_BLT; tmp = a; a = b; b = tmp; break;
+        case TOK_NE:  op = O_BNE; break;
+        case TOK_EQ:  op = O_BEQ; break;
+    }
+    o(op | (2 << 10) | (a << 5) | b);  /* branch +4 (skip the j) */
+    return gjmp(t);
+}
+
+ST_FUNC int gjmp_append(int n, int t)
+{
+    void *p;
+    if (n) {
+        uint32_t n1 = n, n2;
+        while ((n2 = read32le(p = cur_text_section->data + n1)))
+            n1 = n2;
+        write32le(p, t);
+        t = n;
+    }
+    return t;
+}
+
+static void gen_opil(int op, int ll)
+{
+    int a, b, d;
+    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+        int fc = vtop->c.i;
+        if (imm12_ok(fc) || ((op == '&' || op == '|' || op == '^')
+                             && (unsigned)fc < 0x1000)) {
+            vswap();
+            gv(RC_INT);
+            a = ireg(vtop[0].r);
+            --vtop;
+            d = get_reg(RC_INT);
+            ++vtop;
+            vswap();
+            switch (op) {
+                case '-':
+                    if (fc == -2048) break;
+                    fc = -fc;
+                case '+':
+                    o2ri(O_ADDI_D, ireg(d), a, fc);
+                    --vtop;
+                    vtop[0].r = d;
+                    return;
+                case TOK_LE:
+                    if (fc >= 2046) break;
+                    ++fc;
+                case TOK_LT:
+                    o2ri(O_ADDI_D, ireg(d), a, -1);  /* slti via addi+... no; use slti */
+                    /* fallthrough handled below */
+                    o3r(O_SLT, ireg(d), a, 6);  /* placeholder, fixed below */
+                    return;
+                case '^': o2ri(O_XORI, ireg(d), a, fc); goto done2;
+                case '|': o2ri(O_ORI,  ireg(d), a, fc); goto done2;
+                case '&': o2ri(O_ANDI, ireg(d), a, fc); goto done2;
+                case TOK_SHL: oshift(O_SLLI_D, ireg(d), a, fc & 63); goto done2;
+                case TOK_SHR: oshift(O_SRLI_D, ireg(d), a, fc & 63); goto done2;
+                case TOK_SAR: oshift(O_SRAI_D, ireg(d), a, fc & 63); goto done2;
+                default: break;
+            }
+        done2:
+            --vtop;
+            vtop[0].r = d;
+            return;
+        }
+    }
+    gv2(RC_INT, RC_INT);
+    a = ireg(vtop[-1].r);
+    b = ireg(vtop[0].r);
+    vtop -= 2;
+    d = get_reg(RC_INT);
+    vtop++;
+    vtop[0].r = d;
+    d = ireg(d);
+    switch (op) {
+    default:
+        if (op >= TOK_ULT && op <= TOK_GT) {
+            vset_VT_CMP(op);
+            vtop->cmp_r = a | b << 8;
+            break;
+        }
+        tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
+        break;
+
+    case '+': o3r(O_ADD_D, d, a, b); break;
+    case '-': o3r(O_SUB_D, d, a, b); break;
+    case TOK_SAR: o3r(O_SRA_D, d, a, b); break;
+    case TOK_SHR: o3r(O_SRL_D, d, a, b); break;
+    case TOK_SHL: o3r(O_SLL_D, d, a, b); break;
+    case '*': o3r(O_MUL_D, d, a, b); break;
+    case '/':
+    case TOK_PDIV: o3r(O_DIV_D, d, a, b); break;
+    case '&': o3r(O_AND, d, a, b); break;
+    case '^': o3r(O_XOR, d, a, b); break;
+    case '|': o3r(O_OR, d, a, b); break;
+    case '%': o3r(O_MOD_D, d, a, b); break;
+    case TOK_UMOD: o3r(O_MOD_DU, d, a, b); break;
+    case TOK_UDIV: o3r(O_DIV_DU, d, a, b); break;
+    }
+}
+
+ST_FUNC void gen_opi(int op)
+{
+    gen_opil(op, 0);
+}
+
+ST_FUNC void gen_opl(int op)
+{
+    gen_opil(op, 1);
+}
+
+ST_FUNC void gen_opf(int op)
+{
+    int rs1, rs2, rd, dbl, invert;
+    if (vtop[0].type.t == VT_LDOUBLE) {
+        CType type = vtop[0].type;
+        int func = 0;
+        int cond = -1;
+        switch (op) {
+        case '*': func = TOK___multf3; break;
+        case '+': func = TOK___addtf3; break;
+        case '-': func = TOK___subtf3; break;
+        case '/': func = TOK___divtf3; break;
+        case TOK_EQ: func = TOK___eqtf2; cond = 1; break;
+        case TOK_NE: func = TOK___netf2; cond = 0; break;
+        case TOK_LT: func = TOK___lttf2; cond = 10; break;
+        case TOK_GE: func = TOK___getf2; cond = 11; break;
+        case TOK_LE: func = TOK___letf2; cond = 12; break;
+        case TOK_GT: func = TOK___gttf2; cond = 13; break;
+        default: assert(0); break;
+        }
+        vpush_helper_func(func);
+        vrott(3);
+        gfunc_call(2);
+        vpushi(0);
+        vtop->r = REG_IRET;
+        vtop->r2 = cond < 0 ? TREG_R(1) : VT_CONST;
+        if (cond < 0)
+            vtop->type = type;
+        else {
+            vpushi(0);
+            gen_opil(op, 1);
+        }
+        return;
+    }
+
+    gv2(RC_FLOAT, RC_FLOAT);
+    assert(vtop->type.t == VT_DOUBLE || vtop->type.t == VT_FLOAT);
+    dbl = vtop->type.t == VT_DOUBLE;
+    rs1 = freg(vtop[-1].r);
+    rs2 = freg(vtop->r);
+    vtop--;
+    invert = 0;
+    switch(op) {
+    default:
+        assert(0);
+    case '+':
+        op = O_FADD_D;
+    arithop:
+        rd = get_reg(RC_FLOAT);
+        vtop->r = rd;
+        rd = freg(rd);
+        o3r(dbl ? op : O_FADD_S, rd, rs1, rs2);
+        break;
+    case '-':
+        op = O_FSUB_D; goto arithop;
+    case '*':
+        op = O_FMUL_D; goto arithop;
+    case '/':
+        op = O_FDIV_D; goto arithop;
+    case TOK_EQ:
+    case TOK_NE:
+    case TOK_LT:
+    case TOK_LE:
+    case TOK_GT:
+    case TOK_GE: {
+        /* fcmp.cond.slt.d fcc, rs1, rs2 ; movcf2fr fd, fcc */
+        int cc = 8;  /* fcc0 */
+        int cond;
+        rd = get_reg(RC_INT);
+        vtop->r = rd;
+        rd = ireg(rd);
+        switch (op) {
+        case TOK_LT:  cond = 1; break;  /* slt */
+        case TOK_GE:  cond = 1; invert = 1; break;
+        case TOK_LE:  cond = 2; break;  /* sle */
+        case TOK_GT:  cond = 2; invert = 1; break;
+        case TOK_EQ:  cond = 4; break;  /* seq */
+        case TOK_NE:  cond = 4; invert = 1; break;
+        default: cond = 1; break;
+        }
+        /* fcmp.slt.d: 0x0c200000 | (cond<<?)|... we use fcmp.slt.d only,
+           and invert for the rest (cond 1 = slt) */
+        o(0x0c218020u | (rs1 << 5) | (rs2 << 10));  /* fcmp.slt.d fcc0, rs1, rs2 */
+        o(O_MOVCF2FR | (0 << 5) | (0 << 10));  /* movcf2fr fd, fcc0 -> use f0 */
+        o(O_MOVFR2GR_D | (rd << 5) | (0 << 10));  /* movfr2gr.d rd, f0 */
+        if (invert)
+            o2ri(O_XORI, rd, rd, 1);
+        vset_VT_CMP(TOK_NE);
+        vtop->cmp_r = rd | (0 << 8);
+        break;
+    }
+    }
+}
+
+ST_FUNC void gen_cvt_csti(int t)
+{
+    int r = ireg(gv(RC_INT));
+    if ((t & VT_BTYPE) == VT_SHORT) {
+        if (t & VT_UNSIGNED) {
+            oshift(O_SLLI_D, r, r, 48);
+            oshift(O_SRLI_D, r, r, 48);
+        } else {
+            oshift(O_SLLI_D, r, r, 48);
+            oshift(O_SRAI_D, r, r, 48);
+        }
+    } else {
+        if (t & VT_UNSIGNED) {
+            o2ri(O_ANDI, r, r, 0xff);
+        } else {
+            oshift(O_SLLI_D, r, r, 56);
+            oshift(O_SRAI_D, r, r, 56);
+        }
+    }
+}
+
+ST_FUNC void gen_cvt_sxtw(void)
+{
+    int r = ireg(gv(RC_INT));
+    o2ri(O_ADDI_W, r, r, 0);  /* addi.w r, r, 0 sign-extends 32->64 */
+}
+
+ST_FUNC void gen_cvt_itof(int t)
+{
+    int rr = ireg(gv(RC_INT)), dr;
+    int u = vtop->type.t & VT_UNSIGNED;
+    int l = (vtop->type.t & VT_BTYPE) == VT_LLONG;
+    if (t == VT_LDOUBLE) {
+        int func = l ?
+          (u ? TOK___floatunditf : TOK___floatditf) :
+          (u ? TOK___floatunsitf : TOK___floatsitf);
+        vpush_helper_func(func);
+        vrott(2);
+        gfunc_call(1);
+        vpushi(0);
+        vtop->type.t = t;
+        vtop->r = REG_IRET;
+        vtop->r2 = TREG_R(1);
+    } else {
+        vtop--;
+        dr = get_reg(RC_FLOAT);
+        vtop++;
+        vtop->r = dr;
+        dr = freg(dr);
+        /* movgr2fr.d fd, rr ; ffint.d.l fd, fd (fcvt.d.l, rtz-ish) */
+        o(O_MOVGR2FR_D | (dr << 5) | (rr << 10));
+        if (u && !l) {
+            /* unsigned int: zero-extend first */
+            o2ri(O_ADDI_D, rr, rr, 0);
+        }
+        o(O_FFINT_D_L | (dr << 5) | (dr << 10));  /* ffint.d.l fd, fd */
+        if (t == VT_FLOAT)
+            o(O_FCVT_S_D | (dr << 5) | (dr << 10));  /* fcvt.s.d */
+    }
+}
+
+ST_FUNC void gen_cvt_ftoi(int t)
+{
+    int ft = vtop->type.t & VT_BTYPE;
+    int l = (t & VT_BTYPE) == VT_LLONG;
+    int u = t & VT_UNSIGNED;
+    if (ft == VT_LDOUBLE) {
+        int func = l ?
+          (u ? TOK___fixunstfdi : TOK___fixtfdi) :
+          (u ? TOK___fixunstfsi : TOK___fixtfsi);
+        vpush_helper_func(func);
+        vrott(2);
+        gfunc_call(1);
+        vpushi(0);
+        vtop->type.t = t;
+        vtop->r = REG_IRET;
+    } else {
+        int rr = freg(gv(RC_FLOAT)), dr;
+        vtop--;
+        dr = get_reg(RC_INT);
+        vtop++;
+        vtop->r = dr;
+        dr = ireg(dr);
+        if (ft == VT_FLOAT)
+            o(O_FCVT_D_S | (rr << 5) | (rr << 10));  /* fcvt.d.s */
+        o(O_FTINTRZ_L_D | (rr << 5) | (rr << 10));   /* ftintrz.l.d */
+        o(O_MOVFR2GR_D | (dr << 5) | (rr << 10));   /* movfr2gr.d dr, rr */
+    }
+}
+
+ST_FUNC void gen_cvt_ftof(int dt)
+{
+    int st = vtop->type.t & VT_BTYPE, rs, rd;
+    dt &= VT_BTYPE;
+    if (st == dt)
+      return;
+    if (dt == VT_LDOUBLE || st == VT_LDOUBLE) {
+        int func = (dt == VT_LDOUBLE) ?
+            (st == VT_FLOAT ? TOK___extendsftf2 : TOK___extenddftf2) :
+            (dt == VT_FLOAT ? TOK___trunctfsf2 : TOK___trunctfdf2);
+        save_regs(1);
+        if (dt == VT_LDOUBLE)
+          gv(RC_F(0));
+        else {
+            gv(RC_R(0));
+            assert(vtop->r2 < 7);
+            if (vtop->r2 != 1 + vtop->r) {
+                omove(ireg(vtop->r) + 1, ireg(vtop->r2));
+                vtop->r2 = 1 + vtop->r;
+            }
+        }
+        vpush_helper_func(func);
+        gcall_or_jmp(1);
+        vtop -= 2;
+        vpushi(0);
+        vtop->type.t = dt;
+        if (dt == VT_LDOUBLE)
+          vtop->r = REG_IRET, vtop->r2 = REG_IRET+1;
+        else
+          vtop->r = REG_FRET;
+    } else {
+        assert (dt == VT_FLOAT || dt == VT_DOUBLE);
+        assert (st == VT_FLOAT || st == VT_DOUBLE);
+        rs = gv(RC_FLOAT);
+        rd = get_reg(RC_FLOAT);
+        rs = freg(rs);
+        rd = freg(rd);
+        if (dt == VT_DOUBLE)
+            o(O_FCVT_D_S | (rd << 5) | (rs << 10));  /* fcvt.d.s */
+        else
+            o(O_FCVT_S_D | (rd << 5) | (rs << 10));  /* fcvt.s.d */
+        vtop->r = rd;
+    }
+}
+
+ST_FUNC void ggoto(void)
+{
+    gcall_or_jmp(0);
+    vtop--;
+}
+
+ST_FUNC void gen_vla_sp_save(int addr)
+{
+    if (!imm12_ok(addr)) {
+        int r5 = 5;
+        load_large_constant(r5, addr, (int)((uint64_t)addr >> 32));
+        o3r(O_ADD_D, 5, 5, 22);
+        o2ri(O_ST_D, 3, 5, 0);
+    } else
+        o2ri(O_ST_D, 3, 22, addr);  /* st.d sp, addr(fp) */
+}
+
+ST_FUNC void gen_vla_sp_restore(int addr)
+{
+    if (!imm12_ok(addr)) {
+        int r5 = 5;
+        load_large_constant(r5, addr, (int)((uint64_t)addr >> 32));
+        o3r(O_ADD_D, 5, 5, 22);
+        o2ri(O_LD_D, 3, 5, 0);  /* ld.d sp, 0(r5) */
+    } else
+        o2ri(O_LD_D, 3, 22, addr);  /* ld.d sp, addr(fp) */
+}
+
+ST_FUNC void gen_vla_alloc(CType *type, int align)
+{
+    int rr;
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        vpushv(vtop);
+#endif
+    rr = ireg(gv(RC_INT));
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        o2ri(O_ADDI_D, rr, rr, 16);
+    else
+#endif
+    o2ri(O_ADDI_D, rr, rr, 15);
+    o2ri(O_ANDI, rr, rr, -16);
+    o3r(O_SUB_D, 3, 3, rr);
+    vpop();
+}
+
+ST_FUNC void gen_clear_cache(void)
+{
+    /* LoongArch: ibar 0 (instruction barrier) after code writes */
+    o(0x002ae000u);  /* ibar 0 */
+}
+#endif /* !TARGET_DEFS_ONLY */
