@@ -1458,7 +1458,6 @@ ST_FUNC void gen_clear_cache(void)
     /* LoongArch: ibar 0 (instruction barrier) after code writes */
     o(0x002ae000u);  /* ibar 0 */
 }
-#endif /* !TARGET_DEFS_ONLY */
 
 /* increment tcov counter (LoongArch: pcalau12i + addi.d + ld.d + addi.d + st.d) */
 ST_FUNC void gen_increment_tcov (SValue *sv)
@@ -1488,3 +1487,4 @@ ST_FUNC void gen_increment_tcov (SValue *sv)
     o2ri(O_ST_D, r2, r1, 0);            /* st.d r2, r1, 0 */
     vpop();
 }
+#endif /* !TARGET_DEFS_ONLY */

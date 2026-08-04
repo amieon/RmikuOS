@@ -21,9 +21,19 @@
    succeeds no matter which translation unit was cached. */
 #define NB_ASM_REGS 32
 
+/* 仅声明无类型依赖的函数(ASMOperand/SValue/ExprValue/CString 在
+   tcc.h 之后才定义, TARGET_DEFS_ONLY 模式下不可见) */
 ST_FUNC void g(int c);
 ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);
+
+/*************************************************************/
+#else
+/*************************************************************/
+#define USING_GLOBALS
+#include "tcc.h"
+
+/* 其余 asm 符号的声明(此时 SValue/ASMOperand/ExprValue/CString 已定义) */
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 ST_FUNC void asm_compute_constraints(ASMOperand *operands, int nb_operands,
                                      int nb_outputs, const uint8_t *clobber_regs,
@@ -35,12 +45,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int token);
 ST_FUNC int asm_parse_regvar(int t);
 ST_FUNC void gen_expr32(ExprValue *pe);
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier);
-
-/*************************************************************/
-#else
-/*************************************************************/
-#define USING_GLOBALS
-#include "tcc.h"
 
 /* ---- byte emission (used by tccasm.c even when asm is disabled) ---- */
 ST_FUNC void g(int c)
