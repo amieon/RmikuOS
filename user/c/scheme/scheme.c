@@ -1,5 +1,4 @@
-/* scheme.c —— 微型 Scheme 解释器（RmikuOS 第六门用户态语言，从零手写）
- *
+/* 
  * 支持（教学核心集 + 尾调用优化 TCO）:
  *   数据类型: 整数 / 符号(intern) / 字符串 / 布尔(#t #f) / 空表() / 序对 / lambda / 内建
  *   特殊形式: quote  if  define  lambda  begin  set!  cond  let  and  or
@@ -7,13 +6,6 @@
  *             string? boolean?  not eq? list  display newline  exit
  *   TCO: 尾位置的 lambda 调用不进递归, 主循环迭代 -> 深尾递归不爆栈
  *   语法糖: 'x = (quote x); ; 行注释; 多行表达式(REPL 自动补全括号)
- *
- * 教学取舍(与 README 一致): 无 GC(REPL 长跑会泄漏, 注释说明)、无浮点、
- * 无变长参数、无 call/cc。文件模式: scheme file.scm
- *
- * 用法:
- *   scheme                 交互 REPL
- *   scheme /codes/xxx.scm  执行脚本文件
  */
 #include "user.h"
 #include "stdlib.h"
@@ -100,6 +92,26 @@ static Obj *gc_root_e = NULL;      /* eval 主循环当前表达式 */
 static Env *gc_root_env = NULL;    /* eval 主循环当前环境 */
 static Env *g_global = NULL;       /* 全局环境(永远可达) */
 
+/* ---- 临时根(递归保护) ----
+ * GC 根集只含"全局 + 当前帧"。eval 的递归调用(非尾位置)会进入更深的
+ * eval, 此时调用者帧的 e/env 只存在于 C 调用栈上, 不在 GC 根集里。
+ * 递归深处触发 GC 会误回收外层帧仍在使用的对象 -> use-after-free
+ * (症状: scheme fib 深递归时 env_get 访问被回收的 Env, p=0 崩溃)。
+ * 做法: 每次子求值前把调用者帧的 e/env 压入临时根, 求值返回后弹出。 */
+#define TEMP_ROOT_CAP 512
+static Obj *temp_objs[TEMP_ROOT_CAP];
+static Env *temp_envs[TEMP_ROOT_CAP];
+static int n_temp_objs = 0, n_temp_envs = 0;
+
+static void gc_push_obj(Obj *o)  { if (n_temp_objs < TEMP_ROOT_CAP) temp_objs[n_temp_objs++] = o; }
+static void gc_pop_obj(void)     { if (n_temp_objs > 0) n_temp_objs--; }
+static void gc_push_env(Env *e2) { if (n_temp_envs < TEMP_ROOT_CAP) temp_envs[n_temp_envs++] = e2; }
+static void gc_pop_env(void)     { if (n_temp_envs > 0) n_temp_envs--; }
+
+/* eval 主循环内的子求值保护: 求值期间调用者帧的 e/env 存活 */
+#define EVAL_GUARD(x) ({ gc_push_obj(e); gc_push_env(env); \
+                         typeof(x) __r = (x); gc_pop_env(); gc_pop_obj(); __r; })
+
 static void gc_mark_obj(Obj *o);
 static void gc_mark_env(Env *e);
 static void gc_sweep_envs(void);   /* 在 struct Env 定义后实现 */
@@ -110,6 +122,8 @@ static void gc_collect(void) {
     gc_mark_obj(gc_root_expr);
     gc_mark_obj(gc_root_e);
     gc_mark_env(gc_root_env);
+    for (int i = 0; i < n_temp_objs; i++) gc_mark_obj(temp_objs[i]);
+    for (int i = 0; i < n_temp_envs; i++) gc_mark_env(temp_envs[i]);
     /* sweep objs */
     int w = 0;
     for (int i = 0; i < n_objs; i++) {
@@ -388,9 +402,15 @@ static Obj *body_of(Obj *body_list) {
 
 static Obj *eval_list(Obj *args, Env *env) {
     if (args->type == T_NIL) return nil_obj();
+    /* 求值 car 期间, 当前列表 args 与 env 必须存活 */
+    gc_push_obj(args); gc_push_env(env);
     Obj *car = eval(args->u.pair.car, env, 0);
+    gc_pop_env(); gc_pop_obj();
     if (!car) return NULL;
+    /* 递归求值 cdr 期间, 已求值的 car 与 env 必须存活 */
+    gc_push_obj(car); gc_push_env(env);
     Obj *cdr = eval_list(args->u.pair.cdr, env);
+    gc_pop_env(); gc_pop_obj();
     if (!cdr) return NULL;
     return cons(car, cdr);
 }
@@ -423,9 +443,9 @@ static Obj *eval(Obj *e, Env *env, int tail) {
         Obj *head = e->u.pair.car;
         if (head->type != T_SYM) {
             /* 非符号头部: ( (lambda ...) args... ) 直接调用 */
-            Obj *fn = eval(head, env, 0);
+            Obj *fn = EVAL_GUARD(eval(head, env, 0));
             if (!fn) return NULL;
-            Obj *args = eval_list(e->u.pair.cdr, env);
+            Obj *args = EVAL_GUARD(eval_list(e->u.pair.cdr, env));
             if (!args) return NULL;
             if (fn->type == T_BUILTIN)
                 return fn->u.builtin(args);
@@ -438,7 +458,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
                     a = a->u.pair.cdr;
                 }
                 if (tail) { e = fn->u.lambda.body; env = n; continue; }  /* TCO */
-                return eval(fn->u.lambda.body, n, 0);
+                return EVAL_GUARD(eval(fn->u.lambda.body, n, 0));
             }
             printf("scheme: not a function\n");
             return NULL;
@@ -451,7 +471,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             return e->u.pair.cdr->u.pair.car;   /* (quote x) */
         }
         if (h == S_if) {
-            Obj *cond = eval(e->u.pair.cdr->u.pair.car, env, 0);
+            Obj *cond = EVAL_GUARD(eval(e->u.pair.cdr->u.pair.car, env, 0));
             if (!cond) return NULL;
             int truth = !(cond->type == T_BOOL && cond->u.num == 0);
             Obj *rest = e->u.pair.cdr->u.pair.cdr;   /* (then else) */
@@ -466,7 +486,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
         if (h == S_begin) {
             Obj *body = e->u.pair.cdr;
             while (body->type == T_PAIR && body->u.pair.cdr->type == T_PAIR) {
-                Obj *r = eval(body->u.pair.car, env, 0);
+                Obj *r = EVAL_GUARD(eval(body->u.pair.car, env, 0));
                 if (!r) return NULL;
                 body = body->u.pair.cdr;
             }
@@ -479,7 +499,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             Obj *target = e->u.pair.cdr->u.pair.car;   /* 符号 或 (f params...) */
             Obj *rest = e->u.pair.cdr->u.pair.cdr;
             if (target->type == T_SYM) {
-                Obj *val = eval(rest->u.pair.car, env, 0);
+                Obj *val = EVAL_GUARD(eval(rest->u.pair.car, env, 0));
                 if (!val) return NULL;
                 env_def(env, target->u.sym, val);
                 return nil_obj();
@@ -522,7 +542,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
         }
         if (h == S_set) {
             Obj *name = e->u.pair.cdr->u.pair.car;
-            Obj *val = eval(e->u.pair.cdr->u.pair.cdr->u.pair.car, env, 0);
+            Obj *val = EVAL_GUARD(eval(e->u.pair.cdr->u.pair.cdr->u.pair.car, env, 0));
             if (!val) return NULL;
             if (name->type != T_SYM || !env_set(env, name->u.sym, val)) {
                 printf("scheme: set! unbound: %s\n", name->type == T_SYM ? name->u.sym : "?");
@@ -539,20 +559,20 @@ static Obj *eval(Obj *e, Env *env, int tail) {
                 if (test->type == T_SYM && test->u.sym == S_else) {
                     Obj *body = cl->u.pair.cdr;
                     while (body->type == T_PAIR && body->u.pair.cdr->type == T_PAIR) {
-                        Obj *r = eval(body->u.pair.car, env, 0);
+                        Obj *r = EVAL_GUARD(eval(body->u.pair.car, env, 0));
                         if (!r) return NULL;
                         body = body->u.pair.cdr;
                     }
                     e = body->u.pair.car; matched = 1; break;   /* 尾位置 */
                 }
-                Obj *cv = eval(test, env, 0);
+                Obj *cv = EVAL_GUARD(eval(test, env, 0));
                 if (!cv) return NULL;
                 int truth = !(cv->type == T_BOOL && cv->u.num == 0);
                 if (truth) {
                     Obj *body = cl->u.pair.cdr;
                     if (body->type == T_NIL) return boolean(1);
                     while (body->type == T_PAIR && body->u.pair.cdr->type == T_PAIR) {
-                        Obj *r = eval(body->u.pair.car, env, 0);
+                        Obj *r = EVAL_GUARD(eval(body->u.pair.car, env, 0));
                         if (!r) return NULL;
                         body = body->u.pair.cdr;
                     }
@@ -568,7 +588,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             Env *n = env_new(env);
             for (; binds->type == T_PAIR; binds = binds->u.pair.cdr) {
                 Obj *b = binds->u.pair.car;          /* (name expr) */
-                Obj *val = eval(b->u.pair.cdr->u.pair.car, env, 0);
+                Obj *val = EVAL_GUARD(eval(b->u.pair.cdr->u.pair.car, env, 0));
                 if (!val) return NULL;
                 env_def(n, b->u.pair.car->u.sym, val);
             }
@@ -581,7 +601,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             Obj *args = e->u.pair.cdr;
             if (args->type == T_NIL) return boolean(1);
             for (; args->u.pair.cdr->type == T_PAIR; args = args->u.pair.cdr) {
-                Obj *v = eval(args->u.pair.car, env, 0);
+                Obj *v = EVAL_GUARD(eval(args->u.pair.car, env, 0));
                 if (!v) return NULL;
                 if (v->type == T_BOOL && v->u.num == 0) return boolean(0);
             }
@@ -591,7 +611,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
             Obj *args = e->u.pair.cdr;
             if (args->type == T_NIL) return boolean(0);
             for (; args->u.pair.cdr->type == T_PAIR; args = args->u.pair.cdr) {
-                Obj *v = eval(args->u.pair.car, env, 0);
+                Obj *v = EVAL_GUARD(eval(args->u.pair.car, env, 0));
                 if (!v) return NULL;
                 if (!(v->type == T_BOOL && v->u.num == 0)) return v;
             }
@@ -599,9 +619,9 @@ static Obj *eval(Obj *e, Env *env, int tail) {
         }
 
         /* ---- 普通函数调用 (h 是函数名) ---- */
-        Obj *fn = eval(head, env, 0);
+        Obj *fn = EVAL_GUARD(eval(head, env, 0));
         if (!fn) return NULL;
-        Obj *args = eval_list(e->u.pair.cdr, env);
+        Obj *args = EVAL_GUARD(eval_list(e->u.pair.cdr, env));
         if (!args) return NULL;
         if (fn->type == T_BUILTIN)
             return fn->u.builtin(args);
@@ -614,7 +634,7 @@ static Obj *eval(Obj *e, Env *env, int tail) {
                 a = a->u.pair.cdr;
             }
             if (tail) { e = fn->u.lambda.body; env = n; continue; }  /* TCO! */
-            return eval(fn->u.lambda.body, n, 0);
+            return EVAL_GUARD(eval(fn->u.lambda.body, n, 0));
         }
         printf("scheme: not a function\n");
         return NULL;
