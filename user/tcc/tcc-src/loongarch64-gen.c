@@ -133,8 +133,8 @@
 #define O_LD_H   0x28400000u
 #define O_LD_W   0x28800000u
 #define O_LD_D   0x28c00000u
-#define O_ST_B   0x28800000u   /* 0x28c00000 - 0x00400000? see below */
-#define O_ST_H   0x28c00000u
+#define O_ST_B   0x29000000u   /* binutils 权威: st 在 0x29x00000 区间 */
+#define O_ST_H   0x29400000u
 #define O_ST_W   0x29800000u
 #define O_ST_D   0x29c00000u
 #define O_FLD_S  0x2b000000u

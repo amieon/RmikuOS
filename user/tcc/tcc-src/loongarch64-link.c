@@ -206,6 +206,11 @@ ST_FUNC int code_reloc (int reloc_type)
 ST_FUNC int gotplt_entry_type (int reloc_type)
 {
     switch (reloc_type) {
+    case R_LARCH_NONE:
+    case R_LARCH_RELATIVE:
+    case R_LARCH_COPY:
+    case R_LARCH_JUMP_SLOT:
+    case R_LARCH_IRELATIVE:
     case R_LARCH_ADD8:
     case R_LARCH_ADD16:
     case R_LARCH_ADD24:
