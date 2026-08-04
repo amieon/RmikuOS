@@ -127,6 +127,7 @@
 #define O_ANDI   0x03400000u
 #define O_ORI    0x03800000u
 #define O_XORI   0x03c00000u
+#define O_SLTI   0x02000000u
 #define O_SLTUI  0x02400000u
 #define O_LD_B   0x28000000u
 #define O_LD_H   0x28400000u
@@ -1103,7 +1104,8 @@ static void gen_opil(int op, int ll)
             vswap();
             switch (op) {
                 case '-':
-                    if (fc == -2048) break;
+                    if (fc == -2048)
+                      goto too_big;    /* addi.d 不能表示 -(-2048), 走非立即数路径 */
                     fc = -fc;
                 case '+':
                     o2ri(O_ADDI_D, ireg(d), a, fc);
@@ -1111,25 +1113,58 @@ static void gen_opil(int op, int ll)
                     vtop[0].r = d;
                     return;
                 case TOK_LE:
-                    if (fc >= 2046) break;
+                    if (fc >= 2047)     /* ++fc 后需 < 2^11 */
+                      goto too_big;
                     ++fc;
                 case TOK_LT:
-                    o2ri(O_ADDI_D, ireg(d), a, -1);  /* slti via addi+... no; use slti */
-                    /* fallthrough handled below */
-                    o3r(O_SLT, ireg(d), a, 6);  /* placeholder, fixed below */
-                    return;
+                    o2ri(O_SLTI, ireg(d), a, fc);
+                    goto cmp_done;
+                case TOK_ULE:
+                    if (fc >= 2047 || fc == -1)
+                      goto too_big;
+                    ++fc;
+                case TOK_ULT:
+                    o2ri(O_SLTUI, ireg(d), a, fc);
+                    goto cmp_done;
                 case '^': o2ri(O_XORI, ireg(d), a, fc); goto done2;
                 case '|': o2ri(O_ORI,  ireg(d), a, fc); goto done2;
                 case '&': o2ri(O_ANDI, ireg(d), a, fc); goto done2;
                 case TOK_SHL: oshift(O_SLLI_D, ireg(d), a, fc & 63); goto done2;
                 case TOK_SHR: oshift(O_SRLI_D, ireg(d), a, fc & 63); goto done2;
                 case TOK_SAR: oshift(O_SRAI_D, ireg(d), a, fc & 63); goto done2;
-                default: break;
+
+                case TOK_UGE: /* -> TOK_ULT */
+                case TOK_UGT: /* -> TOK_ULE */
+                case TOK_GE:  /* -> TOK_LT */
+                case TOK_GT:  /* -> TOK_LE */
+                    gen_opil(op - 1, ll);
+                    vtop->cmp_op ^= 1;
+                    return;
+
+                case TOK_NE:
+                case TOK_EQ:
+                    if (fc)
+                        gen_opil('-', ll), a = ireg(vtop++->r);
+                    --vtop;
+                    vset_VT_CMP(op);
+                    vtop->cmp_r = a | 0 << 8;
+                    return;
+
+                default:
+                    goto too_big;
             }
+        cmp_done:
+            /* slti/sltui 产生 0/1, 结果即 (d != 0) */
+            --vtop;
+            vset_VT_CMP(TOK_NE);
+            vtop->cmp_r = ireg(d) | 0 << 8;
+            return;
         done2:
             --vtop;
             vtop[0].r = d;
             return;
+        too_big:
+            ;  /* 落入非立即数路径 */
         }
     }
     gv2(RC_INT, RC_INT);
