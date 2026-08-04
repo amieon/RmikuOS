@@ -1184,7 +1184,7 @@ static void relocate_section(TCCState *s1, Section *s, Section *sr)
     }
 #endif
 
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_LOONGARCH64
     dynarray_reset(&s1->pcrel_hi_entries, &s1->nb_pcrel_hi_entries);
 #endif
 }
@@ -1227,7 +1227,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
     int count = 0;
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64) || \
     defined(TCC_TARGET_ARM) || defined(TCC_TARGET_ARM64) || \
-    defined(TCC_TARGET_RISCV64)
+    defined(TCC_TARGET_RISCV64) || defined(TCC_TARGET_LOONGARCH64)
     ElfW_Rel *rel;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
         int sym_index = ELFW(R_SYM)(rel->r_info);
@@ -1254,6 +1254,9 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 #elif defined(TCC_TARGET_RISCV64)
         case R_RISCV_32:
         case R_RISCV_64:
+#elif defined(TCC_TARGET_LOONGARCH64)
+        case R_LARCH_32:
+        case R_LARCH_64:
 #endif
             count++;
             break;
@@ -2759,6 +2762,9 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
 #elif defined TCC_TARGET_RISCV64
     /* XXX should be configurable */
     ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
+#elif defined TCC_TARGET_LOONGARCH64
+    /* LP64D (hard-float, ABI version 0): e_flags = 0 */
+    ehdr.e_flags = 0;
 #endif
 
     if (file_type == TCC_OUTPUT_OBJ) {
@@ -3488,7 +3494,7 @@ invalid:
             ptr = s->data + offset;
             full_read(fd, ptr, size);
         }
-#if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
+#if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_LOONGARCH64
         /* align code sections to instruction lenght */
         /* This is needed if we compile a c file after this */
         if (s->sh_flags & SHF_EXECINSTR)

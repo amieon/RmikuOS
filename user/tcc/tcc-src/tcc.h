@@ -158,11 +158,13 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* #define TCC_TARGET_ARM64  *//* ARMv8 code generator */
 /* #define TCC_TARGET_C67    *//* TMS320C67xx code generator */
 /* #define TCC_TARGET_RISCV64 *//* risc-v code generator */
+/* #define TCC_TARGET_LOONGARCH64 *//* LoongArch 64 code generator */
 
 /* default target is I386 */
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
     !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
-    !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_RISCV64)
+    !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_RISCV64) && \
+    !defined(TCC_TARGET_LOONGARCH64)
 # if defined __x86_64__
 #  define TCC_TARGET_X86_64
 # elif defined __arm__
@@ -174,6 +176,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define TCC_TARGET_ARM64
 # elif defined __riscv
 #  define TCC_TARGET_RISCV64
+# elif defined __loongarch__
+#  define TCC_TARGET_LOONGARCH64
 # else
 #  define TCC_TARGET_I386
 # endif
@@ -197,6 +201,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # elif defined __aarch64__ && defined TCC_TARGET_ARM64
 #  define TCC_IS_NATIVE
 # elif defined __riscv && defined __LP64__ && defined TCC_TARGET_RISCV64
+#  define TCC_IS_NATIVE
+# elif defined __loongarch__ && defined __LP64__ && defined TCC_TARGET_LOONGARCH64
 #  define TCC_IS_NATIVE
 # endif
 #endif
@@ -310,6 +316,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
 # elif defined(TCC_TARGET_RISCV64)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-riscv64-lp64d.so.1"
+# elif defined(TCC_TARGET_LOONGARCH64)
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-loongarch-lp64d.so.1"
 # elif defined(TCC_TARGET_ARM)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.3"
 #  define CONFIG_TCC_ELFINTERP_ARMHF "/lib/ld-linux-armhf.so.3"
@@ -387,6 +395,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # include "riscv64-gen.c"
 # include "riscv64-link.c"
 # include "riscv64-asm.c"
+#elif defined(TCC_TARGET_LOONGARCH64)
+# include "loongarch64-gen.c"
+# include "loongarch64-link.c"
 #else
 #error unknown target
 #endif
@@ -1719,6 +1730,17 @@ ST_FUNC void gen_increment_tcov (SValue *sv);
 
 /* ------------ riscv64-gen.c ------------ */
 #ifdef TCC_TARGET_RISCV64
+ST_FUNC void gen_opl(int op);
+ST_FUNC void gen_va_start(void);
+ST_FUNC void arch_transfer_ret_regs(int);
+ST_FUNC void gen_cvt_sxtw(void);
+ST_FUNC void gen_cvt_csti(int t);
+ST_FUNC void gen_increment_tcov (SValue *sv);
+ST_FUNC void gen_clear_cache(void);
+#endif
+
+/* ------------ loongarch64-gen.c ------------ */
+#ifdef TCC_TARGET_LOONGARCH64
 ST_FUNC void gen_opl(int op);
 ST_FUNC void gen_va_start(void);
 ST_FUNC void arch_transfer_ret_regs(int);

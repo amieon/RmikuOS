@@ -870,6 +870,16 @@ ST_FUNC void tcc_eh_frame_start(TCCState *s1)
     dwarf_data1(eh_frame_section, DW_CFA_def_cfa);
     dwarf_uleb128(eh_frame_section, 2); // r2 (sp)
     dwarf_uleb128(eh_frame_section, 0); // ofs 0
+#elif defined TCC_TARGET_LOONGARCH64
+    eh_frame_section->data[s1->eh_start + 8] = 3; // version = 3
+    dwarf_uleb128(eh_frame_section, 1); // code_alignment_factor
+    dwarf_sleb128(eh_frame_section, -8); // data_alignment_factor
+    dwarf_uleb128(eh_frame_section, 1); // return address column (r1=ra)
+    dwarf_uleb128(eh_frame_section, 1); // Augmentation len
+    dwarf_data1(eh_frame_section, FDE_ENCODING);
+    dwarf_data1(eh_frame_section, DW_CFA_def_cfa);
+    dwarf_uleb128(eh_frame_section, 3); // r3 (sp)
+    dwarf_uleb128(eh_frame_section, 0); // ofs 0
 #endif
     while ((eh_frame_section->data_offset - s1->eh_start) & 3)
 	dwarf_data1(eh_frame_section, DW_CFA_nop);
@@ -899,6 +909,8 @@ static void tcc_debug_frame_end(TCCState *s1, int size)
     dwarf_reloc(eh_frame_section, eh_section_sym, R_AARCH64_PREL32);
 #elif defined TCC_TARGET_RISCV64
     dwarf_reloc(eh_frame_section, eh_section_sym, R_RISCV_32_PCREL);
+#elif defined TCC_TARGET_LOONGARCH64
+    dwarf_reloc(eh_frame_section, eh_section_sym, R_LARCH_32_PCREL);
 #endif
     dwarf_data4(eh_frame_section, func_ind); // PC Begin
     dwarf_data4(eh_frame_section, size); // PC Range
@@ -987,6 +999,34 @@ static void tcc_debug_frame_end(TCCState *s1, int size)
     dwarf_data1(eh_frame_section, DW_CFA_restore + 1); // r1 (lr)
     dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 4);
     dwarf_data1(eh_frame_section, DW_CFA_restore + 8); // r8 (s0, fp)
+    dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 4);
+    dwarf_data1(eh_frame_section, DW_CFA_def_cfa_offset);
+    dwarf_uleb128(eh_frame_section, 0); // ofs 0
+#elif defined TCC_TARGET_LOONGARCH64
+    dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 4);
+    dwarf_data1(eh_frame_section, DW_CFA_def_cfa_offset);
+    dwarf_uleb128(eh_frame_section, 16); // ofs 16
+    dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 8);
+    dwarf_data1(eh_frame_section, DW_CFA_offset + 1); // r1 (ra)
+    dwarf_uleb128(eh_frame_section, 2); // cfa-8
+    dwarf_data1(eh_frame_section, DW_CFA_offset + 22); // r22 (fp)
+    dwarf_uleb128(eh_frame_section, 4); // cfa-16
+    dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 8);
+    dwarf_data1(eh_frame_section, DW_CFA_def_cfa);
+    dwarf_uleb128(eh_frame_section, 22); // r22 (fp)
+    dwarf_uleb128(eh_frame_section, 0); // ofs 0
+    dwarf_data1(eh_frame_section, DW_CFA_advance_loc4);
+    while (size >= 4 &&
+	   read32le(cur_text_section->data + func_ind + size - 4) != 0x4c000020)
+	size -= 4; /* jirl $zero, $ra, 0 = ret */
+    dwarf_data4(eh_frame_section, size - 36);
+    dwarf_data1(eh_frame_section, DW_CFA_def_cfa);
+    dwarf_uleb128(eh_frame_section, 3); // r3 (sp)
+    dwarf_uleb128(eh_frame_section, 16); // ofs 16
+    dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 4);
+    dwarf_data1(eh_frame_section, DW_CFA_restore + 1); // r1 (ra)
+    dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 4);
+    dwarf_data1(eh_frame_section, DW_CFA_restore + 22); // r22 (fp)
     dwarf_data1(eh_frame_section, DW_CFA_advance_loc + 4);
     dwarf_data1(eh_frame_section, DW_CFA_def_cfa_offset);
     dwarf_uleb128(eh_frame_section, 0); // ofs 0
@@ -2407,6 +2447,8 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
         dwarf_data1(dwarf_info_section, DW_OP_reg29); // reg 29
 #elif defined TCC_TARGET_RISCV64
         dwarf_data1(dwarf_info_section, DW_OP_reg8); // r8(s0)
+#elif defined TCC_TARGET_LOONGARCH64
+        dwarf_data1(dwarf_info_section, DW_OP_reg22); // r22(fp)
 #else
         dwarf_data1(dwarf_info_section, DW_OP_call_frame_cfa);
 #endif
@@ -2582,7 +2624,7 @@ ST_FUNC void tcc_tcov_block_begin(TCCState *s1)
         sv.sym = &label;
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 || \
     defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || \
-    defined TCC_TARGET_RISCV64
+    defined TCC_TARGET_RISCV64 || defined TCC_TARGET_LOONGARCH64
         gen_increment_tcov (&sv);
 #else
         vpushv(&sv);

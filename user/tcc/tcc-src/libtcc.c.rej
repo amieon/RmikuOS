@@ -1,0 +1,21 @@
+--- user/tcc/tcc-src/libtcc.c
++++ user/tcc/tcc-src/libtcc.c
+@@ -53,6 +53,9 @@
+ #include "riscv64-gen.c"
+ #include "riscv64-link.c"
+ #include "riscv64-asm.c"
++#elif defined(TCC_TARGET_LOONGARCH64)
++#include "loongarch64-gen.c"
++#include "loongarch64-link.c"
+ #else
+ #error unknown target
+ #endif
+@@ -1790,6 +1793,8 @@
+     "aarch64"
+ #elif defined TCC_TARGET_RISCV64
+     "riscv64"
++#elif defined TCC_TARGET_LOONGARCH64
++    "loongarch64"
+ #endif
+     "-"
+ #ifdef TCC_TARGET_PE

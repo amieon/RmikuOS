@@ -1,0 +1,10 @@
+--- user/build.py
++++ user/build.py
+@@ -769,6 +769,7 @@
+ 
+     arch_backend = {
+         "riscv64": ["riscv64-gen.c", "riscv64-link.c", "riscv64-asm.c"],
++        "loongarch64": ["loongarch64-gen.c", "loongarch64-link.c"],
+     }
+     if arch not in arch_backend:
+         print(f"[user] tcc: TCC 0.9.28 has no {arch} backend (no {arch}-gen.c), skip")
