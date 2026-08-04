@@ -358,7 +358,8 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         /* pcalau12i: [24:5] = (((S+A) & ~0xfff) - (PC & ~0xfff)) >> 12 */
         int64_t off = (val & ~0xfff) - (addr & ~0xfff);
         uint32_t insn = read32le(ptr);
-        if ((off + (1 << 19)) & ~(((uint64_t)1 << 20) << 12))
+        /* 20 位有符号立即数 << 12: off 必须落在 [-2^31, 2^31) */
+        if (off > (((int64_t)1 << 31) - 1) || off < -((int64_t)1 << 31))
             tcc_error_noabort("R_LARCH_PCALA_HI20 relocation failed (off=%lx)", (long)off);
         insn = (insn & 0xfc00001fu) | ((((uint32_t)off >> 12) & 0xfffff) << 5);
         write32le(ptr, insn);

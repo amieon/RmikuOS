@@ -328,16 +328,14 @@ static int load_symofs(int r, SValue *sv, int forstore, int *new_fc)
     int rr;
     int fc = sv->c.i, v = sv->r & VT_VALMASK;
     if (sv->r & VT_SYM) {
-        Sym label = {0};
         assert(v == VT_CONST);
         rr = is_ireg(r) ? ireg(r) : 5;
-        /* pcalau12i rr, %pc_hi20(sym) ; addi.d rr, rr, %pc_lo12(sym) */
+        /* pcalau12i rr, %pc_hi20(sym) ; addi.d rr, rr, %pc_lo12(sym)
+           LoongArch PCALA_LO12 直接取 S+A 低 12 位(无 riscv 的 HI/LO 配对机制),
+           两个重定位必须引用同一个符号。 */
         greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, sv->c.i);
         oli20(O_PCADDU12I, rr, 0);
-        label.type.t = VT_VOID | VT_STATIC;
-        if (!nocode_wanted)
-            put_extern_sym(&label, cur_text_section, ind, 0);
-        greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+        greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, sv->c.i);
         o2ri(O_ADDI_D, rr, rr, 0);
         *new_fc = 0;
         return rr;
@@ -526,14 +524,11 @@ static void gcall_or_jmp(int docall)
     int tr = docall ? 1 : 5; /* ra or t0 */
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
         ((vtop->r & VT_SYM) && vtop->c.i == (int)vtop->c.i)) {
-        /* constant symbolic case -> pcalau12i + addi.d + jirl */
-        Sym label = {0};
+        /* constant symbolic case -> pcalau12i + addi.d + jirl
+           PCALA_LO12 需引用同一符号(无 riscv 的 HI/LO 配对机制) */
         greloca(cur_text_section, vtop->sym, ind, R_LARCH_PCALA_HI20, (int)vtop->c.i);
         oli20(O_PCADDU12I, tr, 0);
-        label.type.t = VT_VOID | VT_STATIC;
-        if (!nocode_wanted)
-            put_extern_sym(&label, cur_text_section, ind, 0);
-        greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+        greloca(cur_text_section, vtop->sym, ind, R_LARCH_PCALA_LO12, (int)vtop->c.i);
         o2ri(O_ADDI_D, tr, tr, 0);
         ojirl(0, tr, 0);  /* jirl r0, tr, 0 */
     } else if (vtop->r < VT_CONST) {
@@ -552,13 +547,9 @@ static void gcall_or_jmp(int docall)
 static void gen_bounds_call(int v)
 {
     Sym *sym = external_helper_sym(v);
-    Sym label = {0};
     greloca(cur_text_section, sym, ind, R_LARCH_PCALA_HI20, 0);
     oli20(O_PCADDU12I, 1, 0);
-    label.type.t = VT_VOID | VT_STATIC;
-    if (!nocode_wanted)
-        put_extern_sym(&label, cur_text_section, ind, 0);
-    greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+    greloca(cur_text_section, sym, ind, R_LARCH_PCALA_LO12, 0);
     o2ri(O_ADDI_D, 1, 1, 0);
     ojirl(0, 1, 0);
 }
@@ -1498,26 +1489,23 @@ ST_FUNC void gen_clear_cache(void)
 ST_FUNC void gen_increment_tcov (SValue *sv)
 {
     int r1, r2;
-    Sym label = {0};
-    label.type.t = VT_VOID | VT_STATIC;
 
     vpushv(sv);
     vtop->r = r1 = get_reg(RC_INT);
     r2 = get_reg(RC_INT);
     r1 = ireg(r1);
     r2 = ireg(r2);
+    /* 读: pcalau12i + addi.d(r1 = &sym), PCALA_LO12 引用同一符号 */
     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
-    put_extern_sym(&label, cur_text_section, ind, 0);
-    oli20(O_PCADDU12I, r1, 0);          /* pcalau12i r1, %pc_hi20(sym) */
-    greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
-    o2ri(O_ADDI_D, r1, r1, 0);          /* addi.d r1, r1, %pc_lo12(sym) */
+    oli20(O_PCADDU12I, r1, 0);
+    greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, 0);
+    o2ri(O_ADDI_D, r1, r1, 0);
     o2ri(O_LD_D, r2, r1, 0);            /* ld.d r2, r1, 0 */
     o2ri(O_ADDI_D, r2, r2, 1);          /* addi.d r2, r2, 1 */
+    /* 写: 重新取地址再 st.d */
     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
-    label.c = 0; /* force new local ELF symbol */
-    put_extern_sym(&label, cur_text_section, ind, 0);
     oli20(O_PCADDU12I, r1, 0);
-    greloca(cur_text_section, &label, ind, R_LARCH_PCALA_LO12, 0);
+    greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, 0);
     o2ri(O_ADDI_D, r1, r1, 0);
     o2ri(O_ST_D, r2, r1, 0);            /* st.d r2, r1, 0 */
     vpop();
