@@ -34,5 +34,9 @@ _start:
 #error unsupported user arch
 #endif
 
+    /* 让段内数据 4 字节对齐: 否则 .text.entry 段大小可能非 4 的倍数,
+     * 导致链接脚本中紧随其后的 .text 段(含 syscall3)起始地址错位,
+     * 跨段 bl(R_LARCH_B26)的偏移未对齐而链接失败(LoongArch 特有)。 */
+    .balign 4
 msg:
     .ascii "[raw.S] hello\n"

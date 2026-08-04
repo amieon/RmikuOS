@@ -24,21 +24,29 @@ void exit(int code) {
 int errno __attribute__((weak)) = 0;
 
 /* gcc 内建原子 __sync_*: TCC 不支持这些内建 -> 需要真实符号。
- * RmikuOS 单核, 用原子指令实现即可(riscv64: amoswap.w.aq + fence; loongarch64: amswap_db.w)。
+ * RmikuOS 单核, 用原子指令实现即可(riscv64: amoswap.w.aq + fence; loongarch64: amswap_db.w + dbar)。
  * lock.h 的 spin_lock/spin_unlock 依赖它们。 */
 int __sync_lock_test_and_set(int *ptr, int val) {
     int old;
 #ifdef USER_ARCH_RISCV64
     __asm__ volatile("amoswap.w.aq %0, %1, (%2)"
-                     : "=r"(old) : "r"(val), "r"(ptr) : "memory");
+                     : "=&r"(old) : "r"(val), "r"(ptr) : "memory");
 #else
+    /* LoongArch: amswap_db.w rd, rj, rk (rk=内存地址寄存器)
+     * 约束: rd != rj && rd != rk (rd 非 $r0 时), 故输出必须 early-clobber,
+     * 否则 GCC 可能让 old 与 val 共用寄存器导致汇编错误。 */
     __asm__ volatile("amswap_db.w %0, %1, %2"
-                     : "=r"(old) : "r"(val), "r"(ptr) : "memory");
+                     : "=&r"(old) : "r"(val), "r"(ptr) : "memory");
 #endif
     return old;
 }
 void __sync_synchronize(void) {
+#ifdef USER_ARCH_RISCV64
     __asm__ volatile("fence rw,rw" ::: "memory");
+#else
+    /* LoongArch 没有 RISC-V 式 "fence rw,rw", 内存屏障指令是 dbar。 */
+    __asm__ volatile("dbar 0" ::: "memory");
+#endif
 }
 void __sync_lock_release(int *ptr) {
     __asm__ volatile("" ::: "memory");
