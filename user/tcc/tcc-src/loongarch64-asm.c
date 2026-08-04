@@ -33,6 +33,35 @@ ST_FUNC void gen_le32(int c);
 #define USING_GLOBALS
 #include "tcc.h"
 
+/* ASMOperand/ExprValue 定义在 tcc.h �� `#ifdef CONFIG_TCC_ASM` 内, 而
+   loongarch64 阶段 1 故意不定义 CONFIG_TCC_ASM(asm 禁用, 避免拉起整个
+   tccasm.c GAS 解析器)。这里自行补充这两个类型的定义, 仅供本 stub 的
+   函数签名使用; 将来启用 CONFIG_TCC_ASM 时本块自动失效, 使用 tcc.h 的
+   正式定义(字段保持一致)。 */
+#ifndef CONFIG_TCC_ASM
+typedef struct ExprValue {
+    uint64_t v;
+    Sym *sym;
+    int pcrel;
+} ExprValue;
+
+#define MAX_ASM_OPERANDS 30
+typedef struct ASMOperand {
+    int id; /* GCC 3 optional identifier (0 if number only supported) */
+    char constraint[16];
+    char asm_str[16]; /* computed asm string for operand */
+    SValue *vt; /* C value of the expression */
+    int ref_index; /* if >= 0, gives reference to a output constraint */
+    int input_index; /* if >= 0, gives reference to an input constraint */
+    int priority; /* priority, used to assign registers */
+    int reg; /* if >= 0, register number used for this operand */
+    int is_llong; /* true if double register value */
+    int is_memory; /* true if memory operand */
+    int is_rw;     /* for '+' modifier */
+    int is_label;  /* for asm goto */
+} ASMOperand;
+#endif
+
 /* 其余 asm 符号的声明(此时 SValue/ASMOperand/ExprValue/CString 已定义) */
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 ST_FUNC void asm_compute_constraints(ASMOperand *operands, int nb_operands,

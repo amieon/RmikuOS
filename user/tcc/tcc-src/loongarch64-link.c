@@ -3,6 +3,78 @@
 
 #define EM_TCC_TARGET 258   /* EM_LOONGARCH */
 
+/* LoongArch ELF relocations (LoongArch ELF ABI v2.01).
+   R_LARCH_* are NOT in elf.h (unlike R_RISCV_*), and tcc.h includes
+   the backends with TARGET_DEFS_ONLY defined, so this branch is the
+   only part of link.c seen by tccgen.c/tccelf.c/etc.  The full table
+   must therefore be self-contained HERE (the #else branch below
+   repeats it under #ifndef R_LARCH_NONE, which is then skipped). */
+#ifndef R_LARCH_NONE
+#define R_LARCH_NONE          0
+#define R_LARCH_32            1
+#define R_LARCH_64            2
+#define R_LARCH_RELATIVE      3
+#define R_LARCH_COPY          4
+#define R_LARCH_JUMP_SLOT     5
+#define R_LARCH_TLS_DTPMOD32  6
+#define R_LARCH_TLS_DTPMOD64  7
+#define R_LARCH_TLS_DTPREL32  8
+#define R_LARCH_TLS_DTPREL64  9
+#define R_LARCH_TLS_TPREL32  10
+#define R_LARCH_TLS_TPREL64  11
+#define R_LARCH_IRELATIVE    12
+#define R_LARCH_MARK_LA      20
+#define R_LARCH_MARK_PCREL   21
+#define R_LARCH_ADD8         47
+#define R_LARCH_ADD16        48
+#define R_LARCH_ADD24        49
+#define R_LARCH_ADD32        50
+#define R_LARCH_ADD64        51
+#define R_LARCH_SUB8         52
+#define R_LARCH_SUB16        53
+#define R_LARCH_SUB24        54
+#define R_LARCH_SUB32        55
+#define R_LARCH_SUB64        56
+#define R_LARCH_GNU_VTINHERIT 57
+#define R_LARCH_GNU_VTENTRY  58
+#define R_LARCH_B16          64
+#define R_LARCH_B21          65
+#define R_LARCH_B26          66
+#define R_LARCH_ABS_HI20     67
+#define R_LARCH_ABS_LO12     68
+#define R_LARCH_ABS64_LO20   69
+#define R_LARCH_ABS64_HI12   70
+#define R_LARCH_PCALA_HI20   71
+#define R_LARCH_PCALA_LO12   72
+#define R_LARCH_PCALA64_LO20 73
+#define R_LARCH_PCALA64_HI12 74
+#define R_LARCH_GOT_PC_HI20  75
+#define R_LARCH_GOT_PC_LO12  76
+#define R_LARCH_GOT64_PC_LO20 77
+#define R_LARCH_GOT64_PC_HI12 78
+#define R_LARCH_GOT_HI20     79
+#define R_LARCH_GOT_LO12     80
+#define R_LARCH_GOT64_LO20   81
+#define R_LARCH_GOT64_HI12   82
+#define R_LARCH_TLS_LE_HI20  83
+#define R_LARCH_TLS_LE_LO12  84
+#define R_LARCH_TLS_LE64_LO20 85
+#define R_LARCH_TLS_LE64_HI12 86
+#define R_LARCH_TLS_TPREL_HI20 87
+#define R_LARCH_TLS_TPREL_LO12 88
+#define R_LARCH_TLS_TPREL64_LO20 89
+#define R_LARCH_TLS_TPREL64_HI12 90
+#define R_LARCH_TLS_DTPREL_HI20 91
+#define R_LARCH_TLS_DTPREL_LO12 92
+#define R_LARCH_TLS_DTPREL64_LO20 93
+#define R_LARCH_TLS_DTPREL64_HI12 94
+#define R_LARCH_TLS_GD_PC_HI20 95
+#define R_LARCH_TLS_GD_PC_LO12 96
+#define R_LARCH_TLS_LD_PC_HI20 97
+#define R_LARCH_TLS_LD_PC_LO12 98
+#define R_LARCH_32_PCREL    99
+#endif
+
 #define R_DATA_32  R_LARCH_32
 #define R_DATA_PTR R_LARCH_64
 #define R_JMP_SLOT R_LARCH_JUMP_SLOT

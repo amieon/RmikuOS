@@ -1184,7 +1184,10 @@ static void relocate_section(TCCState *s1, Section *s, Section *sr)
     }
 #endif
 
-#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_LOONGARCH64
+/* LoongArch link.c is self-contained (computes PCALA_HI20/LO12 directly
+   from the relocation value), so the RISC-V HI20/LO12 pairing state
+   (pcrel_hi_entries) is only maintained for RISC-V. */
+#ifdef TCC_TARGET_RISCV64
     dynarray_reset(&s1->pcrel_hi_entries, &s1->nb_pcrel_hi_entries);
 #endif
 }
