@@ -3607,6 +3607,13 @@ invalid:
 #elif defined TCC_TARGET_RISCV64
                     && type != R_RISCV_ALIGN
                     && type != R_RISCV_RELAX
+#elif defined TCC_TARGET_LOONGARCH64
+                    /* relax 标记重定位(relax reloc)指向 section 符号,
+                       符号重编号后为 0, 与 RISCV ALIGN/RELAX 同样豁免。
+                       R_LARCH_* 不在 elf.h, 用数字: DELETE=100 CFA=101 ALIGN=102 */
+                    && type != 100
+                    && type != 101
+                    && type != 102
 #endif
                    ) {
                 invalid_reloc:

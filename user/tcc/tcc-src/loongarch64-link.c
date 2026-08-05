@@ -73,6 +73,10 @@
 #define R_LARCH_TLS_LD_PC_HI20 97
 #define R_LARCH_TLS_LD_PC_LO12 98
 #define R_LARCH_32_PCREL    99
+/* relax 相关(psABI v2.x): 链接器松弛标记, 静态链接直接忽略 */
+#define R_LARCH_DELETE      100
+#define R_LARCH_CFA         101
+#define R_LARCH_ALIGN       102
 #endif
 
 #define R_DATA_32  R_LARCH_32
@@ -160,6 +164,10 @@
 #define R_LARCH_TLS_LD_PC_HI20 97
 #define R_LARCH_TLS_LD_PC_LO12 98
 #define R_LARCH_32_PCREL    99
+/* relax 相关(psABI v2.x): 链接器松弛标记, 静态链接直接忽略 */
+#define R_LARCH_DELETE      100
+#define R_LARCH_CFA         101
+#define R_LARCH_ALIGN       102
 #endif
 
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
@@ -171,6 +179,9 @@ ST_FUNC int code_reloc (int reloc_type)
     case R_LARCH_B16:
     case R_LARCH_B21:
     case R_LARCH_B26:
+    case R_LARCH_DELETE:   /* relax 标记, 在代码段, relocate() 忽略 */
+    case R_LARCH_CFA:
+    case R_LARCH_ALIGN:
         return 1;
 
     case R_LARCH_PCALA_HI20:
@@ -221,6 +232,9 @@ ST_FUNC int gotplt_entry_type (int reloc_type)
     case R_LARCH_SUB24:
     case R_LARCH_SUB32:
     case R_LARCH_SUB64:
+    case R_LARCH_DELETE:   /* relax 标记: 不需要 GOT/PLT */
+    case R_LARCH_CFA:
+    case R_LARCH_ALIGN:
         return NO_GOTPLT_ENTRY;
 
     case R_LARCH_B16:
@@ -297,6 +311,10 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     int sym_index = ELFW(R_SYM)(rel->r_info);
 
     switch(type) {
+    case R_LARCH_DELETE:   /* relax 标记: 不做任何事 */
+    case R_LARCH_CFA:
+    case R_LARCH_ALIGN:
+        return;
     case R_LARCH_ADD8:
         *ptr += val;
         return;
