@@ -77,6 +77,10 @@
 #define R_LARCH_DELETE      100
 #define R_LARCH_CFA         101
 #define R_LARCH_ALIGN       102
+/* psABI v2.30: 可松弛的 PCALA 对(GCC14+ medium code model 会发,
+   静态链接语义与 PCALA_HI20/LO12 完全相同) */
+#define R_LARCH_PCALA64_LO12 105
+#define R_LARCH_PCALA64_HI20 106
 #endif
 
 #define R_DATA_32  R_LARCH_32
@@ -168,6 +172,9 @@
 #define R_LARCH_DELETE      100
 #define R_LARCH_CFA         101
 #define R_LARCH_ALIGN       102
+/* psABI v2.30: 可松弛 PCALA 对, 语义同 PCALA_HI20/LO12 */
+#define R_LARCH_PCALA64_LO12 105
+#define R_LARCH_PCALA64_HI20 106
 #endif
 
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
@@ -186,8 +193,14 @@ ST_FUNC int code_reloc (int reloc_type)
 
     case R_LARCH_PCALA_HI20:
     case R_LARCH_PCALA_LO12:
+    case R_LARCH_PCALA64_LO12:  /* 105: 同 PCALA_LO12 */
+    case R_LARCH_PCALA64_HI20:  /* 106: 同 PCALA_HI20 */
     case R_LARCH_ABS_HI20:
     case R_LARCH_ABS_LO12:
+    case R_LARCH_ABS64_LO20:
+    case R_LARCH_ABS64_HI12:
+    case R_LARCH_PCALA64_LO20:
+    case R_LARCH_PCALA64_HI12:
     case R_LARCH_GOT_HI20:
     case R_LARCH_GOT_LO12:
     case R_LARCH_GOT_PC_HI20:
@@ -235,6 +248,9 @@ ST_FUNC int gotplt_entry_type (int reloc_type)
     case R_LARCH_DELETE:   /* relax 标记: 不需要 GOT/PLT */
     case R_LARCH_CFA:
     case R_LARCH_ALIGN:
+    case R_LARCH_TLS_LE_HI20:  /* 局部执行模型 TLS: 无需 GOT
+                                  (relocate() 暂无实现, 命中会打印 FIXME) */
+    case R_LARCH_TLS_LE_LO12:
         return NO_GOTPLT_ENTRY;
 
     case R_LARCH_B16:
@@ -242,8 +258,14 @@ ST_FUNC int gotplt_entry_type (int reloc_type)
     case R_LARCH_B26:
     case R_LARCH_PCALA_HI20:
     case R_LARCH_PCALA_LO12:
+    case R_LARCH_PCALA64_LO12:
+    case R_LARCH_PCALA64_HI20:
     case R_LARCH_ABS_HI20:
     case R_LARCH_ABS_LO12:
+    case R_LARCH_ABS64_LO20:
+    case R_LARCH_ABS64_HI12:
+    case R_LARCH_PCALA64_LO20:
+    case R_LARCH_PCALA64_HI12:
     case R_LARCH_32:
     case R_LARCH_64:
     case R_LARCH_32_PCREL:
@@ -384,6 +406,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     }
 
     case R_LARCH_PCALA_HI20: {
+        pcala_hi20:
         /* psABI: imm20 = (((S+A+0x800) & ~0xfff) - (P & ~0xfff)) >> 12
            pcalau12i 是页对齐语义: rd = (PC & ~0xfff) + sext20(imm20)<<12,
            与 LO12 的 addi.d 符号扩展配套后对任意 P 正确。
@@ -399,38 +422,97 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
     }
     case R_LARCH_PCALA_LO12: {
+        pcala_lo12:
         /* psABI: imm12 = (S+A) & 0xfff —— 不减 P!
            pcalau12i 页对齐语义下, addi.d 对 imm12 的符号扩展
            正好补偿 HI20 的 +0x800 进位。 */
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
+        insn = (insn & 0xffc003ffu) | ((val & 0xfff) << 10);
         write32le(ptr, insn);
         return;
     }
+    case R_LARCH_PCALA64_LO12: /* 105: GCC14+ 可松弛形式, 语义同 PCALA_LO12 */
+        goto pcala_lo12;
+    case R_LARCH_PCALA64_HI20: /* 106: 同 PCALA_HI20 */
+        goto pcala_hi20;
     case R_LARCH_ABS_HI20: {
+        /* lu12i.w+addi.w 配对: imm20 = ((S+A+0x800) >> 12) & 0xfffff
+           (原实现缺 +0x800, 低 12 位 >= 0x800 的绝对地址全错 4KB) */
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xfc00001fu) | ((((uint32_t)val >> 12) & 0xfffff) << 5);
+        insn = (insn & 0xfc00001fu) | ((((uint32_t)(val + 0x800) >> 12) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
     case R_LARCH_ABS_LO12: {
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
+        insn = (insn & 0xffc003ffu) | ((val & 0xfff) << 10);
+        write32le(ptr, insn);
+        return;
+    }
+    case R_LARCH_ABS64_LO20: {
+        /* lu32i.d: imm20@[24:5] = ((S+A+0x800) >> 32) & 0xfffff (+0x800 的
+           进位可能越过 bit32, 必须包含) */
+        uint32_t insn = read32le(ptr);
+        insn = (insn & 0xfc00001fu) | ((((uint64_t)(val + 0x800) >> 32) & 0xfffff) << 5);
+        write32le(ptr, insn);
+        return;
+    }
+    case R_LARCH_ABS64_HI12: {
+        /* lu52i.d (2RI12): si12@[21:10] = ((S+A+0x800) >> 52) & 0xfff */
+        uint32_t insn = read32le(ptr);
+        insn = (insn & 0xffc003ffu) | ((((uint64_t)(val + 0x800) >> 52) & 0xfff) << 10);
+        write32le(ptr, insn);
+        return;
+    }
+    case R_LARCH_PCALA64_LO20: {
+        /* lu32i.d: 绝对"调整页"((S+A+0x800)&~0xfff)的 bits[51:32]
+           (pcalau12i 只保证低 32 位页正确, lu32i/lu52i 覆写高位) */
+        int64_t page = (val + 0x800) & ~(int64_t)0xfff;
+        uint32_t insn = read32le(ptr);
+        insn = (insn & 0xfc00001fu) | ((((uint64_t)page >> 32) & 0xfffff) << 5);
+        write32le(ptr, insn);
+        return;
+    }
+    case R_LARCH_PCALA64_HI12: {
+        int64_t page = (val + 0x800) & ~(int64_t)0xfff;
+        uint32_t insn = read32le(ptr);
+        insn = (insn & 0xffc003ffu) | ((((uint64_t)page >> 52) & 0xfff) << 10);
         write32le(ptr, insn);
         return;
     }
     case R_LARCH_GOT_PC_HI20: {
-        /* psABI 75: (((GP+G) & ~0xfff) - (PC & ~0xfff)) >> 12 (无 +0x800) */
-        int64_t off = (val & ~(int64_t)0xfff) - (addr & ~(int64_t)0xfff);
+        /* val 是符号地址, 但 pcalau12i+ld.d 需要的是 GOT 槽地址!
+           (对照 riscv64-link.c: val = got->sh_addr + got_offset;
+            原实现直接填符号地址 -> ld.d 从函数入口读出两条指令当指针,
+            jirl 跳到"指令对"拼成的野地址 -> ADEF, 这是全线崩溃主因)
+           公式同 PCALA_HI20(含 +0x800, ld.d 的 imm12 符号扩展补偿) */
+        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
+        int64_t off = ((got + 0x800) & ~(int64_t)0xfff) - (addr & ~(int64_t)0xfff);
         uint32_t insn = read32le(ptr);
         insn = (insn & 0xfc00001fu) | ((((uint32_t)(off >> 12)) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
     case R_LARCH_GOT_PC_LO12: {
-        /* psABI 76: (GP+G) & 0xfff */
+        /* GOT 槽地址低 12 位(不减 P, 页对齐语义) */
+        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
+        insn = (insn & 0xffc003ffu) | ((got & 0xfff) << 10);
+        write32le(ptr, insn);
+        return;
+    }
+    case R_LARCH_GOT_HI20: {
+        /* 79: 绝对形式 lu12i.w + ld.d, 同样用 GOT 槽地址 */
+        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
+        uint32_t insn = read32le(ptr);
+        insn = (insn & 0xfc00001fu) | ((((uint64_t)(got + 0x800) >> 12) & 0xfffff) << 5);
+        write32le(ptr, insn);
+        return;
+    }
+    case R_LARCH_GOT_LO12: {
+        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
+        uint32_t insn = read32le(ptr);
+        insn = (insn & 0xffc003ffu) | ((got & 0xfff) << 10);
         write32le(ptr, insn);
         return;
     }

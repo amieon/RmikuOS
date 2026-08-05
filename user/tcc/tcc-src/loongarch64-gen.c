@@ -321,13 +321,16 @@ ST_FUNC void gsym_addr(int t_, int a_)
         uint32_t next = read32le(ptr);
         uint32_t r = a - t;   /* byte offset */
         int offs;
-        if ((r + (1 << 17)) & ~((1U << 18) - 4))
+        /* b 的 si26 支持 ±128MB; 原检查按 ±128KB 写死会误报 */
+        if ((r + (1 << 27)) & ~(uint32_t)((1U << 28) - 4))
           tcc_error("out-of-range branch chain");
         offs = (int)(r >> 2);
         if (offs == 1) {
             write32le(ptr, O_NOP);   /* fall through -> nop */
         } else {
-            write32le(ptr, O_B | ((offs & 0xffff) << 10));
+            /* b 的 si26: bits[25:10]=si26[15:0], bits[9:0]=si26[25:16]
+               (原代码丢了高 10 位: 负偏移(循环回跳)变成 +256KB 乱跳) */
+            write32le(ptr, O_B | ((offs & 0xffff) << 10) | ((offs >> 16) & 0x3ff));
         }
         t = next;
     }
@@ -376,7 +379,11 @@ static void load_large_constant(int rr, int fc, int hi32)
     /* 低位必须用 addi.d 而非 ori: lu12i.w 按 (fc+0x800)>>12 进位,
        低 12 位需要符号补偿; ori 是逻辑或, fc 的 bit11=1 时产生错误值 */
     o2ri(O_ADDI_D, rr, rr, fc);
-    if (hi32) {
+    /* lu12i.w 把 32 位结果符号扩展到 64 位: 当目标值高 32 位应为 0 但
+       bit31=1 (fc<0, 如无符号 32 位常量)或 +0x800 进位使 bit31 变 1
+       (v & 0x80000, 如 0x7fffff00)时, 必须再用 lu32i.d/lu52i.d 清零高位,
+       否则得到 0xffffffff_8xxxxxxx 之类的错误值 */
+    if (hi32 || fc < 0 || (v & 0x80000)) {
         oli20(O_LU32I_D, rr, hi32);          /* rd[51:32] = hi32 低 20 位 */
         o2ri(O_LU52I_D, rr, rr, hi32 >> 20); /* rd[63:52] = hi32 高 12 位 */
     }
@@ -1055,13 +1062,14 @@ ST_FUNC void gjmp_addr(int a)
 {
     uint32_t r = a - ind;   /* byte offset */
     int offs;
-    if ((r + (1 << 17)) & ~((1U << 18) - 4)) {
-        /* out of range: pcalau12i + addi.d + jirl */
+    if ((r + (1 << 27)) & ~(uint32_t)((1U << 28) - 4)) {
+        /* out of range (±128MB): 基本不会触发; 真到了也只能长跳 */
         o2ri(O_ADDI_D, 12, 3, 0);  /* placeholder (r12 = t0) */
         ojirl(0, 12, 0);
     } else {
         offs = (int)(r >> 2);
-        o(O_B | ((offs & 0xffff) << 10));
+        /* 同 gsym_addr: si26 高 10 位(bits[9:0])必须写符号位 */
+        o(O_B | ((offs & 0xffff) << 10) | ((offs >> 16) & 0x3ff));
     }
 }
 
@@ -1082,7 +1090,11 @@ ST_FUNC int gjmp_cond(int op, int t)
         case TOK_NE:  op = O_BNE; break;
         case TOK_EQ:  op = O_BEQ; break;
     }
-    o(op | (2 << 10) | (a << 5) | b);  /* branch +4 (skip the j) */
+    /* 条件分支必须发"反条件"来跳过链式跳转(对照 riscv64 的 op ^ 1):
+       上面的映射得到的是"真条件", LoongArch 分支操作码 bit26 即真假对
+       (BEQ=0x58/BNE=0x5c, BLT=0x60/BGE=0x64, BLTU=0x68/BGEU=0x6c),
+       ^0x04000000 取反。原代码漏了取反 -> 所有 if/while/for 条件全部颠倒 */
+    o((op ^ 0x04000000u) | (2 << 10) | (a << 5) | b);  /* bINV a,b,+8 (skip the j) */
     return gjmp(t);
 }
 
@@ -1364,13 +1376,14 @@ ST_FUNC void gen_cvt_itof(int t)
         vtop++;
         vtop->r = dr;
         dr = freg(dr);
-        /* movgr2fr.d fd=dr, rj=rr ; ffint.d.l fd, fd */
-        o(O_MOVGR2FR_D | (rr << 5) | dr);
         if (u && !l) {
-            /* unsigned int: 先零扩展高 32 位(slli+srli, 原 addi.d +0 是空操作) */
+            /* unsigned int: 先零扩展高 32 位 —— 必须在 movgr2fr 之前
+               (原来放在 mov 之后, 等于没做, 负解释被 ffint 转换) */
             oshift(O_SLLI_D, rr, rr, 32);
             oshift(O_SRLI_D, rr, rr, 32);
         }
+        /* movgr2fr.d fd=dr, rj=rr ; ffint.d.l fd, fd */
+        o(O_MOVGR2FR_D | (rr << 5) | dr);
         o(O_FFINT_D_L | (dr << 5) | dr);  /* ffint.d.l fd, fj */
         if (t == VT_FLOAT)
             o(O_FCVT_S_D | (dr << 5) | dr);  /* fcvt.s.d fd, fj */
