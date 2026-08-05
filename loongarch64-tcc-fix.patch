@@ -1,0 +1,1079 @@
+--- a/user/build.py	2026-08-05 04:24:21.000000000 +0800
++++ b/user/build.py	2026-08-05 18:15:38.371304700 +0800
+@@ -891,9 +891,9 @@
+          tcc_src / "lib" / "runmain.c", "-o", sys_root / "runmain.o"])
+ 
+     # include: RmikuOS 头(用户程序 include <stdio.h> 等)
++    # dirs_exist_ok=True: 每次都同步, 否则头文件修改(如 math.h)不会进镜像
+     inc = sys_root / "include"
+-    if not inc.exists():
+-        shutil.copytree(INCLUDE_DIR, inc)
++    shutil.copytree(INCLUDE_DIR, inc, dirs_exist_ok=True)
+     # TCC 编译器配套头: stddef/stdarg/stdbool/stdalign/tgmath 等
+     for h in sorted((tcc_src / "include").glob("*.h")):
+         if not (inc / h.name).exists():
+@@ -906,8 +906,25 @@
+ 
+ def _tcc_merge_libgcc(cfg: dict, libtcc1_a: Path, libtcc1_o: Path):
+     """把 host libgcc.a 中与 libtcc1.o/string.o 不重复的成员合并进 libtcc1.a。
+-    按符号清单去重, 全量提取多放无害。"""
++    按符号清单去重, 全量提取多放无害。
++
++    注意: nm 解析必须只收【全局符号】(类型字母大写: T/D/B/W/R...)。
++    本地标签(如 libtcc1.o 的 'L0\\x01' / '.LC0', 类型小写 t)几乎每个
++    libgcc 成员都定义, 若计入 have 会把所有成员误判为冲突而全部跳过
++    (实测: libtcc1.a 56 成员但 tf 符号为 0)。"""
+     import tempfile
++
++    def global_syms(path):
++        """nm --defined-only 输出中只保留全局符号(类型字母大写)"""
++        r = subprocess.run([cfg["nm"], "--defined-only", str(path)],
++                           capture_output=True, text=True)
++        syms = set()
++        for ln in r.stdout.splitlines():
++            parts = ln.split()
++            if len(parts) >= 3 and parts[-2][-1:].isupper():
++                syms.add(parts[-1])
++        return syms
++
+     try:
+         libgcc = subprocess.check_output(
+             [cfg["gcc"], "-print-libgcc-file-name"], text=True).strip()
+@@ -918,20 +935,14 @@
+         print(f"[user][tcc] !! cannot locate libgcc: {e}")
+         return
+     have = {"memcpy", "memset"}   # libtcc1.o 已有 + string.o 提供的
+-    r = subprocess.run([cfg["nm"], "--defined-only", str(libtcc1_o)],
+-                       capture_output=True, text=True)
+-    for ln in r.stdout.splitlines():
+-        if ln.strip():
+-            have.add(ln.split()[-1])
++    have |= global_syms(libtcc1_o)
+     tmp = tempfile.mkdtemp(prefix="rmiku-libgcc-")
+     subprocess.run([cfg["ar"], "x", libgcc], cwd=tmp, check=True)
+     picked = []
+     for o in sorted(os.listdir(tmp)):
+         if not o.endswith(".o"):
+             continue
+-        r = subprocess.run([cfg["nm"], "--defined-only", os.path.join(tmp, o)],
+-                           capture_output=True, text=True)
+-        syms = {ln.split()[-1] for ln in r.stdout.splitlines() if ln.strip()}
++        syms = global_syms(os.path.join(tmp, o))
+         if syms & have:      # 与 libtcc1.o / string.o 重复 -> 跳过(defined twice)
+             continue
+         picked.append(os.path.join(tmp, o))
+--- a/user/include/math.h	2026-08-05 04:24:21.000000000 +0800
++++ b/user/include/math.h	2026-08-05 16:20:36.409449700 +0800
+@@ -823,12 +823,15 @@
+  // ---------- sqrt（硬件指令，RISC-V / LoongArch） ----------
+ 
+     double r;
+-#if defined(__riscv)
++    /* TCC 的 LoongArch64 后端无内联汇编器(loongarch64-asm.c 是 stub,
++       CONFIG_TCC_ASM 未启用), __TINYC__ 时一律走牛顿迭代兜底;
++       gcc/clang 编译(libc_extern.c 等)仍用硬件 fsqrt.d */
++#if defined(__riscv) && !defined(__TINYC__)
+     __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
+-#elif defined(__loongarch__) || defined(__loongarch64__)
++#elif (defined(__loongarch__) || defined(__loongarch64__)) && !defined(__TINYC__)
+     __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
+ #else
+-    // 兜底：牛顿迭代（主机测试用）
++    // 兜底：牛顿迭代（主机测试 / TCC 编译用）
+     if (x <= 0) return 0;
+     r = x;
+     for (int i = 0; i < 60; ++i) r = 0.5 * (r + x / r);
+--- a/user/tcc/tcc-src/loongarch_enc.h	2026-08-05 04:24:21.000000000 +0800
++++ b/user/tcc/tcc-src/loongarch_enc.h	2026-08-05 16:28:22.549862000 +0800
+@@ -39,8 +39,8 @@
+ LD_H    = 0x28400000   # ld.h
+ LD_W    = 0x28800000   # ld.w
+ LD_D    = 0x28c00000   # ld.d
+-ST_B    = 0x28000000 | 0x00800000  # st.b = 0x28800000? 需确认
+-ST_H    = 0x28400000 | 0x00800000
++ST_B    = 0x29000000   # st.b (修正: 原 0x28800000 是 ld.w)
++ST_H    = 0x29400000   # st.h (修正: 原 0x28c00000 是 ld.d)
+ ST_W    = 0x29800000   # st.w
+ ST_D    = 0x29c00000   # st.d
+ FLD_S   = 0x2b000000   # fld.s
+@@ -59,17 +59,17 @@
+ SRAI_D  = 0x00490000   # srai.d
+ 
+ # === 分支/跳转 ===
+-B       = 0x50000000   # b offs16
+-BL      = 0x54000000   # bl offs16 (推测)
+-BEQ     = 0x58000000   # beq rj, rd, offs16 (推测)
+-BNE     = 0x5c000000   # bne (已验证)
+-BLT     = 0x60000000   # blt (已验证)
+-BGE     = 0x64000000   # bge (已验证)
+-BLTU    = 0x68000000   # bltu (推测)
+-BGEU    = 0x6c000000   # bgeu (推测)
++B       = 0x50000000   # b offs26
++BL      = 0x54000000   # bl offs26
++BEQ     = 0x58000000   # beq rj, rd, offs16
++BNE     = 0x5c000000   # bne
++BLT     = 0x60000000   # blt
++BGE     = 0x64000000   # bge
++BLTU    = 0x68000000   # bltu
++BGEU    = 0x6c000000   # bgeu
+ JIRL    = 0x4c000000   # jirl rd, rj, offs16 (ret = jirl r0, r1, 0 = 0x4c000020)
+-BEQZ    = 0x54000000   # beqz rj, offs21 (推测)
+-BNEZ    = 0x44000000   # bnez rj, offs21 (已验证 0x44001580)
++BEQZ    = 0x40000000   # beqz rj, offs21 (修正: 原 0x54000000 与 BL 冲突)
++BNEZ    = 0x44000000   # bnez rj, offs21
+ 
+ # === 浮点/转换 ===
+ FCMP_SLT_D = 0x0c218020  # fcmp.slt.d fcc, rj, rk
+@@ -84,9 +84,12 @@
+ NOP        = 0x03400000  # nop (andi r0, r0, 0)
+ BREAK      = 0x002a0007  # break 0x7
+ 
++# === 大地址加载(已验证, 见 loongarch64-gen.c) ===
++LU12I_W    = 0x14000000   # lu12i.w rd, si20:  rd = sext32(si20 << 12)
++LU32I_D    = 0x16000000   # lu32i.d rd, si20:  rd[51:32] = si20
++LU52I_D    = 0x03000000   # lu52i.d rd, rj, si12: rd[63:52] = si12
++PCALAU12I  = 0x1a000000   # pcalau12i rd, si20: rd = PC + sext(si20<<12), 配 PCALA_HI20/LO12
++PCADDU12I  = 0x1c000000   # pcaddu12i rd, si20: 配 PCADD_HI20/LO12
+ # === 尚未验证(需补充反汇编): ===
+-#  ST_B / ST_H 模板
+-#  BEQ / BL / BLTU / BGEU / BEQZ
+ #  FCVT 系列其他(fcvt.s.l, fcvt.l.s, fcvt.w.d 等)
+-#  LU12I_D / PCADDU12I 大地址加载
+ #  bstrpick.w
+--- a/user/tcc/tcc-src/loongarch64-gen.c	2026-08-05 04:24:21.000000000 +0800
++++ b/user/tcc/tcc-src/loongarch64-gen.c	2026-08-05 19:47:24.741576600 +0800
+@@ -160,21 +160,32 @@
+ #define O_BLTU   0x68000000u
+ #define O_BGEU   0x6c000000u
+ #define O_JIRL   0x4c000000u
+-#define O_BEQZ   0x58000000u
++#define O_BEQZ   0x40000000u   /* beqz rj, si21: op[31:26]=010000 (原误写 0x58000000=beq) */
+ #define O_BNEZ   0x44000000u
+ /* load-address / misc */
+-#define O_LU12I_D 0x14000000u
+-#define O_PCADDU12I 0x16000000u
++#define O_LU12I_D 0x14000000u  /* 实为 lu12i.w: rd = sext32(si20 << 12) */
++#define O_LU32I_D 0x16000000u  /* lu32i.d: rd[51:32] = si20 */
++#define O_LU52I_D 0x03000000u  /* lu52i.d: rd[63:52] = si12 (2RI12 格式) */
++#define O_PCALAU12I 0x1a000000u /* pcalau12i: rd = PC + sext(si20<<12), 配 R_LARCH_PCALA_HI20/LO12
++                                   (原误写 0x16000000=lu32i.d; 0x1c000000 是 pcaddu12i 配 PCADD_HI20) */
+ #define O_NOP    0x03400000u
+-/* float moves / conversions */
+-#define O_MOVGR2FR_D 0x0114a980u
+-#define O_MOVFR2GR_D 0x0114b80cu
+-#define O_MOVFR2GR_S 0x0114b40cu
+-#define O_MOVCF2FR   0x0114d400u   /* movcf2fr.d fd, fcc0 (fcc 固定 0) */
+-#define O_FFINT_D_L  0x011d2800u
+-#define O_FTINTRZ_L_D 0x011aa800u
+-#define O_FCVT_S_D   0x01191800u
+-#define O_FCVT_D_S   0x01192400u
++/* float moves / conversions —— 模板以 binutils loongarch-opc.c 为准,
++   低 10 位(fd/rj 字段位)必须为 0(原值从具体反汇编抄来, 字段未清零) */
++#define O_MOVGR2FR_D 0x0114a800u  /* movgr2fr.d fd, rj:  fd[4:0] rj[9:5] */
++#define O_MOVGR2FR_W 0x0114a400u  /* movgr2fr.w fd, rj */
++#define O_MOVFR2GR_D 0x0114b800u  /* movfr2gr.d rd, fj:  rd[4:0] fj[9:5] */
++#define O_MOVFR2GR_S 0x0114b400u  /* movfr2gr.s rd, fj */
++#define O_MOVCF2GR   0x0114dc00u  /* movcf2gr rd, cj:    rd[4:0] cj[9:5]
++                                    (原误用 0x0114d400 = movcf2fr 写浮点寄存器) */
++#define O_FMOV_D     0x01149800u  /* fmov.d fd, fj:      fd[4:0] fj[9:5] */
++#define O_FCMP_SLT_D 0x0c218000u  /* fcmp.slt.d cd, fj, fk: cd[4:0] fj[9:5] fk[14:10]
++                                    (原 0x0c218020 带 fj=1 脏字段) */
++#define O_FCMP_SLE_D 0x0c238000u  /* fcmp.sle.d (cond=7) */
++#define O_FCMP_SEQ_D 0x0c228000u  /* fcmp.seq.d (cond=5) */
++#define O_FFINT_D_L  0x011d2800u  /* ffint.d.l fd, fj:   fd[4:0] fj[9:5] */
++#define O_FTINTRZ_L_D 0x011aa800u /* ftintrz.l.d fd, fj */
++#define O_FCVT_S_D   0x01191800u  /* fcvt.s.d fd, fj */
++#define O_FCVT_D_S   0x01192400u  /* fcvt.d.s fd, fj */
+ 
+ ST_DATA const char * const target_machine_defs =
+     "__loongarch__\0"
+@@ -310,13 +321,16 @@
+         uint32_t next = read32le(ptr);
+         uint32_t r = a - t;   /* byte offset */
+         int offs;
+-        if ((r + (1 << 17)) & ~((1U << 18) - 4))
++        /* b 的 si26 支持 ±128MB; 原检查按 ±128KB 写死会误报 */
++        if ((r + (1 << 27)) & ~(uint32_t)((1U << 28) - 4))
+           tcc_error("out-of-range branch chain");
+         offs = (int)(r >> 2);
+         if (offs == 1) {
+             write32le(ptr, O_NOP);   /* fall through -> nop */
+         } else {
+-            write32le(ptr, O_B | ((offs & 0xffff) << 10));
++            /* b 的 si26: bits[25:10]=si26[15:0], bits[9:0]=si26[25:16]
++               (原代码丢了高 10 位: 负偏移(循环回跳)变成 +256KB 乱跳) */
++            write32le(ptr, O_B | ((offs & 0xffff) << 10) | ((offs >> 16) & 0x3ff));
+         }
+         t = next;
+     }
+@@ -329,12 +343,13 @@
+     int fc = sv->c.i, v = sv->r & VT_VALMASK;
+     if (sv->r & VT_SYM) {
+         assert(v == VT_CONST);
+-        rr = is_ireg(r) ? ireg(r) : 5;
++        rr = is_ireg(r) ? ireg(r) : 12;  /* r12 = t0 (LoongArch 的 r5 是 a1 参数寄存器, 不能当 scratch) */
+         /* pcalau12i rr, %pc_hi20(sym) ; addi.d rr, rr, %pc_lo12(sym)
+-           LoongArch PCALA_LO12 直接取 S+A 低 12 位(无 riscv 的 HI/LO 配对机制),
++           pcalau12i 为页对齐语义(rd=(PC&~0xfff)+sext20(imm20)<<12),
++           PCALA_LO12 直接取 S+A 低 12 位(无 riscv 的 HI/LO 配对机制),
+            两个重定位必须引用同一个符号。 */
+         greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, sv->c.i);
+-        oli20(O_PCADDU12I, rr, 0);
++        oli20(O_PCALAU12I, rr, 0);
+         greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, sv->c.i);
+         o2ri(O_ADDI_D, rr, rr, 0);
+         *new_fc = 0;
+@@ -344,7 +359,7 @@
+         if (fc != sv->c.i)
+           tcc_error("unimp: store(giant local off) (0x%lx)", (long)sv->c.i);
+         if (!imm12_ok(fc)) {
+-            rr = is_ireg(r) ? ireg(r) : 5;
++            rr = is_ireg(r) ? ireg(r) : 12;  /* r12 = t0 */
+             oli20(O_LU12I_D, rr, (int)((fc + 0x800) >> 12));
+             o2ri(O_ADDI_D, rr, rr, fc);
+             o3r(O_ADD_D, rr, rr, 22);
+@@ -355,15 +370,22 @@
+     return rr;
+ }
+ 
+-/* Load 64-bit constant into register rr (lu12i.d + ori + lu32i.d) */
++/* Load 64-bit constant into register rr (lu12i.w + addi.d [+ lu32i.d + lu52i.d]) */
+ static void load_large_constant(int rr, int fc, int hi32)
+ {
+     int v;
+     v = (int)(((uint32_t)fc + 0x800) >> 12);
+     oli20(O_LU12I_D, rr, v);
+-    o2ri(O_ORI, rr, rr, fc);
+-    if (hi32) {
+-        o(0x13000000u | ((hi32 & 0xfffff) << 5) | rr);  /* lu32i.d */
++    /* 低位必须用 addi.d 而非 ori: lu12i.w 按 (fc+0x800)>>12 进位,
++       低 12 位需要符号补偿; ori 是逻辑或, fc 的 bit11=1 时产生错误值 */
++    o2ri(O_ADDI_D, rr, rr, fc);
++    /* lu12i.w 把 32 位结果符号扩展到 64 位: 当目标值高 32 位应为 0 但
++       bit31=1 (fc<0, 如无符号 32 位常量)或 +0x800 进位使 bit31 变 1
++       (v & 0x80000, 如 0x7fffff00)时, 必须再用 lu32i.d/lu52i.d 清零高位,
++       否则得到 0xffffffff_8xxxxxxx 之类的错误值 */
++    if (hi32 || fc < 0 || (v & 0x80000)) {
++        oli20(O_LU32I_D, rr, hi32);          /* rd[51:32] = hi32 低 20 位 */
++        o2ri(O_LU52I_D, rr, rr, hi32 >> 20); /* rd[63:52] = hi32 高 12 位 */
+     }
+ }
+ 
+@@ -411,8 +433,8 @@
+         if (is_float(sv->type.t) && bt != VT_LDOUBLE) {
+             /* load float/double constant: move bit pattern from int reg */
+             uint64_t val = sv->c.i;
+-            load_large_constant(6, (int)val, (int)((uint64_t)val >> 32));
+-            o(O_MOVGR2FR_D | (rr << 5) | (6 << 10));  /* movgr2fr.d rr, t0 */
++            load_large_constant(13, (int)val, (int)((uint64_t)val >> 32));
++            o(O_MOVGR2FR_D | (13 << 5) | rr);  /* movgr2fr.d rr(fd), t1(rj) */
+             return;
+         }
+         assert(is_ireg(r) || bt == VT_LDOUBLE);
+@@ -433,14 +455,15 @@
+         o2ri(O_ADDI_D, rr, br, fc);
+     } else if (v < VT_CONST) { /* reg-reg */
+         if (is_freg(r) && is_freg(v)) {
+-            o3r(O_FADD_D, rr, freg(v), 0);
++            o(O_FMOV_D | (freg(v) << 5) | rr);  /* fmov.d rr, freg(v)
++                (原用 fadd.d rr, fj, f0 —— f0 是 fa0 参数寄存器, 不是 0.0!) */
+         } else if (is_ireg(r) && is_ireg(v)) {
+             omove(rr, ireg(v));
+         } else {
+-            if (is_ireg(r))  /* float -> int */
+-                o(O_MOVFR2GR_D | (rr << 5) | ((is_freg(v) ? freg(v) : 0) << 10));
+-            else  /* int -> float */
+-                o(O_MOVGR2FR_D | (rr << 5) | ((is_ireg(v) ? ireg(v) : 0) << 10));
++            if (is_ireg(r))  /* float -> int: movfr2gr.d rd=rr, fj=freg(v) */
++                o(O_MOVFR2GR_D | ((is_freg(v) ? freg(v) : 0) << 5) | rr);
++            else  /* int -> float: movgr2fr.d fd=rr, rj=ireg(v) */
++                o(O_MOVGR2FR_D | ((is_ireg(v) ? ireg(v) : 0) << 5) | rr);
+         }
+     } else if (v == VT_CMP) {
+         int op = vtop->cmp_op;
+@@ -511,7 +534,7 @@
+         fc = 0;
+     } else if (fr == VT_CONST) {
+         int64_t si = sv->c.i;
+-        ptrreg = 5;  /* t0 */
++        ptrreg = 12;  /* t0 */
+         load_large_constant(ptrreg, (int)si, (int)((uint64_t)si >> 32));
+         fc = 0;
+     } else
+@@ -521,24 +544,28 @@
+ 
+ static void gcall_or_jmp(int docall)
+ {
+-    int tr = docall ? 1 : 5; /* ra or t0 */
++    /* rd 必须写 tr(docall 时 = ra): jirl rd, rj, 0 语义是 rd=PC+4 再跳 rj。
++       原代码 ojirl(0, ...) 用 r0 作 rd, 返回地址丢失 -> 所有函数调用返回即乱飞。
++       尾跳(docall=0)时 tr=r12(t0), 写入无害。注意 LoongArch 的 r5=a1 是
++       参数寄存器, 不能像 riscv(x5=t0)那样当 scratch。 */
++    int tr = docall ? 1 : 12; /* ra or t0 */
+     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+         ((vtop->r & VT_SYM) && vtop->c.i == (int)vtop->c.i)) {
+         /* constant symbolic case -> pcalau12i + addi.d + jirl
+            PCALA_LO12 需引用同一符号(无 riscv 的 HI/LO 配对机制) */
+         greloca(cur_text_section, vtop->sym, ind, R_LARCH_PCALA_HI20, (int)vtop->c.i);
+-        oli20(O_PCADDU12I, tr, 0);
++        oli20(O_PCALAU12I, tr, 0);
+         greloca(cur_text_section, vtop->sym, ind, R_LARCH_PCALA_LO12, (int)vtop->c.i);
+         o2ri(O_ADDI_D, tr, tr, 0);
+-        ojirl(0, tr, 0);  /* jirl r0, tr, 0 */
++        ojirl(tr, tr, 0);  /* jirl tr, tr, 0 */
+     } else if (vtop->r < VT_CONST) {
+         int r = ireg(vtop->r);
+-        ojirl(0, r, 0);   /* jirl r0, r, 0 */
++        ojirl(tr, r, 0);   /* jirl tr, r, 0 */
+     } else {
+         int r = TREG_RA;
+         load(r, vtop);
+         r = ireg(r);
+-        ojirl(0, r, 0);
++        ojirl(tr, r, 0);
+     }
+ }
+ 
+@@ -548,10 +575,10 @@
+ {
+     Sym *sym = external_helper_sym(v);
+     greloca(cur_text_section, sym, ind, R_LARCH_PCALA_HI20, 0);
+-    oli20(O_PCADDU12I, 1, 0);
++    oli20(O_PCALAU12I, 1, 0);
+     greloca(cur_text_section, sym, ind, R_LARCH_PCALA_LO12, 0);
+     o2ri(O_ADDI_D, 1, 1, 0);
+-    ojirl(0, 1, 0);
++    ojirl(1, 1, 0);  /* jirl ra, ra, 0: 调用需保存返回地址 */
+ }
+ 
+ static void gen_bounds_prolog(void)
+@@ -707,7 +734,7 @@
+ 
+     if (stack_add) {
+         if (!imm12_ok(-stack_add)) {
+-            int r5 = 5; /* t0 */
++            int r5 = 12; /* t0 */
+             load_large_constant(r5, -stack_add, (int)((uint64_t)(-stack_add) >> 32));
+             o3r(O_ADD_D, 3, 3, r5);
+         }
+@@ -830,7 +857,7 @@
+     vtop -= nb_args + 1;
+     if (stack_add) {
+         if (!imm12_ok(stack_add)) {
+-            int r5 = 5;
++            int r5 = 12; /* t0 */
+             load_large_constant(r5, stack_add, (int)((uint64_t)stack_add >> 32));
+             o3r(O_ADD_D, 3, 3, r5);
+         }
+@@ -892,9 +919,9 @@
+             for (i = 0; i < regcount; i++) {
+                 if (areg[prc[1+i] - 1] >= 8) {
+                     assert(i == 1 && regcount == 2 && !(addr & 7));
+-                    o2ri(O_LD_D, 5, 22, addr);  // ld.d t0, addr(fp)
++                    o2ri(O_LD_D, 12, 22, addr);  // ld.d t0, addr(fp)
+                     addr += 8;
+-                    o2ri(O_ST_D, 5, 22, loc + i*8);  // st.d t0, loc(fp)
++                    o2ri(O_ST_D, 12, 22, loc + i*8);  // st.d t0, loc(fp)
+                 } else if (prc[1+i] == RC_FLOAT) {
+                     o2ri((size / regcount) == 4 ? O_FST_S : O_FST_D,
+                          8 + areg[1]++, 22, loc + (fieldofs[i+1] >> 4));
+@@ -982,7 +1009,7 @@
+         d = 16;
+         o2ri(O_ADDI_D, 22, 3, d - num_va_regs * 8);  // addi.d fp, sp, d
+         if (!imm12_ok(v - 16)) {
+-            int r5 = 5;
++            int r5 = 12;  /* t0 */
+             load_large_constant(r5, v - 16, (int)((uint64_t)(v - 16) >> 32));
+             o3r(O_SUB_D, 3, 3, r5);   // sub sp, sp, t0
+         } else {
+@@ -1035,13 +1062,14 @@
+ {
+     uint32_t r = a - ind;   /* byte offset */
+     int offs;
+-    if ((r + (1 << 17)) & ~((1U << 18) - 4)) {
+-        /* out of range: pcalau12i + addi.d + jirl */
+-        o2ri(O_ADDI_D, 5, 3, 0);  /* placeholder */
+-        ojirl(0, 5, 0);
++    if ((r + (1 << 27)) & ~(uint32_t)((1U << 28) - 4)) {
++        /* out of range (±128MB): 基本不会触发; 真到了也只能长跳 */
++        o2ri(O_ADDI_D, 12, 3, 0);  /* placeholder (r12 = t0) */
++        ojirl(0, 12, 0);
+     } else {
+         offs = (int)(r >> 2);
+-        o(O_B | ((offs & 0xffff) << 10));
++        /* 同 gsym_addr: si26 高 10 位(bits[9:0])必须写符号位 */
++        o(O_B | ((offs & 0xffff) << 10) | ((offs >> 16) & 0x3ff));
+     }
+ }
+ 
+@@ -1062,7 +1090,11 @@
+         case TOK_NE:  op = O_BNE; break;
+         case TOK_EQ:  op = O_BEQ; break;
+     }
+-    o(op | (2 << 10) | (a << 5) | b);  /* branch +4 (skip the j) */
++    /* 条件分支必须发"反条件"来跳过链式跳转(对照 riscv64 的 op ^ 1):
++       上面的映射得到的是"真条件", LoongArch 分支操作码 bit26 即真假对
++       (BEQ=0x58/BNE=0x5c, BLT=0x60/BGE=0x64, BLTU=0x68/BGEU=0x6c),
++       ^0x04000000 取反。原代码漏了取反 -> 所有 if/while/for 条件全部颠倒 */
++    o((op ^ 0x04000000u) | (2 << 10) | (a << 5) | b);  /* bINV a,b,+8 (skip the j) */
+     return gjmp(t);
+ }
+ 
+@@ -1268,26 +1300,24 @@
+     case TOK_LE:
+     case TOK_GT:
+     case TOK_GE: {
+-        /* fcmp.cond.slt.d fcc, rs1, rs2 ; movcf2fr fd, fcc */
+-        int cc = 8;  /* fcc0 */
++        /* fcmp.cond.d fcc0, rs1, rs2 ; movcf2gr rd, fcc0 ; (xori 取反) */
+         int cond;
+         rd = get_reg(RC_INT);
+         vtop->r = rd;
+         rd = ireg(rd);
+         switch (op) {
+-        case TOK_LT:  cond = 1; break;  /* slt */
+-        case TOK_GE:  cond = 1; invert = 1; break;
+-        case TOK_LE:  cond = 2; break;  /* sle */
+-        case TOK_GT:  cond = 2; invert = 1; break;
+-        case TOK_EQ:  cond = 4; break;  /* seq */
+-        case TOK_NE:  cond = 4; invert = 1; break;
+-        default: cond = 1; break;
+-        }
+-        /* fcmp.slt.d: 0x0c200000 | (cond<<?)|... we use fcmp.slt.d only,
+-           and invert for the rest (cond 1 = slt) */
+-        o(0x0c218020u | (rs1 << 5) | (rs2 << 10));  /* fcmp.slt.d fcc0, rs1, rs2 */
+-        o(O_MOVCF2FR | (0 << 5) | (0 << 10));  /* movcf2fr fd, fcc0 -> use f0 */
+-        o(O_MOVFR2GR_D | (rd << 5) | (0 << 10));  /* movfr2gr.d rd, f0 */
++        case TOK_LT:  cond = 3; break;  /* slt */
++        case TOK_GE:  cond = 3; invert = 1; break;
++        case TOK_LE:  cond = 7; break;  /* sle */
++        case TOK_GT:  cond = 7; invert = 1; break;
++        case TOK_EQ:  cond = 5; break;  /* seq */
++        case TOK_NE:  cond = 5; invert = 1; break;
++        default: cond = 3; break;
++        }
++        /* fcmp.cond.d: 0x0c200000 | cond<<15 | fk<<10 | fj<<5 | cd */
++        o(0x0c200000u | (cond << 15) | (rs2 << 10) | (rs1 << 5));
++        /* movcf2gr rd, fcc0: 直接把条件位读到通用寄存器 */
++        o(O_MOVCF2GR | (0 << 5) | rd);
+         if (invert)
+             o2ri(O_XORI, rd, rd, 1);
+         vset_VT_CMP(TOK_NE);
+@@ -1346,15 +1376,17 @@
+         vtop++;
+         vtop->r = dr;
+         dr = freg(dr);
+-        /* movgr2fr.d fd, rr ; ffint.d.l fd, fd (fcvt.d.l, rtz-ish) */
+-        o(O_MOVGR2FR_D | (dr << 5) | (rr << 10));
+         if (u && !l) {
+-            /* unsigned int: zero-extend first */
+-            o2ri(O_ADDI_D, rr, rr, 0);
+-        }
+-        o(O_FFINT_D_L | (dr << 5) | (dr << 10));  /* ffint.d.l fd, fd */
++            /* unsigned int: 先零扩展高 32 位 —— 必须在 movgr2fr 之前
++               (原来放在 mov 之后, 等于没做, 负解释被 ffint 转换) */
++            oshift(O_SLLI_D, rr, rr, 32);
++            oshift(O_SRLI_D, rr, rr, 32);
++        }
++        /* movgr2fr.d fd=dr, rj=rr ; ffint.d.l fd, fd */
++        o(O_MOVGR2FR_D | (rr << 5) | dr);
++        o(O_FFINT_D_L | (dr << 5) | dr);  /* ffint.d.l fd, fj */
+         if (t == VT_FLOAT)
+-            o(O_FCVT_S_D | (dr << 5) | (dr << 10));  /* fcvt.s.d */
++            o(O_FCVT_S_D | (dr << 5) | dr);  /* fcvt.s.d fd, fj */
+     }
+ }
+ 
+@@ -1381,9 +1413,9 @@
+         vtop->r = dr;
+         dr = ireg(dr);
+         if (ft == VT_FLOAT)
+-            o(O_FCVT_D_S | (rr << 5) | (rr << 10));  /* fcvt.d.s */
+-        o(O_FTINTRZ_L_D | (rr << 5) | (rr << 10));   /* ftintrz.l.d */
+-        o(O_MOVFR2GR_D | (dr << 5) | (rr << 10));   /* movfr2gr.d dr, rr */
++            o(O_FCVT_D_S | (rr << 5) | rr);  /* fcvt.d.s fd, fj */
++        o(O_FTINTRZ_L_D | (rr << 5) | rr);   /* ftintrz.l.d fd, fj */
++        o(O_MOVFR2GR_D | (rr << 5) | dr);   /* movfr2gr.d rd=dr, fj=rr */
+     }
+ }
+ 
+@@ -1425,9 +1457,9 @@
+         rs = freg(rs);
+         rd = freg(rd);
+         if (dt == VT_DOUBLE)
+-            o(O_FCVT_D_S | (rd << 5) | (rs << 10));  /* fcvt.d.s */
++            o(O_FCVT_D_S | (rs << 5) | rd);  /* fcvt.d.s fd=rd, fj=rs */
+         else
+-            o(O_FCVT_S_D | (rd << 5) | (rs << 10));  /* fcvt.s.d */
++            o(O_FCVT_S_D | (rs << 5) | rd);  /* fcvt.s.d fd=rd, fj=rs */
+         vtop->r = rd;
+     }
+ }
+@@ -1441,10 +1473,9 @@
+ ST_FUNC void gen_vla_sp_save(int addr)
+ {
+     if (!imm12_ok(addr)) {
+-        int r5 = 5;
+-        load_large_constant(r5, addr, (int)((uint64_t)addr >> 32));
+-        o3r(O_ADD_D, 5, 5, 22);
+-        o2ri(O_ST_D, 3, 5, 0);
++        load_large_constant(12, addr, (int)((uint64_t)addr >> 32));
++        o3r(O_ADD_D, 12, 12, 22);
++        o2ri(O_ST_D, 3, 12, 0);
+     } else
+         o2ri(O_ST_D, 3, 22, addr);  /* st.d sp, addr(fp) */
+ }
+@@ -1452,10 +1483,9 @@
+ ST_FUNC void gen_vla_sp_restore(int addr)
+ {
+     if (!imm12_ok(addr)) {
+-        int r5 = 5;
+-        load_large_constant(r5, addr, (int)((uint64_t)addr >> 32));
+-        o3r(O_ADD_D, 5, 5, 22);
+-        o2ri(O_LD_D, 3, 5, 0);  /* ld.d sp, 0(r5) */
++        load_large_constant(12, addr, (int)((uint64_t)addr >> 32));
++        o3r(O_ADD_D, 12, 12, 22);
++        o2ri(O_LD_D, 3, 12, 0);  /* ld.d sp, 0(t0) */
+     } else
+         o2ri(O_LD_D, 3, 22, addr);  /* ld.d sp, addr(fp) */
+ }
+@@ -1497,14 +1527,14 @@
+     r2 = ireg(r2);
+     /* 读: pcalau12i + addi.d(r1 = &sym), PCALA_LO12 引用同一符号 */
+     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
+-    oli20(O_PCADDU12I, r1, 0);
++    oli20(O_PCALAU12I, r1, 0);
+     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, 0);
+     o2ri(O_ADDI_D, r1, r1, 0);
+     o2ri(O_LD_D, r2, r1, 0);            /* ld.d r2, r1, 0 */
+     o2ri(O_ADDI_D, r2, r2, 1);          /* addi.d r2, r2, 1 */
+     /* 写: 重新取地址再 st.d */
+     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
+-    oli20(O_PCADDU12I, r1, 0);
++    oli20(O_PCALAU12I, r1, 0);
+     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, 0);
+     o2ri(O_ADDI_D, r1, r1, 0);
+     o2ri(O_ST_D, r2, r1, 0);            /* st.d r2, r1, 0 */
+--- a/user/tcc/tcc-src/loongarch64-link.c	2026-08-05 04:24:21.000000000 +0800
++++ b/user/tcc/tcc-src/loongarch64-link.c	2026-08-05 20:24:40.986401800 +0800
+@@ -73,6 +73,14 @@
+ #define R_LARCH_TLS_LD_PC_HI20 97
+ #define R_LARCH_TLS_LD_PC_LO12 98
+ #define R_LARCH_32_PCREL    99
++/* relax 相关(psABI v2.x): 链接器松弛标记, 静态链接直接忽略 */
++#define R_LARCH_DELETE      100
++#define R_LARCH_CFA         101
++#define R_LARCH_ALIGN       102
++/* psABI v2.30: 可松弛的 PCALA 对(GCC14+ medium code model 会发,
++   静态链接语义与 PCALA_HI20/LO12 完全相同) */
++#define R_LARCH_PCALA64_LO12 105
++#define R_LARCH_PCALA64_HI20 106
+ #endif
+ 
+ #define R_DATA_32  R_LARCH_32
+@@ -160,6 +168,13 @@
+ #define R_LARCH_TLS_LD_PC_HI20 97
+ #define R_LARCH_TLS_LD_PC_LO12 98
+ #define R_LARCH_32_PCREL    99
++/* relax 相关(psABI v2.x): 链接器松弛标记, 静态链接直接忽略 */
++#define R_LARCH_DELETE      100
++#define R_LARCH_CFA         101
++#define R_LARCH_ALIGN       102
++/* psABI v2.30: 可松弛 PCALA 对, 语义同 PCALA_HI20/LO12 */
++#define R_LARCH_PCALA64_LO12 105
++#define R_LARCH_PCALA64_HI20 106
+ #endif
+ 
+ /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
+@@ -171,12 +186,21 @@
+     case R_LARCH_B16:
+     case R_LARCH_B21:
+     case R_LARCH_B26:
++    case R_LARCH_DELETE:   /* relax 标记, 在代码段, relocate() 忽略 */
++    case R_LARCH_CFA:
++    case R_LARCH_ALIGN:
+         return 1;
+ 
+     case R_LARCH_PCALA_HI20:
+     case R_LARCH_PCALA_LO12:
++    case R_LARCH_PCALA64_LO12:  /* 105: 同 PCALA_LO12 */
++    case R_LARCH_PCALA64_HI20:  /* 106: 同 PCALA_HI20 */
+     case R_LARCH_ABS_HI20:
+     case R_LARCH_ABS_LO12:
++    case R_LARCH_ABS64_LO20:
++    case R_LARCH_ABS64_HI12:
++    case R_LARCH_PCALA64_LO20:
++    case R_LARCH_PCALA64_HI12:
+     case R_LARCH_GOT_HI20:
+     case R_LARCH_GOT_LO12:
+     case R_LARCH_GOT_PC_HI20:
+@@ -221,6 +245,12 @@
+     case R_LARCH_SUB24:
+     case R_LARCH_SUB32:
+     case R_LARCH_SUB64:
++    case R_LARCH_DELETE:   /* relax 标记: 不需要 GOT/PLT */
++    case R_LARCH_CFA:
++    case R_LARCH_ALIGN:
++    case R_LARCH_TLS_LE_HI20:  /* 局部执行模型 TLS: 无需 GOT
++                                  (relocate() 暂无实现, 命中会打印 FIXME) */
++    case R_LARCH_TLS_LE_LO12:
+         return NO_GOTPLT_ENTRY;
+ 
+     case R_LARCH_B16:
+@@ -228,8 +258,14 @@
+     case R_LARCH_B26:
+     case R_LARCH_PCALA_HI20:
+     case R_LARCH_PCALA_LO12:
++    case R_LARCH_PCALA64_LO12:
++    case R_LARCH_PCALA64_HI20:
+     case R_LARCH_ABS_HI20:
+     case R_LARCH_ABS_LO12:
++    case R_LARCH_ABS64_LO20:
++    case R_LARCH_ABS64_HI12:
++    case R_LARCH_PCALA64_LO20:
++    case R_LARCH_PCALA64_HI12:
+     case R_LARCH_32:
+     case R_LARCH_64:
+     case R_LARCH_32_PCREL:
+@@ -273,7 +309,7 @@
+     /* Minimal PLT: not used for static RmikuOS programs.  Fill with
+        pcalau12i+ld.d+jirl placeholder so it at least links. */
+     while (p < p_end) {
+-        write32le(p, 0x16000000u);  /* pcalau12i $t0, 0 */
++        write32le(p, 0x1a000000u);  /* pcalau12i $t0, 0 (原误写 0x16000000=lu32i.d) */
+         write32le(p + 4, 0x28c0058cu); /* ld.d $t0, $t0, 0 */
+         write32le(p + 8, 0x4c000180u); /* jirl $zero, $t0, 0 */
+         write32le(p + 12, 0x03400000u); /* nop */
+@@ -297,6 +333,10 @@
+     int sym_index = ELFW(R_SYM)(rel->r_info);
+ 
+     switch(type) {
++    case R_LARCH_DELETE:   /* relax 标记: 不做任何事 */
++    case R_LARCH_CFA:
++    case R_LARCH_ALIGN:
++        return;
+     case R_LARCH_ADD8:
+         *ptr += val;
+         return;
+@@ -329,76 +369,150 @@
+         return;
+ 
+     case R_LARCH_B26: {
+-        /* bl/b: bits[9:0]=off[27:18], bits[25:10]=off[17:2], off = S+A-PC */
++        /* b/bl: si26 = (S+A-PC)>>2; bits[25:10]=si26[15:0], bits[9:0]=si26[25:16]
++           (原实现把两个字段的移位写反了: 高 10 位误 <<10 到 [19:10],
++            低 16 位忘了 <<10 到 [25:10]) */
+         int64_t off = val - addr;
+         uint32_t insn = read32le(ptr);
+         if ((off + (1 << 27)) & ~(((uint64_t)1 << 28) - 4))
+             tcc_error_noabort("R_LARCH_B26 relocation failed (val=%lx addr=%lx)", (long)val, (long)addr);
+-        insn = (insn & 0xfc000000u) | (((off >> 18) & 0x3ff) << 10)
+-               | ((off >> 2) & 0xffff);
++        insn = (insn & 0xfc000000u) | (((off >> 2) & 0xffff) << 10)
++               | ((off >> 18) & 0x3ff);
+         write32le(ptr, insn);
+         return;
+     }
+     case R_LARCH_B21: {
++        /* beqz/bnez: si21 = (S+A-PC)>>2; bits[25:10]=si21[15:0], bits[4:0]=si21[20:16],
++           bits[9:5]=rj 必须保留(原实现 mask 0xfc000000 把 rj 清零) */
+         int64_t off = val - addr;
+         uint32_t insn = read32le(ptr);
+         if ((off + (1 << 22)) & ~(((uint64_t)1 << 23) - 4))
+             tcc_error_noabort("R_LARCH_B21 relocation failed");
+-        insn = (insn & 0xfc000000u) | (((off >> 18) & 0x1f) << 10)
+-               | (((off >> 2) & 0xffff));
++        insn = (insn & 0xfc0003e0u) | (((off >> 2) & 0xffff) << 10)
++               | ((off >> 18) & 0x1f);
+         write32le(ptr, insn);
+         return;
+     }
+     case R_LARCH_B16: {
++        /* beq/bne/blt/...: si16 = (S+A-PC)>>2, 在 bits[25:10];
++           bits[9:5]=rj, bits[4:0]=rd 必须保留(原实现 mask 0xfc000000 把两者清零) */
+         int64_t off = val - addr;
+         uint32_t insn = read32le(ptr);
+         if ((off + (1 << 17)) & ~(((uint64_t)1 << 18) - 4))
+             tcc_error_noabort("R_LARCH_B16 relocation failed");
+-        insn = (insn & 0xfc000000u) | (((off >> 2) & 0xffff) << 10);
++        insn = (insn & 0xfc0003ffu) | (((off >> 2) & 0xffff) << 10);
+         write32le(ptr, insn);
+         return;
+     }
+ 
+     case R_LARCH_PCALA_HI20: {
+-        /* pcalau12i: [24:5] = (((S+A) & ~0xfff) - (PC & ~0xfff)) >> 12 */
+-        int64_t off = (val & ~0xfff) - (addr & ~0xfff);
++        pcala_hi20:
++        /* psABI: imm20 = (((S+A+0x800) & ~0xfff) - (P & ~0xfff)) >> 12
++           pcalau12i 是页对齐语义: rd = (PC & ~0xfff) + sext20(imm20)<<12,
++           与 LO12 的 addi.d 符号扩展配套后对任意 P 正确。
++           原实现 (val&~0xfff)-(addr&~0xfff) 缺 +0x800 进位,
++           符号地址低 12 位 >= 0x800 时结果差 4KB。 */
++        int64_t off = ((val + 0x800) & ~(int64_t)0xfff) - (addr & ~(int64_t)0xfff);
+         uint32_t insn = read32le(ptr);
+-        /* 20 位有符号立即数 << 12: off 必须落在 [-2^31, 2^31) */
+-        if (off > (((int64_t)1 << 31) - 1) || off < -((int64_t)1 << 31))
++        off >>= 12;  /* 算术右移 */
++        if (off > 0x7ffff || off < -0x80000)
+             tcc_error_noabort("R_LARCH_PCALA_HI20 relocation failed (off=%lx)", (long)off);
+-        insn = (insn & 0xfc00001fu) | ((((uint32_t)off >> 12) & 0xfffff) << 5);
++        insn = (insn & 0xfc00001fu) | ((((uint32_t)off) & 0xfffff) << 5);
+         write32le(ptr, insn);
+         return;
+     }
+     case R_LARCH_PCALA_LO12: {
+-        /* addi.d: [21:10] = (S+A) & 0xfff */
++        pcala_lo12:
++        /* psABI: imm12 = (S+A) & 0xfff —— 不减 P!
++           pcalau12i 页对齐语义下, addi.d 对 imm12 的符号扩展
++           正好补偿 HI20 的 +0x800 进位。 */
+         uint32_t insn = read32le(ptr);
+-        insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
++        insn = (insn & 0xffc003ffu) | ((val & 0xfff) << 10);
+         write32le(ptr, insn);
+         return;
+     }
++    case R_LARCH_PCALA64_LO12: /* 105: GCC14+ 可松弛形式, 语义同 PCALA_LO12 */
++        goto pcala_lo12;
++    case R_LARCH_PCALA64_HI20: /* 106: 同 PCALA_HI20 */
++        goto pcala_hi20;
+     case R_LARCH_ABS_HI20: {
++        /* lu12i.w+addi.w 配对: imm20 = ((S+A+0x800) >> 12) & 0xfffff
++           (原实现缺 +0x800, 低 12 位 >= 0x800 的绝对地址全错 4KB) */
+         uint32_t insn = read32le(ptr);
+-        insn = (insn & 0xfc00001fu) | ((((uint32_t)val >> 12) & 0xfffff) << 5);
++        insn = (insn & 0xfc00001fu) | ((((uint32_t)(val + 0x800) >> 12) & 0xfffff) << 5);
+         write32le(ptr, insn);
+         return;
+     }
+     case R_LARCH_ABS_LO12: {
+         uint32_t insn = read32le(ptr);
+-        insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
++        insn = (insn & 0xffc003ffu) | ((val & 0xfff) << 10);
++        write32le(ptr, insn);
++        return;
++    }
++    case R_LARCH_ABS64_LO20: {
++        /* lu32i.d: imm20@[24:5] = ((S+A+0x800) >> 32) & 0xfffff (+0x800 的
++           进位可能越过 bit32, 必须包含) */
++        uint32_t insn = read32le(ptr);
++        insn = (insn & 0xfc00001fu) | ((((uint64_t)(val + 0x800) >> 32) & 0xfffff) << 5);
++        write32le(ptr, insn);
++        return;
++    }
++    case R_LARCH_ABS64_HI12: {
++        /* lu52i.d (2RI12): si12@[21:10] = ((S+A+0x800) >> 52) & 0xfff */
++        uint32_t insn = read32le(ptr);
++        insn = (insn & 0xffc003ffu) | ((((uint64_t)(val + 0x800) >> 52) & 0xfff) << 10);
++        write32le(ptr, insn);
++        return;
++    }
++    case R_LARCH_PCALA64_LO20: {
++        /* lu32i.d: 绝对"调整页"((S+A+0x800)&~0xfff)的 bits[51:32]
++           (pcalau12i 只保证低 32 位页正确, lu32i/lu52i 覆写高位) */
++        int64_t page = (val + 0x800) & ~(int64_t)0xfff;
++        uint32_t insn = read32le(ptr);
++        insn = (insn & 0xfc00001fu) | ((((uint64_t)page >> 32) & 0xfffff) << 5);
++        write32le(ptr, insn);
++        return;
++    }
++    case R_LARCH_PCALA64_HI12: {
++        int64_t page = (val + 0x800) & ~(int64_t)0xfff;
++        uint32_t insn = read32le(ptr);
++        insn = (insn & 0xffc003ffu) | ((((uint64_t)page >> 52) & 0xfff) << 10);
+         write32le(ptr, insn);
+         return;
+     }
+     case R_LARCH_GOT_PC_HI20: {
+-        int64_t off = (val & ~0xfff) - (addr & ~0xfff);
++        /* val 是符号地址, 但 pcalau12i+ld.d 需要的是 GOT 槽地址!
++           (对照 riscv64-link.c: val = got->sh_addr + got_offset;
++            原实现直接填符号地址 -> ld.d 从函数入口读出两条指令当指针,
++            jirl 跳到"指令对"拼成的野地址 -> ADEF, 这是全线崩溃主因)
++           公式同 PCALA_HI20(含 +0x800, ld.d 的 imm12 符号扩展补偿) */
++        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
++        int64_t off = ((got + 0x800) & ~(int64_t)0xfff) - (addr & ~(int64_t)0xfff);
+         uint32_t insn = read32le(ptr);
+-        insn = (insn & 0xfc00001fu) | ((((uint32_t)off >> 12) & 0xfffff) << 5);
++        insn = (insn & 0xfc00001fu) | ((((uint32_t)(off >> 12)) & 0xfffff) << 5);
+         write32le(ptr, insn);
+         return;
+     }
+     case R_LARCH_GOT_PC_LO12: {
++        /* GOT 槽地址低 12 位(不减 P, 页对齐语义) */
++        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
++        uint32_t insn = read32le(ptr);
++        insn = (insn & 0xffc003ffu) | ((got & 0xfff) << 10);
++        write32le(ptr, insn);
++        return;
++    }
++    case R_LARCH_GOT_HI20: {
++        /* 79: 绝对形式 lu12i.w + ld.d, 同样用 GOT 槽地址 */
++        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
++        uint32_t insn = read32le(ptr);
++        insn = (insn & 0xfc00001fu) | ((((uint64_t)(got + 0x800) >> 12) & 0xfffff) << 5);
++        write32le(ptr, insn);
++        return;
++    }
++    case R_LARCH_GOT_LO12: {
++        addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
+         uint32_t insn = read32le(ptr);
+-        insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
++        insn = (insn & 0xffc003ffu) | ((got & 0xfff) << 10);
+         write32le(ptr, insn);
+         return;
+     }
+--- a/user/tcc/tcc-src/tccelf.c	2026-08-05 04:24:21.000000000 +0800
++++ b/user/tcc/tcc-src/tccelf.c	2026-08-05 18:51:35.299953900 +0800
+@@ -3607,6 +3607,13 @@
+ #elif defined TCC_TARGET_RISCV64
+                     && type != R_RISCV_ALIGN
+                     && type != R_RISCV_RELAX
++#elif defined TCC_TARGET_LOONGARCH64
++                    /* relax 标记重定位(relax reloc)指向 section 符号,
++                       符号重编号后为 0, 与 RISCV ALIGN/RELAX 同样豁免。
++                       R_LARCH_* 不在 elf.h, 用数字: DELETE=100 CFA=101 ALIGN=102 */
++                    && type != 100
++                    && type != 101
++                    && type != 102
+ #endif
+                    ) {
+                 invalid_reloc:
+--- a/user/tcc/tcc-src/tccrun.c	2026-08-05 04:24:21.000000000 +0800
++++ b/user/tcc/tcc-src/tccrun.c	2026-08-05 16:17:58.566917900 +0800
+@@ -487,7 +487,7 @@
+     if (mprotect(ptr, length, protect[mode]))
+         return -1;
+ /* XXX: BSD sometimes dump core with bad system call */
+-# if (defined TCC_TARGET_ARM && !TARGETOS_BSD) || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
++# if (defined TCC_TARGET_ARM && !TARGETOS_BSD) || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_LOONGARCH64
+     if (mode == 0 || mode == 3) {
+         void __clear_cache(void *beginning, void *end);
+         __clear_cache(ptr, (char *)ptr + length);
+--- /dev/null
++++ b/user/tcc/diag_loongarch_tcc.sh	2026-08-05 16:29:15.524414800 +0800
+@@ -0,0 +1,85 @@
++#!/usr/bin/env bash
++# diag_loongarch_tcc.sh —— 诊断 LoongArch64 下 libtcc1.a 软浮点符号缺失问题
++#
++# 在构建机(Docker 容器)里、仓库根目录下运行:
++#     bash user/tcc/diag_loongarch_tcc.sh
++#
++# 目的:确认 __extenddftf2/__addtf3 等 __*tf* 符号在以下三处的存在性:
++#   1) 交叉工具链的 libgcc.a(合并来源)
++#   2) 构建产物 libtcc1.a(合并结果)
++#   3) libc.a 中谁引用了 __extenddftf2(引用来源)
++set -u
++
++P="${LA_PREFIX:-/opt/cross-tools/bin/loongarch64-unknown-linux-gnu-}"
++GCC="${P}gcc"; NM="${P}nm"; AR="${P}ar"
++
++echo "==================================================="
++echo "== 0) 工具链"
++echo "==================================================="
++if ! command -v "$GCC" >/dev/null 2>&1; then
++    echo "找不到 $GCC"
++    echo "请设置 LA_PREFIX, 例如: export LA_PREFIX=/opt/cross-tools/bin/loongarch64-unknown-linux-gnu-"
++    exit 1
++fi
++"$GCC" --version | head -1
++
++LIBGCC=$("$GCC" -print-libgcc-file-name)
++echo "libgcc: $LIBGCC"
++[ -f "$LIBGCC" ] || { echo "!! libgcc.a 不存在"; exit 1; }
++
++echo
++echo "==================================================="
++echo "== 1) libgcc.a 里的 quad 软浮点符号(合并来源)"
++echo "==================================================="
++TF_IN_LIBGCC=$("$NM" --defined-only "$LIBGCC" 2>/dev/null | grep -cE " T (__addtf3|__subtf3|__multf3|__divtf3|__extenddftf2|__trunctfdf2|__gttf2|__lttf2|__eqtf2|__netf2|__getf2|__letf2|__extendsftf2|__trunctfsf2)$" || true)
++echo "tf 符号数: $TF_IN_LIBGCC"
++"$NM" --defined-only "$LIBGCC" 2>/dev/null | grep -E " T __(addtf3|extenddftf2|multf3|divtf3|gttf2|lttf2|trunctfdf2)$" | sort -u
++if [ "$TF_IN_LIBGCC" = "0" ]; then
++    echo "!! libgcc.a 里没有 quad 软浮点 -> cross-tools 工具链被裁剪过"
++    echo "   备选方案: 从 LLVM compiler-rt 的 builtins(addtf3.c/extenddftf2.c 等)"
++    echo "   摘出 tf 软浮点源码编进 libtcc1.a"
++fi
++
++echo
++echo "== 1b) libgcc.a 里的 __clear_cache(tcc -run 需要)"
++"$NM" --defined-only "$LIBGCC" 2>/dev/null | grep -i clear_cache || echo "(无 -> -run JIT 模式还需要另外解决)"
++
++echo
++echo "==================================================="
++echo "== 2) 构建产物 libtcc1.a(合并结果)"
++echo "==================================================="
++LIBTCC1=user/build/loongarch64/tcc-sys/usr/lib/tcc/libtcc1.a
++if [ -f "$LIBTCC1" ]; then
++    echo "成员数: $("$AR" t "$LIBTCC1" | wc -l)"
++    TF_IN_LIBTCC1=$("$NM" --defined-only "$LIBTCC1" 2>/dev/null | grep -cE " T (__addtf3|__subtf3|__multf3|__divtf3|__extenddftf2|__trunctfdf2|__gttf2|__lttf2)$" || true)
++    echo "tf 符号数: $TF_IN_LIBTCC1"
++    "$NM" --defined-only "$LIBTCC1" 2>/dev/null | grep -E " T __(addtf3|extenddftf2|multf3|divtf3)$" | sort -u
++    if [ "$TF_IN_LIBGCC" != "0" ] && [ "$TF_IN_LIBTCC1" = "0" ]; then
++        echo "!! libgcc 有但 libtcc1.a 没有 -> _tcc_merge_libgcc 未生效,查构建日志里"
++        echo "   是否有 'libgcc merged into libtcc1.a: N objects' 这行"
++    fi
++else
++    echo "不存在: $LIBTCC1 (先完整构建一次: ./run.sh loongarch64)"
++fi
++
++echo
++echo "==================================================="
++echo "== 3) libc.a 中谁引用了 __extenddftf2(引用来源)"
++echo "==================================================="
++LIBC=user/build/loongarch64/tcc-sys/usr/lib/tcc/libc.a
++if [ -f "$LIBC" ]; then
++    "$NM" -u "$LIBC" 2>/dev/null | grep -B8 "extenddftf2" || echo "(libc.a 中无人引用 __extenddftf2)"
++else
++    echo "不存在: $LIBC"
++fi
++
++echo
++echo "==================================================="
++echo "== 4) t01 编译产物反汇编(验证代码生成修复)"
++echo "==================================================="
++echo "在 RmikuOS 内跑: tcc /codes/t01_basics.c -o /tmp/t01"
++echo "若能成功链接但运行仍崩, 用宿主 objdump 对比分析:"
++echo "  ${P}objdump -d /tmp/t01 | head -40"
++echo "(/tmp 若在 ext4 上, 可用 debugfs 从 target/fs-loongarch64.img 抠出)"
++echo
++echo "把以上输出全部贴回来即可。"
+--- /dev/null
++++ b/user/tcc/diag_merge_libgcc.py	2026-08-05 17:43:57.738899900 +0800
+@@ -0,0 +1,62 @@
++#!/usr/bin/env python3
++"""diag_merge_libgcc.py —— 模拟 build.py 的 _tcc_merge_libgcc 逻辑,
++找出 libgcc.a 中定义了 __*tf* 符号的成员为什么没有进入 libtcc1.a。
++
++在构建机(Docker)仓库根目录运行:
++    python3 user/tcc/diag_merge_libgcc.py
++"""
++import os
++import subprocess
++import sys
++import tempfile
++
++P = os.environ.get("LA_PREFIX", "/opt/cross-tools/bin/loongarch64-unknown-linux-gnu-")
++GCC, NM, AR = P + "gcc", P + "nm", P + "ar"
++LIBTCC1_O = sys.argv[1] if len(sys.argv) > 1 else \
++    "user/build/loongarch64/tcc-sys/usr/lib/tcc/libtcc1.o"
++
++libgcc = subprocess.check_output([GCC, "-print-libgcc-file-name"], text=True).strip()
++print(f"libgcc: {libgcc}")
++print(f"libtcc1.o: {LIBTCC1_O} (exists={os.path.exists(LIBTCC1_O)})")
++
++# ---- 复现 build.py 的 have 集合 ----
++have = {"memcpy", "memset"}
++r = subprocess.run([NM, "--defined-only", LIBTCC1_O], capture_output=True, text=True)
++for ln in r.stdout.splitlines():
++    if ln.strip():
++        have.add(ln.split()[-1])
++print(f"\nlibtcc1.o 定义的符号数({len(have)}):")
++print(" ", " ".join(sorted(have)))
++
++# ---- 遍历 libgcc.a 成员, 找 tf 符号所在成员的命运 ----
++TARGETS = {"__addtf3", "__subtf3", "__multf3", "__divtf3",
++           "__extenddftf2", "__extendsftf2", "__trunctfdf2", "__trunctfsf2",
++           "__gttf2", "__lttf2", "__eqtf2", "__netf2", "__getf2", "__letf2",
++           "__fixtfdi", "__fixunstfdi", "__floatditf", "__floatunditf",
++           "__clear_cache"}
++
++tmp = tempfile.mkdtemp(prefix="diag-libgcc-")
++subprocess.run([AR, "x", libgcc], cwd=tmp, check=True)
++members = sorted(os.listdir(tmp))
++print(f"\nlibgcc.a 解压出 {len(members)} 个成员")
++
++found = 0
++for o in members:
++    if not o.endswith(".o"):
++        continue
++    r = subprocess.run([NM, "--defined-only", os.path.join(tmp, o)],
++                       capture_output=True, text=True)
++    syms = {ln.split()[-1] for ln in r.stdout.splitlines() if ln.strip()}
++    hit = syms & TARGETS
++    if not hit:
++        continue
++    found += 1
++    clash = syms & have
++    verdict = f"!! 被跳过(与 libtcc1.o 冲突: {sorted(clash)})" if clash else "OK 应被合并"
++    print(f"  {o}: {sorted(hit)} -> {verdict}")
++
++if found == 0:
++    print("!! 解压后的成员里完全找不到 tf 符号 -> 成员名可能不以 .o 结尾")
++    print("   全部成员名(前 30):", members[:30])
++
++print("\n把以上输出贴回来。")
+--- /dev/null
++++ b/user/tcc/diag_linked_elf.sh	2026-08-05 20:25:16.797550800 +0800
+@@ -0,0 +1,70 @@
++#!/bin/sh
++# diag_linked_elf.sh — RmikuOS TCC LoongArch64: 宿主侧完整链接诊断
++#
++# 在 Docker 宿主(有 loongarch64-unknown-linux-gnu-* 工具链)运行:
++#     sh ~/RmikuOS/user/tcc/diag_linked_elf.sh [测试号, 默认 01]
++#
++# 目的: 用宿主编译的 tcc(与镜像内 tcc.elf 同源码)完整链接一个测试程序,
++#       得到可 objdump 的 ELF, 直接定位 QEMU trap 中 era 指向的指令。
++#
++# 注意: 宿主编译必须加 -DCONFIG_TCC_CRTPREFIX 等, 否则 tcc 在默认路径
++#       (/usr/lib) 找 crt1.o/crti.o 而报 "file 'crt1.o' not found"。
++
++TC=loongarch64-unknown-linux-gnu
++RMOS=${RMOS:-$HOME/RmikuOS}
++SYS=$RMOS/user/build/loongarch64/tcc-sys/usr/lib/tcc
++TN=${1:-01}
++SRC=$(ls $RMOS/user/rootfs/codes/t${TN}_*.c 2>/dev/null | head -1)
++
++if [ -z "$SRC" ]; then echo "找不到 t${TN}_*.c"; exit 1; fi
++if [ ! -f "$SYS/crt1.o" ]; then
++    echo "!! $SYS/crt1.o 不存在 —— 先跑一遍完整构建 (./run.sh loongarch64 或 python3 user/build.py loongarch64)"
++    ls -la "$SYS" 2>/dev/null
++    exit 1
++fi
++
++echo "=== [1] 宿主编译 tcc (LoongArch64 目标) ==="
++cd "$RMOS/user/tcc/tcc-src" || exit 1
++gcc -O1 -DTCC_TARGET_LOONGARCH64 -DONE_SOURCE=0 -I. -I.. \
++    -DCONFIG_TCC_CRTPREFIX="\"$SYS\"" \
++    -DCONFIG_TCC_LIBPATHS="\"$SYS\"" \
++    -DCONFIG_TCC_SYSINCLUDEPATHS="\"$SYS/include\"" \
++    -o /tmp/tcc-la tcc.c libtcc.c tccpp.c tccgen.c tccdbg.c tccelf.c tccasm.c tccrun.c \
++    loongarch64-gen.c loongarch64-link.c loongarch64-asm.c -lm -ldl 2>&1 | grep -v warn_unused_result || true
++[ -x /tmp/tcc-la ] || { echo "宿主 tcc 构建失败"; exit 1; }
++
++echo "=== [2] 完整链接 $SRC ==="
++/tmp/tcc-la "$SRC" -o /tmp/t$TN.elf || exit 1
++
++echo "=== [3] ELF 头 / 程序头 / _start ==="
++$TC-readelf -hW /tmp/t$TN.elf | grep -Ei 'entry|type:|machine' 
++$TC-readelf -lW /tmp/t$TN.elf
++$TC-objdump -d /tmp/t$TN.elf | sed -n '/<_start>:/,+14p'
++
++echo "=== [4] 输入对象的重定位类型统计(对照 loongarch64-link.c 覆盖情况) ==="
++for f in "$SYS/crt1.o" "$SYS/runmain.o"; do
++    echo "--- $f"
++    $TC-readelf -rW "$f" 2>/dev/null | grep -o 'R_LARCH_[A-Z0-9_]*' | sort | uniq -c
++done
++echo "--- libc.a 全部成员"
++$TC-readelf -rW "$SYS/libc.a" 2>/dev/null | grep -o 'R_LARCH_[A-Z0-9_]*' | sort | uniq -c
++echo "--- libtcc1.a 全部成员"
++$TC-readelf -rW "$SYS/libtcc1.a" 2>/dev/null | grep -o 'R_LARCH_[A-Z0-9_]*' | sort | uniq -c
++
++echo "=== [5] QEMU trap era 在本 ELF 中的定位 ==="
++$TC-objdump -d /tmp/t$TN.elf > /tmp/t$TN.dis
++for a in 12974 1e13c 12a9c 12998 1ecfc 1dd5c 1347c 15990 127fc 17484 12ad4 1df5c; do
++    if grep -q "^    $a:" /tmp/t$TN.dis; then
++        echo "--- era 0x$a 上下文:"
++        grep -B10 "^    $a:" /tmp/t$TN.dis | tail -13
++    fi
++done
++
++echo "=== [6] .got 段内容(GOT 槽应填入符号地址, 不应为 0) ==="
++$TC-objdump -s -j .got /tmp/t$TN.elf 2>/dev/null || echo "(无 .got 段)"
++
++echo "=== [7] la.got 使用点抽查(含 GOT_PC 重定位的函数) ==="
++grep -n "GOT_PC" /tmp/t$TN.dis | head -5
++grep -B2 -A2 "ld.d.*\$t" /tmp/t$TN.dis | grep -A4 -B2 pcalau12i | head -30
++
++echo "完成: /tmp/t$TN.elf 与 /tmp/t$TN.dis 已生成, 请把 [3][5][6] 输出贴回。"

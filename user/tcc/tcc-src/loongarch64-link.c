@@ -309,7 +309,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
     /* Minimal PLT: not used for static RmikuOS programs.  Fill with
        pcalau12i+ld.d+jirl placeholder so it at least links. */
     while (p < p_end) {
-        write32le(p, 0x16000000u);  /* pcalau12i $t0, 0 */
+        write32le(p, 0x1a000000u);  /* pcalau12i $t0, 0 (原误写 0x16000000=lu32i.d) */
         write32le(p + 4, 0x28c0058cu); /* ld.d $t0, $t0, 0 */
         write32le(p + 8, 0x4c000180u); /* jirl $zero, $t0, 0 */
         write32le(p + 12, 0x03400000u); /* nop */
@@ -417,7 +417,11 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         off >>= 12;  /* 算术右移 */
         if (off > 0x7ffff || off < -0x80000)
             tcc_error_noabort("R_LARCH_PCALA_HI20 relocation failed (off=%lx)", (long)off);
-        insn = (insn & 0xfc00001fu) | ((((uint32_t)off) & 0xfffff) << 5);
+        /* 保留掩码必须是 0xfe00001f: pcalau12i/lu12i.w/lu32i.d 等 1RI20
+           格式操作码是 7 位(bits[31:25])! 0xfc00001f 会清掉 bit25,
+           把 pcalau12i(0x1a000000) 变成 pcaddi(0x18000000) ——
+           所有 PC 相对寻址全毁(_start 第三条指令即崩, badv=指令对) */
+        insn = (insn & 0xfe00001fu) | ((((uint32_t)off) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
@@ -439,7 +443,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         /* lu12i.w+addi.w 配对: imm20 = ((S+A+0x800) >> 12) & 0xfffff
            (原实现缺 +0x800, 低 12 位 >= 0x800 的绝对地址全错 4KB) */
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xfc00001fu) | ((((uint32_t)(val + 0x800) >> 12) & 0xfffff) << 5);
+        insn = (insn & 0xfe00001fu) | ((((uint32_t)(val + 0x800) >> 12) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
@@ -453,7 +457,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         /* lu32i.d: imm20@[24:5] = ((S+A+0x800) >> 32) & 0xfffff (+0x800 的
            进位可能越过 bit32, 必须包含) */
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xfc00001fu) | ((((uint64_t)(val + 0x800) >> 32) & 0xfffff) << 5);
+        insn = (insn & 0xfe00001fu) | ((((uint64_t)(val + 0x800) >> 32) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
@@ -469,7 +473,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
            (pcalau12i 只保证低 32 位页正确, lu32i/lu52i 覆写高位) */
         int64_t page = (val + 0x800) & ~(int64_t)0xfff;
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xfc00001fu) | ((((uint64_t)page >> 32) & 0xfffff) << 5);
+        insn = (insn & 0xfe00001fu) | ((((uint64_t)page >> 32) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
@@ -489,7 +493,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
         int64_t off = ((got + 0x800) & ~(int64_t)0xfff) - (addr & ~(int64_t)0xfff);
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xfc00001fu) | ((((uint32_t)(off >> 12)) & 0xfffff) << 5);
+        insn = (insn & 0xfe00001fu) | ((((uint32_t)(off >> 12)) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
@@ -505,7 +509,7 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         /* 79: 绝对形式 lu12i.w + ld.d, 同样用 GOT 槽地址 */
         addr_t got = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xfc00001fu) | ((((uint64_t)(got + 0x800) >> 12) & 0xfffff) << 5);
+        insn = (insn & 0xfe00001fu) | ((((uint64_t)(got + 0x800) >> 12) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
