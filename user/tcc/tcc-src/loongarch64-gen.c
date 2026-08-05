@@ -430,6 +430,10 @@ ST_FUNC void load(int r, SValue *sv)
         }
         o2ri(opcode, rr, br, fc);
     } else if (v == VT_CONST) {
+        /* CValue.i 是 uint64_t: 完整 64 位常量必须按 64 位判断,
+           否则 0x8000000000000000 之类被 int 截断成 0, 误判为
+           "12 位可表示" 直接 addi.d 0, 高位全丢 (与 gen_opil 同理) */
+        int64_t cv = (int64_t)sv->c.i;
         int rb = 0;
         if (is_float(sv->type.t) && bt != VT_LDOUBLE) {
             /* load float/double constant: move bit pattern from int reg */
@@ -441,9 +445,8 @@ ST_FUNC void load(int r, SValue *sv)
         assert(is_ireg(r) || bt == VT_LDOUBLE);
         if (fr & VT_SYM) {
             rb = load_symofs(r, sv, 0, &fc);
-        } else if (!imm12_ok(fc)) {
-            int64_t si = sv->c.i;
-            load_large_constant(rr, (int)si, (int)((uint64_t)si >> 32));
+        } else if (!imm12_ok(cv)) {
+            load_large_constant(rr, (int)cv, (int)((uint64_t)cv >> 32));
             fc = 0;
             rb = rr;
         } else {
@@ -1129,13 +1132,19 @@ static void gen_opil(int op, int ll)
 {
     int a, b, d;
     if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-        int fc = vtop->c.i;
+        /* CValue.i 是 uint64_t: 必须按 64 位读取, 否则高位非零常量
+           (如 SLAB_MAGIC = 1ULL<<63 = 0x8000000000000000) 被 int 截断
+           成 0, 误入 ori/andi 立即数路径, 生成 "ori $a1,$a1,0" 丢掉
+           整个高位 (t05 slab b->size 只写成 sc 的教训).
+           riscv64 版靠 "fc == vtop->c.i" 的 64 位比较兜底, 这里直接
+           用 int64_t 读. */
+        int64_t fc = (int64_t)vtop->c.i;
         int is_log = (op == '&' || op == '|' || op == '^');
         /* ANDI/ORI/XORI 的 imm12 是【零扩展】(逻辑运算), 负立即数会得到
            0x00000xxx 而非 0xFFFF...xxx —— 如 va_arg 的 "ap & ~3" (& -4)
            若用 andi 0xffc 会把 64 位地址截成 12 位小整数!
            逻辑运算只接受 0..4095; 算术/比较(ADDI/SLTI 符号扩展)接受 ±2048 */
-        if ((is_log && (unsigned)fc < 0x1000) || (!is_log && imm12_ok(fc))) {
+        if ((is_log && (uint64_t)fc < 0x1000) || (!is_log && imm12_ok(fc))) {
             vswap();
             gv(RC_INT);
             a = ireg(vtop[0].r);
@@ -1149,7 +1158,7 @@ static void gen_opil(int op, int ll)
                       goto too_big;    /* addi.d 不能表示 -(-2048), 走非立即数路径 */
                     fc = -fc;
                 case '+':
-                    o2ri(O_ADDI_D, ireg(d), a, fc);
+                    o2ri(O_ADDI_D, ireg(d), a, (int)fc);
                     --vtop;
                     vtop[0].r = d;
                     return;
@@ -1158,18 +1167,18 @@ static void gen_opil(int op, int ll)
                       goto too_big;
                     ++fc;
                 case TOK_LT:
-                    o2ri(O_SLTI, ireg(d), a, fc);
+                    o2ri(O_SLTI, ireg(d), a, (int)fc);
                     goto cmp_done;
                 case TOK_ULE:
                     if (fc >= 2047 || fc == -1)
                       goto too_big;
                     ++fc;
                 case TOK_ULT:
-                    o2ri(O_SLTUI, ireg(d), a, fc);
+                    o2ri(O_SLTUI, ireg(d), a, (int)fc);
                     goto cmp_done;
-                case '^': o2ri(O_XORI, ireg(d), a, fc); goto done2;
-                case '|': o2ri(O_ORI,  ireg(d), a, fc); goto done2;
-                case '&': o2ri(O_ANDI, ireg(d), a, fc); goto done2;
+                case '^': o2ri(O_XORI, ireg(d), a, (int)fc); goto done2;
+                case '|': o2ri(O_ORI,  ireg(d), a, (int)fc); goto done2;
+                case '&': o2ri(O_ANDI, ireg(d), a, (int)fc); goto done2;
                 case TOK_SHL: oshift(O_SLLI_D, ireg(d), a, fc & 63); goto done2;
                 case TOK_SHR: oshift(O_SRLI_D, ireg(d), a, fc & 63); goto done2;
                 case TOK_SAR: oshift(O_SRAI_D, ireg(d), a, fc & 63); goto done2;
