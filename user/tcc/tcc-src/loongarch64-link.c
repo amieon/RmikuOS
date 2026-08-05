@@ -73,14 +73,29 @@
 #define R_LARCH_TLS_LD_PC_HI20 97
 #define R_LARCH_TLS_LD_PC_LO12 98
 #define R_LARCH_32_PCREL    99
-/* relax 相关(psABI v2.x): 链接器松弛标记, 静态链接直接忽略 */
-#define R_LARCH_DELETE      100
-#define R_LARCH_CFA         101
+/* relax 相关(ABI v2.10, binutils>=2.41; 编号以 glibc/内核 elf.h 为准):
+   RELAX=100 DELETE=101 ALIGN=102 是标记, 静态链接忽略;
+   PCREL20_S2=103(pcaddi) 需真解析; CFA=104 是 dwarf 标记, 忽略;
+   ADD6/SUB6=105/106, ADD/SUB_ULEB128=107/108 是真算术重定位, 必须实现;
+   64_PCREL=109 同 32_PCREL 的 64 位版。
+   (注意: 本文件此前误把 DELETE=100/CFA=101, 且把 105/106 当成
+    PCALA64_LO12/HI20 —— 实为 ADD6/SUB6, 按 PCALA 公式改写会损坏代码) */
+#define R_LARCH_RELAX       100
+#define R_LARCH_DELETE      101
 #define R_LARCH_ALIGN       102
-/* psABI v2.30: 可松弛的 PCALA 对(GCC14+ medium code model 会发,
-   静态链接语义与 PCALA_HI20/LO12 完全相同) */
-#define R_LARCH_PCALA64_LO12 105
-#define R_LARCH_PCALA64_HI20 106
+#define R_LARCH_PCREL20_S2  103
+#define R_LARCH_CFA         104
+#define R_LARCH_ADD6        105
+#define R_LARCH_SUB6        106
+#define R_LARCH_ADD_ULEB128 107
+#define R_LARCH_SUB_ULEB128 108
+#define R_LARCH_64_PCREL    109
+/* ABI v2.30 (binutils>=2.42): 可松弛的 PCALA 对(medium code model),
+   静态链接语义与 PCALA_HI20/LO12 完全相同 */
+#define R_LARCH_PCREL64_LO12 110
+#define R_LARCH_PCREL64_HI20 111
+#define R_LARCH_PCALA64_LO12 112
+#define R_LARCH_PCALA64_HI20 113
 #endif
 
 #define R_DATA_32  R_LARCH_32
@@ -168,13 +183,22 @@
 #define R_LARCH_TLS_LD_PC_HI20 97
 #define R_LARCH_TLS_LD_PC_LO12 98
 #define R_LARCH_32_PCREL    99
-/* relax 相关(psABI v2.x): 链接器松弛标记, 静态链接直接忽略 */
-#define R_LARCH_DELETE      100
-#define R_LARCH_CFA         101
+/* relax 相关(ABI v2.10): 编号同上块, 以 glibc/内核 elf.h 为准 */
+#define R_LARCH_RELAX       100
+#define R_LARCH_DELETE      101
 #define R_LARCH_ALIGN       102
-/* psABI v2.30: 可松弛 PCALA 对, 语义同 PCALA_HI20/LO12 */
-#define R_LARCH_PCALA64_LO12 105
-#define R_LARCH_PCALA64_HI20 106
+#define R_LARCH_PCREL20_S2  103
+#define R_LARCH_CFA         104
+#define R_LARCH_ADD6        105
+#define R_LARCH_SUB6        106
+#define R_LARCH_ADD_ULEB128 107
+#define R_LARCH_SUB_ULEB128 108
+#define R_LARCH_64_PCREL    109
+/* ABI v2.30: 可松弛 PCALA 对, 语义同 PCALA_HI20/LO12 */
+#define R_LARCH_PCREL64_LO12 110
+#define R_LARCH_PCREL64_HI20 111
+#define R_LARCH_PCALA64_LO12 112
+#define R_LARCH_PCALA64_HI20 113
 #endif
 
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
@@ -186,15 +210,17 @@ ST_FUNC int code_reloc (int reloc_type)
     case R_LARCH_B16:
     case R_LARCH_B21:
     case R_LARCH_B26:
-    case R_LARCH_DELETE:   /* relax 标记, 在代码段, relocate() 忽略 */
+    case R_LARCH_RELAX:    /* relax 标记, 在代码段, relocate() 忽略 */
+    case R_LARCH_DELETE:
     case R_LARCH_CFA:
     case R_LARCH_ALIGN:
+    case R_LARCH_PCREL20_S2:  /* pcaddi(松弛候选), 按代码重定位处理 */
         return 1;
 
     case R_LARCH_PCALA_HI20:
     case R_LARCH_PCALA_LO12:
-    case R_LARCH_PCALA64_LO12:  /* 105: 同 PCALA_LO12 */
-    case R_LARCH_PCALA64_HI20:  /* 106: 同 PCALA_HI20 */
+    case R_LARCH_PCALA64_LO12:  /* 112: 同 PCALA_LO12 */
+    case R_LARCH_PCALA64_HI20:  /* 113: 同 PCALA_HI20 */
     case R_LARCH_ABS_HI20:
     case R_LARCH_ABS_LO12:
     case R_LARCH_ABS64_LO20:
@@ -207,6 +233,11 @@ ST_FUNC int code_reloc (int reloc_type)
     case R_LARCH_GOT_PC_LO12:
     case R_LARCH_TLS_LE_HI20:
     case R_LARCH_TLS_LE_LO12:
+    case R_LARCH_ADD6:
+    case R_LARCH_SUB6:
+    case R_LARCH_ADD_ULEB128:
+    case R_LARCH_SUB_ULEB128:
+    case R_LARCH_64_PCREL:
     case R_LARCH_ADD8:
     case R_LARCH_ADD16:
     case R_LARCH_ADD24:
@@ -245,9 +276,15 @@ ST_FUNC int gotplt_entry_type (int reloc_type)
     case R_LARCH_SUB24:
     case R_LARCH_SUB32:
     case R_LARCH_SUB64:
-    case R_LARCH_DELETE:   /* relax 标记: 不需要 GOT/PLT */
+    case R_LARCH_DELETE:   /* relax 标记/算术: 不需要 GOT/PLT */
     case R_LARCH_CFA:
     case R_LARCH_ALIGN:
+    case R_LARCH_RELAX:
+    case R_LARCH_ADD6:
+    case R_LARCH_SUB6:
+    case R_LARCH_ADD_ULEB128:
+    case R_LARCH_SUB_ULEB128:
+    case R_LARCH_64_PCREL:
     case R_LARCH_TLS_LE_HI20:  /* 局部执行模型 TLS: 无需 GOT
                                   (relocate() 暂无实现, 命中会打印 FIXME) */
     case R_LARCH_TLS_LE_LO12:
@@ -333,9 +370,52 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     int sym_index = ELFW(R_SYM)(rel->r_info);
 
     switch(type) {
-    case R_LARCH_DELETE:   /* relax 标记: 不做任何事 */
+    case R_LARCH_RELAX:    /* relax 标记: 不做任何事 */
+    case R_LARCH_DELETE:
     case R_LARCH_CFA:
     case R_LARCH_ALIGN:
+        return;
+    case R_LARCH_PCREL20_S2: {
+        /* pcaddi: si20 = (S+A-P) >> 2, imm20@[24:5] (7 位操作码掩码 0xfe00001f) */
+        int64_t off = val - addr;
+        uint32_t insn = read32le(ptr);
+        if ((off + (1 << 21)) & ~(((uint64_t)1 << 22) - 4))
+            tcc_error_noabort("R_LARCH_PCREL20_S2 relocation failed");
+        insn = (insn & 0xfe00001fu) | ((((uint32_t)(off >> 2)) & 0xfffff) << 5);
+        write32le(ptr, insn);
+        return;
+    }
+    case R_LARCH_ADD6:
+        *ptr = (*ptr & ~0x3f) | ((*ptr + val) & 0x3f);
+        return;
+    case R_LARCH_SUB6:
+        *ptr = (*ptr & ~0x3f) | ((*ptr - val) & 0x3f);
+        return;
+    case R_LARCH_ADD_ULEB128:
+    case R_LARCH_SUB_ULEB128: {
+        /* uleb128 原地加减(dwarf/.eh_frame 用): 读出-加减-等长写回 */
+        uint8_t *p = ptr;
+        uint64_t v = 0, shift = 0, b;
+        int len = 0;
+        do { b = p[len++]; v |= (uint64_t)(b & 0x7f) << shift; shift += 7; } while (b & 0x80);
+        v = (type == R_LARCH_ADD_ULEB128) ? v + val : v - val;
+        /* 等长重写; 需要更长则报错(relax 场景 binutils 保证等长) */
+        {
+            uint64_t t = v; int need = 0;
+            do { need++; t >>= 7; } while (t);
+            if (need > len) {
+                tcc_error_noabort("R_LARCH_(ADD|SUB)_ULEB128: growth unsupported");
+                return;
+            }
+        }
+        for (b = 0; b < (uint64_t)len; b++) {
+            uint8_t out = (v >> (7 * b)) & 0x7f;
+            p[b] = out | (b + 1 < (uint64_t)len ? 0x80 : 0);
+        }
+        return;
+    }
+    case R_LARCH_64_PCREL:
+        add64le(ptr, val - addr);
         return;
     case R_LARCH_ADD8:
         *ptr += val;
@@ -435,9 +515,9 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         write32le(ptr, insn);
         return;
     }
-    case R_LARCH_PCALA64_LO12: /* 105: GCC14+ 可松弛形式, 语义同 PCALA_LO12 */
+    case R_LARCH_PCALA64_LO12: /* 112: ABI v2.30 可松弛形式, 语义同 PCALA_LO12 */
         goto pcala_lo12;
-    case R_LARCH_PCALA64_HI20: /* 106: 同 PCALA_HI20 */
+    case R_LARCH_PCALA64_HI20: /* 113: 同 PCALA_HI20 */
         goto pcala_hi20;
     case R_LARCH_ABS_HI20: {
         /* lu12i.w+addi.w 配对: imm20 = ((S+A+0x800) >> 12) & 0xfffff

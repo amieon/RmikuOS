@@ -788,10 +788,10 @@ def build_tcc(arch: str):
     #    TCC 官方用 conftest.c(c2str 宿主程序)做文本级转换; tcc-src 里
     #    conftest.c 可能缺失(仓库未含), 用 python 等价实现, 逐字节转义,
     #    输出与 c2str 完全一致(tccpp.c #include 后作为 cstr_cat 字符串参数)。
+    #    每次都重新生成: tccdefs.h 修改(如 va_list 分支)必须反映到 tcc.elf
     defs_h = tcc_src / "tccdefs_.h"
-    if not defs_h.exists():
-        gen_tccdefs(tcc_src / "include" / "tccdefs.h", defs_h)
-        print(f"[user][tcc] generated {defs_h}")
+    gen_tccdefs(tcc_src / "include" / "tccdefs.h", defs_h)
+    print(f"[user][tcc] generated {defs_h}")
 
     objs = []
     # 1) crt0 / syscall 汇编
@@ -894,10 +894,10 @@ def build_tcc_sys_files(arch: str, tcc_dir: Path, tcc_src: Path):
     # dirs_exist_ok=True: 每次都同步, 否则头文件修改(如 math.h)不会进镜像
     inc = sys_root / "include"
     shutil.copytree(INCLUDE_DIR, inc, dirs_exist_ok=True)
-    # TCC 编译器配套头: stddef/stdarg/stdbool/stdalign/tgmath 等
+    # TCC 编译器配套头: stddef/stdarg/stdbool/stdalign/tgmath/tccdefs 等
+    # 每次都覆盖(tccdefs.h 的 va_list 分支等修改必须进镜像, 否则旧版残留)
     for h in sorted((tcc_src / "include").glob("*.h")):
-        if not (inc / h.name).exists():
-            shutil.copy(h, inc)
+        shutil.copy(h, inc)
     # TCC 专用 stdint.h(裸机工具链无 libc 版)
     if not (inc / "stdint.h").exists():
         shutil.copy(tcc_dir / "stdint.h", inc)
