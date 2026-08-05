@@ -2,4 +2,5 @@
 # but not representative of the kernel test-implementation language.
 user/samples/*test* linguist-detectable=false
 user/c/lua/* linguist-detectable=false
-
+user/sqlites3/* linguist-detectable=false
+user/tcc/* linguist-detectable=false
