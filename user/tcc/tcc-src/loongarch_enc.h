@@ -39,8 +39,8 @@ LD_B    = 0x28000000   # ld.b
 LD_H    = 0x28400000   # ld.h
 LD_W    = 0x28800000   # ld.w
 LD_D    = 0x28c00000   # ld.d
-ST_B    = 0x28000000 | 0x00800000  # st.b = 0x28800000? 需确认
-ST_H    = 0x28400000 | 0x00800000
+ST_B    = 0x29000000   # st.b (修正: 原 0x28800000 是 ld.w)
+ST_H    = 0x29400000   # st.h (修正: 原 0x28c00000 是 ld.d)
 ST_W    = 0x29800000   # st.w
 ST_D    = 0x29c00000   # st.d
 FLD_S   = 0x2b000000   # fld.s
@@ -59,17 +59,17 @@ SRLI_D  = 0x00450000   # srli.d
 SRAI_D  = 0x00490000   # srai.d
 
 # === 分支/跳转 ===
-B       = 0x50000000   # b offs16
-BL      = 0x54000000   # bl offs16 (推测)
-BEQ     = 0x58000000   # beq rj, rd, offs16 (推测)
-BNE     = 0x5c000000   # bne (已验证)
-BLT     = 0x60000000   # blt (已验证)
-BGE     = 0x64000000   # bge (已验证)
-BLTU    = 0x68000000   # bltu (推测)
-BGEU    = 0x6c000000   # bgeu (推测)
+B       = 0x50000000   # b offs26
+BL      = 0x54000000   # bl offs26
+BEQ     = 0x58000000   # beq rj, rd, offs16
+BNE     = 0x5c000000   # bne
+BLT     = 0x60000000   # blt
+BGE     = 0x64000000   # bge
+BLTU    = 0x68000000   # bltu
+BGEU    = 0x6c000000   # bgeu
 JIRL    = 0x4c000000   # jirl rd, rj, offs16 (ret = jirl r0, r1, 0 = 0x4c000020)
-BEQZ    = 0x54000000   # beqz rj, offs21 (推测)
-BNEZ    = 0x44000000   # bnez rj, offs21 (已验证 0x44001580)
+BEQZ    = 0x40000000   # beqz rj, offs21 (修正: 原 0x54000000 与 BL 冲突)
+BNEZ    = 0x44000000   # bnez rj, offs21
 
 # === 浮点/转换 ===
 FCMP_SLT_D = 0x0c218020  # fcmp.slt.d fcc, rj, rk
@@ -84,9 +84,12 @@ FCVT_D_S   = 0x01192400  # fcvt.d.s fd, fj
 NOP        = 0x03400000  # nop (andi r0, r0, 0)
 BREAK      = 0x002a0007  # break 0x7
 
+# === 大地址加载(已验证, 见 loongarch64-gen.c) ===
+LU12I_W    = 0x14000000   # lu12i.w rd, si20:  rd = sext32(si20 << 12)
+LU32I_D    = 0x16000000   # lu32i.d rd, si20:  rd[51:32] = si20
+LU52I_D    = 0x03000000   # lu52i.d rd, rj, si12: rd[63:52] = si12
+PCALAU12I  = 0x1a000000   # pcalau12i rd, si20: rd = PC + sext(si20<<12), 配 PCALA_HI20/LO12
+PCADDU12I  = 0x1c000000   # pcaddu12i rd, si20: 配 PCADD_HI20/LO12
 # === 尚未验证(需补充反汇编): ===
-#  ST_B / ST_H 模板
-#  BEQ / BL / BLTU / BGEU / BEQZ
 #  FCVT 系列其他(fcvt.s.l, fcvt.l.s, fcvt.w.d 等)
-#  LU12I_D / PCADDU12I 大地址加载
 #  bstrpick.w

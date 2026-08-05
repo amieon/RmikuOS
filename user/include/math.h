@@ -823,12 +823,15 @@ static inline double mm_sqrt(double x) {
  // ---------- sqrt（硬件指令，RISC-V / LoongArch） ----------
 
     double r;
-#if defined(__riscv)
+    /* TCC 的 LoongArch64 后端无内联汇编器(loongarch64-asm.c 是 stub,
+       CONFIG_TCC_ASM 未启用), __TINYC__ 时一律走牛顿迭代兜底;
+       gcc/clang 编译(libc_extern.c 等)仍用硬件 fsqrt.d */
+#if defined(__riscv) && !defined(__TINYC__)
     __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
-#elif defined(__loongarch__) || defined(__loongarch64__)
+#elif (defined(__loongarch__) || defined(__loongarch64__)) && !defined(__TINYC__)
     __asm__ volatile("fsqrt.d %0, %1" : "=f"(r) : "f"(x));
 #else
-    // 兜底：牛顿迭代（主机测试用）
+    // 兜底：牛顿迭代（主机测试 / TCC 编译用）
     if (x <= 0) return 0;
     r = x;
     for (int i = 0; i < 60; ++i) r = 0.5 * (r + x / r);
