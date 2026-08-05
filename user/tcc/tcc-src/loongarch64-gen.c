@@ -169,15 +169,23 @@
 #define O_PCALAU12I 0x1a000000u /* pcalau12i: rd = PC + sext(si20<<12), 配 R_LARCH_PCALA_HI20/LO12
                                    (原误写 0x16000000=lu32i.d; 0x1c000000 是 pcaddu12i 配 PCADD_HI20) */
 #define O_NOP    0x03400000u
-/* float moves / conversions */
-#define O_MOVGR2FR_D 0x0114a980u
-#define O_MOVFR2GR_D 0x0114b80cu
-#define O_MOVFR2GR_S 0x0114b40cu
-#define O_MOVCF2FR   0x0114d400u   /* movcf2fr.d fd, fcc0 (fcc 固定 0) */
-#define O_FFINT_D_L  0x011d2800u
-#define O_FTINTRZ_L_D 0x011aa800u
-#define O_FCVT_S_D   0x01191800u
-#define O_FCVT_D_S   0x01192400u
+/* float moves / conversions —— 模板以 binutils loongarch-opc.c 为准,
+   低 10 位(fd/rj 字段位)必须为 0(原值从具体反汇编抄来, 字段未清零) */
+#define O_MOVGR2FR_D 0x0114a800u  /* movgr2fr.d fd, rj:  fd[4:0] rj[9:5] */
+#define O_MOVGR2FR_W 0x0114a400u  /* movgr2fr.w fd, rj */
+#define O_MOVFR2GR_D 0x0114b800u  /* movfr2gr.d rd, fj:  rd[4:0] fj[9:5] */
+#define O_MOVFR2GR_S 0x0114b400u  /* movfr2gr.s rd, fj */
+#define O_MOVCF2GR   0x0114dc00u  /* movcf2gr rd, cj:    rd[4:0] cj[9:5]
+                                    (原误用 0x0114d400 = movcf2fr 写浮点寄存器) */
+#define O_FMOV_D     0x01149800u  /* fmov.d fd, fj:      fd[4:0] fj[9:5] */
+#define O_FCMP_SLT_D 0x0c218000u  /* fcmp.slt.d cd, fj, fk: cd[4:0] fj[9:5] fk[14:10]
+                                    (原 0x0c218020 带 fj=1 脏字段) */
+#define O_FCMP_SLE_D 0x0c238000u  /* fcmp.sle.d (cond=7) */
+#define O_FCMP_SEQ_D 0x0c228000u  /* fcmp.seq.d (cond=5) */
+#define O_FFINT_D_L  0x011d2800u  /* ffint.d.l fd, fj:   fd[4:0] fj[9:5] */
+#define O_FTINTRZ_L_D 0x011aa800u /* ftintrz.l.d fd, fj */
+#define O_FCVT_S_D   0x01191800u  /* fcvt.s.d fd, fj */
+#define O_FCVT_D_S   0x01192400u  /* fcvt.d.s fd, fj */
 
 ST_DATA const char * const target_machine_defs =
     "__loongarch__\0"
@@ -419,7 +427,7 @@ ST_FUNC void load(int r, SValue *sv)
             /* load float/double constant: move bit pattern from int reg */
             uint64_t val = sv->c.i;
             load_large_constant(13, (int)val, (int)((uint64_t)val >> 32));
-            o(O_MOVGR2FR_D | (rr << 5) | (13 << 10));  /* movgr2fr.d rr, t1 */
+            o(O_MOVGR2FR_D | (13 << 5) | rr);  /* movgr2fr.d rr(fd), t1(rj) */
             return;
         }
         assert(is_ireg(r) || bt == VT_LDOUBLE);
@@ -440,14 +448,15 @@ ST_FUNC void load(int r, SValue *sv)
         o2ri(O_ADDI_D, rr, br, fc);
     } else if (v < VT_CONST) { /* reg-reg */
         if (is_freg(r) && is_freg(v)) {
-            o3r(O_FADD_D, rr, freg(v), 0);
+            o(O_FMOV_D | (freg(v) << 5) | rr);  /* fmov.d rr, freg(v)
+                (原用 fadd.d rr, fj, f0 —— f0 是 fa0 参数寄存器, 不是 0.0!) */
         } else if (is_ireg(r) && is_ireg(v)) {
             omove(rr, ireg(v));
         } else {
-            if (is_ireg(r))  /* float -> int */
-                o(O_MOVFR2GR_D | (rr << 5) | ((is_freg(v) ? freg(v) : 0) << 10));
-            else  /* int -> float */
-                o(O_MOVGR2FR_D | (rr << 5) | ((is_ireg(v) ? ireg(v) : 0) << 10));
+            if (is_ireg(r))  /* float -> int: movfr2gr.d rd=rr, fj=freg(v) */
+                o(O_MOVFR2GR_D | ((is_freg(v) ? freg(v) : 0) << 5) | rr);
+            else  /* int -> float: movgr2fr.d fd=rr, rj=ireg(v) */
+                o(O_MOVGR2FR_D | ((is_ireg(v) ? ireg(v) : 0) << 5) | rr);
         }
     } else if (v == VT_CMP) {
         int op = vtop->cmp_op;
@@ -1279,26 +1288,24 @@ ST_FUNC void gen_opf(int op)
     case TOK_LE:
     case TOK_GT:
     case TOK_GE: {
-        /* fcmp.cond.slt.d fcc, rs1, rs2 ; movcf2fr fd, fcc */
-        int cc = 8;  /* fcc0 */
+        /* fcmp.cond.d fcc0, rs1, rs2 ; movcf2gr rd, fcc0 ; (xori 取反) */
         int cond;
         rd = get_reg(RC_INT);
         vtop->r = rd;
         rd = ireg(rd);
         switch (op) {
-        case TOK_LT:  cond = 1; break;  /* slt */
-        case TOK_GE:  cond = 1; invert = 1; break;
-        case TOK_LE:  cond = 2; break;  /* sle */
-        case TOK_GT:  cond = 2; invert = 1; break;
-        case TOK_EQ:  cond = 4; break;  /* seq */
-        case TOK_NE:  cond = 4; invert = 1; break;
-        default: cond = 1; break;
+        case TOK_LT:  cond = 3; break;  /* slt */
+        case TOK_GE:  cond = 3; invert = 1; break;
+        case TOK_LE:  cond = 7; break;  /* sle */
+        case TOK_GT:  cond = 7; invert = 1; break;
+        case TOK_EQ:  cond = 5; break;  /* seq */
+        case TOK_NE:  cond = 5; invert = 1; break;
+        default: cond = 3; break;
         }
-        /* fcmp.slt.d: 0x0c200000 | (cond<<?)|... we use fcmp.slt.d only,
-           and invert for the rest (cond 1 = slt) */
-        o(0x0c218020u | (rs1 << 5) | (rs2 << 10));  /* fcmp.slt.d fcc0, rs1, rs2 */
-        o(O_MOVCF2FR | (0 << 5) | (0 << 10));  /* movcf2fr fd, fcc0 -> use f0 */
-        o(O_MOVFR2GR_D | (rd << 5) | (0 << 10));  /* movfr2gr.d rd, f0 */
+        /* fcmp.cond.d: 0x0c200000 | cond<<15 | fk<<10 | fj<<5 | cd */
+        o(0x0c200000u | (cond << 15) | (rs2 << 10) | (rs1 << 5));
+        /* movcf2gr rd, fcc0: 直接把条件位读到通用寄存器 */
+        o(O_MOVCF2GR | (0 << 5) | rd);
         if (invert)
             o2ri(O_XORI, rd, rd, 1);
         vset_VT_CMP(TOK_NE);
@@ -1357,15 +1364,16 @@ ST_FUNC void gen_cvt_itof(int t)
         vtop++;
         vtop->r = dr;
         dr = freg(dr);
-        /* movgr2fr.d fd, rr ; ffint.d.l fd, fd (fcvt.d.l, rtz-ish) */
-        o(O_MOVGR2FR_D | (dr << 5) | (rr << 10));
+        /* movgr2fr.d fd=dr, rj=rr ; ffint.d.l fd, fd */
+        o(O_MOVGR2FR_D | (rr << 5) | dr);
         if (u && !l) {
-            /* unsigned int: zero-extend first */
-            o2ri(O_ADDI_D, rr, rr, 0);
+            /* unsigned int: 先零扩展高 32 位(slli+srli, 原 addi.d +0 是空操作) */
+            oshift(O_SLLI_D, rr, rr, 32);
+            oshift(O_SRLI_D, rr, rr, 32);
         }
-        o(O_FFINT_D_L | (dr << 5) | (dr << 10));  /* ffint.d.l fd, fd */
+        o(O_FFINT_D_L | (dr << 5) | dr);  /* ffint.d.l fd, fj */
         if (t == VT_FLOAT)
-            o(O_FCVT_S_D | (dr << 5) | (dr << 10));  /* fcvt.s.d */
+            o(O_FCVT_S_D | (dr << 5) | dr);  /* fcvt.s.d fd, fj */
     }
 }
 
@@ -1392,9 +1400,9 @@ ST_FUNC void gen_cvt_ftoi(int t)
         vtop->r = dr;
         dr = ireg(dr);
         if (ft == VT_FLOAT)
-            o(O_FCVT_D_S | (rr << 5) | (rr << 10));  /* fcvt.d.s */
-        o(O_FTINTRZ_L_D | (rr << 5) | (rr << 10));   /* ftintrz.l.d */
-        o(O_MOVFR2GR_D | (dr << 5) | (rr << 10));   /* movfr2gr.d dr, rr */
+            o(O_FCVT_D_S | (rr << 5) | rr);  /* fcvt.d.s fd, fj */
+        o(O_FTINTRZ_L_D | (rr << 5) | rr);   /* ftintrz.l.d fd, fj */
+        o(O_MOVFR2GR_D | (rr << 5) | dr);   /* movfr2gr.d rd=dr, fj=rr */
     }
 }
 
@@ -1436,9 +1444,9 @@ ST_FUNC void gen_cvt_ftof(int dt)
         rs = freg(rs);
         rd = freg(rd);
         if (dt == VT_DOUBLE)
-            o(O_FCVT_D_S | (rd << 5) | (rs << 10));  /* fcvt.d.s */
+            o(O_FCVT_D_S | (rs << 5) | rd);  /* fcvt.d.s fd=rd, fj=rs */
         else
-            o(O_FCVT_S_D | (rd << 5) | (rs << 10));  /* fcvt.s.d */
+            o(O_FCVT_S_D | (rs << 5) | rd);  /* fcvt.s.d fd=rd, fj=rs */
         vtop->r = rd;
     }
 }
@@ -1452,10 +1460,9 @@ ST_FUNC void ggoto(void)
 ST_FUNC void gen_vla_sp_save(int addr)
 {
     if (!imm12_ok(addr)) {
-        int r5 = 5;
-        load_large_constant(r5, addr, (int)((uint64_t)addr >> 32));
-        o3r(O_ADD_D, 5, 5, 22);
-        o2ri(O_ST_D, 3, 5, 0);
+        load_large_constant(12, addr, (int)((uint64_t)addr >> 32));
+        o3r(O_ADD_D, 12, 12, 22);
+        o2ri(O_ST_D, 3, 12, 0);
     } else
         o2ri(O_ST_D, 3, 22, addr);  /* st.d sp, addr(fp) */
 }
@@ -1463,10 +1470,9 @@ ST_FUNC void gen_vla_sp_save(int addr)
 ST_FUNC void gen_vla_sp_restore(int addr)
 {
     if (!imm12_ok(addr)) {
-        int r5 = 5;
-        load_large_constant(r5, addr, (int)((uint64_t)addr >> 32));
-        o3r(O_ADD_D, 5, 5, 22);
-        o2ri(O_LD_D, 3, 5, 0);  /* ld.d sp, 0(r5) */
+        load_large_constant(12, addr, (int)((uint64_t)addr >> 32));
+        o3r(O_ADD_D, 12, 12, 22);
+        o2ri(O_LD_D, 3, 12, 0);  /* ld.d sp, 0(t0) */
     } else
         o2ri(O_LD_D, 3, 22, addr);  /* ld.d sp, addr(fp) */
 }

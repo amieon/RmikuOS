@@ -906,8 +906,25 @@ def build_tcc_sys_files(arch: str, tcc_dir: Path, tcc_src: Path):
 
 def _tcc_merge_libgcc(cfg: dict, libtcc1_a: Path, libtcc1_o: Path):
     """把 host libgcc.a 中与 libtcc1.o/string.o 不重复的成员合并进 libtcc1.a。
-    按符号清单去重, 全量提取多放无害。"""
+    按符号清单去重, 全量提取多放无害。
+
+    注意: nm 解析必须只收【全局符号】(类型字母大写: T/D/B/W/R...)。
+    本地标签(如 libtcc1.o 的 'L0\\x01' / '.LC0', 类型小写 t)几乎每个
+    libgcc 成员都定义, 若计入 have 会把所有成员误判为冲突而全部跳过
+    (实测: libtcc1.a 56 成员但 tf 符号为 0)。"""
     import tempfile
+
+    def global_syms(path):
+        """nm --defined-only 输出中只保留全局符号(类型字母大写)"""
+        r = subprocess.run([cfg["nm"], "--defined-only", str(path)],
+                           capture_output=True, text=True)
+        syms = set()
+        for ln in r.stdout.splitlines():
+            parts = ln.split()
+            if len(parts) >= 3 and parts[-2][-1:].isupper():
+                syms.add(parts[-1])
+        return syms
+
     try:
         libgcc = subprocess.check_output(
             [cfg["gcc"], "-print-libgcc-file-name"], text=True).strip()
@@ -918,20 +935,14 @@ def _tcc_merge_libgcc(cfg: dict, libtcc1_a: Path, libtcc1_o: Path):
         print(f"[user][tcc] !! cannot locate libgcc: {e}")
         return
     have = {"memcpy", "memset"}   # libtcc1.o 已有 + string.o 提供的
-    r = subprocess.run([cfg["nm"], "--defined-only", str(libtcc1_o)],
-                       capture_output=True, text=True)
-    for ln in r.stdout.splitlines():
-        if ln.strip():
-            have.add(ln.split()[-1])
+    have |= global_syms(libtcc1_o)
     tmp = tempfile.mkdtemp(prefix="rmiku-libgcc-")
     subprocess.run([cfg["ar"], "x", libgcc], cwd=tmp, check=True)
     picked = []
     for o in sorted(os.listdir(tmp)):
         if not o.endswith(".o"):
             continue
-        r = subprocess.run([cfg["nm"], "--defined-only", os.path.join(tmp, o)],
-                           capture_output=True, text=True)
-        syms = {ln.split()[-1] for ln in r.stdout.splitlines() if ln.strip()}
+        syms = global_syms(os.path.join(tmp, o))
         if syms & have:      # 与 libtcc1.o / string.o 重复 -> 跳过(defined twice)
             continue
         picked.append(os.path.join(tmp, o))
