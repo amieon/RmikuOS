@@ -432,6 +432,40 @@ tcc hello.c -run                   # JIT: 编译进内存直接执行
 - 用户程序显式 `exit()`（头内联）不 flush——次要路径；
 - TCC 的 `static inline` 不内联是特性不是 bug，靠 libc_extern 转发兜底。
 
+#### LoongArch64 后端：从「全崩」到 12/12 全绿
+
+LoongArch64 后端的排障。起点极其狼狈：后端能编译、产物长得完全正常，但 12 个测试**一个都跑不起来**——所有程序在启动头几条指令就 SIGSEGV。难点在于：编译侧一切正确、运行时全军覆没。
+
+**排障方法**：在宿主侧用同一份源码编出 `/tmp/tcc-la`，产出与镜像内**逐字节一致**的 ELF，再用 `objdump` 把每个 trap 的 `era` 精确映射到指令——整个调试过程就是「反汇编定罪 → 对照能用的 riscv64 后端 → 修 → 重测」的循环。
+
+按时间线：
+
+**① 指令编码层**：`pcalau12i` 的宏值写成了 `lu32i.d` 的、BEQZ 编码错、`jirl` 丢返回地址、r5/r6（其实是 `a1/a2` 参数寄存器）被当 scratch 用、B26/B21/B16 重定位字段移位错、PCALA_HI20 缺 `+0x800` 进位——**6 个编码错误叠在一起**。
+
+**② 链接层**：`__extenddftf2` unresolved——根因是 libtcc1.o 的本地标签 `L0` 和每个 libgcc 成员「撞名」，build.py 的去重逻辑把**全部 tf 符号当重复项误杀**。诊断脚本实锤：libgcc 有 14 个 tf 符号，合并后的 libtcc1.a 是 0 个。
+
+**③ 条件跳转层**：`gjmp_cond` 的条件**没取反**——riscv64 的写法是 `op ^ 1`（发反条件跳过链式跳转），移植时丢了。后果：**所有 if/while/for 的条件全部颠倒**，程序跑起来完全不是人写的逻辑。
+
+**④ GOT 层**：`GOT_PC_HI20/LO12` 重定位直接填符号地址，而不是 **GOT 槽地址**（`got->sh_addr + got_offset`）→ `pcalau12i + ld.d` 从**函数入口读出前两条指令**当成函数指针 → `jirl` 跳进野地址。这正是所有 trap 里 `badv=指令对`（如 `0x28ffa2cc29ffa2c4` = 两条 `ld.d/st.d` 序言指令拼成的 64 位值）的来历。
+
+**⑤ 重定位掩码层（主线崩溃根因）**：`relocate()` 的 imm20 保留掩码 `0xfc00001f` **错了一比特**——1RI20 格式指令（pcalau12i/lu12i.w/lu32i.d）的操作码是 **7 位**（bits[31:25]），掩码只保留 [31:26] 把 bit25 清了 → GAS 发出的 `pcalau12i $t0, 3`（`0x1a00000c`）链接后变成 `pcaddi $t0, 3`（`0x1800006c`）→ **PC 相对寻址全灭**。`lu12i.w` 因 bit25=0 恰好幸存，所以绝对寻址正常、PC 相对全崩——「什么都是对的但什么都跑不起来」的教科书案例。**era 恒定（崩在 crt1.o 内）+ badv 随构建变化（文本内容变）** 这两个特征直接把矛头钉死在重定位上。
+
+**⑥ 变参层**：`tccdefs.h` 没有 LoongArch 分支 → `va_start/va_arg` 落进 **i386 的 4 字节槽方案** → `va_start(ap, fmt)` 变成 `ap = &fmt + 8`（= fp-16，恰好是保存旧 fp 的槽位）→ **所有 `%d` 打印同一个数 16764816**（= 初始 sp = 0xffcf90），`%f` 全 0，`%s` 全乱码。一个宏分支的缺失让整个 printf 看起来像坏了。
+
+**⑦ 立即数层（全崩总根因）**：LoongArch 的 `ANDI/ORI/XORI` 立即数是**零扩展**（逻辑运算），`ADDI/SLTI` 是**符号扩展**——TCC 的立即数判断对两者一视同仁 → `& -4` 被编成 `andi $a0, $a0, 0xffc` → **64 位地址被截成 12 位小整数**（所有 `badv=0xexx` 的 PIL 崩溃）。RISC-V 的 `andi` 是符号扩展所以永远踩不到。`va_arg` 的 `_tcc_align`、malloc 的 `align_up`、一切 `& ~mask` 全中招。
+
+**⑧ ABI 层**：浮点参数被放进了 `$f0-$f7`，而 LoongArch LP64D 的参数寄存器是 **`$f12-$f19`**（`$f0` 只是返回寄存器）。RISC-V 的 fa0-fa7 = f10-f17 与返回寄存器 f10 重合，移植代码「歪打正着」在 RISC-V 上自洽；LoongArch 必须显式 `fmov.d $f12+k ← $f(k)`。症状一眼看穿：`cos(0.0)=1.0` 对（$f12 初始恰好是 0）、`sqrt(2.0)=0`（libc 从 $f12 读到 0）。
+
+**⑨ 常量求值层**：`tcc.h` 的 `CValue.i` 是 **uint64_t**，后端却用 `int fc = vtop->c.i` 截断 → `SLAB_MAGIC = 1ULL<<63` 变成 0 → `b->size = SLAB_MAGIC | sc` 被编成 `ori $a1, $a1, 0x0` → slab 头失去 magic → `realloc` 全部误判。定罪证据是反汇编里那行刺眼的 `ori 0x0`。RISC-V 版靠一行「废话」比较 `fc == vtop->c.i`（int 提升成 64 位比较）兜底，移植时丢了。
+
+**方法论沉淀**（三句话）：
+
+1. **反汇编是唯一真相**。`badv=指令对`、`era 恒定`、`ori 0x0`、`pcalau12i→pcaddi`——所有「看起来完全正常」的 bug，最后都是被 objdump 直接定罪，而不是靠读代码猜出来的。
+2. **同树能用的后端是金矿**。GOT 槽地址、条件取反、freg 物理映射、64 位常量兜底——一半的修复是 `diff riscv64-gen.c` 直接对出来的。
+3. **指令编码只信权威源**。binutils 的 loongarch-opc.c、QEMU 的 insns.decode、loongson 的 psABI 三源核对，宁可多查一次也不猜。
+
+结局：**12/12 全绿**，与 RISC-V 参考输出逐字节一致——`tcc_test.sh` 里的每一行，都是这九层 bug 的墓志铭。
+
 ---
 
 ### kilo：全屏编辑器（与 TCC 组成开发闭环）
