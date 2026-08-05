@@ -177,6 +177,7 @@
 #define O_MOVFR2GR_S 0x0114b400u  /* movfr2gr.s rd, fj */
 #define O_MOVCF2GR   0x0114dc00u  /* movcf2gr rd, cj:    rd[4:0] cj[9:5]
                                     (原误用 0x0114d400 = movcf2fr 写浮点寄存器) */
+#define O_FMOV_S     0x01149400u  /* fmov.s fd, fj:      fd[4:0] fj[9:5] */
 #define O_FMOV_D     0x01149800u  /* fmov.d fd, fj:      fd[4:0] fj[9:5] */
 #define O_FCMP_SLT_D 0x0c218000u  /* fcmp.slt.d cd, fj, fk: cd[4:0] fj[9:5] fk[14:10]
                                     (原 0x0c218020 带 fj=1 脏字段) */
@@ -809,6 +810,16 @@ ST_FUNC void gfunc_call(int nb_args)
             }
             vtop->type.t = loadt | (vtop->type.t & VT_UNSIGNED);
             gv(r < 8 ? RC_R(r) : RC_F(r - 8));
+            if (r >= 8 && (loadt == VT_FLOAT || loadt == VT_DOUBLE)) {
+                /* LoongArch LP64D ABI: 浮点参数寄存器是 $f12-$f19
+                   (fa0-fa7), 而 TCC 的 RC_F 类临时寄存器是 $f0-$f7
+                   (仅 $f0 兼作返回寄存器). 与 riscv64 不同(fa0=f10
+                   同时是参数和返回), 调用前必须把值搬进参数寄存器.
+                   否则 libc/GCC 函数从 $f12.. 读到 0/垃圾. */
+                int src = freg(vtop->r), dst = 12 + (r - 8);
+                o(loadt == VT_FLOAT ? O_FMOV_S : O_FMOV_D
+                  | (src << 5) | dst);
+            }
             vtop->type = origtype;
 
             if (r2 && loadt != VT_LDOUBLE) {
@@ -923,8 +934,11 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
                     addr += 8;
                     o2ri(O_ST_D, 12, 22, loc + i*8);  // st.d t0, loc(fp)
                 } else if (prc[1+i] == RC_FLOAT) {
+                    /* 浮点参数在 ABI 寄存器 $f12-$f19 (fa0-fa7).
+                       (o2ri 直接编码物理寄存器号, 原 8+areg[1] 实际
+                       是 $f8-$f15, 既非内部 $f0-$f7 也非 ABI 槽位) */
                     o2ri((size / regcount) == 4 ? O_FST_S : O_FST_D,
-                         8 + areg[1]++, 22, loc + (fieldofs[i+1] >> 4));
+                         12 + areg[1]++, 22, loc + (fieldofs[i+1] >> 4));
                 } else {
                     o2ri(O_ST_D, 4 + areg[0]++, 22, loc + i*8); // st.d aX, loc(fp)
                 }
@@ -1434,8 +1448,12 @@ ST_FUNC void gen_cvt_ftof(int dt)
             (st == VT_FLOAT ? TOK___extendsftf2 : TOK___extenddftf2) :
             (dt == VT_FLOAT ? TOK___trunctfsf2 : TOK___trunctfdf2);
         save_regs(1);
-        if (dt == VT_LDOUBLE)
-          gv(RC_F(0));
+        if (dt == VT_LDOUBLE) {
+            gv(RC_F(0));
+            /* helper 是 GCC 编译的 libgcc, 参数按 ABI 在 $f12
+               (本后端 RC_F 类是 $f0-$f7, 必须显式搬移) */
+            o(O_FMOV_D | (freg(vtop->r) << 5) | 12);
+        }
         else {
             gv(RC_R(0));
             assert(vtop->r2 < 7);
