@@ -329,49 +329,61 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
 
     case R_LARCH_B26: {
-        /* bl/b: bits[9:0]=off[27:18], bits[25:10]=off[17:2], off = S+A-PC */
+        /* b/bl: si26 = (S+A-PC)>>2; bits[25:10]=si26[15:0], bits[9:0]=si26[25:16]
+           (原实现把两个字段的移位写反了: 高 10 位误 <<10 到 [19:10],
+            低 16 位忘了 <<10 到 [25:10]) */
         int64_t off = val - addr;
         uint32_t insn = read32le(ptr);
         if ((off + (1 << 27)) & ~(((uint64_t)1 << 28) - 4))
             tcc_error_noabort("R_LARCH_B26 relocation failed (val=%lx addr=%lx)", (long)val, (long)addr);
-        insn = (insn & 0xfc000000u) | (((off >> 18) & 0x3ff) << 10)
-               | ((off >> 2) & 0xffff);
+        insn = (insn & 0xfc000000u) | (((off >> 2) & 0xffff) << 10)
+               | ((off >> 18) & 0x3ff);
         write32le(ptr, insn);
         return;
     }
     case R_LARCH_B21: {
+        /* beqz/bnez: si21 = (S+A-PC)>>2; bits[25:10]=si21[15:0], bits[4:0]=si21[20:16],
+           bits[9:5]=rj 必须保留(原实现 mask 0xfc000000 把 rj 清零) */
         int64_t off = val - addr;
         uint32_t insn = read32le(ptr);
         if ((off + (1 << 22)) & ~(((uint64_t)1 << 23) - 4))
             tcc_error_noabort("R_LARCH_B21 relocation failed");
-        insn = (insn & 0xfc000000u) | (((off >> 18) & 0x1f) << 10)
-               | (((off >> 2) & 0xffff));
+        insn = (insn & 0xfc0003e0u) | (((off >> 2) & 0xffff) << 10)
+               | ((off >> 18) & 0x1f);
         write32le(ptr, insn);
         return;
     }
     case R_LARCH_B16: {
+        /* beq/bne/blt/...: si16 = (S+A-PC)>>2, 在 bits[25:10];
+           bits[9:5]=rj, bits[4:0]=rd 必须保留(原实现 mask 0xfc000000 把两者清零) */
         int64_t off = val - addr;
         uint32_t insn = read32le(ptr);
         if ((off + (1 << 17)) & ~(((uint64_t)1 << 18) - 4))
             tcc_error_noabort("R_LARCH_B16 relocation failed");
-        insn = (insn & 0xfc000000u) | (((off >> 2) & 0xffff) << 10);
+        insn = (insn & 0xfc0003ffu) | (((off >> 2) & 0xffff) << 10);
         write32le(ptr, insn);
         return;
     }
 
     case R_LARCH_PCALA_HI20: {
-        /* pcalau12i: [24:5] = (((S+A) & ~0xfff) - (PC & ~0xfff)) >> 12 */
-        int64_t off = (val & ~0xfff) - (addr & ~0xfff);
+        /* psABI: imm20 = (((S+A+0x800) & ~0xfff) - (P & ~0xfff)) >> 12
+           pcalau12i 是页对齐语义: rd = (PC & ~0xfff) + sext20(imm20)<<12,
+           与 LO12 的 addi.d 符号扩展配套后对任意 P 正确。
+           原实现 (val&~0xfff)-(addr&~0xfff) 缺 +0x800 进位,
+           符号地址低 12 位 >= 0x800 时结果差 4KB。 */
+        int64_t off = ((val + 0x800) & ~(int64_t)0xfff) - (addr & ~(int64_t)0xfff);
         uint32_t insn = read32le(ptr);
-        /* 20 位有符号立即数 << 12: off 必须落在 [-2^31, 2^31) */
-        if (off > (((int64_t)1 << 31) - 1) || off < -((int64_t)1 << 31))
+        off >>= 12;  /* 算术右移 */
+        if (off > 0x7ffff || off < -0x80000)
             tcc_error_noabort("R_LARCH_PCALA_HI20 relocation failed (off=%lx)", (long)off);
-        insn = (insn & 0xfc00001fu) | ((((uint32_t)off >> 12) & 0xfffff) << 5);
+        insn = (insn & 0xfc00001fu) | ((((uint32_t)off) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
     case R_LARCH_PCALA_LO12: {
-        /* addi.d: [21:10] = (S+A) & 0xfff */
+        /* psABI: imm12 = (S+A) & 0xfff —— 不减 P!
+           pcalau12i 页对齐语义下, addi.d 对 imm12 的符号扩展
+           正好补偿 HI20 的 +0x800 进位。 */
         uint32_t insn = read32le(ptr);
         insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
         write32le(ptr, insn);
@@ -390,13 +402,15 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
     }
     case R_LARCH_GOT_PC_HI20: {
-        int64_t off = (val & ~0xfff) - (addr & ~0xfff);
+        /* psABI 75: (((GP+G) & ~0xfff) - (PC & ~0xfff)) >> 12 (无 +0x800) */
+        int64_t off = (val & ~(int64_t)0xfff) - (addr & ~(int64_t)0xfff);
         uint32_t insn = read32le(ptr);
-        insn = (insn & 0xfc00001fu) | ((((uint32_t)off >> 12) & 0xfffff) << 5);
+        insn = (insn & 0xfc00001fu) | ((((uint32_t)(off >> 12)) & 0xfffff) << 5);
         write32le(ptr, insn);
         return;
     }
     case R_LARCH_GOT_PC_LO12: {
+        /* psABI 76: (GP+G) & 0xfff */
         uint32_t insn = read32le(ptr);
         insn = (insn & 0xffc00fffu) | ((val & 0xfff) << 10);
         write32le(ptr, insn);

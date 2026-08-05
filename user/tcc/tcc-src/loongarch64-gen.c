@@ -160,11 +160,14 @@
 #define O_BLTU   0x68000000u
 #define O_BGEU   0x6c000000u
 #define O_JIRL   0x4c000000u
-#define O_BEQZ   0x58000000u
+#define O_BEQZ   0x40000000u   /* beqz rj, si21: op[31:26]=010000 (原误写 0x58000000=beq) */
 #define O_BNEZ   0x44000000u
 /* load-address / misc */
-#define O_LU12I_D 0x14000000u
-#define O_PCADDU12I 0x16000000u
+#define O_LU12I_D 0x14000000u  /* 实为 lu12i.w: rd = sext32(si20 << 12) */
+#define O_LU32I_D 0x16000000u  /* lu32i.d: rd[51:32] = si20 */
+#define O_LU52I_D 0x03000000u  /* lu52i.d: rd[63:52] = si12 (2RI12 格式) */
+#define O_PCALAU12I 0x1a000000u /* pcalau12i: rd = PC + sext(si20<<12), 配 R_LARCH_PCALA_HI20/LO12
+                                   (原误写 0x16000000=lu32i.d; 0x1c000000 是 pcaddu12i 配 PCADD_HI20) */
 #define O_NOP    0x03400000u
 /* float moves / conversions */
 #define O_MOVGR2FR_D 0x0114a980u
@@ -329,12 +332,13 @@ static int load_symofs(int r, SValue *sv, int forstore, int *new_fc)
     int fc = sv->c.i, v = sv->r & VT_VALMASK;
     if (sv->r & VT_SYM) {
         assert(v == VT_CONST);
-        rr = is_ireg(r) ? ireg(r) : 5;
+        rr = is_ireg(r) ? ireg(r) : 12;  /* r12 = t0 (LoongArch 的 r5 是 a1 参数寄存器, 不能当 scratch) */
         /* pcalau12i rr, %pc_hi20(sym) ; addi.d rr, rr, %pc_lo12(sym)
-           LoongArch PCALA_LO12 直接取 S+A 低 12 位(无 riscv 的 HI/LO 配对机制),
+           pcalau12i 为页对齐语义(rd=(PC&~0xfff)+sext20(imm20)<<12),
+           PCALA_LO12 直接取 S+A 低 12 位(无 riscv 的 HI/LO 配对机制),
            两个重定位必须引用同一个符号。 */
         greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, sv->c.i);
-        oli20(O_PCADDU12I, rr, 0);
+        oli20(O_PCALAU12I, rr, 0);
         greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, sv->c.i);
         o2ri(O_ADDI_D, rr, rr, 0);
         *new_fc = 0;
@@ -344,7 +348,7 @@ static int load_symofs(int r, SValue *sv, int forstore, int *new_fc)
         if (fc != sv->c.i)
           tcc_error("unimp: store(giant local off) (0x%lx)", (long)sv->c.i);
         if (!imm12_ok(fc)) {
-            rr = is_ireg(r) ? ireg(r) : 5;
+            rr = is_ireg(r) ? ireg(r) : 12;  /* r12 = t0 */
             oli20(O_LU12I_D, rr, (int)((fc + 0x800) >> 12));
             o2ri(O_ADDI_D, rr, rr, fc);
             o3r(O_ADD_D, rr, rr, 22);
@@ -355,15 +359,18 @@ static int load_symofs(int r, SValue *sv, int forstore, int *new_fc)
     return rr;
 }
 
-/* Load 64-bit constant into register rr (lu12i.d + ori + lu32i.d) */
+/* Load 64-bit constant into register rr (lu12i.w + addi.d [+ lu32i.d + lu52i.d]) */
 static void load_large_constant(int rr, int fc, int hi32)
 {
     int v;
     v = (int)(((uint32_t)fc + 0x800) >> 12);
     oli20(O_LU12I_D, rr, v);
-    o2ri(O_ORI, rr, rr, fc);
+    /* 低位必须用 addi.d 而非 ori: lu12i.w 按 (fc+0x800)>>12 进位,
+       低 12 位需要符号补偿; ori 是逻辑或, fc 的 bit11=1 时产生错误值 */
+    o2ri(O_ADDI_D, rr, rr, fc);
     if (hi32) {
-        o(0x13000000u | ((hi32 & 0xfffff) << 5) | rr);  /* lu32i.d */
+        oli20(O_LU32I_D, rr, hi32);          /* rd[51:32] = hi32 低 20 位 */
+        o2ri(O_LU52I_D, rr, rr, hi32 >> 20); /* rd[63:52] = hi32 高 12 位 */
     }
 }
 
@@ -411,8 +418,8 @@ ST_FUNC void load(int r, SValue *sv)
         if (is_float(sv->type.t) && bt != VT_LDOUBLE) {
             /* load float/double constant: move bit pattern from int reg */
             uint64_t val = sv->c.i;
-            load_large_constant(6, (int)val, (int)((uint64_t)val >> 32));
-            o(O_MOVGR2FR_D | (rr << 5) | (6 << 10));  /* movgr2fr.d rr, t0 */
+            load_large_constant(13, (int)val, (int)((uint64_t)val >> 32));
+            o(O_MOVGR2FR_D | (rr << 5) | (13 << 10));  /* movgr2fr.d rr, t1 */
             return;
         }
         assert(is_ireg(r) || bt == VT_LDOUBLE);
@@ -511,7 +518,7 @@ ST_FUNC void store(int r, SValue *sv)
         fc = 0;
     } else if (fr == VT_CONST) {
         int64_t si = sv->c.i;
-        ptrreg = 5;  /* t0 */
+        ptrreg = 12;  /* t0 */
         load_large_constant(ptrreg, (int)si, (int)((uint64_t)si >> 32));
         fc = 0;
     } else
@@ -521,24 +528,28 @@ ST_FUNC void store(int r, SValue *sv)
 
 static void gcall_or_jmp(int docall)
 {
-    int tr = docall ? 1 : 5; /* ra or t0 */
+    /* rd 必须写 tr(docall 时 = ra): jirl rd, rj, 0 语义是 rd=PC+4 再跳 rj。
+       原代码 ojirl(0, ...) 用 r0 作 rd, 返回地址丢失 -> 所有函数调用返回即乱飞。
+       尾跳(docall=0)时 tr=r12(t0), 写入无害。注意 LoongArch 的 r5=a1 是
+       参数寄存器, 不能像 riscv(x5=t0)那样当 scratch。 */
+    int tr = docall ? 1 : 12; /* ra or t0 */
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
         ((vtop->r & VT_SYM) && vtop->c.i == (int)vtop->c.i)) {
         /* constant symbolic case -> pcalau12i + addi.d + jirl
            PCALA_LO12 需引用同一符号(无 riscv 的 HI/LO 配对机制) */
         greloca(cur_text_section, vtop->sym, ind, R_LARCH_PCALA_HI20, (int)vtop->c.i);
-        oli20(O_PCADDU12I, tr, 0);
+        oli20(O_PCALAU12I, tr, 0);
         greloca(cur_text_section, vtop->sym, ind, R_LARCH_PCALA_LO12, (int)vtop->c.i);
         o2ri(O_ADDI_D, tr, tr, 0);
-        ojirl(0, tr, 0);  /* jirl r0, tr, 0 */
+        ojirl(tr, tr, 0);  /* jirl tr, tr, 0 */
     } else if (vtop->r < VT_CONST) {
         int r = ireg(vtop->r);
-        ojirl(0, r, 0);   /* jirl r0, r, 0 */
+        ojirl(tr, r, 0);   /* jirl tr, r, 0 */
     } else {
         int r = TREG_RA;
         load(r, vtop);
         r = ireg(r);
-        ojirl(0, r, 0);
+        ojirl(tr, r, 0);
     }
 }
 
@@ -548,10 +559,10 @@ static void gen_bounds_call(int v)
 {
     Sym *sym = external_helper_sym(v);
     greloca(cur_text_section, sym, ind, R_LARCH_PCALA_HI20, 0);
-    oli20(O_PCADDU12I, 1, 0);
+    oli20(O_PCALAU12I, 1, 0);
     greloca(cur_text_section, sym, ind, R_LARCH_PCALA_LO12, 0);
     o2ri(O_ADDI_D, 1, 1, 0);
-    ojirl(0, 1, 0);
+    ojirl(1, 1, 0);  /* jirl ra, ra, 0: 调用需保存返回地址 */
 }
 
 static void gen_bounds_prolog(void)
@@ -707,7 +718,7 @@ ST_FUNC void gfunc_call(int nb_args)
 
     if (stack_add) {
         if (!imm12_ok(-stack_add)) {
-            int r5 = 5; /* t0 */
+            int r5 = 12; /* t0 */
             load_large_constant(r5, -stack_add, (int)((uint64_t)(-stack_add) >> 32));
             o3r(O_ADD_D, 3, 3, r5);
         }
@@ -830,7 +841,7 @@ done:
     vtop -= nb_args + 1;
     if (stack_add) {
         if (!imm12_ok(stack_add)) {
-            int r5 = 5;
+            int r5 = 12; /* t0 */
             load_large_constant(r5, stack_add, (int)((uint64_t)stack_add >> 32));
             o3r(O_ADD_D, 3, 3, r5);
         }
@@ -892,9 +903,9 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
             for (i = 0; i < regcount; i++) {
                 if (areg[prc[1+i] - 1] >= 8) {
                     assert(i == 1 && regcount == 2 && !(addr & 7));
-                    o2ri(O_LD_D, 5, 22, addr);  // ld.d t0, addr(fp)
+                    o2ri(O_LD_D, 12, 22, addr);  // ld.d t0, addr(fp)
                     addr += 8;
-                    o2ri(O_ST_D, 5, 22, loc + i*8);  // st.d t0, loc(fp)
+                    o2ri(O_ST_D, 12, 22, loc + i*8);  // st.d t0, loc(fp)
                 } else if (prc[1+i] == RC_FLOAT) {
                     o2ri((size / regcount) == 4 ? O_FST_S : O_FST_D,
                          8 + areg[1]++, 22, loc + (fieldofs[i+1] >> 4));
@@ -982,7 +993,7 @@ ST_FUNC void gfunc_epilog(void)
         d = 16;
         o2ri(O_ADDI_D, 22, 3, d - num_va_regs * 8);  // addi.d fp, sp, d
         if (!imm12_ok(v - 16)) {
-            int r5 = 5;
+            int r5 = 12;  /* t0 */
             load_large_constant(r5, v - 16, (int)((uint64_t)(v - 16) >> 32));
             o3r(O_SUB_D, 3, 3, r5);   // sub sp, sp, t0
         } else {
@@ -1037,8 +1048,8 @@ ST_FUNC void gjmp_addr(int a)
     int offs;
     if ((r + (1 << 17)) & ~((1U << 18) - 4)) {
         /* out of range: pcalau12i + addi.d + jirl */
-        o2ri(O_ADDI_D, 5, 3, 0);  /* placeholder */
-        ojirl(0, 5, 0);
+        o2ri(O_ADDI_D, 12, 3, 0);  /* placeholder (r12 = t0) */
+        ojirl(0, 12, 0);
     } else {
         offs = (int)(r >> 2);
         o(O_B | ((offs & 0xffff) << 10));
@@ -1497,14 +1508,14 @@ ST_FUNC void gen_increment_tcov (SValue *sv)
     r2 = ireg(r2);
     /* 读: pcalau12i + addi.d(r1 = &sym), PCALA_LO12 引用同一符号 */
     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
-    oli20(O_PCADDU12I, r1, 0);
+    oli20(O_PCALAU12I, r1, 0);
     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, 0);
     o2ri(O_ADDI_D, r1, r1, 0);
     o2ri(O_LD_D, r2, r1, 0);            /* ld.d r2, r1, 0 */
     o2ri(O_ADDI_D, r2, r2, 1);          /* addi.d r2, r2, 1 */
     /* 写: 重新取地址再 st.d */
     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_HI20, 0);
-    oli20(O_PCADDU12I, r1, 0);
+    oli20(O_PCALAU12I, r1, 0);
     greloca(cur_text_section, sv->sym, ind, R_LARCH_PCALA_LO12, 0);
     o2ri(O_ADDI_D, r1, r1, 0);
     o2ri(O_ST_D, r2, r1, 0);            /* st.d r2, r1, 0 */
