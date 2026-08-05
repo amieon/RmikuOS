@@ -891,9 +891,9 @@ def build_tcc_sys_files(arch: str, tcc_dir: Path, tcc_src: Path):
          tcc_src / "lib" / "runmain.c", "-o", sys_root / "runmain.o"])
 
     # include: RmikuOS 头(用户程序 include <stdio.h> 等)
-    # dirs_exist_ok=True: 每次都同步, 否则头文件修改(如 math.h)不会进镜像
     inc = sys_root / "include"
-    shutil.copytree(INCLUDE_DIR, inc, dirs_exist_ok=True)
+    if not inc.exists():
+        shutil.copytree(INCLUDE_DIR, inc)
     # TCC 编译器配套头: stddef/stdarg/stdbool/stdalign/tgmath 等
     for h in sorted((tcc_src / "include").glob("*.h")):
         if not (inc / h.name).exists():
