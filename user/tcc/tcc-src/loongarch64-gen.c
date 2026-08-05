@@ -1116,8 +1116,12 @@ static void gen_opil(int op, int ll)
     int a, b, d;
     if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
         int fc = vtop->c.i;
-        if (imm12_ok(fc) || ((op == '&' || op == '|' || op == '^')
-                             && (unsigned)fc < 0x1000)) {
+        int is_log = (op == '&' || op == '|' || op == '^');
+        /* ANDI/ORI/XORI 的 imm12 是【零扩展】(逻辑运算), 负立即数会得到
+           0x00000xxx 而非 0xFFFF...xxx —— 如 va_arg 的 "ap & ~3" (& -4)
+           若用 andi 0xffc 会把 64 位地址截成 12 位小整数!
+           逻辑运算只接受 0..4095; 算术/比较(ADDI/SLTI 符号扩展)接受 ±2048 */
+        if ((is_log && (unsigned)fc < 0x1000) || (!is_log && imm12_ok(fc))) {
             vswap();
             gv(RC_INT);
             a = ireg(vtop[0].r);
@@ -1504,7 +1508,9 @@ ST_FUNC void gen_vla_alloc(CType *type, int align)
     else
 #endif
     o2ri(O_ADDI_D, rr, rr, 15);
-    o2ri(O_ANDI, rr, rr, -16);
+    /* 对齐到 16: 不能用 andi -16(零扩展会得到 0xFF0), 用移位清低 4 位 */
+    oshift(O_SRLI_D, rr, rr, 4);
+    oshift(O_SLLI_D, rr, rr, 4);
     o3r(O_SUB_D, 3, 3, rr);
     vpop();
 }
