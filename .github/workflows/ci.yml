@@ -46,17 +46,77 @@ jobs:
       - name: 静态检查
         run: cargo clippy --workspace -- -D warnings
 
-  # 第二步:双架构并行构建 + QEMU 冒烟测试(核心)
-  test:
-    name: 构建 + QEMU 冒烟 (${{ matrix.arch }})
-    # 只跑手动触发时选中的架构
-    if: inputs.arch == 'both' || inputs.arch == matrix.arch
+  # 第二步:构建 + QEMU 冒烟测试(riscv64)
+  # 注意:不能用 matrix 做 job 级过滤(job if 在 matrix 展开前求值,matrix 不可用),
+  # 所以拆成两个独立 job,各自用 inputs 判断 —— 没选中的架构整个 job 不会启动
+  test-riscv64:
+    name: 构建 + QEMU 冒烟 (riscv64)
+    if: inputs.arch == 'both' || inputs.arch == 'riscv64'
     runs-on: ubuntu-latest
     needs: lint
-    strategy:
-      fail-fast: false      # 一个架构挂了不阻断另一个
-      matrix:
-        arch: [riscv64, loongarch64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-riscv64 qemu-system-loongarch64
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv64gc-unknown-none-elf, loongarch64-unknown-none-elf
+
+      - name: 用 first_run.sh 装齐环境(rust/工具链/依赖)
+        run: |
+          # first_run.sh 就是"环境说明书":CI 每次从干净 Ubuntu 重演它,
+          # 能跑通 = 证明别人 clone 下来也能跑。
+          # 工具链下载走 api.github.com —— runner 在 GitHub 服务器上,访问极快,
+          # 你在国内遇到的 API 被 reset 问题在 CI 里不存在。
+          bash first_run.sh
+
+      - name: 缓存构建产物(cargo 依赖 + 用户程序编译缓存)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            user/build
+          # user/build 缓存了 build.py 的增量缓存(含 sqlite3 等编译结果),
+          # 命中后 sqlite3 这种几分钟的大编译直接跳过
+          key: build-riscv64-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            build-riscv64-
+
+      - name: 构建用户程序 + rootfs + 内核
+        run: |
+          # 对应 run.sh 的构建部分(跳过最后的 QEMU 启动):
+          #   1) 编译全部用户程序(C/C++/Rust/Java/sqlite3/TCC...,sqlite3 最慢)
+          python3 user/build.py riscv64
+          #   2) 制作 ext4 rootfs + FAT16 镜像(target/fs-*.img)
+          ./user/mkfs_ext4.sh riscv64
+          #   3) 编译内核(debug,与 run.sh 默认一致)
+          cargo build --target riscv64gc-unknown-none-elf
+
+      - name: QEMU 冒烟测试(自动登录,shutdown 关机)
+        run: |
+          # 脚本内部:启动 QEMU → 输 root/root 登录 → 看到 /home/root 提示符 → shutdown
+          # 总超时 360s,失败时日志自动上传可排查
+          bash ./scripts/smoke_test.sh riscv64
+
+      - name: 上传启动日志(失败时便于排查)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-log-riscv64
+          path: /tmp/smoke_*.log
+
+  # 第二步(loongarch64):内容同上,额外缓存交叉工具链
+  test-loongarch64:
+    name: 构建 + QEMU 冒烟 (loongarch64)
+    if: inputs.arch == 'both' || inputs.arch == 'loongarch64'
+    runs-on: ubuntu-latest
+    needs: lint
     steps:
       - uses: actions/checkout@v4
 
@@ -70,14 +130,12 @@ jobs:
           targets: riscv64gc-unknown-none-elf, loongarch64-unknown-none-elf
 
       - name: 准备 loongarch64 工具链缓存目录
-        if: matrix.arch == 'loongarch64'
         run: |
           # 先让 runner 用户能写 /opt/cross-tools,cache 恢复时才不会卡权限
           sudo mkdir -p /opt/cross-tools
           sudo chown -R "$USER" /opt/cross-tools
 
       - name: 缓存 loongarch64 交叉工具链(免去每次下载)
-        if: matrix.arch == 'loongarch64'
         uses: actions/cache@v4
         with:
           path: /opt/cross-tools
@@ -85,11 +143,7 @@ jobs:
 
       - name: 用 first_run.sh 装齐环境(rust/工具链/依赖)
         run: |
-          # first_run.sh 就是"环境说明书":CI 每次从干净 Ubuntu 重演它,
-          # 能跑通 = 证明别人 clone 下来也能跑。
-          # 工具链下载走 api.github.com —— runner 在 GitHub 服务器上,访问极快,
-          # 你在国内遇到的 API 被 reset 问题在 CI 里不存在。
-          # 缓存命中时,脚本里 [ -x /opt/cross-tools/bin/...gcc ] 会直接跳过下载。
+          # 缓存命中时,脚本里 [ -x /opt/cross-tools/bin/...gcc ] 会直接跳过下载
           bash first_run.sh
 
       - name: 缓存构建产物(cargo 依赖 + 用户程序编译缓存)
@@ -100,33 +154,25 @@ jobs:
             ~/.cargo/git
             target
             user/build
-          # user/build 缓存了 build.py 的增量缓存(含 sqlite3 等编译结果),
-          # 命中后 sqlite3 这种几分钟的大编译直接跳过;key 带 arch 防止两架构互相污染
-          key: build-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
+          key: build-loongarch64-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            build-${{ matrix.arch }}-
+            build-loongarch64-
 
       - name: 构建用户程序 + rootfs + 内核
         run: |
-          # 对应 run.sh 的构建部分(跳过最后的 QEMU 启动):
-          #   1) 编译全部用户程序(C/C++/Rust/Java/sqlite3/TCC...,sqlite3 最慢)
-          python3 user/build.py ${{ matrix.arch }}
-          #   2) 制作 ext4 rootfs + FAT16 镜像(target/fs-*.img)
-          ./user/mkfs_ext4.sh ${{ matrix.arch }}
-          #   3) 编译内核(debug,与 run.sh 默认一致)
-          cargo build --target ${{ matrix.arch == 'riscv64' && 'riscv64gc-unknown-none-elf' || 'loongarch64-unknown-none' }}
+          python3 user/build.py loongarch64
+          ./user/mkfs_ext4.sh loongarch64
+          cargo build --target loongarch64-unknown-none
 
-      - name: QEMU 冒烟测试(自动登录,进入 shell 即成功)
+      - name: QEMU 冒烟测试(自动登录,shutdown 关机)
         run: |
-          # 脚本内部:启动 QEMU → 输 root/root 登录 → 看到 /home/root 提示符即通过
-          # 总超时 360s(覆盖 sqlite3 编译等慢启动),失败时日志自动上传可排查
-          bash ./scripts/smoke_test.sh ${{ matrix.arch }}
+          bash ./scripts/smoke_test.sh loongarch64
 
       - name: 上传启动日志(失败时便于排查)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-log-${{ matrix.arch }}
+          name: smoke-log-loongarch64
           path: /tmp/smoke_*.log
 
   # 第三步:打 v 标签时自动发布 Release 产物(CD,可选)
@@ -134,7 +180,7 @@ jobs:
     name: 发布 Release 产物
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test-riscv64, test-loongarch64]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
