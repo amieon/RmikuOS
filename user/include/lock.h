@@ -6,6 +6,12 @@ extern "C" {
 
 #include "syscall.h"
 
+#ifdef __TINYC__
+extern int __sync_lock_test_and_set(volatile int *ptr, int val);
+extern void __sync_synchronize(void);
+extern void __sync_lock_release(volatile int *ptr);
+#endif
+
 typedef struct {
     volatile int locked;
 } spinlock_t;
