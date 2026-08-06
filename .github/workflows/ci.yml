@@ -101,10 +101,11 @@ jobs:
           #   3) 编译内核(debug,与 run.sh 默认一致)
           cargo build --target riscv64gc-unknown-none-elf
 
-      - name: QEMU 冒烟测试(自动登录,shutdown 关机)
+      - name: QEMU 冒烟 + 回归测试(自动登录,run_all,shutdown 关机)
         run: |
-          # 脚本内部:启动 QEMU → 输 root/root 登录 → 看到 /home/root 提示符 → shutdown
-          # 总超时 360s,失败时日志自动上传可排查
+          # 脚本内部:启动 QEMU → 登录 → 跑 run_all(36 项回归,绿勾=全过)
+          #           → 检查 [RUNALL] 汇总 → shutdown
+          # 总超时默认 900s(含 tcc 现场编译),失败时日志自动上传可排查
           bash ./scripts/smoke_test.sh riscv64
 
       - name: 上传启动日志(失败时便于排查)
@@ -178,7 +179,7 @@ jobs:
           FS_SIZE_MB=96 ./user/mkfs_ext4.sh loongarch64
           cargo build --target loongarch64-unknown-none
 
-      - name: QEMU 冒烟测试(自动登录,shutdown 关机)
+      - name: QEMU 冒烟 + 回归测试(自动登录,run_all,shutdown 关机)
         run: |
           bash ./scripts/smoke_test.sh loongarch64
 

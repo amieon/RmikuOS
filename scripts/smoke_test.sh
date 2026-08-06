@@ -20,7 +20,7 @@ set -euo pipefail
 ARCH="${1:?用法: smoke_test.sh <riscv64|loongarch64>}"
 LOG="/tmp/smoke_${ARCH}.log"
 IN_FIFO="/tmp/smoke_${ARCH}.in"
-TIMEOUT_SEC="${SMOKE_TIMEOUT:-360}"
+TIMEOUT_SEC="${SMOKE_TIMEOUT:-900}"   # 含 run_all 回归(36 测试,tcc 现场编译较慢)
 LOGIN_USER="${LOGIN_USER:-root}"
 LOGIN_PASS="${LOGIN_PASS:-root}"
 SHELL_PROMPT="${SHELL_PROMPT:-/home/root}"
@@ -95,6 +95,20 @@ send "${LOGIN_PASS}"
 
 wait_for "${SHELL_PROMPT}" "shell 提示符" || exit 1
 echo "[smoke] ${ARCH}: 已进入 shell ✓"
+
+# ---- 回归测试:运行 run_all,检查汇总(绿勾 = 36 项回归全过) ----
+echo "[smoke] ${ARCH}: 发送 run_all,等待回归测试完成(可能数分钟)..."
+send "run_all"
+wait_for "[RUNALL] 汇总" "run_all 汇总" || exit 1
+
+summary="$(grep '\[RUNALL\] 汇总' "${LOG}" | tail -1)"
+echo "[smoke] ${ARCH}: ${summary}"
+failed_count="$(echo "${summary}" | sed -E 's/.* ([0-9]+) failed.*/\1/')"
+if [ -z "${failed_count}" ] || [ "${failed_count}" != "0" ]; then
+  echo "[smoke] ✗ 回归测试存在失败: ${summary}"
+  exit 1
+fi
+echo "[smoke] ${ARCH}: 回归测试全部通过 ✓"
 
 # 进入 shell 后发 shutdown,让系统正常关机、QEMU 自然退出(顺带验证关机功能)。
 # riscv64 的 shutdown 会写 SiFive Test finisher 使 QEMU 退出;
