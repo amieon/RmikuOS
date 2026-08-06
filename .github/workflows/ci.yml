@@ -141,9 +141,16 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /opt/cross-tools
-          key: loongarch64-cross-tools
+          # v2:工具链从 baseline(GCC 12.3)换成 latest(GCC 16.x,支持 -mno-relax),
+          # 必须 bump key 让旧缓存失效;以后换工具链版本时也记得改这里
+          key: loongarch64-cross-tools-v2
 
       - name: 用 first_run.sh 装齐环境(rust/工具链/依赖)
+        env:
+          # first_run.sh 默认匹配到的工具链是 baseline = GCC 12.3.0,太旧,
+          # 不支持 -mno-relax。这里固定指向 latest = GCC 16.x(与本地 15.1.0 同代)。
+          # latest/download 短链接永远指向最新 release 的对应资产
+          TOOLCHAIN_URL: https://github.com/loong64/cross-tools/releases/latest/download/x86_64-cross-tools-loongarch64-unknown-linux-gnu-latest.tar.xz
         run: |
           # 缓存命中时,脚本里 [ -x /opt/cross-tools/bin/...gcc ] 会直接跳过下载
           bash first_run.sh
@@ -164,6 +171,8 @@ jobs:
         run: |
           # loongarch64 工具链在 /opt/cross-tools/bin,仅在本步骤内补 PATH
           export PATH=/opt/cross-tools/bin:$PATH
+          # 打印工具链版本,用于与本地对比(排查 -mno-relax 不被识别的问题)
+          loongarch64-unknown-linux-gnu-gcc --version
           python3 user/build.py loongarch64
           ./user/mkfs_ext4.sh loongarch64
           cargo build --target loongarch64-unknown-none
@@ -192,6 +201,9 @@ jobs:
           targets: riscv64gc-unknown-none-elf, loongarch64-unknown-none
 
       - name: 用 first_run.sh 装齐环境(release 也要交叉工具链和 rootfs 工具)
+        env:
+          # 与 test-loongarch64 一致:固定用 latest(GCC 16.x)工具链
+          TOOLCHAIN_URL: https://github.com/loong64/cross-tools/releases/latest/download/x86_64-cross-tools-loongarch64-unknown-linux-gnu-latest.tar.xz
         run: |
           # 同上:工具链在 CI 里下载很快,且会命中上面的缓存(缓存是仓库级的,跨 job 共享)
           bash first_run.sh
