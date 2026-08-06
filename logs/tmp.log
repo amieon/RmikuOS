@@ -1,0 +1,15 @@
+root
+root
+root
+root
+root
+root
+cd /tests
+misc_math_test
+misc_printf_test
+
+lang_cpp_vector_test
+lang_cpp_string_test
+lang_cpp_map_test
+lang_cpp_set_test
+lang_cpp_random_test
