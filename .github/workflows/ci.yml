@@ -96,8 +96,8 @@ jobs:
           # 对应 run.sh 的构建部分(跳过最后的 QEMU 启动):
           #   1) 编译全部用户程序(C/C++/Rust/Java/sqlite3/TCC...,sqlite3 最慢)
           python3 user/build.py riscv64
-          #   2) 制作 ext4 rootfs + FAT16 镜像(target/fs-*.img)
-          ./user/mkfs_ext4.sh riscv64
+          #   2) 制作 ext4 rootfs + FAT16 镜像;CI 里 rootfs 较大,FS_SIZE_MB=96 覆盖默认 32M
+          FS_SIZE_MB=96 ./user/mkfs_ext4.sh riscv64
           #   3) 编译内核(debug,与 run.sh 默认一致)
           cargo build --target riscv64gc-unknown-none-elf
 
@@ -174,7 +174,8 @@ jobs:
           # 打印工具链版本,用于与本地对比(排查 -mno-relax 不被识别的问题)
           loongarch64-unknown-linux-gnu-gcc --version
           python3 user/build.py loongarch64
-          ./user/mkfs_ext4.sh loongarch64
+          # CI 里 rootfs 较大,FS_SIZE_MB=96 覆盖默认 32M(32M 会爆盘)
+          FS_SIZE_MB=96 ./user/mkfs_ext4.sh loongarch64
           cargo build --target loongarch64-unknown-none
 
       - name: QEMU 冒烟测试(自动登录,shutdown 关机)
@@ -215,8 +216,8 @@ jobs:
           export PATH=/opt/cross-tools/bin:$PATH
           python3 user/build.py riscv64
           python3 user/build.py loongarch64
-          ./user/mkfs_ext4.sh riscv64
-          ./user/mkfs_ext4.sh loongarch64
+          FS_SIZE_MB=96 ./user/mkfs_ext4.sh riscv64
+          FS_SIZE_MB=96 ./user/mkfs_ext4.sh loongarch64
           cargo build --release --target riscv64gc-unknown-none-elf
           cargo build --release --target loongarch64-unknown-none
 

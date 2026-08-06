@@ -166,7 +166,8 @@ find "$ROOT" -maxdepth 3 -print | sort
 
 # 构建镜像
 rm -f "$IMG"
-truncate -s 32M "$IMG"
+FS_SIZE_MB="${FS_SIZE_MB:-32}"
+truncate -s "${FS_SIZE_MB}M" "$IMG"
 
 mkfs.ext4 -q -F -d "$ROOT" "$IMG"
 echo "created $IMG"
