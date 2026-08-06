@@ -1,5 +1,7 @@
 # RmikuOS
 
+[![CI/CD](https://github.com/amieon/RmikuOS/actions/workflows/ci.yml/badge.svg)](https://github.com/amieon/RmikuOS/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua / Scheme** 六种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
 
 当前系统已经覆盖操作系统实验中常见的核心模块：进程与线程、虚拟内存、buddy 物理帧分配器、系统调用、VFS、多文件系统挂载、virtio 块设备、用户态 shell、环境变量、管道与重定向、信号、stride / alpha-scaled 调度器、 TCP/IP 网络协议栈与用户态 HTTP 服务器、JVM（解释器 + 装载期 AOT，双架构后端）、SQLite 3.50（自定义 VFS + 交互式 shell）、NTP 网络时间同步（墙钟 + 文件时间戳）、TCC 0.9.28（系统内 C 编译器，AOT + JIT 自托管工具链）、kilo 编辑器（ANSI 全屏编辑 + 语法高亮）、Scheme（从零手写的 Lisp 方言，尾调用优化 + 标记清除 GC），以及用于调度器实验的 workload 与自适应控制器。
@@ -40,7 +42,28 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 
 ---
 
+## CI/CD 持续集成
 
+每次提交后,GitHub Actions 自动验证双架构(手动触发,可选架构):
+
+```text
+双架构交叉编译 -> rootfs 制作 -> QEMU 启动 -> 自动登录 -> 36 项回归测试 -> 检查汇总 -> shutdown 关机
+```
+
+* 流水线文件:`.github/workflows/ci.yml`,冒烟脚本:`scripts/smoke_test.sh`
+* 触发方式:仓库 **Actions** 页 → 左侧 **CI/CD** → 右侧 **Run workflow**,选择 `riscv64` / `loongarch64` / `both`
+* 冒烟流程:启动 QEMU → 自动登录 root/root → 进入 shell 后自动执行 `run_all` 回归测试 → 检查 `[RUNALL] 汇总`(任一失败即流水线红)→ 发 `shutdown` 优雅关机
+* 构建产物(内核 ELF + rootfs + FAT 镜像)自动缓存,二次运行大幅提速
+
+### 回归测试(user/tests/)
+
+规范化测试体系,进系统后 `run_all` 一键执行全部:
+
+* **断言库 `user/include/test.h`**:`CHECK / CHECK_EQ / CHECK_NE / CHECK_LT / CHECK_LE / CHECK_GT / CHECK_GE / CHECK_STREQ`,统一 `[TEST]/[PASS]/[FAIL]` 输出,退出码 0=全过 / 1=有失败
+* **36 个测试**覆盖:进程(fork/exec/waitpid/信号)、线程、内存(mmap/堆)、文件系统(tmpfs/FAT/目录/seek/truncate/fsync)、管道、系统调用(凭证/权限/env)、SQLite 落盘、数学库、printf、setjmp、C++ 容器(vector/map/set/string/random)、语言运行时(TCC 现场编译 / Lua / Scheme / JVM)
+* 新增测试:往 `user/tests/` 放一个可执行文件即可,`run_all` 自动覆盖
+
+打 `v` 开头的标签(如 `v1.0`)时,还会自动构建双架构 release 产物并上传到 GitHub Release。
 
 ## 环境搭建
 
@@ -2033,7 +2056,7 @@ static int         sl_l_ratio_permil;   // 相位比例（exp5 用，0=等分）
 |------|------|
 | `sl_add_spin(name, tk, threads, burn)` | 全程满载 spin 组（子进程） |
 | `sl_add_spin_phased(name, tk, threads, burn, light_active)` | 四段相位 spin 组 |
-| `sl_add_jobs(name, tk, threads, period, cpu, burn)` | 周期 deadline jobs 组��独立子进程） |
+| `sl_add_jobs(name, tk, threads, period, cpu, burn)` | 周期 deadline jobs 组  独立子进程） |
 | `sl_add_jobs_parent(name, tk, threads, period, cpu, burn)` | 周期 deadline jobs 组（跑在监控进程内） |
 
 **为什么 ctrl 用 in-parent？** 控制器需要每窗口读 ctrl 的 miss/late。in-parent 组通过进程内共享计数器（`__sync_fetch_and_add`）统计，控制器零 syscall 读取。
@@ -2113,7 +2136,7 @@ if (sl_l_ratio_permil > 0) {
 - `sl_l_ratio_permil = 200` → 10/40/10/40（H 占 80%）
 - `= 0`（默认）→ 25/25/25/25 等分，exp4 不受影响
 
-### sl_phased_sleep ���— 轻相位休眠
+### sl_phased_sleep    — 轻相位休眠
 
 ```c
 static long sl_phased_sleep(const sl_group_t *g, int idx) {
@@ -2153,7 +2176,7 @@ late_delta <= safe     → safe_windows++，≥2 且可 probe → up（+inc）
 ```
 
 **调参历程**：
-- `cooldown=1 → 3`、`safe_windows>=1 → >=2`：减少 set_sched_alpha 调��频率（syscall + scale 缓存重算开销算在 ctrl_run 里，压低 ai_run）
+- `cooldown=1 → 3`、`safe_windows>=1 → >=2`：减少 set_sched_alpha 调  频率（syscall + scale 缓存重算开销算在 ctrl_run 里，压低 ai_run）
 - `inc=5`：决定稳态高度 `α_steady = (p/q)·inc/(1−b) ∝ inc`
 
 ### SPSA-AdamW —— 梯度优化
