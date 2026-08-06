@@ -20,7 +20,7 @@ set -euo pipefail
 ARCH="${1:?用法: smoke_test.sh <riscv64|loongarch64>}"
 LOG="/tmp/smoke_${ARCH}.log"
 IN_FIFO="/tmp/smoke_${ARCH}.in"
-TIMEOUT_SEC="${SMOKE_TIMEOUT:-900}"   # 含 run_all 回归(36 测试,tcc 现场编译较慢)
+TIMEOUT_SEC="${SMOKE_TIMEOUT:-3600}"   # 总超时:TCG 模拟下 36 项回归(含 tcc 现场编译/sqlite/jvm)很慢,默认 60 分钟
 LOGIN_USER="${LOGIN_USER:-root}"
 LOGIN_PASS="${LOGIN_PASS:-root}"
 SHELL_PROMPT="${SHELL_PROMPT:-/home/root}"
