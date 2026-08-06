@@ -37,4 +37,3 @@ int main() {
 
     TEST_END();
 }
-s
