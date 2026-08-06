@@ -662,6 +662,7 @@ def build_sqlite3(arch: str):
         "rmiku_vfs": src_dir / "rmiku_vfs.c",
         "rmiku_shims": src_dir / "rmiku_shims.c",
         "sqlite_main": src_dir / "sqlite_main.c",
+        "sqlite_test": src_dir / "sqlite_test.c",
     }
     files_hash = {k: file_sha256(v) for k, v in sources.items() if v.exists()}
     files_hash["__shared_deps__"] = shared_deps_hash(arch)
@@ -715,9 +716,10 @@ def build_sqlite3(arch: str):
             raise RuntimeError(f"{elf_name} produced empty ELF")
         print(f"[user] sqlite3: {elf_name} {len(data)} bytes (ELF)")
 
-    # sqlite3.elf = 交互式 shell; sqlite3_probe.elf = 原落盘探针
+    # sqlite3.elf = 交互式 shell; sqlite3_probe.elf = 原落盘探针; sqlite_test.elf = 规范化回归测试
     link("sqlite3.elf", objs["shell"])
     link("sqlite3_probe.elf", objs["sqlite_main"])
+    link("sqlite_test.elf", objs["sqlite_test"])
 
     arch_cache = get_arch_cache(arch)
     arch_cache["sqlite3"] = files_hash
@@ -828,6 +830,38 @@ def build_tcc(arch: str):
         f"-I{tcc_src}",       # TCC 自身头(tcc.h 等)
         f"-I{tcc_dir}",       # 手工 config.h
     ]
+
+    # ---- 增量缓存:所有源文件 + cflags + tccdefs.h 的联合 SHA256 ----
+    # 任何依赖变化 → 缓存失效全量重编;否则跳过 12 个 .o 的编译和链接
+    h = hashlib.sha256()
+    for f in files:
+        p = tcc_src / f
+        if p.exists():
+            h.update(file_sha256(p).encode())
+    for src in (cfg["crt0"], cfg["runtime"], LIB_DIR / "string.c",
+                tcc_src / "include" / "tccdefs.h"):
+        if Path(src).exists():
+            h.update(file_sha256(src).encode())
+    h.update(repr(cflags).encode())
+    current_hash = h.hexdigest()
+
+    arch_cache = get_arch_cache(arch)
+    tcc_cache = arch_cache.get("tcc", {})
+    elf = out / "tcc.elf"
+    if tcc_cache.get("hash") == current_hash and elf.exists():
+        print(f"[user][tcc] cache hit (SHA256 无变化), 跳过编译")
+        # 确保镜像 bin/ 里有 tcc.elf(若被清理则补复制)
+        bin_dir = BUILD_DIR / arch / "bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        if not (bin_dir / "tcc.elf").exists():
+            shutil.copy(elf, bin_dir / "tcc.elf")
+        # 系统文件被清时补生成
+        sys_root = BUILD_DIR / arch / "tcc-sys" / "usr" / "lib" / "tcc"
+        if not ((sys_root / "libc.a").exists() and (sys_root / "libtcc1.a").exists()):
+            print(f"[user][tcc] sys 文件缺失, 补生成")
+            build_tcc_sys_files(arch, tcc_dir, tcc_src)
+        return
+
     for f in files:
         o = out / (Path(f).stem + ".o")
         run([cfg["gcc"], *cflags, "-c", tcc_src / f, "-o", o])
@@ -851,6 +885,11 @@ def build_tcc(arch: str):
 
     # 6) TCC 系统文件(镜像 /usr/lib/tcc)
     build_tcc_sys_files(arch, tcc_dir, tcc_src)
+
+    # 保存 SHA256 缓存(仅在全量编译成功后)
+    arch_cache = get_arch_cache(arch)
+    arch_cache["tcc"] = {"hash": current_hash}
+    put_arch_cache(arch, arch_cache)
 
 
 def build_tcc_sys_files(arch: str, tcc_dir: Path, tcc_src: Path):

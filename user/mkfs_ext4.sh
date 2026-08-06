@@ -133,12 +133,18 @@ if [ -d "user/build/${ARCH}/gcn" ]; then
 fi
 
 # SQLite3（专门构建目录 user/build/<arch>/sqlite3/）
+# sqlite_test 是规范化回归测试 -> /tests/;其余(sqlite3 shell/探针)-> /programs/
 if [ -d "user/build/${ARCH}/sqlite3" ]; then
   for f in user/build/${ARCH}/sqlite3/*.elf; do
     [ -e "$f" ] || continue
     base="$(basename "$f" .elf)"
-    cp "$f" "$ROOT/programs/$base"
-    echo "  [sqlite3] $base -> /programs/$base"
+    if [ "$base" = "sqlite_test" ]; then
+      cp "$f" "$ROOT/tests/sqlite_test"
+      echo "  [sqlite3] sqlite_test -> /tests/sqlite_test"
+    else
+      cp "$f" "$ROOT/programs/$base"
+      echo "  [sqlite3] $base -> /programs/$base"
+    fi
   done
 fi
 
@@ -164,9 +170,10 @@ done
 echo "rootfs content:"
 find "$ROOT" -maxdepth 3 -print | sort
 
-# 构建镜像
+# 构建镜像(容量可通过 FS_SIZE_MB 覆盖;默认 96M——tests/samples/用户程序
+# 全量打进 rootfs 后 32M 已不够,loongarch64 ELF 更大更容易爆盘)
 rm -f "$IMG"
-FS_SIZE_MB="${FS_SIZE_MB:-32}"
+FS_SIZE_MB="${FS_SIZE_MB:-96}"
 truncate -s "${FS_SIZE_MB}M" "$IMG"
 
 mkfs.ext4 -q -F -d "$ROOT" "$IMG"
