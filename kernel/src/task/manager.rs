@@ -531,6 +531,7 @@ impl TaskManager {
             );
             thread.status = ThreadStatus::Blocking;
             thread.block_reason = reason;
+            thread.running_on = None;
             r
         };
 

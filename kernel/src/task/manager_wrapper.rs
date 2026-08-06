@@ -149,12 +149,12 @@ pub fn run_tasks() -> ! {
                     if thread.running_on == Some(hart) {
                         thread.running_on = None;
                     } else {
-                        log::error!(
-                            "[sched] hart {} back from tid {}, but running_on={:?}",
-                            hart,
-                            tid,
-                            thread.running_on,
-                        );
+                        // log::error!(
+                        //     "[sched] hart {} back from tid {}, but running_on={:?}",
+                        //     hart,
+                        //     tid,
+                        //     thread.running_on,
+                        // );
                         thread.running_on = None;
                     }
 
