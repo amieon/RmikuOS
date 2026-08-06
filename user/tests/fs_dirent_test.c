@@ -1,7 +1,7 @@
 #include "test.h"
 #include "dirent.h"
 
-/* 文件系统:opendir/readdir 列目录,能看到刚创建的文件 */
+/* 文件系统:POSIX opendir/readdir/closedir 列目录,能看到刚创建的文件 */
 int main() {
     TEST_START("fs_dirent");
 
