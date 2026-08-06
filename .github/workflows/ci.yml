@@ -22,9 +22,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # first_run.sh 把 loongarch64 工具链装到 /opt/cross-tools 并写进 ~/.bashrc,
-  # 但 CI 每个 step 是新的非交互 shell,不会读 ~/.bashrc,所以在这里全局补上 PATH
-  PATH: /opt/cross-tools/bin:$PATH
+  # 注意:不要在这里写 PATH: xxx:$PATH —— 它会污染所有 step(含 checkout 等
+  # 内置 action)的运行环境,runner 可能连 tar 都找不到。loongarch64 工具链
+  # 的 PATH 只在真正需要的构建步骤里局部 export。
 
 # 连续 push 时只保留最新一次检查,自动取消还在跑的旧任务(省排队时间)
 concurrency:
@@ -37,7 +37,7 @@ jobs:
     name: fmt + clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: riscv64gc-unknown-none-elf, loongarch64-unknown-none-elf
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: 安装 QEMU
         run: |
@@ -75,7 +75,7 @@ jobs:
           bash first_run.sh
 
       - name: 缓存构建产物(cargo 依赖 + 用户程序编译缓存)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -106,7 +106,7 @@ jobs:
 
       - name: 上传启动日志(失败时便于排查)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: smoke-log-riscv64
           path: /tmp/smoke_*.log
@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: 安装 QEMU
         run: |
@@ -136,7 +136,7 @@ jobs:
           sudo chown -R "$USER" /opt/cross-tools
 
       - name: 缓存 loongarch64 交叉工具链(免去每次下载)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/cross-tools
           key: loongarch64-cross-tools
@@ -147,7 +147,7 @@ jobs:
           bash first_run.sh
 
       - name: 缓存构建产物(cargo 依赖 + 用户程序编译缓存)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -160,6 +160,8 @@ jobs:
 
       - name: 构建用户程序 + rootfs + 内核
         run: |
+          # loongarch64 工具链在 /opt/cross-tools/bin,仅在本步骤内补 PATH
+          export PATH=/opt/cross-tools/bin:$PATH
           python3 user/build.py loongarch64
           ./user/mkfs_ext4.sh loongarch64
           cargo build --target loongarch64-unknown-none
@@ -170,7 +172,7 @@ jobs:
 
       - name: 上传启动日志(失败时便于排查)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: smoke-log-loongarch64
           path: /tmp/smoke_*.log
@@ -182,7 +184,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test-riscv64, test-loongarch64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: riscv64gc-unknown-none-elf, loongarch64-unknown-none-elf
@@ -195,6 +197,8 @@ jobs:
       - name: 构建双架构产物(release)
         run: |
           # 与 test job 的构建一致,但内核用 --release(发布真实产物)
+          # loongarch64 工具链仅在此步骤内补 PATH
+          export PATH=/opt/cross-tools/bin:$PATH
           python3 user/build.py riscv64
           python3 user/build.py loongarch64
           ./user/mkfs_ext4.sh riscv64
