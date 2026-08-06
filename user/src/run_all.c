@@ -4,8 +4,10 @@
 /* ============================================================================
  * run_all —— RmikuOS 测试批量执行器(进 /bin/run_all)
  *
- * 遍历 /tests/ 下所有测试程序(*_test 或 sqlite_test),逐个 fork+exec+waitpid,
- * 按退出码判定 PASS/FAIL(0=全过,1=有失败断言,127=exec 失败),最后汇总。
+ * 直接运行 /tests/ 下所有程序(该目录语义上就是"测试专区",mkfs 只放测试
+ * 可执行文件,全跑永不漏测;若混入非程序文件会 exec 失败 → 红,反而提醒)。
+ * 逐个 fork+exec+waitpid,按退出码判定 PASS/FAIL(0=全过,1=有失败断言,
+ * 127=exec 失败),最后汇总。
  *
  * 输出约定(机器可解析):
  *   [RUNALL] 共发现 N 个测试
@@ -17,13 +19,6 @@
 
 #define MAX_TESTS 128
 #define NAME_MAX_LEN 64
-
-static int is_test_name(const char *name) {
-    int len = (int)strlen(name);
-    if (len >= 6 && strcmp(name + len - 6, "_test") == 0) return 1;
-    if (strcmp(name, "sqlite_test") == 0) return 1;
-    return 0;
-}
 
 int main(void) {
     char names[MAX_TESTS][NAME_MAX_LEN];
@@ -38,11 +33,11 @@ int main(void) {
     struct dirent *d;
     while ((d = readdir(dir)) != 0) {
         if (count >= MAX_TESTS) break;
-        if (is_test_name(d->d_name)) {
-            strncpy(names[count], d->d_name, NAME_MAX_LEN - 1);
-            names[count][NAME_MAX_LEN - 1] = 0;
-            count++;
-        }
+        /* 跳过 . 和 .. */
+        if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0) continue;
+        strncpy(names[count], d->d_name, NAME_MAX_LEN - 1);
+        names[count][NAME_MAX_LEN - 1] = 0;
+        count++;
     }
     closedir(dir);
 
