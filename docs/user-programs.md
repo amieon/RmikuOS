@@ -2,7 +2,7 @@
 
 ---
 
-## User Programs in C, C++, Rust, Java and Lua
+## User Programs in C, C++, Rust, Java， Lua and scheme
 
 RmikuOS 的用户程序可以用 **C、C++、Rust, Java and Lua** 编写。前三者编译成相同格式的静态 ELF、走完全相同的系统调用 ABI（号在 `a7`/`r11`，参数在 `a0..`/`r4..`，触发 `ecall` / `syscall 0`，返回值在 `a0`/`r4`），因此在内核看来完全等价——**支持 C++ 用户程序内核侧零改动**，只是多了一条产出兼容 ELF 的编译流程。 后者通过javac编译成class文件后用cpp编写的jvm进行使用。
 
@@ -558,7 +558,7 @@ user/sqlite3/                 SQLite(自定义VFS)   /programs(sqlite3 / sqlite3
 
 ### 彩蛋：Brainfuck 解释器（8 指令的抽象语言）
 
-凑数的抽象语言彩蛋——**不算第六种用户态语言**（真正支持的语言是上面五个），只是一个 8 指令的图灵完备玩具解释器（`/programs/brainfuck`）：
+凑数的抽象语言彩蛋——**不算某个用户态语言**吧（真正支持的语言是上面几个），只是一个 8 指令的图灵完备玩具解释器（`/programs/brainfuck`）：
 
 ```
 /programs/brainfuck /codes/hello.bf     # Hello World!
