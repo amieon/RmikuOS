@@ -63,6 +63,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | [docs/user-programs.md](docs/user-programs.md) | C 分层库 / C++ `stdcompat.h` 桥接 / Rust `ulib` / 自研 JVM / Lua 5.4 / Scheme,堆分配器与裸运行时数学库 |
 | [docs/scheduler.md](docs/scheduler.md) | stride 与 alpha-scaled 调度机制,调度统计接口,SMP 与计时注意事项 |
 | [docs/experiments/](docs/experiments/) | 调度实验框架(schedlab)+ 7 篇完整实验报告:EDF 基线 / α 机制 / Edge Deadline / AIMD / 动态负载 / 相位 / SPSA-AdamW |
+| [docs/report/](docs/report/) | 启发式规则 vs 随机梯度优化:自研操作系统上的自适应调度控制器对照研究报告 |
 
 ---
 
