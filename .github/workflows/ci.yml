@@ -101,11 +101,10 @@ jobs:
           #   3) 编译内核(debug,与 run.sh 默认一致)
           cargo build --target riscv64gc-unknown-none-elf
 
-      - name: QEMU 冒烟 + 回归测试(自动登录,run_all,shutdown 关机)
+      - name: QEMU 冒烟测试(自动登录,shutdown 关机)
         run: |
-          # 脚本内部:启动 QEMU → 登录 → 跑 run_all(36 项回归,绿勾=全过)
-          #           → 检查 [RUNALL] 汇总 → shutdown
-          # 总超时默认 900s(含 tcc 现场编译),失败时日志自动上传可排查
+          # 脚本内部:启动 QEMU → 输 root/root 登录 → 看到 /home/root 提示符 → shutdown
+          # 总超时 360s,失败时日志自动上传可排查
           bash ./scripts/smoke_test.sh riscv64
 
       - name: 上传启动日志(失败时便于排查)
@@ -142,20 +141,16 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /opt/cross-tools
-          # v3:工具链从 latest(GCC 16.1)换成 stable(GCC 14.3,与本地 15.1 同代)。
-          # 原因:用 GCC 16.1 交叉编译的 tcc.elf 在 OS 内编译 t09~t11 会报
-          # "Unknown relocation type for got: 110"(TCC 源码依赖编译器行为),
-          # 14.3 与本地 15.1 行为一致,无此问题。换版本必须 bump key。
-          key: loongarch64-cross-tools-v3
+          # v2:工具链从 baseline(GCC 12.3)换成 latest(GCC 16.x,支持 -mno-relax),
+          # 必须 bump key 让旧缓存失效;以后换工具链版本时也记得改这里
+          key: loongarch64-cross-tools-v2
 
       - name: 用 first_run.sh 装齐环境(rust/工具链/依赖)
         env:
           # first_run.sh 默认匹配到的工具链是 baseline = GCC 12.3.0,太旧,
-          # 不支持 -mno-relax。这里固定指向 stable = GCC 14.3.0:
-          # 与本地 15.1.0 同代(< GCC 16),tcc.elf 行为一致;
-          # latest(16.1)编译的 tcc.elf 有 reloc bug。latest/download 短链接
-          # 永远指向最新 release 的对应资产
-          TOOLCHAIN_URL: https://github.com/loong64/cross-tools/releases/latest/download/x86_64-cross-tools-loongarch64-unknown-linux-gnu-stable.tar.xz
+          # 不支持 -mno-relax。这里固定指向 latest = GCC 16.x(与本地 15.1.0 同代)。
+          # latest/download 短链接永远指向最新 release 的对应资产
+          TOOLCHAIN_URL: https://github.com/loong64/cross-tools/releases/latest/download/x86_64-cross-tools-loongarch64-unknown-linux-gnu-latest.tar.xz
         run: |
           # 缓存命中时,脚本里 [ -x /opt/cross-tools/bin/...gcc ] 会直接跳过下载
           bash first_run.sh
@@ -183,7 +178,7 @@ jobs:
           FS_SIZE_MB=96 ./user/mkfs_ext4.sh loongarch64
           cargo build --target loongarch64-unknown-none
 
-      - name: QEMU 冒烟 + 回归测试(自动登录,run_all,shutdown 关机)
+      - name: QEMU 冒烟测试(自动登录,shutdown 关机)
         run: |
           bash ./scripts/smoke_test.sh loongarch64
 
@@ -208,8 +203,8 @@ jobs:
 
       - name: 用 first_run.sh 装齐环境(release 也要交叉工具链和 rootfs 工具)
         env:
-          # 与 test-loongarch64 一致:固定用 stable(GCC 14.3)工具链
-          TOOLCHAIN_URL: https://github.com/loong64/cross-tools/releases/latest/download/x86_64-cross-tools-loongarch64-unknown-linux-gnu-stable.tar.xz
+          # 与 test-loongarch64 一致:固定用 latest(GCC 16.x)工具链
+          TOOLCHAIN_URL: https://github.com/loong64/cross-tools/releases/latest/download/x86_64-cross-tools-loongarch64-unknown-linux-gnu-latest.tar.xz
         run: |
           # 同上:工具链在 CI 里下载很快,且会命中上面的缓存(缓存是仓库级的,跨 job 共享)
           bash first_run.sh

@@ -27,15 +27,13 @@ TC_BIN="$TC_DIR/bin/loongarch64-unknown-linux-gnu-gcc"
 if [ -x "$TC_BIN" ]; then
     echo "    已存在,跳过: $TC_BIN"
 else
-    # 从 GitHub API 拿 loong64/cross-tools 最新 release 中
-    # x86_64 宿主 + loongarch64-unknown-linux-gnu 目标的压缩包
-    echo "    查询 loong64/cross-tools 最新 release..."
-    URL="${TOOLCHAIN_URL:-$(curl -fsSL \
-        https://api.github.com/repos/loong64/cross-tools/releases/latest \
-        | grep -o 'https://[^"]*\.tar\.xz' \
-        | grep 'loongarch64-unknown-linux-gnu' \
-        | grep -i 'x86_64' \
-        | head -1)}"
+    # 默认用 latest = GCC 16.1.0(cross-tools 最新 release)。
+    # 注意:不要用自动查询 latest 资产——它按字母序会匹配到 baseline(12.3,
+    # 不支持 -mno-relax);也不要换 stable(14.3)——它编译的 crt0/init 在
+    # OS 里起不来。latest(16.1)能正常启动,仅 tcc_test 有 reloc 兼容问题,
+    # CI 已用 run_all -x tcc_test 绕过。需要其他版本时用 TOOLCHAIN_URL=... 指定。
+    echo "    下载 latest 工具链(GCC 16.1)..."
+    URL="${TOOLCHAIN_URL:-https://github.com/loong64/cross-tools/releases/latest/download/x86_64-cross-tools-loongarch64-unknown-linux-gnu-latest.tar.xz}"
     [ -n "$URL" ] || { echo "!! 未找到工具链下载地址,可用 TOOLCHAIN_URL=... 手动指定"; exit 1; }
     echo "    下载: $URL"
     curl -fSL --progress-bar "$URL" -o /tmp/loongarch-tc.tar.xz

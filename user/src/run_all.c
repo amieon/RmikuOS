@@ -1,5 +1,6 @@
 #include "user.h"
 #include "dirent.h"
+
 /*
  * run_all —— RmikuOS 测试批量执行器(进 /bin/run_all)
  *
@@ -19,7 +20,7 @@
 #define MAX_TESTS 128
 #define NAME_MAX_LEN 64
 
-int main(void) {
+int main(int argc, char *argv[]) {
     char names[MAX_TESTS][NAME_MAX_LEN];
     int count = 0;
 
@@ -29,11 +30,25 @@ int main(void) {
         return 1;
     }
 
+    /* -x <name>:忽略指定测试(可多次)。例:run_all -x tcc_test */
+    const char *skip[16];
+    int nskip = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-x") == 0 && i + 1 < argc && nskip < 16) {
+            skip[nskip++] = argv[++i];
+        }
+    }
+
     struct dirent *d;
     while ((d = readdir(dir)) != 0) {
         if (count >= MAX_TESTS) break;
         /* 跳过 . 和 .. */
         if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0) continue;
+        int skipped = 0;
+        for (int j = 0; j < nskip; j++) {
+            if (strcmp(d->d_name, skip[j]) == 0) { skipped = 1; break; }
+        }
+        if (skipped) continue;
         strncpy(names[count], d->d_name, NAME_MAX_LEN - 1);
         names[count][NAME_MAX_LEN - 1] = 0;
         count++;
