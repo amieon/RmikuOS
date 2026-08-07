@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# RmikuOS QEMU 冒烟测试(在 CI 的 Ubuntu 机器上跑,不是在你的 OS 里!)
 #
 # 逻辑:启动 QEMU → 自动登录(root/root)→ 看到 shell 提示符就算成功
 #   - 编译 sqlite3 等导致启动较慢,默认总超时 360 秒(6 分钟)
@@ -19,7 +20,7 @@ set -euo pipefail
 ARCH="${1:?用法: smoke_test.sh <riscv64|loongarch64>}"
 LOG="/tmp/smoke_${ARCH}.log"
 IN_FIFO="/tmp/smoke_${ARCH}.in"
-TIMEOUT_SEC="${SMOKE_TIMEOUT:-3600}"   # 总超时:TCG 模拟下 36 项回归(含 tcc 现场编译/sqlite/jvm)很慢,默认 40 分钟
+TIMEOUT_SEC="${SMOKE_TIMEOUT:-2400}"   # 总超时:TCG 模拟下 36 项回归(含 tcc 现场编译/sqlite/jvm)很慢,默认 40 分钟
 LOGIN_USER="${LOGIN_USER:-root}"
 LOGIN_PASS="${LOGIN_PASS:-root}"
 SHELL_PROMPT="${SHELL_PROMPT:-/home/root}"
@@ -96,10 +97,8 @@ wait_for "${SHELL_PROMPT}" "shell 提示符" || exit 1
 echo "[smoke] ${ARCH}: 已进入 shell ✓"
 
 # ---- 回归测试:运行 run_all,检查汇总(绿勾 = 36 项回归全过) ----
-# CI 默认 quick 模式(跳过 tcc_test 现场编译,TCG 模拟下太重);
-# 需要全量时设 RUN_ALL_ARGS=""(本地手动跑 run_all 亦可)
-echo "[smoke] ${ARCH}: 发送 run_all ${RUN_ALL_ARGS:-quick},等待回归测试完成(可能数分钟)..."
-send "run_all ${RUN_ALL_ARGS:-quick}"
+echo "[smoke] ${ARCH}: 发送 run_all,等待 36 项回归完成(可能数分钟)..."
+send "run_all"
 wait_for "[RUNALL] 汇总" "run_all 汇总" || exit 1
 
 # -a:测试输出可能含二进制字节,不加会把日志当 binary 导致 grep 不给匹配行
