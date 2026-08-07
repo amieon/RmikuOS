@@ -122,9 +122,16 @@ pub fn tlb_shootdown_sync() {
     for i in 0..MAX_HARTS {
         if i == my_hart { continue; }
         if HART_LOCALS[i].ready.load(Ordering::Acquire) {
+            let mut spins = 0usize;
             while !TLB_ACK[i].load(Ordering::Acquire) {
                 core::hint::spin_loop();
+                spins += 1;
+                if spins > 50_000_000 {
+                    log::error!("[ipi] TLB shootdown ACK 超时: hart {} 未响应, 放弃等待", i);
+                    break;   // 死锁变可恢复,并打印出"到底哪个核丢 ACK"
+                }
             }
         }
     }
+
 }
