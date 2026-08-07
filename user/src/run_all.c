@@ -20,9 +20,13 @@
 #define MAX_TESTS 128
 #define NAME_MAX_LEN 64
 
-int main(void) {
+int main(int argc, char *argv[]) {
     char names[MAX_TESTS][NAME_MAX_LEN];
     int count = 0;
+    /* quick 模式:跳过语言运行时回归(lang_* 每个都要启动解释器/VM,TCG 模拟下
+     * 都是分钟级;tcc_test 的 12 个源码现场编译同样昂贵),只留核心 C 功能回归,
+     * 供 CI 快速回归使用;本地想全量直接跑 run_all */
+    int quick = (argc > 1 && strcmp(argv[1], "quick") == 0);
 
     DIR *dir = opendir("/tests");
     if (!dir) {
@@ -35,6 +39,8 @@ int main(void) {
         if (count >= MAX_TESTS) break;
         /* 跳过 . 和 .. */
         if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0) continue;
+        if (quick && (strncmp(d->d_name, "lang_", 5) == 0
+                      || strcmp(d->d_name, "tcc_test") == 0)) continue;
         strncpy(names[count], d->d_name, NAME_MAX_LEN - 1);
         names[count][NAME_MAX_LEN - 1] = 0;
         count++;
