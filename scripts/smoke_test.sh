@@ -14,7 +14,7 @@
 #   LOGIN_PASS     登录密码,默认 root
 #   SHELL_PROMPT   判定"已进入 shell"的提示符关键字,默认 /home/root
 
-set -euo pipefaila
+set -euo pipefail
 
 ARCH="${1:?用法: smoke_test.sh <riscv64|loongarch64>}"
 LOG="/tmp/smoke_${ARCH}.log"
