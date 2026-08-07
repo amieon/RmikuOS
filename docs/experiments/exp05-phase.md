@@ -154,9 +154,15 @@ fixed50 在 L=80% 时 miss 只有 17.4%——H 段太短来不及崩。但这不
 
 ### 核心图
 - `exp5_advantage_vs_ratio.png` — **最关键**：x=L 段占比(20/50/80%)，y=AIMD burn 领先 fixed25 的%。三条线（aimd0/50/100）均单调递增。
+
+  ![AIMD 优势 vs L 段占比(核心图)](../../logs/sched/phase/exp5_advantage_vs_ratio.png)
 - `exp5_burn_vs_miss.png` — 3 子图（每个 ratio 一张），8 mode 的 burn vs miss 散点。
 - `exp5_alpha_traj.png` — 3 子图，每个 ratio 的 AIMD α 轨迹 + 相位背景。L=80% 时冲高最高，L=20% 时冲高最低。
+
+  ![不同 ratio 的 AIMD α 轨迹](../../logs/sched/phase/exp5_alpha_traj.png)
 - `exp5_miss_traj.png` — 3 子图，每个 ratio 的逐窗口 miss rate + 相位背景。
+
+  ![逐窗口 miss rate + 相位背景](../../logs/sched/phase/exp5_miss_traj.png)
 
 ## 调试历程
 

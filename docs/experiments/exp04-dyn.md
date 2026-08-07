@@ -123,14 +123,20 @@ AIMD 每 up/down 一次就调一次 `set_sched_alpha`（syscall + `scale_factor_
 
 ### 轨迹图
 - `exp4_alpha_traj.png` — AIMD α 轨迹 + 相位背景（L/H/L/H 四段，三起点）
+
+  ![AIMD α 轨迹:跟随负载的 L-H-L-H 波形](../../logs/sched/dyn/exp4_alpha_traj.png)
 - `exp4_miss_traj.png` — 逐窗口 miss rate + 相位背景（8 mode）
 - `exp4_ai_throughput.png` — 逐窗口 ai CPU time (run_delta) + 相位背景
 
 ### 柱状/散点
 - `exp4_phase_summary.png` — 四段相位 miss rate 柱状图（8 mode 对比）
+
+  ![四段相位 miss rate 柱状图](../../logs/sched/dyn/exp4_phase_summary.png)
 - `exp4_work_vs_miss.png` — ai_burn vs miss 散点（实际吞吐量视角）
 - `exp4_run_vs_miss.png` — ai_run vs miss 散点（CPU 分配视角）
 - `exp4_burn_vs_run.png` — ai_burn vs ai_run 散点 + fixed0 参考线（**点在参考线上方 = burn 效率高**）
+
+  ![burn vs run:点在参考线上方 = burn 效率高](../../logs/sched/dyn/exp4_burn_vs_run.png)
 - `exp4_burn_run_bars.png` — 8 mode 的 burn/run 并排柱状图（双 y 轴）
 
 ## 调试历程

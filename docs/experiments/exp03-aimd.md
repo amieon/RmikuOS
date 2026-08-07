@@ -168,8 +168,14 @@ cool:56  down:56  gray:448  hold:11  up:82
 
 ### 跨配置
 - `exp3_miss_all.png` — 4 配置 × 8 模式 miss rate 柱状图
+
+  ![miss rate 全景(4 配置 × 8 模式)](../../logs/sched/aimd/exp3_miss_all.png)
 - `exp3_alpha_traj_all.png` — 4 配置 α 轨迹（三起点收敛，x 轴归一化到 [0,1]）
+
+  ![α 轨迹:三起点收敛](../../logs/sched/aimd/exp3_alpha_traj_all.png)
 - `exp3_burn_vs_miss.png` — ai burn 迭代数 vs ctrl miss 散点（每配置）—— **真正的吞吐量**
+
+  ![ai burn vs ctrl miss:真正的吞吐量](../../logs/sched/aimd/exp3_burn_vs_miss.png)
 - `exp3_run_vs_miss.png` — ai CPU ticks (run_delta) vs ctrl miss 散点—— **CPU 分配视角**
 - `exp3_share_vs_miss.png` — ai CPU share vs ctrl miss 散点（每配置）
 - `exp3_burn_vs_run.png` — ai burn vs ai run 散点（4 配置 + fixed0 参考线，**点在参考线上方 = burn 效率高**）

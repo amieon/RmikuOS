@@ -289,11 +289,19 @@ AdamW 的 α 轨迹**方差远大于 AIMD**——这正是它的优势来源。�
 
 ### 对比图（AdamW vs AIMD）
 - `exp6_alpha_traj_adamw_vs_aimd.png` — AdamW（虚线）vs AIMD（实线）α 轨迹，3 ratio 对比。AdamW 震荡大、AIMD 稳定。
+
+  ![AdamW(虚线)vs AIMD(实线)α 轨迹](../../logs/sched/adamw/exp6_alpha_traj_adamw_vs_aimd.png)
 - `exp6_advantage_adamw_vs_aimd.png` — 两者 burn lead vs L 段比例。AdamW 线在 AIMD 线上方。
+
+  ![AdamW vs AIMD burn 领先(核心图)](../../logs/sched/adamw/exp6_advantage_adamw_vs_aimd.png)
 - `exp6_burn_vs_miss.png` — 全 mode 散点（AdamW=方块，AIMD/fixed=圆点）。AdamW 在"高 burn、低 miss"的优势区。
+
+  ![全 mode burn vs miss 散点(AdamW=方块)](../../logs/sched/adamw/exp6_burn_vs_miss.png)
 
 ### AdamW 独立图
 - `exp6_adamw_alpha_traj.png` — AdamW 三起点 α 轨迹 + target=25 参考线 + 相位背景。看 AdamW 的震荡模式。
+
+  ![AdamW 三起点 α 轨迹:高频震荡模式](../../logs/sched/adamw/exp6_adamw_alpha_traj.png)
 - `exp6_adamw_miss_traj.png` — AdamW 逐窗口 miss rate（虚线）+ fixed 基线（实线）。
 - `exp6_adamw_burn_vs_miss.png` — AdamW 独立散点 + fixed 基线。
 - `exp6_adamw_actions.png` — up/down/hold 分布柱状图。看 AdamW 的调节频率。
