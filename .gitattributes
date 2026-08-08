@@ -1,4 +1,4 @@
 user/c/lua/** linguist-vendored
-user/sqlites3/** linguist-vendored
+user/sqlite3/** linguist-vendored
 user/tcc/** linguist-vendored
 
