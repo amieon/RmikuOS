@@ -1,6 +1,4 @@
-# User-space experiment programs: important for evaluation,
-# but not representative of the kernel test-implementation language.
-user/c/lua/ linguist-vendored
-user/sqlites3/ linguist-vendored
-user/tcc/ linguist-vendored
+user/c/lua/** linguist-vendored
+user/sqlites3/** linguist-vendored
+user/tcc/** linguist-vendored
 
