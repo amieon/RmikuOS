@@ -1,9 +1,6 @@
 # User-space experiment programs: important for evaluation,
 # but not representative of the kernel test-implementation language.
-user/samples/*test* linguist-detectable=false
-user/c/lua/* linguist-detectable=false
-user/sqlites3/* linguist-detectable=false
-user/tcc/* linguist-detectable=false
-user/tcc/tcc-src/* linguist-detectable=false
-vendor/* linguist-detectable=false
-third_party/* linguist-detectable=false
+user/c/lua/ linguist-vendored
+user/sqlites3/ linguist-vendored
+user/tcc/ linguist-vendored
+
