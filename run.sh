@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cargo clean
-
 
 ARCH="${1:-riscv64}"
 MODE="${2:-debug}"
