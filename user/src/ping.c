@@ -16,12 +16,14 @@ struct icmp_hdr { unsigned char type, code; unsigned short cksum, id, seq; };
 int main(int argc, char **argv)
 {
     if (argc < 2) {
-        printf("usage: ping a.b.c.d\n");
+        printf("usage: ping <ip|hostname>\n");
         return 1;
     }
-    unsigned int target = parse_ip(argv[1]);   // "192.168.100.2" -> 0xC0A86402(主机序)
+    /* 先当点分 IP,失败则域名解析 */
+    unsigned int target = parse_ip(argv[1]);
+    if (target == 0) target = net_resolve(argv[1]);
     if (target == 0) {
-        printf("ping: bad address %s\n", argv[1]);
+        printf("ping: cannot resolve %s\n", argv[1]);
         return 1;
     }
 
