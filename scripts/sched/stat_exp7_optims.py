@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from schedlab_stat import (
     RATIOS, RATIO_LABELS, RATIO_L_PCT, color_of, add_phase_shading,
     phase_bounds_for_ratio, parse_csv, compute_run, aggregate_runs, fmt_err,
+    plot_miss_traj,
 )
 
 OPTIMS = ["sgdm", "rmsprop", "adagrad", "adamw"]
@@ -161,6 +162,30 @@ def plot_safe_zone_drift(computed, outdir):
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
+def plot_decay_step_contrib(stats, outdir):
+    """定理3 核心图: Σdecay vs Σstep 累计位移分量 (AdamW 独有的 decay 通道)。"""
+    fig, axes = plt.subplots(1, len(RATIOS), figsize=(6 * len(RATIOS), 5))
+    if len(RATIOS) == 1:
+        axes = [axes]
+    for idx, ratio in enumerate(RATIOS):
+        ax = axes[idx]
+        x = np.arange(len(OPTIMS))
+        w = 0.35
+        decays = [stats.get((ratio, m), {}).get("sum_decay_mean", 0) / 1024.0 for m in OPTIMS]
+        steps = [stats.get((ratio, m), {}).get("sum_step_mean", 0) / 1024.0 for m in OPTIMS]
+        ax.bar(x - w / 2, decays, w, color="#059669", label="Σdecay (拉向 target=25)")
+        ax.bar(x + w / 2, steps, w, color="#dc2626", label="Σstep (梯度)")
+        ax.set_xticks(x); ax.set_xticklabels(OPTIMS, fontsize=9)
+        ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
+        ax.set_ylabel("累计位移 (α点)")
+        ax.axhline(0, color="gray", lw=1)
+        ax.legend(fontsize=8)
+    fig.suptitle("Exp7 theorem-3: decay is AdamW's exclusive stabilization channel", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(outdir, "exp7_decay_step_contrib.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
 def main():
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <sexp7_optims.csv>")
@@ -184,6 +209,9 @@ def main():
     plot_alpha_traj(computed, outdir)
     plot_decay_decomposition(computed, outdir)
     plot_safe_zone_drift(computed, outdir)
+    plot_miss_traj(computed, OPTIMS, outdir, "exp7_optims_miss_traj.png",
+                   "Exp7: optimizer family miss-rate trajectory")
+    plot_decay_step_contrib(stats, outdir)
     print("\nDone.")
 
 

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from schedlab_stat import (
     RATIOS, RATIO_LABELS, RATIO_L_PCT, PHASE_NAMES, COLORS, color_of,
     phase_bounds_for_ratio, add_phase_shading, parse_csv, compute_run,
-    aggregate_runs, fmt_err,
+    aggregate_runs, fmt_err, plot_miss_traj,
 )
 
 CUBIC_MODES = ["cubic0", "cubic50", "cubic100"]
@@ -150,6 +150,9 @@ def main():
     plot_traj(computed, outdir)
     plot_overshoot(stats, outdir)
     plot_burn_vs_miss(stats, outdir)
+    plot_miss_traj(computed, ["fixed25", "aimd50", "aimd100", "cubic50", "cubic100"],
+                   outdir, "exp6_cubic_miss_traj.png",
+                   "Exp6: CUBIC vs AIMD miss-rate trajectory")
     print("\nDone.")
 
 

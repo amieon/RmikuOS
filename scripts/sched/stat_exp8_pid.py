@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from schedlab_stat import (
     RATIOS, RATIO_LABELS, RATIO_L_PCT, color_of, add_phase_shading,
     phase_bounds_for_ratio, parse_csv, compute_run, aggregate_runs, fmt_err,
+    plot_miss_traj,
 )
 
 PID_MODES = ["pid0", "pid100"]
@@ -127,6 +128,9 @@ def main():
     print_summary(stats)
     plot_traj(computed, outdir)
     plot_light_phase_slope(computed, outdir)
+    plot_miss_traj(computed, ["fixed25", "aimd50", "aimd100", "pid0", "pid100"],
+                   outdir, "exp8_pid_miss_traj.png",
+                   "Exp8: PI vs AIMD miss-rate trajectory")
     print("\nDone.")
 
 

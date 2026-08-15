@@ -105,6 +105,41 @@ def plot_arm_hist(computed, outdir):
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
 
 
+def plot_arm_by_phase(computed, outdir):
+    """分相位(L vs H)臂选择分布对比——检验无上下文的滞后(UCB 的已知弱点)。"""
+    fig, axes = plt.subplots(1, len(RATIOS), figsize=(6 * len(RATIOS), 4))
+    if len(RATIOS) == 1:
+        axes = [axes]
+    for idx, ratio in enumerate(RATIOS):
+        ax = axes[idx]
+        cnt_L = [0] * 11
+        cnt_H = [0] * 11
+        for r in computed:
+            if r["ratio"] != ratio or r["mode"] != "ucb" or "arms" not in r:
+                continue
+            wins = r["alpha_wins"]
+            if len(wins) == 0:
+                continue
+            pb = phase_bounds_for_ratio(ratio, max(wins))
+            for i, a in enumerate(r["arms"]):
+                w = wins[i]
+                if pb[0] <= w < pb[1] or pb[2] <= w < pb[3]:
+                    cnt_L[a] += 1
+                else:
+                    cnt_H[a] += 1
+        x = np.arange(11) * 10
+        w = 3.5
+        ax.bar(x - w / 2, cnt_L, w, color="#16a34a", label="L 相")
+        ax.bar(x + w / 2, cnt_H, w, color="#dc2626", label="H 相")
+        ax.axvspan(25, 50, color="#fde68a", alpha=0.3)
+        ax.set_xticks(x); ax.set_title(f"Ratio {RATIO_LABELS[ratio]}")
+        ax.set_xlabel("α (臂)"); ax.legend(fontsize=8)
+    fig.suptitle("Exp9: SW-UCB arm distribution by phase (黄带=理论临界带)", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(outdir, "exp9_ucb_arm_by_phase.png")
+    fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
+
+
 def main():
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <sexp9_ucb.csv>")
@@ -126,6 +161,7 @@ def main():
     print_summary(stats, computed)
     plot_arm_trajectory(computed, outdir)
     plot_arm_hist(computed, outdir)
+    plot_arm_by_phase(computed, outdir)
     print("\nDone.")
 
 
