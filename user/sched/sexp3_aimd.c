@@ -61,9 +61,6 @@ static void run_aimd(const cfg_t *c, int alpha0, int rep, unsigned long total) {
     setup(c);
     sl_aimd_t aimd;
     sl_aimd_init(&aimd, alpha0);
-    /* 提高退避阈值：in-parent ctrl 被主线程每 100tick 打断 1tick，
-     * late_delta 基线偏高。danger=25 太敏感，AIMD 一直退避到 0。
-     * danger=100 让 AIMD 只在严重 miss 时退避，在 edge 附近 probe up。 */
     aimd.danger_lateness = 25;
     aimd.safe_lateness = 0;
     printf("# RUN config=%s mode=aimd alpha0=%d rep=%d/3\n", c->name, alpha0, rep);
