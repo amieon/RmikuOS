@@ -169,9 +169,9 @@ static inline unsigned int parse_ip(const char *s) {
 static inline unsigned int net_resolve(const char *name) {
     unsigned int n = 0;
     while (name[n]) n++;
-    return (unsigned int)syscall3(SYS_NET_RESOLVE, (long)name, n, 0);
+    long r = syscall3(SYS_NET_RESOLVE, (long)name, n, 0);
+    return r < 0 ? 0u : (unsigned int)r;   /* 内核失败返回 -1,别让它强转成 0xFFFFFFFF */
 }
-
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,6 @@
 //DNS 客户端（RFC 1035 教学子集）：A 记录查询
 //复用 UDP socket 层，向 DNS 服务器发查询、解析响应中的 IPv4 地址。
 //不做缓存、不做 IPv6(AAAA)、不做 CNAME 展开——只取响应里的第一条 A 记录。
-
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
@@ -84,6 +83,9 @@ fn parse_name(data: &[u8], mut off: usize, out: &mut String) -> Option<usize> {
             off += 1;
             break;
         }
+        if len > 63 {
+            return None; // 0x40-0xBF 是 RFC 1035 的保留/扩展值，非指针非 label，非法
+        }
         if off + 1 + len as usize > data.len() {
             return None;
         }
@@ -98,20 +100,33 @@ fn parse_name(data: &[u8], mut off: usize, out: &mut String) -> Option<usize> {
     Some(if jumped { end } else { off })
 }
 
+/// 响应解析结果。
+enum Reply {
+    Answer(u32), // 拿到 A 记录
+    Nx(u8),      // 明确失败:rcode 非 0(NXDOMAIN/SERVFAIL)或 rcode=0 但无 A 记录,别再重发
+    Truncated,   // TC=1:响应超 512B 被截断,教学版 UDP-only 不支持 TCP 重试
+    Skip,        // 与本查询无关的包(ID 不匹配/非响应),继续等
+}
+
 /// 解析响应，校验 transaction ID 与 rcode，提取第一条 A 记录的 IPv4。
-fn parse_response(data: &[u8], id: u16) -> Option<u32> {
+/// rcode 语义:0=NoError 1=FormErr 2=ServFail 3=NXDomain 4=NotImp 5=Refused
+fn parse_response(data: &[u8], id: u16) -> Reply {
     if data.len() < 12 {
-        return None;
+        return Reply::Skip;
     }
     if u16::from_be_bytes([data[0], data[1]]) != id {
-        return None;
+        return Reply::Skip;
     }
     let flags = u16::from_be_bytes([data[2], data[3]]);
     if flags & 0x8000 == 0 {
-        return None; // QR=0，不是响应
+        return Reply::Skip; // QR=0，不是响应
     }
-    if flags & 0xF != 0 {
-        return None; // rcode != 0（如 NXDOMAIN）
+    let rcode = flags & 0xF;
+    if rcode != 0 {
+        return Reply::Nx(rcode as u8); // 服务器已明确答复(如 NXDOMAIN)，立即失败
+    }
+    if flags & 0x0200 != 0 {
+        return Reply::Truncated; // TC=1:UDP 响应被截断
     }
     let qdcount = u16::from_be_bytes([data[4], data[5]]) as usize;
     let ancount = u16::from_be_bytes([data[6], data[7]]) as usize;
@@ -120,18 +135,24 @@ fn parse_response(data: &[u8], id: u16) -> Option<u32> {
     // 跳过 question 段（QNAME + QTYPE + QCLASS）
     let mut _tmp = String::new();
     for _ in 0..qdcount {
-        off = parse_name(data, off, &mut _tmp)?;
+        off = match parse_name(data, off, &mut _tmp) {
+            Some(o) => o,
+            None => return Reply::Skip,
+        };
         if off + 4 > data.len() {
-            return None;
+            return Reply::Skip;
         }
         off += 4;
     }
     // 遍历 answer 段，找 A 记录
     for _ in 0..ancount {
         let mut _name = String::new();
-        off = parse_name(data, off, &mut _name)?;
+        off = match parse_name(data, off, &mut _name) {
+            Some(o) => o,
+            None => return Reply::Skip,
+        };
         if off + 10 > data.len() {
-            return None;
+            return Reply::Skip;
         }
         let atype = u16::from_be_bytes([data[off], data[off + 1]]);
         let aclass = u16::from_be_bytes([data[off + 2], data[off + 3]]);
@@ -139,10 +160,10 @@ fn parse_response(data: &[u8], id: u16) -> Option<u32> {
         let rdlen = u16::from_be_bytes([data[off + 8], data[off + 9]]) as usize;
         off += 10;
         if off + rdlen > data.len() {
-            return None;
+            return Reply::Skip;
         }
         if atype == 1 && aclass == 1 && rdlen == 4 {
-            return Some(u32::from_be_bytes([
+            return Reply::Answer(u32::from_be_bytes([
                 data[off],
                 data[off + 1],
                 data[off + 2],
@@ -151,7 +172,7 @@ fn parse_response(data: &[u8], id: u16) -> Option<u32> {
         }
         off += rdlen;
     }
-    None
+    Reply::Nx(0) // rcode=0 但没有 A 记录(如只有 CNAME/AAAA)
 }
 
 /// 释放一个 UDP 临时 socket（内核态直接操作 socket 表，无 fd 表可走）
@@ -168,6 +189,11 @@ pub fn resolve(name: &str) -> Option<u32> {
     if name.is_empty() || name.len() > 253 {
         return None;
     }
+    let server = dns_server();
+    if server == 0 {
+        log::warn!("[dns] no DNS server configured, skip '{}'", name);
+        return None;
+    }
     let fd = socket::socket_create(socket::SOCKET_TYPE_UDP, 0)?;
     if !socket::socket_bind(fd, 0) {
         close_socket(fd); // 端口 0 = 自动分配，失败即释放
@@ -175,7 +201,6 @@ pub fn resolve(name: &str) -> Option<u32> {
     }
 
     let id = next_id();
-    let server = dns_server();
     let query = build_query(id, name);
     let (a, b, c, d) = fmt_ip(server);
     log::info!("[dns] >>> query '{}' -> dns={}.{}.{}.{}", name, a, b, c, d);
@@ -187,9 +212,21 @@ pub fn resolve(name: &str) -> Option<u32> {
 
     let result = loop {
         crate::drivers::net::poll();
-        if let Some((_, n)) = socket::socket_recvfrom(fd, &mut buf) {
-            if let Some(ip) = parse_response(&buf[..n], id) {
-                break Some(ip);
+        if let Some((src, n)) = socket::socket_recvfrom(fd, &mut buf) {
+            // 只认 DNS 服务器发回的响应，其余来源的包忽略
+            if src.ip == server && src.port == DNS_PORT {
+                match parse_response(&buf[..n], id) {
+                    Reply::Answer(ip) => break Some(ip),
+                    Reply::Nx(rc) => {
+                        log::warn!("[dns] '{}' resolve failed, rcode={}", name, rc);
+                        break None;
+                    }
+                    Reply::Truncated => {
+                        log::warn!("[dns] '{}' response truncated (>512B)", name);
+                        break None;
+                    }
+                    Reply::Skip => {}
+                }
             }
         }
         spins += 1;

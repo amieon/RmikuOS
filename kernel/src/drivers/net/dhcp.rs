@@ -172,6 +172,9 @@ pub fn dhcp_test() {
     }
 
     set_my_ip(ack.yiaddr);
+    if ack.dns != 0 {
+        crate::drivers::net::dns::set_dns_server(ack.dns); // 服务器没给 option 6 就保留默认 10.0.2.3
+    }
     crate::drivers::net::dns::set_dns_server(ack.dns);
     let (ga, gb, gc, gd) = fmt_ip(ack.router);
     let (na, nb, nc, nd) = fmt_ip(ack.dns);
