@@ -1,11 +1,13 @@
-//DNS 客户端（RFC 1035 教学子集）：A 记录查询
-//复用 UDP socket 层，向 DNS 服务器发查询、解析响应中的 IPv4 地址。
-//不做缓存、不做 IPv6(AAAA)、不做 CNAME 展开——只取响应里的第一条 A 记录。
+//! DNS 客户端（RFC 1035 教学子集）：A 记录查询
+//! 复用 UDP socket 层，向 DNS 服务器发查询、解析响应中的 IPv4 地址。
+//! 带 16 槽 TTL 缓存；不做 IPv6(AAAA)、不做 CNAME 展开——只取响应里的第一条 A 记录。
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 
 use crate::drivers::net::socket::{self, SocketAddr, SOCKET_TABLE};
+use crate::sync::spin::Mutex;
 
 /// DNS 服务器地址，默认 slirp 内置 DNS(10.0.2.3)；DHCP 租约落地后 set_dns_server 热切换。
 static DNS_SERVER: AtomicU32 = AtomicU32::new(0x0A00_0203);
@@ -18,6 +20,74 @@ pub fn set_dns_server(ip: u32) {
 }
 
 const DNS_PORT: u16 = 53;
+
+/* ---- DNS 结果缓存(教学版:固定 16 槽 + djb2 hash,冲突直接覆盖) ---- */
+const CACHE_SIZE: usize = 16;
+const MAX_NAME_LEN: usize = 64;
+
+#[derive(Clone, Copy)]
+struct CacheEntry {
+    name: [u8; MAX_NAME_LEN], // 已归一化小写
+    name_len: usize,
+    ip: u32,
+    expire_us: u64, // 单调微秒过期时间
+}
+
+static CACHE: Mutex<[Option<CacheEntry>; CACHE_SIZE]> = Mutex::new([None; CACHE_SIZE]);
+
+/// djb2 字符串 hash
+fn hash_bytes(b: &[u8]) -> usize {
+    let mut h: usize = 5381;
+    for &c in b {
+        h = h.wrapping_mul(33).wrapping_add(c as usize);
+    }
+    h % CACHE_SIZE
+}
+
+/// ASCII 小写归一化(DNS 域名大小写不敏感),返回写入字节数
+fn ascii_lower(out: &mut [u8], s: &str) -> usize {
+    let b = s.as_bytes();
+    let n = b.len().min(out.len());
+    for i in 0..n {
+        out[i] = if b[i].is_ascii_uppercase() { b[i] + 32 } else { b[i] };
+    }
+    n
+}
+
+/// 查缓存:命中且未过期返回 IP;过期/冲突/超长都当 miss。
+fn cache_lookup(name: &str) -> Option<u32> {
+    if name.len() > MAX_NAME_LEN {
+        return None;
+    }
+    let mut lower = [0u8; MAX_NAME_LEN];
+    let n = ascii_lower(&mut lower, name);
+    let now = crate::timer::monotonic_us();
+    let cache = CACHE.lock();
+    let e = cache[hash_bytes(&lower[..n])].as_ref()?;
+    if e.name_len == n && &e.name[..n] == &lower[..n] && e.expire_us > now {
+        Some(e.ip)
+    } else {
+        None
+    }
+}
+
+/// 存缓存:TTL=0 或超长域名不缓存。
+fn cache_store(name: &str, ip: u32, ttl: u32) {
+    if ttl == 0 || name.len() > MAX_NAME_LEN {
+        return;
+    }
+    let mut lower = [0u8; MAX_NAME_LEN];
+    let n = ascii_lower(&mut lower, name);
+    let mut e = CacheEntry {
+        name: [0; MAX_NAME_LEN],
+        name_len: n,
+        ip,
+        expire_us: crate::timer::monotonic_us() + (ttl as u64) * 1_000_000,
+    };
+    e.name[..n].copy_from_slice(&lower[..n]);
+    let mut cache = CACHE.lock();
+    cache[hash_bytes(&lower[..n])] = Some(e);
+}
 
 /// 每个查询分配一个递增的 transaction ID，响应按此匹配。
 static QUERY_ID: AtomicU16 = AtomicU16::new(1);
@@ -102,10 +172,10 @@ fn parse_name(data: &[u8], mut off: usize, out: &mut String) -> Option<usize> {
 
 /// 响应解析结果。
 enum Reply {
-    Answer(u32), // 拿到 A 记录
-    Nx(u8),      // 明确失败:rcode 非 0(NXDOMAIN/SERVFAIL)或 rcode=0 但无 A 记录,别再重发
-    Truncated,   // TC=1:响应超 512B 被截断,教学版 UDP-only 不支持 TCP 重试
-    Skip,        // 与本查询无关的包(ID 不匹配/非响应),继续等
+    Answer(u32, u32), // (IPv4, TTL 秒)
+    Nx(u8),           // 明确失败:rcode 非 0(NXDOMAIN/SERVFAIL)或 rcode=0 但无 A 记录,别再重发
+    Truncated,        // TC=1:响应超 512B 被截断,教学版 UDP-only 不支持 TCP 重试
+    Skip,             // 与本查询无关的包(ID 不匹配/非响应),继续等
 }
 
 /// 解析响应，校验 transaction ID 与 rcode，提取第一条 A 记录的 IPv4。
@@ -156,19 +226,17 @@ fn parse_response(data: &[u8], id: u16) -> Reply {
         }
         let atype = u16::from_be_bytes([data[off], data[off + 1]]);
         let aclass = u16::from_be_bytes([data[off + 2], data[off + 3]]);
-        // data[off+4..off+8] 是 TTL，跳过
+        let ttl = u32::from_be_bytes([data[off + 4], data[off + 5], data[off + 6], data[off + 7]]);
         let rdlen = u16::from_be_bytes([data[off + 8], data[off + 9]]) as usize;
         off += 10;
         if off + rdlen > data.len() {
             return Reply::Skip;
         }
         if atype == 1 && aclass == 1 && rdlen == 4 {
-            return Reply::Answer(u32::from_be_bytes([
-                data[off],
-                data[off + 1],
-                data[off + 2],
-                data[off + 3],
-            ]));
+            return Reply::Answer(
+                u32::from_be_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]),
+                ttl,
+            );
         }
         off += rdlen;
     }
@@ -188,6 +256,12 @@ fn close_socket(fd: usize) {
 pub fn resolve(name: &str) -> Option<u32> {
     if name.is_empty() || name.len() > 253 {
         return None;
+    }
+    // 先查缓存,命中直接返回
+    if let Some(ip) = cache_lookup(name) {
+        let (a, b, c, d) = fmt_ip(ip);
+        log::info!("[dns] cache hit '{}' -> {}.{}.{}.{}", name, a, b, c, d);
+        return Some(ip);
     }
     let server = dns_server();
     if server == 0 {
@@ -216,7 +290,10 @@ pub fn resolve(name: &str) -> Option<u32> {
             // 只认 DNS 服务器发回的响应，其余来源的包忽略
             if src.ip == server && src.port == DNS_PORT {
                 match parse_response(&buf[..n], id) {
-                    Reply::Answer(ip) => break Some(ip),
+                    Reply::Answer(ip, ttl) => {
+                        cache_store(name, ip, ttl);
+                        break Some(ip);
+                    }
                     Reply::Nx(rc) => {
                         log::warn!("[dns] '{}' resolve failed, rcode={}", name, rc);
                         break None;
