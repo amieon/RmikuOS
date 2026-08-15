@@ -140,3 +140,23 @@ pub fn sys_net_set_ip(ip: usize) -> isize {
 pub fn sys_net_get_ip() -> isize {
     crate::drivers::net::ip::my_ip() as isize
 }
+
+/// resolve(name_ptr, name_len) -> 主机序 IPv4 / -1
+/// 阻塞式 DNS 查询，失败返回 -1。
+pub fn sys_net_resolve(name_ptr: usize, name_len: usize) -> isize {
+    if name_len == 0 || name_len > 253 {
+        return -1;
+    }
+    let data = match read_current_user_bytes(name_ptr, name_len) {
+        Some(d) if d.len() == name_len => d,
+        _ => return -1,
+    };
+    let name = match core::str::from_utf8(&data) {
+        Ok(n) => n,
+        Err(_) => return -1,
+    };
+    match crate::drivers::net::dns::resolve(name) {
+        Some(ip) => ip as isize,
+        None => -1,
+    }
+}

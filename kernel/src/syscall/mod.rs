@@ -96,6 +96,7 @@ pub const SYSCALL_NET_SEND: usize = 108;
 pub const SYSCALL_NET_RECV: usize = 109;
 pub const SYSCALL_NET_SET_IP: usize = 110;
 pub const SYSCALL_NET_GET_IP: usize = 111;
+pub const SYSCALL_NET_RESOLVE: usize = 112;
 
 use core::{sync::atomic::{AtomicUsize, Ordering}};
 
@@ -202,6 +203,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_NET_RECV => net::sys_net_recv(args[0],args[1],args[2]),
         SYSCALL_NET_SET_IP => net::sys_net_set_ip(args[0]),
         SYSCALL_NET_GET_IP => net::sys_net_get_ip(),
+        SYSCALL_NET_RESOLVE => net::sys_net_resolve(args[0], args[1]),
 
         _ => {
             log::warn!(

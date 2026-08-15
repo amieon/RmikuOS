@@ -172,6 +172,7 @@ pub fn dhcp_test() {
     }
 
     set_my_ip(ack.yiaddr);
+    crate::drivers::net::dns::set_dns_server(ack.dns);
     let (ga, gb, gc, gd) = fmt_ip(ack.router);
     let (na, nb, nc, nd) = fmt_ip(ack.dns);
     log::info!(

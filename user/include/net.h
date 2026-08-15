@@ -165,6 +165,13 @@ static inline unsigned int parse_ip(const char *s) {
     return v;
 }
 
+/* DNS 解析:"www.example.com" -> 主机序 IPv4;失败返回 0(0.0.0.0 视为失败) */
+static inline unsigned int net_resolve(const char *name) {
+    unsigned int n = 0;
+    while (name[n]) n++;
+    return (unsigned int)syscall3(SYS_NET_RESOLVE, (long)name, n, 0);
+}
+
 
 #ifdef __cplusplus
 }

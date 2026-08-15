@@ -7,6 +7,7 @@ pub mod udp;
 pub mod tcp;
 pub mod socket;
 pub mod dhcp;
+pub mod dns;
 
 use core::sync::atomic::{AtomicBool, Ordering};
 

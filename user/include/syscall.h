@@ -98,6 +98,8 @@ extern "C" {
 #define SYS_NET_RECV                 109
 #define SYS_NET_SET_IP               110
 #define SYS_NET_GET_IP               111
+#define SYS_NET_RESOLVE              112
+
 
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
