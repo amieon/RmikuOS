@@ -246,9 +246,7 @@ fn parse_response(data: &[u8], id: u16) -> Reply {
 /// 释放一个 UDP 临时 socket（内核态直接操作 socket 表，无 fd 表可走）
 fn close_socket(fd: usize) {
     let mut table = SOCKET_TABLE.lock();
-    if fd < table.len() {
-        table[fd] = None;
-    }
+    socket::release_slot(&mut table, fd);
 }
 
 /// 解析域名，返回主机序 IPv4；失败返回 None。

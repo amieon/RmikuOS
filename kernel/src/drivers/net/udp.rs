@@ -94,7 +94,7 @@ pub fn input(packet: &[u8], src_ip: u32, dst_ip: u32) {
 
     // 投递到 socket 接收队列
     let mut table = SOCKET_TABLE.lock();
-    for s in table.iter_mut().flatten() {
+    for s in table.slots.iter_mut().flatten() {
         if let Socket::Udp(sock) = s {
             if sock.local_port == dst_port {
                 if sock.rx_queue.len() < 64 {

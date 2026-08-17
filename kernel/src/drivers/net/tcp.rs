@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap; // 加在 VecDeque 那行旁边
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 use crate::drivers::net::ip::{checksum as ip_checksum, send as ip_send, my_ip};
-use crate::drivers::net::socket::{Socket, SocketAddr, SOCKET_TABLE};
+use crate::drivers::net::socket::{alloc_slot, release_slot, Socket, SocketAddr, SOCKET_TABLE};
 use crate::println;
 use crate::sync::spin::Mutex;
 
@@ -457,10 +457,6 @@ fn send_segment(local_port: u16, remote: SocketAddr, seq: u32, ack: u32, flags: 
     ip_send(remote.ip, 6, &pkt);
 }
 
-fn alloc_slot(table: &[Option<Socket>; 8]) -> Option<usize> {
-    table.iter().position(|s| s.is_none())
-}
-
 /// 处理累积 ACK,返回本次新确认的段数(供 CUBIC 增窗)
 fn process_ack(t: &mut TcpSocket, ack: u32) -> u32 {
     let now = now_ms();
@@ -518,7 +514,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
     let mut table = SOCKET_TABLE.lock();
 
     let mut idx: Option<usize> = None;
-    for (i, s) in table.iter().enumerate() {
+    for (i, s) in table.slots.iter().enumerate() {
         if let Some(Socket::Tcp(t)) = s {
             if t.state != TcpState::Listen && t.local_port == dst_port && t.remote == Some(remote) {
                 idx = Some(i);
@@ -527,7 +523,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
         }
     }
     if idx.is_none() {
-        for (i, s) in table.iter().enumerate() {
+        for (i, s) in table.slots.iter().enumerate() {
             if let Some(Socket::Tcp(t)) = s {
                 if t.state == TcpState::Listen && t.local_port == dst_port {
                     idx = Some(i);
@@ -540,12 +536,12 @@ pub fn input(segment: &[u8], src_ip: u32) {
         Some(i) => i,
         None => return,
     };
-    let is_listener = matches!(&table[i], Some(Socket::Tcp(t)) if t.state == TcpState::Listen);
+    let is_listener = matches!(&table.slots[i], Some(Socket::Tcp(t)) if t.state == TcpState::Listen);
     if is_listener {
         if flags & SYN == 0 {
             return;
         }
-        let child_idx = match alloc_slot(&table) {
+        let child_idx = match alloc_slot(&mut table) {
             Some(c) => c,
             None => return,
         };
@@ -560,7 +556,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
         child.rcv_nxt = seq.wrapping_add(1);
         child.tx_unacked.push_back(TxSeg::new(isn, SYN | ACK, Vec::new()));
         child.rto_deadline = now_ms() + child.rto_ms;
-        table[child_idx] = Some(Socket::Tcp(child));
+        table.slots[child_idx] = Some(Socket::Tcp(child));
         send_segment(dst_port, remote, isn, seq.wrapping_add(1), SYN | ACK, &[]);
         return;
     }
@@ -568,7 +564,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
     let mut push_accept: Option<(usize, usize)> = None;
     let mut free_slot = false;
     {
-        let t = match table[i].as_mut().and_then(as_tcp_mut) {
+        let t = match table.slots[i].as_mut().and_then(as_tcp_mut) {
             Some(t) => t,
             None => return,
         };
@@ -670,15 +666,15 @@ pub fn input(segment: &[u8], src_ip: u32) {
         }
     }
     if let Some((p, child)) = push_accept {
-        if let Some(Socket::Tcp(l)) = &mut table[p] {
+        if let Some(Socket::Tcp(l)) = &mut table.slots[p] {
             l.accept_queue.push_back(child);
         }
     }
     if free_slot {
-        if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) {
+        if let Some(t) = table.slots[i].as_mut().and_then(as_tcp_mut) {
             dump_stats(i, t, "fin");
         }
-        table[i] = None;
+        release_slot(&mut table, i);
     }
 }
 
@@ -687,9 +683,9 @@ pub fn input(segment: &[u8], src_ip: u32) {
 pub fn tick() {
     let now = now_ms();
     let mut table = SOCKET_TABLE.lock();
-    for i in 0..table.len() {
+    for i in 0..table.slots.len() {
         let mut free = false;
-        if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) {
+        if let Some(t) = table.slots[i].as_mut().and_then(as_tcp_mut) {
             if t.state == TcpState::TimeWait {
                 if now >= t.time_wait_deadline {
                     free = true;
@@ -729,10 +725,10 @@ pub fn tick() {
             }
         }
         if free {
-            if let Some(t) = table[i].as_mut().and_then(as_tcp_mut) {
+            if let Some(t) = table.slots[i].as_mut().and_then(as_tcp_mut) {
                 dump_stats(i, t, "tick");
             }
-            table[i] = None;
+            release_slot(&mut table, i);
         }
 
     }
@@ -743,7 +739,7 @@ pub fn tick() {
 pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
     {
         let mut table = SOCKET_TABLE.lock();
-        let t = match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+        let t = match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
             Some(t) => t,
             None => return -1,
         };
@@ -770,7 +766,7 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
         crate::drivers::net::poll();
         {
             let table = SOCKET_TABLE.lock();
-            match table.get(fd).and_then(|s| s.as_ref()).and_then(as_tcp) {
+            match table.slots.get(fd).and_then(|s| s.as_ref()).and_then(as_tcp) {
                 Some(t) if t.state == TcpState::Established => return 0,
                 Some(t) if t.state == TcpState::Closed => return -1,
                 None => return -1,
@@ -788,7 +784,7 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
 
 pub fn listen(fd: usize) -> isize {
     let mut table = SOCKET_TABLE.lock();
-    match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+    match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
         Some(t) if t.state == TcpState::Closed && t.local_port != 0 => {
             t.state = TcpState::Listen;
             0
@@ -803,10 +799,10 @@ pub fn accept(fd: usize) -> Option<(usize, SocketAddr)> {
         crate::drivers::net::poll();
         {
             let mut table = SOCKET_TABLE.lock();
-            match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+            match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
                 Some(l) if l.state == TcpState::Listen => {
                     if let Some(child) = l.accept_queue.pop_front() {
-                        if let Some(Socket::Tcp(c)) = &table[child] {
+                        if let Some(Socket::Tcp(c)) = &table.slots[child] {
                             if let Some(r) = c.remote {
                                 return Some((child, r));
                             }
@@ -828,7 +824,7 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
     loop {
         {
             let mut table = SOCKET_TABLE.lock();
-            let t = match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+            let t = match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
                 Some(t) => t,
                 None => return -1,
             };
@@ -875,7 +871,7 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
         crate::drivers::net::poll();
         {
             let mut table = SOCKET_TABLE.lock();
-            match table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+            match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
                 Some(t) => {
                     if let Some(mut chunk) = t.rx_queue.pop_front() {
                         if chunk.is_empty() && t.rst {
@@ -909,7 +905,7 @@ pub fn close(fd: usize) -> isize {
     let mut table = SOCKET_TABLE.lock();
     let mut free = false;
     let mut ok = true;
-    if let Some(t) = table.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+    if let Some(t) = table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
         match t.state {
             TcpState::Established => {
                 let seq = t.snd_nxt;
@@ -939,10 +935,10 @@ pub fn close(fd: usize) -> isize {
         ok = false;
     }
     if free {
-        if let Some(t) = table[fd].as_mut().and_then(as_tcp_mut) {
+        if let Some(t) = table.slots[fd].as_mut().and_then(as_tcp_mut) {
             dump_stats(fd, t, "close");
         }
-        table[fd] = None;
+        release_slot(&mut table, fd);
     }
     if ok { 0 } else { -1 }
 }

@@ -115,14 +115,17 @@ pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize) -> isize {
 pub fn sys_net_close(fd: usize) -> isize {
     let is_tcp = {
         let table = socket::SOCKET_TABLE.lock();
-        matches!(table.get(fd), Some(Some(socket::Socket::Tcp(_))))
+        matches!(table.slots.get(fd), Some(Some(socket::Socket::Tcp(_))))
     };
     if is_tcp {
         tcp::close(fd)
     } else {
         let mut table = socket::SOCKET_TABLE.lock();
-        match table.get_mut(fd) {
-            Some(slot) if slot.is_some() => { *slot = None; 0 }
+        match table.slots.get(fd) {
+            Some(Some(_)) => {
+                socket::release_slot(&mut table, fd);
+                0
+            }
             _ => -1,
         }
     }
