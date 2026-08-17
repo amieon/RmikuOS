@@ -144,10 +144,10 @@ pub fn dhcp_test() {
     let xid = 0x3903_F326; // 教学版固定 xid
     let discover = build_packet(xid, T_DISCOVER, None, None);
     log::info!("[dhcp] >>> DISCOVER");
-    udp::send_broadcast(CLIENT_PORT, SERVER_PORT, &discover);
+    udp::send_broadcast(0, CLIENT_PORT, SERVER_PORT, &discover); // 无 IP 阶段:源 0.0.0.0
 
     let offer = match wait_reply(fd, xid, &[T_OFFER], &|| {
-        udp::send_broadcast(CLIENT_PORT, SERVER_PORT, &build_packet(xid, T_DISCOVER, None, None));
+        udp::send_broadcast(0, CLIENT_PORT, SERVER_PORT, &build_packet(xid, T_DISCOVER, None, None));
     }) {
         Some(o) => o,
         None => return,
@@ -158,10 +158,10 @@ pub fn dhcp_test() {
 
     let request = build_packet(xid, T_REQUEST, Some(offer.yiaddr), Some(offer.server_id));
     log::info!("[dhcp] >>> REQUEST");
-    udp::send_broadcast(CLIENT_PORT, SERVER_PORT, &request);
+    udp::send_broadcast(0, CLIENT_PORT, SERVER_PORT, &request);
 
     let ack = match wait_reply(fd, xid, &[T_ACK, T_NAK], &|| {
-        udp::send_broadcast(CLIENT_PORT, SERVER_PORT, &request);
+        udp::send_broadcast(0, CLIENT_PORT, SERVER_PORT, &request);
     }) {
         Some(r) => r,
         None => return,
@@ -175,7 +175,6 @@ pub fn dhcp_test() {
     if ack.dns != 0 {
         crate::drivers::net::dns::set_dns_server(ack.dns); // 服务器没给 option 6 就保留默认 10.0.2.3
     }
-    crate::drivers::net::dns::set_dns_server(ack.dns);
     let (ga, gb, gc, gd) = fmt_ip(ack.router);
     let (na, nb, nc, nd) = fmt_ip(ack.dns);
     log::info!(
