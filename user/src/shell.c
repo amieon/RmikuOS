@@ -1597,9 +1597,121 @@ static int run_node(char *cmd, int background) {
     return run_external(exp_argc, exp_argv, background);
 }
 
+/* ---- 命令替换 $() / 反引号 ---- */
+static int cmdsub_depth = 0;
+#define CMDSUB_MAX_DEPTH 8
+
+/* 执行子命令并捕获 stdout(经临时文件),返回捕获字符串(静态缓冲,已去尾部换行) */
+static const char *capture_cmd(const char *cmd) {
+    if (cmdsub_depth >= CMDSUB_MAX_DEPTH) return "";
+    cmdsub_depth++;
+
+    static char tmp[48];
+    static char buf[1024];
+    snprintf(tmp, sizeof tmp, "/tmp/.cmdsub%d", cmdsub_depth);
+
+    isize pid = fork();
+    if (pid == 0) {
+        /* 子进程: stdout 重定向到临时文件后执行(内置+外部命令通吃) */
+        int fd = open(tmp, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        if (fd < 0) exit(1);
+        dup2(fd, 1);
+        close(fd);
+        char cmd_copy[LINE_SIZE];
+        copy_str(cmd_copy, cmd, LINE_SIZE);
+        execute_line(cmd_copy);       /* 复用整行执行,支持 ; && || 与嵌套替换 */
+        fflush(stdout);
+        exit(0);
+    } else if (pid > 0) {
+        int status = 0;
+        while (waitpid(pid, &status, 0) < 0) yield();
+    }
+
+    buf[0] = 0;
+    int fd = open(tmp, O_RDONLY);
+    if (fd >= 0) {
+        int n = read(fd, buf, sizeof buf - 1);
+        if (n > 0) buf[n] = 0; else buf[0] = 0;
+        close(fd);
+    }
+    unlink(tmp);
+
+    /* POSIX 语义: 命令替换结果去掉尾部的所有换行 */
+    int len = strlen_(buf);
+    while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) buf[--len] = 0;
+
+    cmdsub_depth--;
+    return buf;
+}
+
+/* 处理单个命令替换: src[i] 指向 "$(" 或 "`",提取子命令执行,结果写入 out,返回新的源索引 */
+static int do_cmdsub(char *src, int i, char *out, int *o, int dollar_paren) {
+    int cmd_start = dollar_paren ? i + 2 : i + 1;
+    int k = cmd_start;
+    int depth = 1;
+    char close = dollar_paren ? ')' : '`';
+    while (src[k]) {
+        if (dollar_paren && src[k] == '(') depth++;
+        else if (src[k] == close) {
+            depth--;
+            if (depth == 0) break;
+        }
+        k++;
+    }
+    if (src[k] != close) {
+        /* 没配对,原样输出该字符 */
+        out[(*o)++] = src[i++];
+        return i;
+    }
+
+    char cmd[LINE_SIZE];
+    int cl = k - cmd_start;
+    if (cl >= LINE_SIZE - 1) cl = LINE_SIZE - 1;
+    for (int t = 0; t < cl; t++) cmd[t] = src[cmd_start + t];
+    cmd[cl] = 0;
+
+    const char *r = capture_cmd(cmd);
+    for (int t = 0; r[t] && *o < LINE_SIZE - 1; t++) out[(*o)++] = r[t];
+    return k + 1;   /* 跳过整个 $(...) / `...` */
+}
+
+/* 扫描整行,把 $(...) 与 `...` 替换为命令输出(单引号内不处理) */
+static void expand_cmdsub(char *line) {
+    char out[LINE_SIZE];
+    int o = 0;
+    int i = 0;
+    int squote = 0;
+    while (line[i] && o < LINE_SIZE - 1) {
+        char c = line[i];
+        if (squote) {
+            out[o++] = line[i++];
+            if (c == '\'') squote = 0;
+            continue;
+        }
+        if (c == '\'') {
+            squote = 1;
+            out[o++] = line[i++];
+            continue;
+        }
+        if (c == '$' && line[i+1] == '(') {
+            i = do_cmdsub(line, i, out, &o, 1);
+            continue;
+        }
+        if (c == '`') {
+            i = do_cmdsub(line, i, out, &o, 0);
+            continue;
+        }
+        out[o++] = line[i++];
+    }
+    out[o] = 0;
+    copy_str(line, out, LINE_SIZE);
+}
+
 /* 执行一行输入（处理 ; 和 && || 逻辑链） */
 static int execute_line(char *line) {
     int last_status = 0;
+
+    expand_cmdsub(line);   /* 命令替换必须在语句/逻辑分割之前完成 */
 
     /* 按 ; 分割语句 */
     char line_copy[LINE_SIZE];
