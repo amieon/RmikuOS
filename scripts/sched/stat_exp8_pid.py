@@ -52,10 +52,14 @@ def plot_traj(computed, outdir):
                     and len(r.get("alpha_traj", [])) > 0]
             if not reps:
                 continue
-            gmin = min(len(r["alpha_traj"]) for r in reps)
-            aligned = np.array([r["alpha_traj"][:gmin] for r in reps])
+            # NaN 填充到最长 rep: 某 rep 的 A 行截尾只造成断点, 不再截断均值
+            maxlen = max(len(r["alpha_traj"]) for r in reps)
+            aligned = np.full((len(reps), maxlen), np.nan)
+            for i, r in enumerate(reps):
+                aligned[i, :len(r["alpha_traj"])] = r["alpha_traj"]
             ls = "-" if mode.startswith("aimd") else "--"
-            ax.plot(np.arange(gmin), aligned.mean(axis=0), ls, color=color_of(mode), lw=2, label=mode)
+            ax.plot(np.arange(maxlen), np.nanmean(aligned, axis=0), ls,
+                    color=color_of(mode), lw=2, label=mode)
         max_w = max((max(r["alpha_wins"]) for r in computed
                      if r["ratio"] == ratio and len(r.get("alpha_wins", [])) > 0), default=100)
         add_phase_shading(ax, phase_bounds_for_ratio(ratio, max_w), 105)
@@ -93,9 +97,9 @@ def plot_light_phase_slope(computed, outdir):
             xs.append(RATIO_L_PCT[ratio]); ys.append(slope)
         if xs:
             ax.plot(xs, ys, "o-", color=color_of(mode), ms=8, label=mode)
-    ax.axhline(5, color="gray", ls=":", lw=1, label="AIMD +5/窗")
+    ax.axhline(5, color="gray", ls=":", lw=1, label="AIMD +5/win")
     ax.set_xlabel("L-segment Proportion (%)")
-    ax.set_ylabel("轻相位爬升速率 (α点/窗)")
+    ax.set_ylabel("light-phase climb rate (α/win)")
     ax.set_title("Exp8 core: PI climbs light phase far slower than AIMD")
     ax.legend(fontsize=8)
     fig.tight_layout()

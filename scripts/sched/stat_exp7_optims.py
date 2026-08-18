@@ -32,14 +32,16 @@ def print_summary(stats):
     print("=" * 130)
     for ratio in RATIOS:
         print(f"\n--- RATIO {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%) ---")
-        print(f"{'mode':>9}  {'miss%':>18}  {'α_steady':>8}  {'Σstep':>10}  "
-              f"{'Σdecay':>10}  {'Σstep/窗':>9}  {'Σdecay/窗':>10}")
+        print(f"{'mode':>9}  {'miss%':>18}  {'sh_ai':>7}  {'ai_burn':>9}  {'ai_run':>9}  "
+              f"{'α_steady':>8}  {'Σstep':>10}  {'Σdecay':>10}  {'Σstep/窗':>9}  {'Σdecay/窗':>10}")
         print("-" * 130)
         for mode in OPTIMS:
             s = stats.get((ratio, mode))
             if not s:
                 continue
             print(f"{mode:>9}  {fmt_err(s.get('miss_rate_mean',0), s.get('miss_rate_hi',0), s.get('miss_rate_lo',0))}  "
+                  f"{s.get('share_ai_mean',0):>7.1f}  {s.get('ai_burn_mean',0):>9.0f}  "
+                  f"{s.get('run_ai_mean',0):>9.0f}  "
                   f"{s.get('alpha_steady_mean',0):>8.1f}  "
                   f"{s.get('sum_step_mean',0):>10.0f}  {s.get('sum_decay_mean',0):>10.0f}  "
                   f"{s.get('sum_step_mean',0)/2400 if s.get('nreps',1) else 0:>9.1f}  "
@@ -59,9 +61,13 @@ def plot_alpha_traj(computed, outdir):
                     and len(r.get("alpha_traj", [])) > 0]
             if not reps:
                 continue
-            gmin = min(len(r["alpha_traj"]) for r in reps)
-            aligned = np.array([r["alpha_traj"][:gmin] for r in reps])
-            ax.plot(np.arange(gmin), aligned.mean(axis=0), color=color_of(mode), lw=2, label=mode)
+            # NaN 填充到最长 rep: 短 rep 只造成断点, 不再截断均值曲线
+            maxlen = max(len(r["alpha_traj"]) for r in reps)
+            aligned = np.full((len(reps), maxlen), np.nan)
+            for i, r in enumerate(reps):
+                aligned[i, :len(r["alpha_traj"])] = r["alpha_traj"]
+            ax.plot(np.arange(maxlen), np.nanmean(aligned, axis=0),
+                    color=color_of(mode), lw=2, label=mode)
         max_w = max((max(r["alpha_wins"]) for r in computed
                      if r["ratio"] == ratio and len(r.get("alpha_wins", [])) > 0), default=100)
         add_phase_shading(ax, phase_bounds_for_ratio(ratio, max_w), 105)
@@ -91,11 +97,11 @@ def plot_decay_decomposition(computed, outdir):
         r = reps[0]
         wins = r["alpha_wins"]
         ax.plot(wins, r["alpha_traj"], color="#111", lw=1.5, label="α")
-        ax.plot(wins, r["step"] / 1024.0, color="#dc2626", lw=1, label="step (α点/窗)")
-        ax.plot(wins, r["decay"] / 1024.0, color="#059669", lw=1, label="decay (α点/窗)")
+        ax.plot(wins, r["step"] / 1024.0, color="#dc2626", lw=1, label="step (α/win)")
+        ax.plot(wins, r["decay"] / 1024.0, color="#059669", lw=1, label="decay (α/win)")
         ax.axhline(0, color="gray", ls="--", lw=0.8)
         ax.axhline(25, color="#7c3aed", ls=":", lw=1, label="target=25")
-        ax.set_title(f"Ratio {RATIO_LABELS[ratio]}: AdamW α + step/decay 分量(×1/1024)")
+        ax.set_title(f"Ratio {RATIO_LABELS[ratio]}: AdamW α + step/decay components (x1/1024)")
         ax.set_xlabel("Window"); ax.legend(fontsize=8)
     fig.tight_layout()
     out = os.path.join(outdir, "exp7_adamw_decay_decomp.png")
@@ -153,7 +159,7 @@ def plot_safe_zone_drift(computed, outdir):
                     lw=1.5, label=f"{mode}@R{RATIO_LABELS[ratio]}")
             break  # 每 mode 一个 ratio 的段即可
     ax.axhline(25, color="gray", ls=":", lw=1, label="target=25")
-    ax.set_xlabel("连续 miss=0 段内的窗口序号")
+    ax.set_xlabel("window # in miss=0 segment")
     ax.set_ylabel("α")
     ax.set_title("Exp7 theorem-3: safe-zone drift (adamw vs no-decay optimizers)")
     ax.legend(fontsize=8)
@@ -173,11 +179,11 @@ def plot_decay_step_contrib(stats, outdir):
         w = 0.35
         decays = [stats.get((ratio, m), {}).get("sum_decay_mean", 0) / 1024.0 for m in OPTIMS]
         steps = [stats.get((ratio, m), {}).get("sum_step_mean", 0) / 1024.0 for m in OPTIMS]
-        ax.bar(x - w / 2, decays, w, color="#059669", label="Σdecay (拉向 target=25)")
-        ax.bar(x + w / 2, steps, w, color="#dc2626", label="Σstep (梯度)")
+        ax.bar(x - w / 2, decays, w, color="#059669", label="Σdecay (pull to target=25)")
+        ax.bar(x + w / 2, steps, w, color="#dc2626", label="Σstep (gradient)")
         ax.set_xticks(x); ax.set_xticklabels(OPTIMS, fontsize=9)
         ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
-        ax.set_ylabel("累计位移 (α点)")
+        ax.set_ylabel("cumulative displacement (α)")
         ax.axhline(0, color="gray", lw=1)
         ax.legend(fontsize=8)
     fig.suptitle("Exp7 theorem-3: decay is AdamW's exclusive stabilization channel", fontsize=13)
