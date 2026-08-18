@@ -2,7 +2,7 @@
 
 [![CI/CD](https://github.com/amieon/RmikuOS/actions/workflows/ci.yml/badge.svg)](https://github.com/amieon/RmikuOS/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-RmikuOS 是一个从零实现的教学型操作系统内核，支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell，从真实 virtio 块设备加载 ext4 rootfs，并运行 **C / C++ / Rust / Java / Lua / Scheme** 六种语言的用户程序，内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式），配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环，还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘），并通过 TCP/IP 协议栈向宿主机浏览器提供真实的 HTTP 服务。
+RmikuOS 是一个从零实现的教学型操作系统内核,支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell,从真实 virtio 块设备加载 ext4 rootfs,并运行 **C / C++ / Rust / Java / Lua / Scheme** 六种语言的用户程序,内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式）,配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环,还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘）,并通过自研 TCP/IP 协议栈（含 DHCP 自动配置、DNS 域名解析）向宿主机浏览器提供真实的 HTTP 服务。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -44,7 +44,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 虚拟内存 | buddy 帧分配器、多级页表、ELF 加载、mmap | |
 | 文件系统 | VFS 多挂载:ext4 rootfs / tmpfs / FAT16(落盘) | `lseek` / `ftruncate` / `fsync` / `rename`(号段 64–68) |
 | 调度器 | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应 | 内置调度实验框架(exp00–exp06,见 docs) |
-| 网络 | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd |
+| 网络 | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd + 域名解析(TTL 缓存) |
 | 用户程序 | C / C++ / Rust / Java(JVM + 装载期 AOT)/ Lua 5.4 / Scheme | syscall ABI 语言无关 |
 | 系统内工具链 | TCC 0.9.28(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器 | 编辑-编译-运行闭环 |
 | 应用验证 | VeryEasyGCN(78.3% 准确率)、RmikuRay(定点光线追踪)、GCN/GAT | |
@@ -59,7 +59,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 |------|------|
 | [docs/shell.md](docs/shell.md) | Shell 词法 / 管道 / 重定向 / 环境变量 / `$?` 展开,TCC 自托管工具链,kilo 编辑器 |
 | [docs/filesystem.md](docs/filesystem.md) | VFS 与 fd table,ext4 / tmpfs / FAT16,文件系统调用 64–68,virtio 块设备 |
-| [docs/network.md](docs/network.md) | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / ICMP / NTP),socket 100–109,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
+| [docs/network.md](docs/network.md) | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / DNS / ICMP / NTP),socket 100–112,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
 | [docs/user-programs.md](docs/user-programs.md) | C 分层库 / C++ `stdcompat.h` 桥接 / Rust `ulib` / 自研 JVM / Lua 5.4 / Scheme,堆分配器与裸运行时数学库 |
 | [docs/scheduler.md](docs/scheduler.md) | stride 与 alpha-scaled 调度机制,调度统计接口,SMP 与计时注意事项 |
 | [docs/experiments/](docs/experiments/) | 调度实验框架(schedlab)+ 7 篇完整实验报告:EDF 基线 / α 机制 / Edge Deadline / AIMD / 动态负载 / 相位 / SPSA-AdamW |
@@ -142,7 +142,7 @@ user/
 ├── include/                C/C++ 用户库(分层头文件,types/syscall/flag/io/process/fs/mem/lock/thread/sched/ipc/net/string/fmt/env + user.h 汇总)
 │   └── my/                 C++ 桥接层与裸运行时库(stdcompat.h / cmath.h / vector.h ...)
 ├── lib/                    crt0 与 syscall_<arch>.S、cpp_runtime.cpp
-├── src/                    C 系统程序 → /bin(ls / cat / echo / grep / shell)
+├── src/                    C 系统程序 → /bin(ls / cat / echo / grep / shell / nslookup)
 ├── tests/                  C / 单文件 Rust / 单文件 C++ 测试程序 → /tests
 ├── c/                      C 项目型构建目录(多文件工程 httpd、lua)→ /programs
 ├── cpp/                    C++ 项目型构建目录(装载期 AOT 的 JVM)→ /programs
@@ -196,14 +196,14 @@ virtio-mmio virtio-pci
 网络子系统与文件系统并列,挂在同一棵调用树下,并与块设备共享 virtio transport:
 
 ```text
-User Programs (httpd / udp_test / tcp_test)
-                │  socket syscalls(100–109 专用号段)
+User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
+                │  socket syscalls(100–112 专用号段)
                 ▼
-            Socket 层(UDP / TCP 统一 socket table)
+            Socket 层(UDP / TCP 统一 socket table,动态扩容 + free list)
                 │
         TCP(状态机/滑窗/Jacobson-Karn RTO)   UDP   ICMP
                 │
-        IPv4  ·  DHCP(自动配置地址)
+        IPv4  ·  DHCP(自动配置地址) ·  DNS(域名解析 + TTL 缓存)
                 │
         ARP(缓存 + 挂起队列)
                 │
@@ -221,7 +221,7 @@ User Programs (httpd / udp_test / tcp_test)
 * **内核基础**:双架构启动 / trap / syscall / 进程线程 / 信号投递与用户态隔离 / buddy 帧分配器 / SMP 多核(per-hart timer、IPI reschedule、TLB shootdown)
 * **调度器**:stride scheduling + alpha-scaled(连续 alpha `[0,100]`,纯整数幂)+ AIMD / SPSA-AdamW 自适应策略,完整调度实验框架与 7 篇实验报告(见 [docs/experiments/](docs/experiments/))
 * **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)
-* **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / ICMP)、socket 100–109、用户态 httpd(宿主机浏览器访问)、TFTP / NTP / wget、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×)
+* **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP)、socket 100–112、用户态 httpd(宿主机浏览器访问)、DNS 客户端(压缩指针解析 + TTL 缓存,nslookup)、TFTP / NTP / wget(wget/ping/ntpdate 支持域名参数)、shell 命令替换 `$()` / 反引号、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×)
 * **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器
 * **验证**:36 项 CI 回归测试、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
 
@@ -232,8 +232,9 @@ User Programs (httpd / udp_test / tcp_test)
 ### Network
 
 * RTO 实验补强:交错（interleaved）重复尺寸扫描,消除跨 session 漂移图中的「版本–顺序」混杂
-* socket 表扩容与 SYN 队列(当前 8 槽 + TIME_WAIT 10s,快速连发时 SYN 被静默丢弃)
+* SYN 队列与 listen backlog(当前待接受队列直通,socket 表已动态扩容 + free list,MAX_FD 4096)
 * DHCP 租约续期(T1 / T2)
+* DNS:CNAME 链追踪 / 多服务器 fallback / 域名合法性预检
 * socket fd 与文件 fd 的统一 fd 表
 * 并发 httpd:每连接一个用户态线程(`thread_create` 已就位)
 
