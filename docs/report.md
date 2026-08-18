@@ -296,6 +296,10 @@ reward = 10000 − loss          # 只罚 miss，不奖吞吐
 
 三个 ratio 全部成立（40/10：6.9→7.3 vs 7.5→8.0；10/40：19.5 vs 25.5）。**带 decay 先验的 AdamW 追平了启发式的 miss（~7%），但吞吐低 ~10%，且没有在任何指标上反超；同家族无先验的三兄弟 miss 高达 32~51%（25/25），10/40 下 rmsprop 达 65%**——优化器家族内部发生分裂，分水岭只有一行 decay（机制见 §6.3）。 这与 v0.1 稿「AdamW 全面碾压」的结论相反——旧结论是跨批次漂移（旧 AdamW 跑在更快主机）与 ratio 实现 bug 共同造成的假象。
 
+![AIMD 三起点 α 轨迹](logs/sched/all/exp10_fam_aimd_alpha_traj.png)
+
+*图：AIMD 三个起点（0/50/100）的 α 轨迹在 3 ratios 下快速汇流到同一包络带——起点鲁棒性的直接可视化。*
+
 #### 5.2.4 发现 3：PI 的稳态与起点非单调
 
 |                 | pid0 | pid50    | pid100 |
@@ -340,7 +344,19 @@ miss 代价**全在高 α 一侧**：α 低侧几乎免费（地板 miss），α
 
 数据两面印证：(a) adamw 的 α_steady 在 3 起点 × 3 ratios 下全部回落至 21.5~30.6，围绕锚点 25——落点由先验决定；三兄弟落点 42~72，由「漂到哪算哪」决定，随 ratio 与起点漂移。(b) exp07 分量恒等式 `α(t+1)=α(t)−step+decay` 离线重放 2204 窗失配 0，且安全区 α−25 按每窗 2% 几何衰减——AdamW 的稳态归位可完全归因于 decay 项。
 
+![AdamW 三起点 α 轨迹](logs/sched/all/exp10_fam_adamw_alpha_traj.png)
+
+*图（上）：AdamW 三个起点全部被 decay 拉回锚点 25 附近的窄带——注意 adamw0 是被 decay 从下方拉起的：先验既是刹车也是油门。*
+
+![三兄弟 α 轨迹](logs/sched/all/exp10_fam_optim_alpha_traj.png)
+
+*图（下）：同批同图的三兄弟——集体漂在高位下不来。上下的对照即「家族分裂」本身。*
+
 一句话：三兄弟与 AdamW 的分水岭不是优化公式，而是**有没有一股梯度消失时不消失的力**。这也是发现 1「先验/探索」维度最干净的同家族消融——同一梯度估计器、同一 loss、同一起点，唯一结构差异就是那一行 decay。
+
+![AdamW 分量分解](logs/sched/all/exp10_adamw_decomp.png)
+
+*图：adamw50 @25/25 rep1 的分量时序（A 行 loss/g/step/decay 直接作图）。H 段 loss 冒尖、|g| 与 |step| 跟随发力；L 段三者集体消失，只剩 decay（绿）全程存活——「梯度消失时不消失的力」的单 run 特写。*
 
 ### 6.4 PID 为什么非单调：双吸引子 + 不可逆过冲
 
@@ -348,6 +364,10 @@ miss 代价**全在高 α 一侧**：α 低侧几乎免费（地板 miss），α
 - **α≈36 是稳定平衡**：H 段 late_delta 恰好 ≈ target=10 → e≈0 → 不动。
 
 pid100 从 100 出发，H 段首窗的 kp·Δe 冲量（−40~−60 点/窗）越过 α=36，直接砸穿到钳位边界 0，而 0 处无爬升信号，于是**永久停住**。pid50 的冲量小，恰好落在平衡点。**起点决定吸引子，且过冲不可逆——因为控制器在消灭误差的同时，也消灭了自己的驱动信号。** 这与 exp08 的「自毁信号」是同一机制的同批复现。
+
+![PI 三起点 α 轨迹](logs/sched/all/exp10_fam_pid_alpha_traj.png)
+
+*图：同一个 PI 控制器的三种命运——pid100 在首个 H 段砸穿至钳位边界 0，pid50 滑入 α≈36 平衡点，pid0 贴地不动。起点决定吸引子。*
 
 ### 6.5 综合
 
@@ -450,7 +470,8 @@ AIMD 的「阈值动作 + 显式试探 + 冻结」恰好是这两个维度的最
 ## 附录 B：数据来源与复现
 
 - 实验框架：`user/include/schedlab.h`、`user/sched/sexp10_all.c`；
-- 统计脚本：`scripts/sched/stat_exp10_all.py`（流式解析，~300 万行不驻内存）；
+- 统计脚本：`scripts/sched/stat_exp10_all.py`（流式解析，~300 万行不驻内存；另输出每家族的 α 轨迹图与吞吐-miss 二维图 `exp10_fam_*`）；
+- 分量分解图脚本：`scripts/sched/plot_exp10_adamw_decomp.py`（A 行定点分量 → loss/|g|/|step|/|decay| 四联时序图）；
 - 原始数据：`logs/sched/all/sexp10_all.csv`（189 runs）；
 - 图表：`logs/sched/all/exp10_*.png`（稳态柱状图 / 同起点轨迹 / trade-off 前沿散点 / miss 轨迹）；
 - 复现：进入 RmikuOS shell 执行 `./sched/sexp10_all > /tmp/sexp10_all.csv`，用 `stat_exp10_all.py` 处理。
