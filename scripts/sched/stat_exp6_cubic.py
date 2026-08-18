@@ -58,11 +58,14 @@ def plot_traj(computed, outdir):
                     and len(r.get("alpha_traj", [])) > 0]
             if not reps:
                 continue
-            gmin = min(len(r["alpha_traj"]) for r in reps)
-            aligned = np.array([r["alpha_traj"][:gmin] for r in reps])
-            mean = aligned.mean(axis=0)
+            # NaN 填充到最长 rep: 短 rep 只造成断点, 不再截断均值曲线
+            maxlen = max(len(r["alpha_traj"]) for r in reps)
+            aligned = np.full((len(reps), maxlen), np.nan)
+            for i, r in enumerate(reps):
+                aligned[i, :len(r["alpha_traj"])] = r["alpha_traj"]
+            mean = np.nanmean(aligned, axis=0)
             ls = "-" if mode.startswith("aimd") else "--"
-            ax.plot(np.arange(gmin), mean, ls, color=color_of(mode), lw=2, label=mode)
+            ax.plot(np.arange(maxlen), mean, ls, color=color_of(mode), lw=2, label=mode)
         max_w = max((max(r["alpha_wins"]) for r in computed
                      if r["ratio"] == ratio and len(r.get("alpha_wins", [])) > 0), default=100)
         add_phase_shading(ax, phase_bounds_for_ratio(ratio, max_w), 105)
@@ -90,7 +93,7 @@ def plot_overshoot(stats, outdir):
             ax.bar(x + off, vals, w * 0.9, color=color_of(mode),
                    edgecolor="black", linewidth=0.5, label=mode)
     ax.set_xticks(x); ax.set_xticklabels([RATIO_LABELS[r] for r in RATIOS])
-    ax.set_ylabel("n_down (退避次数)")
+    ax.set_ylabel("n_down (back-off count)")
     ax.set_title("Exp6 core hypothesis: CUBIC overshoots less (fewer α-down moves)")
     ax.legend(fontsize=8)
     fig.tight_layout()
