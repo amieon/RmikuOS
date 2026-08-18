@@ -66,9 +66,9 @@ def plot_arm_trajectory(computed, outdir):
         max_w = max(wins) if len(wins) else 100
         add_phase_shading(ax, phase_bounds_for_ratio(ratio, max_w), 105)
         # 理论临界带标记
-        ax.axhspan(25, 50, color="#fde68a", alpha=0.35, label="真实临界带(exp4 校准)")
+        ax.axhspan(25, 50, color="#fde68a", alpha=0.35, label="critical band (exp4-calibrated)")
         ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
-        ax.set_xlabel("Window"); ax.set_ylabel("α (选中的臂)")
+        ax.set_xlabel("Window"); ax.set_ylabel("α (selected arm)")
         ax.set_ylim(-5, 105)
         ax.legend(fontsize=7)
     fig.suptitle("Exp9: SW-UCB arm selection trajectory", fontsize=13)
@@ -97,9 +97,9 @@ def plot_arm_hist(computed, outdir):
         colors = ["#fbbf24" if 25 <= a * 10 <= 50 else "#94a3b8" for a in range(11)]
         ax.bar(xs, ys, width=8, color=colors, edgecolor="black", linewidth=0.5)
         ax.set_title(f"Ratio {RATIO_LABELS[ratio]} (L={RATIO_L_PCT[ratio]}%)")
-        ax.set_xlabel("α (臂)"); ax.set_ylabel("选择次数")
+        ax.set_xlabel("α (arm)"); ax.set_ylabel("count")
         ax.axvspan(25, 50, color="#fde68a", alpha=0.3)
-    fig.suptitle("Exp9: SW-UCB arm selection histogram (黄带=理论临界带)", fontsize=13)
+    fig.suptitle("Exp9: SW-UCB arm selection histogram (yellow = critical band)", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     out = os.path.join(outdir, "exp9_ucb_arm_hist.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
@@ -129,12 +129,12 @@ def plot_arm_by_phase(computed, outdir):
                     cnt_H[a] += 1
         x = np.arange(11) * 10
         w = 3.5
-        ax.bar(x - w / 2, cnt_L, w, color="#16a34a", label="L 相")
-        ax.bar(x + w / 2, cnt_H, w, color="#dc2626", label="H 相")
+        ax.bar(x - w / 2, cnt_L, w, color="#16a34a", label="L phase")
+        ax.bar(x + w / 2, cnt_H, w, color="#dc2626", label="H phase")
         ax.axvspan(25, 50, color="#fde68a", alpha=0.3)
         ax.set_xticks(x); ax.set_title(f"Ratio {RATIO_LABELS[ratio]}")
-        ax.set_xlabel("α (臂)"); ax.legend(fontsize=8)
-    fig.suptitle("Exp9: SW-UCB arm distribution by phase (黄带=理论临界带)", fontsize=13)
+        ax.set_xlabel("α (arm)"); ax.legend(fontsize=8)
+    fig.suptitle("Exp9: SW-UCB arm distribution by phase (yellow = critical band)", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     out = os.path.join(outdir, "exp9_ucb_arm_by_phase.png")
     fig.savefig(out); print(f"[saved] {out}"); plt.close(fig)
