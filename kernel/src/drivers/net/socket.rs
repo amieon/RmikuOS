@@ -92,9 +92,9 @@ pub fn socket_create(stype: usize, protocol: usize) -> Option<usize> {
     let mut table = SOCKET_TABLE.lock();
     let fd = alloc_slot(&mut table)?;
     table.slots[fd] = match stype {
-        SOCKET_TYPE_TCP => Socket::Tcp(TcpSocket::new()),
-        SOCKET_TYPE_UDP => Socket::Udp(UdpSocket::new(0)),
-        SOCKET_TYPE_RAW if protocol == 1 => Socket::Raw(RawSocket::new(1)),
+        SOCKET_TYPE_TCP => Some(Socket::Tcp(TcpSocket::new())),
+        SOCKET_TYPE_UDP => Some(Socket::Udp(UdpSocket::new(0))),
+        SOCKET_TYPE_RAW if protocol == 1 => Some(Socket::Raw(RawSocket::new(1))),
         _ => {
             release_slot(&mut table, fd); // 类型不支持,退还槽位
             return None;
