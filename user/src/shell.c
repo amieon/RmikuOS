@@ -231,7 +231,7 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
         "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir", "rename", "mv",
         "whoami", "chmod", "chown",
         "shutdown", "ls", "cat", "clear", "jobs",
-        "export", "env", "unset", NULL
+        "export", "env", "unset", "source", NULL
     };
 
     for (int i = 0; builtins[i] && count < max_matches; i++) {
@@ -918,16 +918,22 @@ static void print_help(void) {
     fputs("  rmdir <path>\n", stdout);
     fputs("  whoami              (print effective user name)\n", stdout);
     fputs("  chmod <mode> <path> (mode is octal, e.g. 755 / 0644)\n", stdout);
+    fputs("  chown <uid> <gid> <path>  (root only)\n", stdout);
     fputs("  rename <old> <new> (mv <old> <new> also works; ...)\n",stdout);
     fputs("  jobs\n", stdout);
     fputs("  clear\n", stdout);
     fputs("  export NAME=VALUE   (set env var; $VAR / ${VAR} / $? expands in commands)\n", stdout);
     fputs("  env                 (print all env vars)\n", stdout);
     fputs("  unset NAME          (remove env var)\n", stdout);
+    fputs("  source <script>     (run shell commands from a file)\n", stdout);
     fputs("  variable expansion: $VAR, ${VAR}, $? (last exit code)\n", stdout);
     fputs("    'single quotes' protect $; \"double quotes\" still expand $ (bash style)\n", stdout);
     fputs("  shutdown\n", stdout);
     fputs("\nexternal commands are in $PATH (/bin, /tests, /programs):\n", stdout);
+    fputs("  filesystem: ls, cat, echo, grep, time\n", stdout);
+    fputs("  network:     nslookup <host> [host ...], wget <url> [out], ping <host>\n", stdout);
+    fputs("               ntpdate [server] [port], tftp <remote> [local], httpd [file]\n", stdout);
+    fputs("               getip, setip <a.b.c.d>\n", stdout);
     fputs("  try: ls /bin\n\n", stdout);
 }
 

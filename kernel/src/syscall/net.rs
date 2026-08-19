@@ -1,3 +1,6 @@
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 use crate::drivers::net::socket::{self, SocketAddr};
 use crate::drivers::net::tcp;
 use crate::task::{read_current_user_bytes, write_current_user_bytes};
@@ -162,4 +165,49 @@ pub fn sys_net_resolve(name_ptr: usize, name_len: usize) -> isize {
         Some(ip) => ip as isize,
         None => -1,
     }
+}
+
+pub fn sys_net_resolve_many(names_ptr: usize, lens_ptr: usize,
+                            out_ptr: usize, count: usize) -> isize {
+    if count == 0 || count > 64 {
+        return -1; // 上限防滥用
+    }
+    // ① 拷入指针数组 + 长度数组(各 count 个 usize)
+    let nptrs = match read_current_user_bytes(names_ptr, count * 8) {
+        Some(v) if v.len() == count * 8 => v,
+        _ => return -1,
+    };
+    let lens = match read_current_user_bytes(lens_ptr, count * 8) {
+        Some(v) if v.len() == count * 8 => v,
+        _ => return -1,
+    };
+
+    let mut names: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::with_capacity(count);
+    for i in 0..count {
+        let p = usize::from_ne_bytes(nptrs[i * 8..i * 8 + 8].try_into().unwrap());
+        let l = usize::from_ne_bytes(lens[i * 8..i * 8 + 8].try_into().unwrap());
+        if l == 0 || l > 253 {
+            return -1;
+        }
+        let b = match read_current_user_bytes(p, l) {
+            Some(v) if v.len() == l => v,
+            _ => return -1,
+        };
+        match core::str::from_utf8(&b) {
+            Ok(s) => names.push(s.to_string()),
+            Err(_) => return -1,
+        }
+    }
+
+    let refs: alloc::vec::Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+    let results = crate::drivers::net::dns::resolve_many(&refs);
+
+    let mut out = alloc::vec::Vec::with_capacity(count * 4);
+    for r in results {
+        out.extend_from_slice(&r.unwrap_or(0).to_ne_bytes());
+    }
+    if write_current_user_bytes(out_ptr, &out).is_none() {
+        return -1;
+    }
+    count as isize
 }
