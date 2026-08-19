@@ -2,8 +2,10 @@
 //! 复用 UDP socket 层，向 DNS 服务器发查询、解析响应中的 IPv4 地址。
 //! 带 16 槽 TTL 缓存；不做 IPv6(AAAA)、不做 CNAME 展开——只取响应里的第一条 A 记录。
 
+use alloc::collections::BTreeMap;
 use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::vec;
+use alloc::vec::{Vec};
 use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 
 use crate::drivers::net::socket::{self, SocketAddr, SOCKET_TABLE};
@@ -318,4 +320,94 @@ pub fn resolve(name: &str) -> Option<u32> {
 
     close_socket(fd);
     result
+}
+
+/// 批量解析域名，返回与输入一一对应的结果数组（单个失败置 None，不影响其他）。
+/// 并发：一个 UDP socket 一次发出 N 个查询，按 transaction ID 分发填充——
+/// N 个查询并行飞行 ≈ 1 个 RTT，而不是串行的 N × RTT。
+pub fn resolve_many(names: &[&str]) -> Vec<Option<u32>> {
+    let mut out = vec![None; names.len()];
+    if names.is_empty() {
+        return out;
+    }
+    let server = dns_server();
+    if server == 0 {
+        log::warn!("[dns] no DNS server configured, skip {} names", names.len());
+        return out;
+    }
+
+    let fd = match socket::socket_create(socket::SOCKET_TYPE_UDP, 0) {
+        Some(f) => f,
+        None => {
+            log::warn!("[dns] socket table full, batch failed");
+            return out;
+        }
+    };
+    if !socket::socket_bind(fd, 0) {
+        close_socket(fd);
+        return out;
+    }
+
+    let mut pending: BTreeMap<u16, (usize, Vec<u8>, u32)> = BTreeMap::new();
+    for (i, name) in names.iter().enumerate() {
+        let id = next_id();
+        let query = build_query(id, name);
+        socket::socket_sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
+        pending.insert(id, (i, query, 1));
+        log::info!("[dns] >>> batch#{} '{}' id={}", i, name, id);
+    }
+
+
+    let mut buf = [0u8; 512];
+    let mut spins = 0usize;
+    while !pending.is_empty() {
+        crate::drivers::net::poll();
+        if let Some((src, n)) = socket::socket_recvfrom(fd, &mut buf) {
+            if src.ip == server && src.port == DNS_PORT {
+                // 先读包的 ID 验明正身，在 pending 里才解析（多路复用的关键一步）
+                let pkt_id = u16::from_be_bytes([buf[0], buf[1]]);
+                if let Some(&(idx, _, _)) = pending.get(&pkt_id) {
+                    match parse_response(&buf[..n], pkt_id) {
+                        Reply::Answer(ip, ttl) => {
+                            out[idx] = Some(ip);
+                            cache_store(names[idx], ip, ttl);
+                            pending.remove(&pkt_id);
+                        }
+                        Reply::Nx(rc) => {
+                            log::warn!("[dns] '{}' resolve failed, rcode={}", names[idx], rc);
+                            pending.remove(&pkt_id); // 明确失败，不等了
+                        }
+                        Reply::Truncated => {
+                            log::warn!("[dns] '{}' response truncated (>512B)", names[idx]);
+                            pending.remove(&pkt_id);
+                        }
+                        Reply::Skip => {}
+                    }
+                }
+            }
+        }
+        spins += 1;
+        if spins % 5_000_000 == 0 {
+            let mut to_resend: Vec<(u16, Vec<u8>)> = Vec::new();
+            for (&id, &(_, ref q, sent)) in pending.iter() {
+                if sent < 4 {
+                    to_resend.push((id, q.clone()));
+                }
+            }
+            for (id, q) in to_resend {
+                log::info!("[dns] resend id={}", id);
+                socket::socket_sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &q);
+                if let Some(e) = pending.get_mut(&id) {
+                    e.2 += 1;
+                }
+            }
+        }
+        if spins >= 30_000_000 {
+            log::warn!("[dns] batch timeout, give up on {} names", pending.len());
+            break;
+        }
+    }
+
+    close_socket(fd);
+    out
 }
