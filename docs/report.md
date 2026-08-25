@@ -53,7 +53,7 @@ RmikuOS 实现 **α-scaled 调度**：多线程任务的有效票数按 `scale(�
 - **系统**：在从零实现的内核中实现 α-scaled 调度与五类自适应控制器（全部定点运算，无浮点），并搭建可复现的实验框架 schedlab；
 - **方法**：提出「同一批次」的对照方法论，以 `burn/run` 作为跨方法可比性的 QC 判据，消除跨批次主机漂移对 `ai_burn` 的污染（§2.6）；
 - **发现**：五类方法家族的稳态落点可由「信号结构 + 先验/探索」两个维度解释；AIMD 帕累托最优，梯度法/控制法/学习法均未超越启发式；
-- **数据**：189 runs 同批统一矩阵、原始 CSV、统计脚本、图表全部开源（`logs/sched/`），可完全复现。
+- **数据**：189 runs 同批统一矩阵、原始 CSV、统计脚本、图表全部开源（`../logs/sched/`），可完全复现。
 
 ---
 
@@ -301,7 +301,7 @@ reward = 10000 − loss          # 只罚 miss，不奖吞吐
 
 同起点对比在 25/25 与 40/10 均成立（40/10：aimd50 6.9→7.3；adamw50 7.5→8.0）。10/40 方向一致但须谨慎：逐 rep 看，该 ratio 下所有自适应控制器的单 run miss 横跨 10~44%（如 adamw 三起点 9 个 rep 落在 10.6~43.9），组内方差远大于组间均值差——n=3 的均值在高方差负载下不构成强证据，10/40 只能作为方向性旁证。**带 decay 先验的 AdamW 被启发式双指标压制——miss 更高（7.5% vs 6.9%）且吞吐低 ~10%，没有在任何指标上反超；同家族无先验的三兄弟 miss 高达 32~51%（25/25），10/40 下 rmsprop 达 65%**——优化器家族内部发生分裂，分水岭只有一行 decay（机制见 §6.3）。这与 v0.1 稿「AdamW 全面碾压」的结论相反——旧结论是跨批次污染的假象：旧 AdamW（exp06）跑在更快的主机上，而对比对象 AIMD/fixed 复用的是不同 total（96k vs 240k ticks）的 exp4/5 数据，两套数字本就不在同一把尺子上（§2.6）。
 
-![AIMD 三起点 α 轨迹](logs/sched/all/exp10_fam_aimd_alpha_traj.png)
+![AIMD 三起点 α 轨迹](../logs/sched/all/exp10_fam_aimd_alpha_traj.png)
 
 *图：AIMD 三个起点（0/50/100）的 α 轨迹在 3 ratios 下快速汇流到同一包络带——起点鲁棒性的直接可视化。*
 
@@ -345,7 +345,7 @@ reward = 10000 − loss          # 只罚 miss，不奖吞吐
 
 「其他方法都输」只在**双输意义**下成立；更准确的说法是：其余方法要么用不可接受的 miss 换吞吐（第一阵营），要么两头皆失（第二阵营）。单边悬崖地形上吞吐随 α 单调递增，谁敢把 α 钉高谁吞吐就高——真正的难度不在赚吞吐，在于**不跳崖地把吞吐赚到手**，这正是 AIMD 家族独占「划算交易」阵营的原因（形式框架 §6.5、方差税 §6.6、AdamW 解剖 §6.7）。
 
-![burn-miss 帕累托前沿](logs/sched/all/exp10_pareto_burn_vs_miss.png)
+![burn-miss 帕累托前沿](../logs/sched/all/exp10_pareto_burn_vs_miss.png)
 
 *图：全 21 模式的 burn-miss 平面（虚线 = 帕累托前沿，红星 = 后验 oracle fixed25）。AIMD 家族贴着前沿，AdamW/UCB/PI 全部落在前沿左下方的被支配区。*
 
@@ -384,17 +384,17 @@ miss 代价**全在高 α 一侧**：α 低侧几乎免费（地板 miss），α
 
 数据两面印证：(a) adamw 的 α_steady 在 3 起点 × 3 ratios 下全部回落至 21.5~30.6，围绕锚点 25——落点由先验决定（10/40 下 adamw100 miss 均值 16.8 反低于 adamw50 的 25.5，看似异常，实为高方差假象：该 ratio 下 adamw 单 rep miss 横跨 10.6~43.9%，均值排序不携带机制信息）；三兄弟落点 42~72，由「漂到哪算哪」决定，随 ratio 与起点漂移。(b) exp07 分量恒等式 `α(t+1)=α(t)−step+decay` 离线重放 2204 窗失配 0，且安全区 α−25 按每窗 2% 几何衰减——AdamW 的稳态归位可完全归因于 decay 项。
 
-![AdamW 三起点 α 轨迹](logs/sched/all/exp10_fam_adamw_alpha_traj.png)
+![AdamW 三起点 α 轨迹](../logs/sched/all/exp10_fam_adamw_alpha_traj.png)
 
 *图（上）：AdamW 三个起点全部被 decay 拉回锚点 25 附近的窄带——注意 adamw0 是被 decay 从下方拉起的：先验既是刹车也是油门。*
 
-![三兄弟 α 轨迹](logs/sched/all/exp10_fam_optim_alpha_traj.png)
+![三兄弟 α 轨迹](../logs/sched/all/exp10_fam_optim_alpha_traj.png)
 
 *图（下）：同批同图的三兄弟——集体漂在高位下不来。上下的对照即「家族分裂」本身。*
 
 一句话：三兄弟与 AdamW 的分水岭不是优化公式，而是**有没有一股梯度消失时不消失的力**。这也是发现 1「先验/探索」维度最干净的同家族消融——同一梯度估计器、同一 loss、同一起点，唯一结构差异就是那一行 decay。
 
-![AdamW 分量分解](logs/sched/all/exp10_adamw_decomp.png)
+![AdamW 分量分解](../logs/sched/all/exp10_adamw_decomp.png)
 
 *图：adamw50 @25/25 rep1 的分量时序（A 行 loss/g/step/decay 直接作图）。H 段 loss 冒尖、|g| 与 |step| 跟随发力；L 段三者集体消失，只剩 decay（绿）全程存活——「梯度消失时不消失的力」的单 run 特写。*
 
@@ -405,7 +405,7 @@ miss 代价**全在高 α 一侧**：α 低侧几乎免费（地板 miss），α
 
 pid100 从 100 出发，H 段首窗的 kp·Δe 冲量（−40~−60 点/窗）越过 α=36，直接砸穿到钳位边界 0，而 0 处无爬升信号，于是**永久停住**。pid50 的冲量小，恰好落在平衡点。**起点决定吸引子，且过冲不可逆——因为控制器在消灭误差的同时，也消灭了自己的驱动信号。** 这与 exp08 的「自毁信号」是同一机制的同批复现。
 
-![PI 三起点 α 轨迹](logs/sched/all/exp10_fam_pid_alpha_traj.png)
+![PI 三起点 α 轨迹](../logs/sched/all/exp10_fam_pid_alpha_traj.png)
 
 *图：同一个 PI 控制器的三种命运——pid100 在首个 H 段砸穿至钳位边界 0，pid50 滑入 α≈36 平衡点，pid0 贴地不动。起点决定吸引子。*
 
@@ -551,12 +551,12 @@ AIMD 的「阈值动作 + 显式试探 + 冻结」恰好是这两个维度的最
 ## 附录 B：数据来源与复现
 
 - 实验框架：`user/include/schedlab.h`、`user/sched/sexp10_all.c`；
-- 统计脚本：`scripts/sched/stat_exp10_all.py`（流式解析，~300 万行不驻内存；另输出每家族的 α 轨迹图与吞吐-miss 二维图 `exp10_fam_*`）；
-- 分量分解图脚本：`scripts/sched/plot_exp10_adamw_decomp.py`（A 行定点分量 → loss/|g|/|step|/|decay| 四联时序图）；
-- tradeoff 账本脚本：`scripts/sched/stat_exp10_tradeoff.py`（兑换率表 + burn-miss 帕累托前沿 + 分相位吞吐账 + 前沿图）；
-- 方差税检验脚本：`scripts/sched/plot_exp10_vartax.py`（miss vs std(α) 散点 `exp10_vartax_miss_vs_jitter.png`）；窗口级分桶 Jensen 分解见 §6.6。
-- 原始数据：`logs/sched/all/sexp10_all.csv`（189 runs）；
-- 图表：`logs/sched/all/exp10_*.png`（稳态柱状图 / 同起点轨迹 / trade-off 前沿散点 / miss 轨迹）；
+- 统计脚本：`../scripts/sched/stat_exp10_all.py`（流式解析，~300 万行不驻内存；另输出每家族的 α 轨迹图与吞吐-miss 二维图 `exp10_fam_*`）；
+- 分量分解图脚本：`../scripts/sched/plot_exp10_adamw_decomp.py`（A 行定点分量 → loss/|g|/|step|/|decay| 四联时序图）；
+- tradeoff 账本脚本：`../scripts/sched/stat_exp10_tradeoff.py`（兑换率表 + burn-miss 帕累托前沿 + 分相位吞吐账 + 前沿图）；
+- 方差税检验脚本：`../scripts/sched/plot_exp10_vartax.py`（miss vs std(α) 散点 `exp10_vartax_miss_vs_jitter.png`）；窗口级分桶 Jensen 分解见 §6.6。
+- 原始数据：`../logs/sched/all/sexp10_all.csv`（189 runs）；
+- 图表：`../logs/sched/all/exp10_*.png`（稳态柱状图 / 同起点轨迹 / trade-off 前沿散点 / miss 轨迹）；
 - 复现：进入 RmikuOS shell 执行 `./sched/sexp10_all > /tmp/sexp10_all.csv`，用 `stat_exp10_all.py` 处理。
 
 ## 参考
