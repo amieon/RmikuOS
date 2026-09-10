@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use crate::fs::stat::STAT_TYPE_SOCKET;
 use crate::fs::{File, Stat};
 use crate::sync::spin::Mutex;
-use crate::drivers::net::{tcp, udp};
+use crate::drivers::net::{socket, tcp, udp};
 use crate::drivers::net::tcp::TcpSocket;
 use crate::drivers::net::ip;
 
@@ -157,8 +157,7 @@ pub fn socket_sendto(fd: usize, dst: SocketAddr, data: &[u8]) -> bool {
         _ => false,
     }
 }
-/// UDP 接收，返回 (src, len)
-/// 接收,返回 (src, len);UDP 帧头 6 字节(ip+port),RAW 帧头 4 字节(仅 ip)
+
 pub fn socket_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
     let mut table = SOCKET_TABLE.lock();
     match table.slots.get_mut(fd) {
@@ -188,7 +187,7 @@ pub fn socket_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)>
         _ => None,
     }
 }
-/// 把收到的报文副本分发给所有匹配的 RAW socket(在协议层收包路径调用)
+
 pub fn deliver_raw(protocol: u8, src_ip: u32, data: &[u8]) {
     let mut table = SOCKET_TABLE.lock();
     for slot in table.slots.iter_mut().flatten() {
@@ -204,37 +203,105 @@ pub fn deliver_raw(protocol: u8, src_ip: u32, data: &[u8]) {
     }
 }
 
-struct SocketFile { slot: usize }
+fn slot_kind(slot: usize) -> Option<SlotKind> {
+    let table = SOCKET_TABLE.lock();
+    match table.slots.get(slot) {
+        Some(Some(Socket::Tcp(_))) => Some(SlotKind::Tcp),
+        Some(Some(Socket::Udp(_))) => Some(SlotKind::Udp),
+        Some(Some(Socket::Raw(_))) => Some(SlotKind::Raw),
+        _ => None,
+    }
+}
+
+/// read 语义附带:把刚收到的对端记为默认对端(教学语义,非 POSIX)。
+fn udp_set_remote(slot: usize, addr: SocketAddr) {
+    let mut table = SOCKET_TABLE.lock();
+    if let Some(Some(Socket::Udp(u))) = table.slots.get_mut(slot) {
+        u.remote = Some(addr);
+    }
+}
+
+fn raw_set_remote(slot: usize, ip: u32) {
+    let mut table = SOCKET_TABLE.lock();
+    if let Some(Some(Socket::Raw(r))) = table.slots.get_mut(slot) {
+        r.remote = Some(ip);
+    }
+}
+
+/// write 的前置:读默认对端。未设置(None)时 write 返回 -1(类 ENOTCONN)。
+fn udp_get_remote(slot: usize) -> Option<SocketAddr> {
+    let table = SOCKET_TABLE.lock();
+    match table.slots.get(slot) {
+        Some(Some(Socket::Udp(u))) => u.remote,
+        _ => None,
+    }
+}
+
+fn raw_get_remote(slot: usize) -> Option<u32> {
+    let table = SOCKET_TABLE.lock();
+    match table.slots.get(slot) {
+        Some(Some(Socket::Raw(r))) => r.remote,
+        _ => None,
+    }
+}
+
+/// fd 表中的 socket 表项:只持槽号,状态仍在全局 SOCKET_TABLE。
+/// 进程 fd 生命周期与协议状态机生命周期由此解耦。
+pub struct SocketFile {
+    pub slot: usize,
+}
+enum SlotKind { Tcp, Udp, Raw }
 
 impl File for SocketFile {
     fn readable(&self) -> bool { true }
     fn writable(&self) -> bool { true }
+
     fn stat(&self) -> Stat {
         Stat::new(STAT_TYPE_SOCKET, 0, 0o666, 0, 0)
-     }
-    fn read(&self, buf: &mut [u8]) -> isize {
-        -1
     }
+
+    fn read(&self, buf: &mut [u8]) -> isize {
+        match slot_kind(self.slot) {
+            Some(SlotKind::Tcp) => tcp::recv_data(self.slot, buf),
+            Some(SlotKind::Udp) => match socket_recvfrom(self.slot, buf) {
+                Some((addr, n)) => { udp_set_remote(self.slot, addr); n as isize }
+                None => 0, 
+            },
+            Some(SlotKind::Raw) => match socket_recvfrom(self.slot, buf) {
+                Some((addr, n)) => { raw_set_remote(self.slot, addr.ip); n as isize }
+                None => 0,
+            },
+            None => -1,
+        }
+    }
+
     fn write(&self, buf: &[u8]) -> isize {
-        -1
+        match slot_kind(self.slot) {
+            Some(SlotKind::Tcp) => tcp::send_data(self.slot, buf),
+            Some(SlotKind::Udp) => match udp_get_remote(self.slot) {
+                Some(remote) if socket_sendto(self.slot, remote, buf) => buf.len() as isize,
+                _ => -1,  
+            },
+            Some(SlotKind::Raw) => match raw_get_remote(self.slot) {
+                Some(ip) if socket_sendto(self.slot, SocketAddr { ip, port: 0 }, buf) => {
+                    buf.len() as isize
+                }
+                _ => -1,
+            },
+            None => -1,
+        }
     }
 }
 
 impl Drop for SocketFile {
     fn drop(&mut self) {
-        let mut table = SOCKET_TABLE.lock();
-        match table.slots.get_mut(self.slot){
-            Some(Some(Socket::Udp(u))) => { 
-                release_slot(&mut table, self.slot); 
+        match slot_kind(self.slot) {
+            Some(SlotKind::Tcp) => { tcp::close(self.slot); }
+            Some(SlotKind::Udp) | Some(SlotKind::Raw) => {
+                let mut table = SOCKET_TABLE.lock();
+                release_slot(&mut table, self.slot);
             }
-            Some(Some(Socket::Tcp(t))) => { 
-                drop(table);
-                tcp::close(self.slot);
-            }
-            Some(Some(Socket::Raw(_))) => {
-                release_slot(&mut table, self.slot); 
-            },  
-            _ => {}
+            None => {}
         }
     }
 }
