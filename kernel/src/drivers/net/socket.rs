@@ -1,7 +1,9 @@
 use alloc::collections::vec_deque::VecDeque;
 use alloc::vec::Vec;
+use crate::fs::stat::STAT_TYPE_SOCKET;
+use crate::fs::{File, Stat};
 use crate::sync::spin::Mutex;
-use crate::drivers::net::udp;
+use crate::drivers::net::{tcp, udp};
 use crate::drivers::net::tcp::TcpSocket;
 use crate::drivers::net::ip;
 
@@ -199,5 +201,40 @@ pub fn deliver_raw(protocol: u8, src_ip: u32, data: &[u8]) {
         frame.extend_from_slice(&src_ip.to_be_bytes());
         frame.extend_from_slice(data);
         r.rx_queue.push_back(frame);
+    }
+}
+
+struct SocketFile { slot: usize }
+
+impl File for SocketFile {
+    fn readable(&self) -> bool { true }
+    fn writable(&self) -> bool { true }
+    fn stat(&self) -> Stat {
+        Stat::new(STAT_TYPE_SOCKET, 0, 0o666, 0, 0)
+     }
+    fn read(&self, buf: &mut [u8]) -> isize {
+        -1
+    }
+    fn write(&self, buf: &[u8]) -> isize {
+        -1
+    }
+}
+
+impl Drop for SocketFile {
+    fn drop(&mut self) {
+        let mut table = SOCKET_TABLE.lock();
+        match table.slots.get_mut(self.slot){
+            Some(Some(Socket::Udp(u))) => { 
+                release_slot(&mut table, self.slot); 
+            }
+            Some(Some(Socket::Tcp(t))) => { 
+                drop(table);
+                tcp::close(self.slot);
+            }
+            Some(Some(Socket::Raw(_))) => {
+                release_slot(&mut table, self.slot); 
+            },  
+            _ => {}
+        }
     }
 }

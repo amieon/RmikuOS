@@ -15,6 +15,7 @@ pub const STAT_TYPE_FILE: u8 = 1;
 pub const STAT_TYPE_DIR: u8 = 2;
 pub const STAT_TYPE_CHAR: u8 = 3;
 pub const STAT_TYPE_PIPE: u8 = 4;
+pub const STAT_TYPE_SOCKET: u8 = 5;
 
 // ===== 权限位(低 12 位) =====
 pub const S_IRWXU: u16 = 0o700;
