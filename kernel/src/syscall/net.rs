@@ -1,25 +1,51 @@
 use alloc::string::ToString;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::drivers::net::socket::{self, SocketAddr};
+use crate::drivers::net::socket::{self, SOCKET_TABLE, SocketAddr, SocketFile, release_slot};
 use crate::drivers::net::tcp;
-use crate::task::{read_current_user_bytes, write_current_user_bytes};
+use crate::task::{get_fd_flags_current, read_current_user_bytes, write_current_user_bytes};
 
+fn get_slot_from_fd(fd: usize) -> isize{
+    let mut slot = -1;
+    if let Some(file) = crate::task::current_file(fd){
+        let option_slot = file.socket_slot();
+        if option_slot.is_none() { return -1;} 
+        else {
+            slot = option_slot.unwrap() as isize;
+        }
+        if slot < 0 {return -1;}
+    } else {
+        return -1;
+    }
+    return slot;
+}
 
-pub fn sys_net_socket(stype: usize,protocol:usize) -> isize {
-    match socket::socket_create(stype,protocol) {
-        Some(fd) => fd as isize,
+pub fn sys_net_socket(stype: usize, protocol: usize) -> isize {
+    match socket::socket_create(stype, protocol) {
+        Some(slot) => {
+            let fd = crate::task::alloc_fd_current(Arc::new(SocketFile { slot }));
+            if fd < 0 {            
+                let mut table = SOCKET_TABLE.lock();
+                release_slot(&mut table, slot);
+            }
+            fd
+        }
         None => -1,
     }
 }
 
 /// bind(fd, port) -> 0 / -1
 pub fn sys_net_bind(fd: usize, port: usize) -> isize {
-    if socket::socket_bind(fd, port as u16) { 0 } else { -1 }
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
+    if socket::socket_bind(slot as usize, port as u16) { 0 } else { -1 }
 }
 
 /// sendto(fd, buf, len, ip, port) -> 发送字节数 / -1
 pub fn sys_net_sendto(fd: usize, buf: usize, len: usize, ip: usize, port: usize) -> isize {
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
     if len == 0 || len > 1472 {
         return -1; // 1472 = 1500 - 20(IP) - 8(UDP)，超了要分片，教学版不做
     }
@@ -28,7 +54,7 @@ pub fn sys_net_sendto(fd: usize, buf: usize, len: usize, ip: usize, port: usize)
         _ => return -1,
     };
     let dst = SocketAddr { ip: ip as u32, port: port as u16 };
-    if socket::socket_sendto(fd, dst, &data) {
+    if socket::socket_sendto(slot as usize, dst, &data) {
         len as isize
     } else {
         -1
@@ -37,12 +63,14 @@ pub fn sys_net_sendto(fd: usize, buf: usize, len: usize, ip: usize, port: usize)
 
 /// recvfrom(fd, buf, maxlen, info) -> 实际长度 / 0(超时) / -1
 pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> isize {
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
     let cap = maxlen.min(2048);
     let mut kbuf = alloc::vec![0u8; cap];
     let mut spins = 0usize;
     loop {
         crate::drivers::net::maybe_poll(); 
-        if let Some((src, n)) = socket::socket_recvfrom(fd, &mut kbuf) {
+        if let Some((src, n)) = socket::socket_recvfrom(slot as usize, &mut kbuf) {
             if write_current_user_bytes(buf, &kbuf[..n]).is_none() {
                 return -1;
             }
@@ -65,17 +93,28 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
 
 
 pub fn sys_net_connect(fd: usize, ip: usize, port: usize) -> isize {
-    tcp::connect(fd, ip as u32, port as u16)
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
+    tcp::connect(slot as usize, ip as u32, port as u16)
 }
 
 pub fn sys_net_listen(fd: usize, _backlog: usize) -> isize {
-    tcp::listen(fd)
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
+    tcp::listen(slot as usize)
 }
 
 /// accept(fd, info) -> child_fd / -1；info 同 recvfrom 的 8 字节格式
 pub fn sys_net_accept(fd: usize, info: usize) -> isize {
-    match tcp::accept(fd) {
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
+    match tcp::accept(slot as usize) {
         Some((child, remote)) => {
+            let cfd = crate::task::alloc_fd_current(Arc::new(SocketFile { slot: child }));
+            if cfd < 0 {
+                tcp::close(child);        
+                return -1;
+            }
             if info != 0 {
                 let mut raw = [0u8; 8];
                 raw[0..4].copy_from_slice(&remote.ip.to_ne_bytes());    // was: to_be_bytes
@@ -84,13 +123,15 @@ pub fn sys_net_accept(fd: usize, info: usize) -> isize {
                     return -1;
                 }
             }
-            child as isize
+            cfd
         }
         None => -1,
     }
 }
 
 pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
     if len == 0 || len > 1460 {
         return -1;
     }
@@ -98,13 +139,15 @@ pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
         Some(d) if d.len() == len => d,
         _ => return -1,
     };
-    tcp::send_data(fd, &data)
+    tcp::send_data(slot as usize, &data)
 }
 
 /// recv 返回 n / 0(EOF) / -1
 pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize) -> isize {
+    let mut slot = get_slot_from_fd(fd);
+    if slot < 0 {return -1;}
     let mut kbuf = alloc::vec![0u8; maxlen.min(2048)];
-    let n = tcp::recv_data(fd, &mut kbuf);
+    let n = tcp::recv_data(slot as usize, &mut kbuf);
     if n <= 0 {
         return n;
     }
@@ -116,21 +159,10 @@ pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize) -> isize {
 
 
 pub fn sys_net_close(fd: usize) -> isize {
-    let is_tcp = {
-        let table = socket::SOCKET_TABLE.lock();
-        matches!(table.slots.get(fd), Some(Some(socket::Socket::Tcp(_))))
-    };
-    if is_tcp {
-        tcp::close(fd)
-    } else {
-        let mut table = socket::SOCKET_TABLE.lock();
-        match table.slots.get(fd) {
-            Some(Some(_)) => {
-                socket::release_slot(&mut table, fd);
-                0
-            }
-            _ => -1,
-        }
+    // 可选的严格性:只许关 socket,不许拿 net_close 关文件
+    match crate::task::current_file(fd) {
+        Some(f) if f.socket_slot().is_some() => crate::task::close_fd_current(fd),
+        _ => -1,
     }
 }
 

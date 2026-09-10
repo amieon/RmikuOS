@@ -131,7 +131,7 @@ static inline int recvfrom(int fd, void *buf, int len, int flags,
     return ret;
 }
 
-/* close: 暂保留 net_close,待 fd 表统一后并入文件系统 close */
+/* 已经拿下 socket fd 与文件 fd 的统一 fd 表 */
 static inline int net_close(int fd) {
     return syscall3(SYS_NET_CLOSE, fd, 0, 0);
 }

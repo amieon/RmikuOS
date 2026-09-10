@@ -49,4 +49,5 @@ pub trait File: Send + Sync {
 
     fn on_fork(&self) {}
     fn on_close_kind(&self) -> PipeCloseKind {PipeCloseKind::Nothing}
+    fn socket_slot(&self) -> Option<usize> { None }
 }

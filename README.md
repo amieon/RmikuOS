@@ -235,7 +235,6 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 * SYN 队列与 listen backlog(当前待接受队列直通,socket 表已动态扩容 + free list,MAX_FD 4096)
 * DHCP 租约续期(T1 / T2)
 * DNS:CNAME 链追踪 / 多服务器 fallback / 域名合法性预检
-* socket fd 与文件 fd 的统一 fd 表
 * 并发 httpd:每连接一个用户态线程(`thread_create` 已就位)
 
 ### Filesystem

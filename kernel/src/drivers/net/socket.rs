@@ -291,6 +291,7 @@ impl File for SocketFile {
             None => -1,
         }
     }
+    fn socket_slot(&self) -> Option<usize> { Some(self.slot) }
 }
 
 impl Drop for SocketFile {
