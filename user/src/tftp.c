@@ -48,10 +48,15 @@ int main(int argc, char **argv)
     req[n++] = 0;
     for (const char *p = "octet"; *p; ) req[n++] = (unsigned char)*p++;
     req[n++] = 0;
-    struct sockaddr_in local_ = addr_of(0, 39069);   /* 0.0.0.0:39069,随便挑的高端口 */
+    struct sockaddr_in local_ = addr_of(0, 0);   /* 端口 0:内核自动分配(>=20000) */
     if (bind(fd, &local_, sizeof(local_)) < 0) {
         printf("tftp: bind failed\n");
         return 1;
+    }
+    {
+        struct sockaddr_in mine;
+        if (net_getsockname(fd, &mine) == 0)   /* 读回实际分到的端口 */
+            printf("tftp: local port %u\n", ntohs(mine.sin_port));
     }
     struct sockaddr_in srv = addr_of(TFTP_SERVER, TFTP_PORT);
     sendto(fd, req, n, 0, &srv, sizeof(srv));

@@ -18,6 +18,8 @@ int main(int argc, char **argv)
     }
     int lfd = socket(AF_INET, SOCK_STREAM, 0);
     if (lfd < 0) { printf("[httpd] socket failed\n"); return 1; }
+    /* 重启时上一次服务还蹲在 TIME_WAIT(10s),不开 REUSEADDR  bind 必败 */
+    net_setsockopt(lfd, SO_REUSEADDR, 1);
 
     struct sockaddr_in local = addr_of(0, HTTPD_PORT);
     if (bind(lfd, &local, sizeof local) < 0) { printf("[httpd] bind failed\n"); return 1; }

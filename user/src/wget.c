@@ -98,8 +98,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* ---- 收响应: 一次读大块(内核 recv 弹出整个 TCP chunk, 只返回请求长度——
-     * 逐字节读会把整块数据弹掉丢弃!), 缓冲里找 \r\n\r\n 分隔头与体 ---- */
+    /* 请求发完即半关闭:FIN 告知服务器"请求到此为止",读通道留着收响应 */
+    net_shutdown(fd, SHUT_WR);
+
+    /* ---- 收响应: 缓冲里找 \r\n\r\n 分隔头与体(内核 recv 已是 POSIX 语义,
+     * 消费 n 字节后剩余回队头,任意读法都安全) ---- */
     static char rbuf[BUF_SIZE];
     int used = 0;
     int hdr_end = -1;
