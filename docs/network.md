@@ -4,7 +4,7 @@
 
 ## Network Stack
 
-RmikuOS 自带一套 TCP/IP 协议栈：自 virtio-net 驱动起，经 Ethernet / ARP / IPv4 / ICMP / UDP / TCP 与 DHCP，到一组专用的 socket 系统调用（号段 100–109），最终在用户态跑起一个真实的 HTTP 服务器与 TFTP 客户端——宿主机浏览器经 QEMU `hostfwd` 直接访问 guest 内的页面，两台 QEMU 经 socket pair 互 ping。协议栈每一层都是内核 `drivers/net/` 下的 Rust 代码，不依赖任何外部网络 crate。
+RmikuOS 自带一套 TCP/IP 协议栈：自 virtio-net 驱动起，经 Ethernet / ARP / IPv4 / ICMP / UDP / TCP 与 DHCP，到一组专用的 socket 系统调用（号段 100–117），最终在用户态跑起一个真实的 HTTP 服务器与 TFTP 客户端——宿主机浏览器经 QEMU `hostfwd` 直接访问 guest 内的页面，两台 QEMU 经 socket pair 互 ping。协议栈每一层都是内核 `drivers/net/` 下的 Rust 代码，不依赖任何外部网络 crate。
 
 ```text
 用户态   httpd(静态文件 + JSON API)   tftp(文件注入)   ping / udp_test / tcp_test
@@ -58,16 +58,61 @@ ICMP echo request / reply 入栈后，两台 QEMU 可以直接对话：经 socke
 
 两个 bug 都由「三段定位法」在 ARP 层现形：tcpdump 里 ARP 请求的目标地址暴露了一切。
 
-### Socket 系统调用：100–109 专用号段
+### Socket 系统调用：100–117 专用号段
 
 网络调用不挤占主系统调用表，独立开一段号段——主分发只多一条范围判断，后续扩充也不污染既有编号：
 
 ```text
-100 SOCKET    101 BIND    102 SENDTO    103 RECVFROM    104 CLOSE
-105 CONNECT   106 LISTEN  107 ACCEPT    108 SEND        109 RECV
+100 SOCKET    101 BIND      102 SENDTO    103 RECVFROM    104 CLOSE
+105 CONNECT   106 LISTEN    107 ACCEPT    108 SEND        109 RECV
+110 SET_IP    111 GET_IP    112 RESOLVE   113 RESOLVE_MANY
+114 SHUTDOWN  115 GETSOCKNAME  116 GETPEERNAME  117 SETSOCKOPT
 ```
 
-用户态经 `net.h` 封装为 `net_socket()` / `net_socket_tcp()` / `net_bind()` / `net_connect()` / `net_listen()` / `net_accept()` / `net_send()` / `net_recv()` 等，体感与 POSIX 对齐。
+用户态经 `net.h` 封装为 `net_socket()` / `net_socket_tcp()` / `net_bind()` / `net_connect()` / `net_listen()` / `net_accept()` / `net_send()` / `net_recv()` 等，体感与 POSIX 对齐。syscall 号一旦发布就是 ABI，只增不收——`net_close`（104）在 fd 表统一后退化为「仅限 socket 的 close 别名」，保留号位不带缺口。
+
+### 统一 fd 表：socket 也是文件
+
+socket fd 与文件 fd 曾是两套命名空间（文件索引进程 fd_table，socket 索引全局 SOCKET_TABLE），本质是 Windows 的 SOCKET/fd 双轨模型。现已统一到 Unix 的「一切皆文件」：
+
+```text
+进程 fd_table                全局 SOCKET_TABLE(协议层注册表,保留)
+┌─────────────┐             ┌──────────────────────────┐
+│ 0 stdin     │             │ 槽 n: Tcp(TimeWait)       │ ← fd 已死,状态机服刑中
+│ 1 stdout    │             │ 槽 m: Udp(:20000)         │ ←──┐
+│ 3 SocketFile│── slot m ──→│ 槽 k: Tcp(Established)    │ ←─┐│
+│ 4 SocketFile│── slot k ──→└──────────────────────────┘   ││
+└─────────────┘   fd 从进程表发,表项只持槽号 ───────────────┘│
+```
+
+* **SocketFile 实现 File trait**：fd 表项只持槽号，协议状态仍驻留 SOCKET_TABLE（收包分发与定时器驱动的注册表，删不得）；`File::socket_slot()` 默认方法充当 fd→slot 的翻译针（no_std 下替代 downcast）。
+* **两个生命周期解耦**：fd 摘表即死；槽位由状态机/tick() 按协议节奏回收——close(10) 返回后，TCP 槽位可能还在 TimeWait 里蹲满 10s 才释放（`[tcp-stat] end=timewait` 即定时器主持的葬礼）。
+* **Drop 分派**：TCP 调 `tcp::close` 发起四次挥手，UDP/Raw 当场收尸。
+* **白捡的语义**：fork 后经 Arc 引用计数共享 socket（最后一个 close 才真正告别）；`read(fd)`/`write(fd)` 可直接用于 TCP socket（POSIX 语义）；`close(10)` 通吃文件与 socket。
+* **锁纪律**：SOCKET_TABLE 的 guard 持有期间不得调用任何会再次进锁的函数（tcp::recv_data 等内部自行进锁）——模式为「锁内探测变体，锁外行动」，否则自旋锁的同核重入检测直接 trap。
+
+### shutdown（114）：半关闭
+
+四次挥手的 FIN 与 ACK 由不同主体驱动（FIN 是应用行为，ACK 是内核行为），两个方向本就独立。`shutdown(fd, how)` 把「发 FIN」从「摘 fd」的组合拳里拆出来：
+
+* `SHUT_WR`：发 FIN 进半关闭（仅 Established/CloseWait 有意义），写死读活——「我说完了，你接着说」；
+* `SHUT_RD`：置 `rx_shutdown` + 清接收队列，recv 恒 EOF；
+* 与 close 的本质区别：close 作用于**描述符**（引用计数归零才发 FIN），shutdown 作用于**连接**（立即生效，全家族持有者的 send 一并失败）；
+* 实现上 `send_fin()` 由 close 与 shutdown 共用（FIN 占一个序号、进重传队列受 RTO 约束）；
+* 验证程序 `halfclose.c`（配套 `halfclose_server.py`）：SHUT_WR 后 send 返回 -1、recv 照常收完、对端 FIN 表现为 EOF——长度未知的双向交换正是 shutdown 的主场（HTTP 靠 Content-Length 绕开了这个问题，FTP 数据连接则是 FIN 即 EOF 的另一流派）。
+
+### getsockname / getpeername / setsockopt（115–117）
+
+* **getsockname**：本端 MY_IP + local_port（UDP `bind(0)` 自动分配的端口可读回，≥20000）；
+* **getpeername**：TCP 取建连四元组；未连接返回 -1；
+* **setsockopt(SO_REUSEADDR)**：bind 冲突检查跳过 TimeWait 尸体，修复 httpd 退出后 10s 内重启 bind 失败。**注意语义边界**：TimeWait 槽位本身保留、协议职责（最后 ACK 重传）不受影响，松绑的只是端口命名空间——报文隔离由四元组分发 + ISN 随机化负责。真正激进的 `tcp_tw_recycle` 因在 NAT 场景误判正常连接，已被 Linux 4.12 移除；
+* 地址回传与 accept 同款约定（内核 `to_ne_bytes`，用户态小端拼回转网络序）；验证程序 `netapi_test.c` 6 检查点全绿，含「裸 bind 被 TimeWait 尸体拦截 / REUSEADDR 放行」的对照实验。
+
+### 已知不一致（留待后续）
+
+* TCP 临时端口（`next_ephem_port`，49152 起）与 UDP bind(0) 自动分配（20000 起）是两套分配器，可统一；
+* UDP `connect()`（默认对端 + 接收过滤）未实现，暂由 read 记录最近对端的教学语义顶替；
+* select/poll、SO_RCVTIMEO、sendmsg/recvmsg 未覆盖。
 
 ### httpd：跑在自研协议栈上的 Web 服务器
 

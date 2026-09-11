@@ -36,18 +36,18 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 
 ## 功能总览
 
-| 子系统 | 能力 | 备注 |
-|--------|------|------|
-| 双架构 | RISC-V 64 + LoongArch 64,SMP 多核 | virtio-mmio / virtio-pci |
-| 进程与线程 | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join` | 进程级 fd table,线程共享地址空间 |
-| 信号 | 通用 `sig_pending` 位图 + 延迟投递 | 用户态 SIGILL/SIGFPE 不炸内核,shell Ctrl+C |
-| 虚拟内存 | buddy 帧分配器、多级页表、ELF 加载、mmap | |
-| 文件系统 | VFS 多挂载:ext4 rootfs / tmpfs / FAT16(落盘) | `lseek` / `ftruncate` / `fsync` / `rename`(号段 64–68) |
-| 调度器 | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应 | 内置调度实验框架(exp00–exp06,见 docs) |
-| 网络 | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd + 域名解析(TTL 缓存) |
-| 用户程序 | C / C++ / Rust / Java(JVM + 装载期 AOT)/ Lua 5.4 / Scheme | syscall ABI 语言无关 |
-| 系统内工具链 | TCC 0.9.28(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器 | 编辑-编译-运行闭环 |
-| 应用验证 | VeryEasyGCN(78.3% 准确率)、RmikuRay(定点光线追踪)、GCN/GAT | |
+| 子系统       | 能力                                                         | 备注                                                         |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| 双架构       | RISC-V 64 + LoongArch 64,SMP 多核                            | virtio-mmio / virtio-pci                                     |
+| 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join` | 进程级 fd table,线程共享地址空间                             |
+| 信号         | 通用 `sig_pending` 位图 + 延迟投递                           | 用户态 SIGILL/SIGFPE 不炸内核,shell Ctrl+C                   |
+| 虚拟内存     | buddy 帧分配器、多级页表、ELF 加载、mmap                     |                                                              |
+| 文件系统     | VFS 多挂载:ext4 rootfs / tmpfs / FAT16(落盘)                 | `lseek` / `ftruncate` / `fsync` / `rename`(号段 64–68)       |
+| 调度器       | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应             | 内置调度实验框架(exp00–exp06,见 docs)                        |
+| 网络         | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd + 域名解析(TTL 缓存) |
+| 用户程序     | C / C++ / Rust / Java(JVM + 装载期 AOT)/ Lua 5.4 / Scheme    | syscall ABI 语言无关                                         |
+| 系统内工具链 | TCC 0.9.28(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器 | 编辑-编译-运行闭环                                           |
+| 应用验证     | VeryEasyGCN(78.3% 准确率)、RmikuRay(定点光线追踪)、GCN/GAT   |                                                              |
 
 ---
 
@@ -55,15 +55,15 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 
 主 README 只保留门面与索引,深度内容按主题拆到 `docs/`:
 
-| 文档 | 内容 |
-|------|------|
-| [docs/shell.md](docs/shell.md) | Shell 词法 / 管道 / 重定向 / 环境变量 / `$?` 展开,TCC 自托管工具链,kilo 编辑器 |
-| [docs/filesystem.md](docs/filesystem.md) | VFS 与 fd table,ext4 / tmpfs / FAT16,文件系统调用 64–68,virtio 块设备 |
-| [docs/network.md](docs/network.md) | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / DNS / ICMP / NTP),socket 100–112,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
+| 文档                                           | 内容                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| [docs/shell.md](docs/shell.md)                 | Shell 词法 / 管道 / 重定向 / 环境变量 / `$?` 展开,TCC 自托管工具链,kilo 编辑器 |
+| [docs/filesystem.md](docs/filesystem.md)       | VFS 与 fd table,ext4 / tmpfs / FAT16,文件系统调用 64–68,virtio 块设备 |
+| [docs/network.md](docs/network.md)             | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / DNS / ICMP / NTP),socket 100–117,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
 | [docs/user-programs.md](docs/user-programs.md) | C 分层库 / C++ `stdcompat.h` 桥接 / Rust `ulib` / 自研 JVM / Lua 5.4 / Scheme,堆分配器与裸运行时数学库 |
-| [docs/scheduler.md](docs/scheduler.md) | stride 与 alpha-scaled 调度机制,调度统计接口,SMP 与计时注意事项 |
-| [docs/experiments/](docs/experiments/) | 调度实验框架(schedlab)+ 7 篇完整实验报告:EDF 基线 / α 机制 / Edge Deadline / AIMD / 动态负载 / 相位 / SPSA-AdamW |
-| [docs/report/](docs/report/) | 启发式规则 vs 随机梯度优化:自研操作系统上的自适应调度控制器对照研究报告 |
+| [docs/scheduler.md](docs/scheduler.md)         | stride 与 alpha-scaled 调度机制,调度统计接口,SMP 与计时注意事项 |
+| [docs/experiments/](docs/experiments/)         | 调度实验框架(schedlab)+ 7 篇完整实验报告:EDF 基线 / α 机制 / Edge Deadline / AIMD / 动态负载 / 相位 / SPSA-AdamW |
+| [docs/report.md](docs/report.md)               | α 缩放调度旋钮的自适应控制：五类方法家族的受控对照研究 |
 
 ---
 
@@ -197,7 +197,7 @@ virtio-mmio virtio-pci
 
 ```text
 User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
-                │  socket syscalls(100–112 专用号段)
+                │  socket syscalls(100–117 专用号段)
                 ▼
             Socket 层(UDP / TCP 统一 socket table,动态扩容 + free list)
                 │
@@ -221,7 +221,7 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 * **内核基础**:双架构启动 / trap / syscall / 进程线程 / 信号投递与用户态隔离 / buddy 帧分配器 / SMP 多核(per-hart timer、IPI reschedule、TLB shootdown)
 * **调度器**:stride scheduling + alpha-scaled(连续 alpha `[0,100]`,纯整数幂)+ AIMD / SPSA-AdamW 自适应策略,完整调度实验框架与 7 篇实验报告(见 [docs/experiments/](docs/experiments/))
 * **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)
-* **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP)、socket 100–112、用户态 httpd(宿主机浏览器访问)、DNS 客户端(压缩指针解析 + TTL 缓存,nslookup)、TFTP / NTP / wget(wget/ping/ntpdate 支持域名参数)、shell 命令替换 `$()` / 反引号、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×)
+* **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP)、socket 100–117、用户态 httpd(宿主机浏览器访问)、DNS 客户端(压缩指针解析 + TTL 缓存,nslookup)、TFTP / NTP / wget(wget/ping/ntpdate 支持域名参数)、shell 命令替换 `$()` / 反引号、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×)
 * **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器
 * **验证**:36 项 CI 回归测试、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
 
@@ -235,6 +235,8 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 * SYN 队列与 listen backlog(当前待接受队列直通,socket 表已动态扩容 + free list,MAX_FD 4096)
 * DHCP 租约续期(T1 / T2)
 * DNS:CNAME 链追踪 / 多服务器 fallback / 域名合法性预检
+* UDP connect()(默认对端 + 接收过滤);两套临时端口分配器(TCP 49152 / UDP 20000)统一
+* select/poll 多路复用;SO_RCVTIMEO 超时可配
 * 并发 httpd:每连接一个用户态线程(`thread_create` 已就位)
 
 ### Filesystem
