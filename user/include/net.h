@@ -184,7 +184,7 @@ static inline unsigned int parse_ip(const char *s) {
 #define SHUT_RDWR 2
 
 static inline int net_shutdown(int fd, int how) {
-    return syscall2(SYS_NET_SHUTDOWN, fd, how);   // 按你的 syscall 封装宏调整
+    return syscall3(SYS_NET_SHUTDOWN, fd, how,0);   // 按你的 syscall 封装宏调整
 }
 
 
