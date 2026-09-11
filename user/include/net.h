@@ -187,6 +187,28 @@ static inline int net_shutdown(int fd, int how) {
     return syscall3(SYS_NET_SHUTDOWN, fd, how,0);   // 按你的 syscall 封装宏调整
 }
 
+#define SO_REUSEADDR 1
+
+static inline int net_getsockname(int fd, struct sockaddr_in *addr) {
+    unsigned long raw[1] = {0};
+    if (syscall3(SYS_NET_GETSOCKNAME, fd, (long)raw, 0) < 0) return -1;
+    addr->sin_addr = (unsigned int)raw[0];
+    addr->sin_port = (unsigned short)(raw[0] >> 32);
+    return 0;
+}
+
+static inline int net_getpeername(int fd, struct sockaddr_in *addr) {
+    unsigned long raw[1] = {0};
+    if (syscall3(SYS_NET_GETPEERNAME, fd, (long)raw, 0) < 0) return -1;
+    addr->sin_addr = (unsigned int)raw[0];
+    addr->sin_port = (unsigned short)(raw[0] >> 32);
+    return 0;
+}
+
+static inline int net_setsockopt(int fd, int optname, int optval) {
+    return syscall3(SYS_NET_SETSOCKOPT, fd, optname, optval);
+}
+
 
 #ifdef __cplusplus
 }
