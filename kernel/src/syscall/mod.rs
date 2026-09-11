@@ -98,6 +98,7 @@ pub const SYSCALL_NET_SET_IP: usize = 110;
 pub const SYSCALL_NET_GET_IP: usize = 111;
 pub const SYSCALL_NET_RESOLVE: usize = 112;
 pub const SYSCALL_NET_RESOLVE_MANY: usize = 113;
+pub const SYSCALL_NET_SHUTDOWN: usize = 114;
 
 use core::{sync::atomic::{AtomicUsize, Ordering}};
 
@@ -206,7 +207,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_NET_GET_IP => net::sys_net_get_ip(),
         SYSCALL_NET_RESOLVE => net::sys_net_resolve(args[0], args[1]),
         SYSCALL_NET_RESOLVE_MANY => net::sys_net_resolve_many(args[0], args[1],args[2], args[3]),
-
+        SYSCALL_NET_SHUTDOWN => net::sys_net_shutdown(args[0], args[1]),
+        
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

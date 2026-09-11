@@ -135,6 +135,8 @@ pub struct TcpSocket {
     pub stat_rtx_rto: u32,  // RTO 重传次数
     pub stat_rtx_fast: u32, // 快速重传次数(旧版恒 0)
     pub stat_loss: u32,     // 降窗事件数(旧版恒 0)
+
+    pub rx_shutdown: bool,
 }
 
 impl TcpSocket {
@@ -176,6 +178,7 @@ impl TcpSocket {
             stat_rtx_rto: 0,
             stat_rtx_fast: 0,
             stat_loss: 0,
+            rx_shutdown: false,
         }
     }
 }
@@ -888,6 +891,7 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
                         }
                         return n as isize;
                     }
+                    if t.rx_shutdown { return 0; }
                     match t.state {
                         TcpState::Closed => return if t.rst { -1 } else { 0 },
                         TcpState::CloseWait | TcpState::Closing
@@ -939,6 +943,48 @@ pub fn close(fd: usize) -> isize {
             dump_stats(fd, t, "close");
         }
         release_slot(&mut table, fd);
+    }
+    if ok { 0 } else { -1 }
+}
+
+pub const SHUT_RD : usize = 0;
+pub const SHUT_WR : usize = 1;
+pub const SHUT_RDWR : usize = 2;
+
+
+fn send_fin(t: &mut TcpSocket) {
+    let seq = t.snd_nxt;
+    t.snd_nxt = t.snd_nxt.wrapping_add(1);
+    t.tx_unacked.push_back(TxSeg::new(seq, FIN | ACK, Vec::new()));
+    if t.rto_deadline == 0 {
+        t.rto_deadline = now_ms() + t.rto_ms;
+    }
+    let (lp, r, rn) = (t.local_port, t.remote.unwrap(), t.rcv_nxt);
+    send_segment(lp, r, seq, rn, FIN | ACK, &[]);
+    t.state = match t.state {
+        TcpState::Established => TcpState::FinWait1,
+        TcpState::CloseWait => TcpState::LastAck,
+        s => s,
+    };
+}
+
+/// shutdown(fd, how): how: 0=SHUT_RD, 1=SHUT_WR, 2=SHUT_RDWR
+pub fn shutdown(fd: usize, how: usize) -> isize {
+    let mut table = SOCKET_TABLE.lock();
+    let t = match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+        Some(t) => t,
+        None => return -1,
+    };
+    let mut ok = true;
+    if how == SHUT_RD || how == SHUT_RDWR {           // SHUT_RD:清接收队列,recv 见 EOF
+        t.rx_shutdown = true;
+        t.rx_queue.clear();
+    }
+    if how == SHUT_WR || how == SHUT_RDWR {           // SHUT_WR:发 FIN,进入半关闭
+        match t.state {
+            TcpState::Established | TcpState::CloseWait => send_fin(t),
+            _ => { ok = false; }        // 未建连/已在告别:无意义
+        }
     }
     if ok { 0 } else { -1 }
 }

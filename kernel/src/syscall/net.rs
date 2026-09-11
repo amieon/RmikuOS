@@ -243,3 +243,9 @@ pub fn sys_net_resolve_many(names_ptr: usize, lens_ptr: usize,
     }
     count as isize
 }
+
+pub fn sys_net_shutdown(fd: usize, how: usize) -> isize {
+    let slot = get_slot_from_fd(fd);
+    if slot < 0 { return -1; }
+    tcp::shutdown(slot as usize, how)
+}
