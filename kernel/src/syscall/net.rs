@@ -2,7 +2,7 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::drivers::net::socket::{self, SOCKET_TABLE, SocketAddr, SocketFile, release_slot};
+use crate::drivers::net::socket::{self, SOCKET_TABLE, Socket, SocketAddr, SocketFile, release_slot};
 use crate::drivers::net::tcp;
 use crate::task::{get_fd_flags_current, read_current_user_bytes, write_current_user_bytes};
 
@@ -248,4 +248,29 @@ pub fn sys_net_shutdown(fd: usize, how: usize) -> isize {
     let slot = get_slot_from_fd(fd);
     if slot < 0 { return -1; }
     tcp::shutdown(slot as usize, how)
+}
+
+/// getsockname/getpeername:info 同 accept 的 8 字节格式(ip 4B + port 2B,ne)
+fn write_sockaddr(slot: usize, info: usize, addr: Option<SocketAddr>) -> isize {
+    let addr = match addr { Some(a) => a, None => return -1 };
+    if info == 0 { return -1; }
+    let mut raw = [0u8; 8];
+    raw[0..4].copy_from_slice(&addr.ip.to_ne_bytes());
+    raw[4..6].copy_from_slice(&addr.port.to_ne_bytes());
+    match write_current_user_bytes(info, &raw) {
+        Some(_) => 0,
+        None => -1,
+    }
+}
+
+pub fn sys_net_getsockname(fd: usize, info: usize) -> isize {
+    let slot = get_slot_from_fd(fd);
+    if slot < 0 { return -1; }
+    write_sockaddr(slot as usize, info, socket::socket_getsockname(slot as usize))
+}
+
+pub fn sys_net_getpeername(fd: usize, info: usize) -> isize {
+    let slot = get_slot_from_fd(fd);
+    if slot < 0 { return -1; }
+    write_sockaddr(slot as usize, info, socket::socket_getpeername(slot as usize))
 }

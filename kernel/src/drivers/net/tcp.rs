@@ -137,6 +137,7 @@ pub struct TcpSocket {
     pub stat_loss: u32,     // 降窗事件数(旧版恒 0)
 
     pub rx_shutdown: bool,
+    pub reuse_addr: bool,
 }
 
 impl TcpSocket {
@@ -179,6 +180,7 @@ impl TcpSocket {
             stat_rtx_fast: 0,
             stat_loss: 0,
             rx_shutdown: false,
+            reuse_addr: false,
         }
     }
 }

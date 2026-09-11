@@ -57,11 +57,12 @@ pub struct UdpSocket {
     pub local_port: u16,
     pub remote: Option<SocketAddr>,
     pub rx_queue: VecDeque<Vec<u8>>,
+    pub reuse_addr: bool,
 }
 
 impl UdpSocket {
     pub fn new(local_port: u16) -> Self {
-        Self { local_port, remote: None, rx_queue: VecDeque::new() }
+        Self { local_port, remote: None, rx_queue: VecDeque::new(), reuse_addr: false }
     }
 }
 
@@ -110,13 +111,22 @@ pub fn socket_bind(fd: usize, port: u16) -> bool {
     if fd >= table.slots.len() || table.slots[fd].is_none() {
         return false;
     }
+    let reuse = match &table.slots[fd] {
+        Some(Socket::Tcp(t)) => t.reuse_addr,
+        Some(Socket::Udp(u)) => u.reuse_addr,
+        _ => false,
+    };
     let used = |p: u16| {
         table.slots.iter().flatten().any(|s| match s {
             Socket::Udp(u) => u.local_port == p,
-            Socket::Tcp(t) => t.local_port == p,
+            Socket::Tcp(t) => {
+                t.local_port == p
+                    && !(reuse && t.state == crate::drivers::net::tcp::TcpState::TimeWait)
+            }
             Socket::Raw(_) => false,
         })
     };
+    
     /* 端口 0 = 请求内核自动分配（POSIX bind 语义）。
      * 注意不能直接赋 0: 未绑定 socket 的默认 local_port 也是 0, 会撞冲突检查。 */
     let actual = if port == 0 {
@@ -306,3 +316,28 @@ impl Drop for SocketFile {
         }
     }
 }
+
+
+/// getsockname: 本端地址 = MY_IP + local_port(未绑定端口为 0)
+pub fn socket_getsockname(slot: usize) -> Option<SocketAddr> {
+    let table = SOCKET_TABLE.lock();
+    let port = match table.slots.get(slot) {
+        Some(Some(Socket::Tcp(t))) => t.local_port,
+        Some(Some(Socket::Udp(u))) => u.local_port,
+        Some(Some(Socket::Raw(_))) => 0,          // RAW 无端口
+        _ => return None,
+    };
+    Some(SocketAddr { ip: crate::drivers::net::ip::my_ip(), port })
+}
+
+/// getpeername: 对端地址;TCP 取建连四元组,UDP/RAW 取 connect/read 记的 remote
+pub fn socket_getpeername(slot: usize) -> Option<SocketAddr> {
+    let table = SOCKET_TABLE.lock();
+    match table.slots.get(slot) {
+        Some(Some(Socket::Tcp(t))) => t.remote,
+        Some(Some(Socket::Udp(u))) => u.remote,
+        Some(Some(Socket::Raw(r))) => r.remote.map(|ip| SocketAddr { ip, port: 0 }),
+        _ => None,
+    }
+}
+
