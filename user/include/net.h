@@ -190,16 +190,23 @@ static inline int net_shutdown(int fd, int how) {
 #define SO_REUSEADDR 1
 
 static inline int net_getsockname(int fd, struct sockaddr_in *addr) {
-    unsigned long raw[1] = {0};
-    if (syscall3(SYS_NET_GETSOCKNAME, fd, (long)raw, 0) < 0) return -1;
-    addr->sin_addr = (unsigned int)raw[0];
-    addr->sin_port = (unsigned short)(raw[0] >> 32);
+    struct net_peer p;
+    if (syscall3(SYS_NET_GETSOCKNAME, fd, (long)&p, 0) < 0) return -1;
+    unsigned int ip = (unsigned)p.raw[0] | ((unsigned)p.raw[1] << 8)
+                    | ((unsigned)p.raw[2] << 16) | ((unsigned)p.raw[3] << 24);
+    unsigned short port = (unsigned short)((unsigned)p.raw[4] | ((unsigned)p.raw[5] << 8));
+    addr->sin_family = AF_INET;
+    addr->sin_addr   = htonl(ip);
+    addr->sin_port   = htons(port);
     return 0;
 }
 
 static inline int net_getpeername(int fd, struct sockaddr_in *addr) {
     unsigned long raw[1] = {0};
     if (syscall3(SYS_NET_GETPEERNAME, fd, (long)raw, 0) < 0) return -1;
+    unsigned int ip = (unsigned)p.raw[0] | ((unsigned)p.raw[1] << 8)
+                | ((unsigned)p.raw[2] << 16) | ((unsigned)p.raw[3] << 24);
+    unsigned short port = (unsigned short)((unsigned)p.raw[4] | ((unsigned)p.raw[5] << 8));
     addr->sin_addr = (unsigned int)raw[0];
     addr->sin_port = (unsigned short)(raw[0] >> 32);
     return 0;
