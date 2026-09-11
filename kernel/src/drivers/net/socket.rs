@@ -317,6 +317,8 @@ impl Drop for SocketFile {
     }
 }
 
+pub const SO_REUSEADDR: usize = 1;
+
 
 /// getsockname: 本端地址 = MY_IP + local_port(未绑定端口为 0)
 pub fn socket_getsockname(slot: usize) -> Option<SocketAddr> {
@@ -341,3 +343,14 @@ pub fn socket_getpeername(slot: usize) -> Option<SocketAddr> {
     }
 }
 
+/// setsockopt: 目前只认 SO_REUSEADDR(非零开启);未知选项返回 false
+pub fn socket_setsockopt(slot: usize, optname: usize, optval: usize) -> bool {
+    let mut table = SOCKET_TABLE.lock();
+    if optname != SO_REUSEADDR { return false; }
+    let on = optval != 0;
+    match table.slots.get_mut(slot) {
+        Some(Some(Socket::Tcp(t))) => { t.reuse_addr = on; true }
+        Some(Some(Socket::Udp(u))) => { u.reuse_addr = on; true }
+        _ => false,                               // RAW 无端口概念,不支持
+    }
+}

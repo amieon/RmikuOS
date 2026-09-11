@@ -274,3 +274,10 @@ pub fn sys_net_getpeername(fd: usize, info: usize) -> isize {
     if slot < 0 { return -1; }
     write_sockaddr(slot as usize, info, socket::socket_getpeername(slot as usize))
 }
+
+/// setsockopt(fd, optname, optval) -> 0 / -1
+pub fn sys_net_setsockopt(fd: usize, optname: usize, optval: usize) -> isize {
+    let slot = get_slot_from_fd(fd);
+    if slot < 0 { return -1; }
+    if socket::socket_setsockopt(slot as usize, optname, optval) { 0 } else { -1 }
+}
