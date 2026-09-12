@@ -1,26 +1,54 @@
-#include "arch.h"
-#include "stdio.h"
-
-/*
- * 探测 get_time() 到底返回什么：
- *   - 若它返回的是"Unix 纪元秒"(自 1970-01-01 起)，算出的年份应接近 2026；
- *   - 若它返回的是开机单调 tick(自 QEMU 启动起)，算出的年份应接近 1970。
- * 跑起来看 year 即可判定。
+/* time.c —— 显示当前时间
+ *
+ * 数据源: 内核墙钟(epoch 秒)。需先用 ntpdate 校准,否则显示未校准提示。
+ * 纪元秒 -> 年月日 用 Howard Hinnant 的 civil_from_days 算法(纯整数,
+ * 无查表,正确处理闰年)。
  */
+#include "user.h"
+
+/* 自 1970-01-01 的天数 -> 年/月/日(Howard Hinnant, 公历) */
+static void civil_from_days(long z, int *y, int *m, int *d) {
+    z += 719468L;
+    long era = (z >= 0 ? z : z - 146096L) / 146097L;
+    unsigned doe = (unsigned)(z - era * 146097L);          /* [0, 146096] */
+    unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+    long yr = (long)yoe + era * 400L;
+    unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);      /* [0, 365] */
+    unsigned mp = (5*doy + 2)/153;                          /* [0, 11] */
+    *d = (int)(doy - (153*mp+2)/5 + 1);                     /* [1, 31] */
+    *m = (int)(mp < 10 ? mp+3 : mp-9);                      /* [1, 12] */
+    *y = (int)(yr + (*m <= 2));
+}
+
+static const char *WEEKDAY[] = { "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed" };
+
+/* 自研 printf 不保证 %02d,手补零 */
+static void print2(int v) {
+    if (v < 10) putchar('0');
+    printf("%d", v);
+}
+
 int main(void) {
-    isize raw = get_time();
+    time_t t = time(0);
+    if (t == 0) {
+        printf("time: wall clock not set, run `ntpdate` first\n");
+        return 1;
+    }
 
-    /* 主线判定：把返回值直接当成"自 1970 起的秒数" */
-    //printf("%d\n",sizeof(raw));
-    long secs = (long)raw;
+    long secs = (long)t;
     long days = secs / 86400L;
-    long years = 1970L + days / 365L;
+    long rem  = secs % 86400L;
+    int hh = (int)(rem / 3600L);
+    int mm = (int)((rem % 3600L) / 60L);
+    int ss = (int)(rem % 60L);
 
-    printf("raw get_time()          = %ld\n", (long)raw);
-    printf("==> if epoch seconds    -> ~year %ld\n", years);
+    int y, mo, d;
+    civil_from_days(days, &y, &mo, &d);
 
-    /* 旁证：若它是 ~10MHz 的单调 tick，自开机大约多少秒 */
-    printf("    if 10MHz ticks      -> ~%ld sec since boot\n", (long)(raw / 10000000L));
-
+    printf("%d-", y); print2(mo); putchar('-'); print2(d);
+    putchar(' ');
+    print2(hh); putchar(':'); print2(mm); putchar(':'); print2(ss);
+    printf(" UTC %s", WEEKDAY[days % 7L < 0 ? days % 7L + 7 : days % 7L]);
+    printf("  (epoch %ld)\n", secs);
     return 0;
 }
