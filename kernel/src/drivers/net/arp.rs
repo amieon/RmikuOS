@@ -2,6 +2,16 @@ use crate::drivers::net::eth::{send as eth_send, MY_MAC};
 use crate::drivers::net::ip::my_ip;
 use crate::sync::spin::Mutex;
 
+// 与 tcp.rs 同款的毫秒时钟(按架构分频)
+#[cfg(target_arch = "riscv64")]
+fn now_ms() -> u64 { (crate::timer::monotonic_time() / 10_000) as u64 }
+#[cfg(target_arch = "loongarch64")]
+fn now_ms() -> u64 { (crate::timer::monotonic_time() / 100_000) as u64 }
+
+/// ARP 条目保质期: 60s。映射关系会漂移(IP 换网卡/DHCP 重租),
+/// 过期后按未命中处理,触发重新解析——宁可重问,不吃陈尸答案。
+const ARP_TTL_MS: u64 = 60_000;
+
 #[repr(C, packed)]
 struct ArpHeader {
     hw_type: u16,
@@ -20,41 +30,62 @@ struct ArpEntry {
     ip: u32,
     mac: [u8; 6],
     valid: bool,
+    learned_ms: u64,   // 学到时刻:老化判据。命中不刷新(否则热条目永不过期)
+    ref_cnt: u32,      // 命中计数:淘汰时挑最小的(Second-Chance 的计数版,类 LFU)
 }
 
 static ARP_CACHE: Mutex<[ArpEntry; 8]> = Mutex::new([
-    ArpEntry { ip: 0, mac: [0; 6], valid: false };
+    ArpEntry { ip: 0, mac: [0; 6], valid: false, learned_ms: 0, ref_cnt: 0 };
     8
 ]);
 
+/// 条目是否过期(过期等价于不存在)
+fn expired(e: &ArpEntry) -> bool {
+    e.valid && now_ms().wrapping_sub(e.learned_ms) > ARP_TTL_MS
+}
+
 pub fn insert(ip: u32, mac: &[u8; 6]) {
     let mut cache = ARP_CACHE.lock();
-    // 更新已存在条目
+    let now = now_ms();
+    // 更新已存在条目(重新学习:刷新时间戳,计数清零)
     for e in cache.iter_mut() {
         if e.valid && e.ip == ip {
             e.mac.copy_from_slice(mac);
+            e.learned_ms = now;
+            e.ref_cnt = 0;
             return;
         }
     }
-    // 找空位
+    // 找空位或过期的尸体
     for e in cache.iter_mut() {
-        if !e.valid {
-            e.ip = ip;
-            e.mac.copy_from_slice(mac);
-            e.valid = true;
+        if !e.valid || expired(e) {
+            *e = ArpEntry { ip, mac: *mac, valid: true, learned_ms: now, ref_cnt: 1 };
             return;
         }
     }
-    // 满了则替换第一个（可改进为 LRU）
-    cache[0].ip = ip;
-    cache[0].mac.copy_from_slice(mac);
-    cache[0].valid = true;
+    // 满了:挑命中计数最小的踢掉(新条目计数 1,避免刚进门就被下一轮踢)
+    let mut victim = 0;
+    for i in 1..cache.len() {
+        if cache[i].ref_cnt < cache[victim].ref_cnt {
+            victim = i;
+        }
+    }
+    log::info!("[arp] cache full, evict ip={:#x} (ref_cnt={})",
+               cache[victim].ip, cache[victim].ref_cnt);
+    cache[victim] = ArpEntry { ip, mac: *mac, valid: true, learned_ms: now, ref_cnt: 1 };
 }
 
 pub fn lookup(ip: u32, out: &mut [u8; 6]) -> bool {
-    let cache = ARP_CACHE.lock();
-    for e in cache.iter() {
+    let mut cache = ARP_CACHE.lock();
+    for e in cache.iter_mut() {
         if e.valid && e.ip == ip {
+            if expired(e) {
+                // 过期: 作废并按未命中处理,上层走挂起队列重新解析
+                log::info!("[arp] entry expired, re-resolve {:#x}", ip);
+                e.valid = false;
+                return false;
+            }
+            e.ref_cnt = e.ref_cnt.saturating_add(1);   // 命中计数(淘汰依据)
             out.copy_from_slice(&e.mac);
             return true;
         }
