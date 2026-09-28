@@ -101,7 +101,7 @@ pub const SYSCALL_NET_RESOLVE_MANY: usize = 113;
 pub const SYSCALL_NET_SHUTDOWN: usize = 114;
 pub const SYSCALL_NET_GETSOCKNAME: usize = 115;
 pub const SYSCALL_NET_GETPEERNAME: usize = 116;
-
+pub const SYSCALL_NET_SETSOCKOPT: usize = 117;
 
 
 
