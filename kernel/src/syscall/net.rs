@@ -2,8 +2,9 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::drivers::net::socket::{self, SOCKET_TABLE, Socket, SocketAddr, SocketFile, release_slot};
-use crate::drivers::net::tcp;
+use crate::drivers::net::socket::{self, SOCKET_TABLE, SocketAddr, SocketFile, release_slot};
+use crate::drivers::net::socket::SlotKind;
+use crate::drivers::net::{tcp, udp};
 use crate::task::{get_fd_flags_current, read_current_user_bytes, write_current_user_bytes};
 
 fn get_slot_from_fd(fd: usize) -> isize{
@@ -54,11 +55,13 @@ pub fn sys_net_sendto(fd: usize, buf: usize, len: usize, ip: usize, port: usize)
         _ => return -1,
     };
     let dst = SocketAddr { ip: ip as u32, port: port as u16 };
-    if socket::socket_sendto(slot as usize, dst, &data) {
-        len as isize
-    } else {
-        -1
-    }
+    let slot = slot as usize;
+    let ok = match socket::slot_kind(slot) {
+        Some(SlotKind::Udp) => udp::sendto(slot, dst, &data),
+        Some(SlotKind::Raw) => socket::socket_raw_sendto(slot, dst, &data),
+        _ => false,
+    };
+    if ok { len as isize } else { -1 }
 }
 
 /// recvfrom(fd, buf, maxlen, info) -> 实际长度 / 0(超时) / -1
@@ -95,7 +98,13 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
 pub fn sys_net_connect(fd: usize, ip: usize, port: usize) -> isize {
     let mut slot = get_slot_from_fd(fd);
     if slot < 0 {return -1;}
-    tcp::connect(slot as usize, ip as u32, port as u16)
+    let slot = slot as usize;
+    match socket::slot_kind(slot) {
+        Some(SlotKind::Tcp) => tcp::connect(slot, ip as u32, port as u16),
+        // UDP: 无握手,只记默认对端 + 接收过滤;全 0 地址(0.0.0.0:0)表示断开
+        Some(SlotKind::Udp) => udp::connect(slot, ip as u32, port as u16),
+        _ => -1,
+    }
 }
 
 pub fn sys_net_listen(fd: usize, _backlog: usize) -> isize {
@@ -139,15 +148,27 @@ pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
         Some(d) if d.len() == len => d,
         _ => return -1,
     };
-    tcp::send_data(slot as usize, &data)
+    let slot = slot as usize;
+    match socket::slot_kind(slot) {
+        Some(SlotKind::Tcp) => tcp::send_data(slot, &data),
+        // UDP: 向 connect 记下的默认对端发送,未 connect 返回 -1(类 EDESTADDRREQ)
+        Some(SlotKind::Udp) => udp::send_data(slot, &data),
+        _ => -1,
+    }
 }
 
-/// recv 返回 n / 0(EOF) / -1
+/// recv 返回 n / 0(EOF或超时) / -1
 pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize) -> isize {
-    let mut slot = get_slot_from_fd(fd);
+    let slot = get_slot_from_fd(fd);
     if slot < 0 {return -1;}
     let mut kbuf = alloc::vec![0u8; maxlen.min(2048)];
-    let n = tcp::recv_data(slot as usize, &mut kbuf);
+    let slot = slot as usize;
+    let n = match socket::slot_kind(slot) {
+        Some(SlotKind::Tcp) => tcp::recv_data(slot, &mut kbuf),
+        // UDP 已 connect 的由 udp::input 负责来源过滤
+        Some(SlotKind::Udp) => udp::recv_data(slot, &mut kbuf),
+        _ => -1,
+    };
     if n <= 0 {
         return n;
     }

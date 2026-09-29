@@ -1,9 +1,9 @@
 use alloc::collections::vec_deque::VecDeque;
 use alloc::collections::BTreeMap; // 加在 VecDeque 那行旁边
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 use crate::drivers::net::ip::{checksum as ip_checksum, send as ip_send, my_ip};
-use crate::drivers::net::socket::{alloc_slot, release_slot, Socket, SocketAddr, SOCKET_TABLE};
+use crate::drivers::net::socket::{alloc_ephem_port, alloc_slot, release_slot, Socket, SocketAddr, SOCKET_TABLE};
 use crate::println;
 use crate::sync::spin::Mutex;
 
@@ -412,10 +412,8 @@ fn as_tcp_mut(s: &mut Socket) -> Option<&mut TcpSocket> {
     if let Socket::Tcp(t) = s { Some(t) } else { None }
 }
 
-static NEXT_EPHEM: AtomicU16 = AtomicU16::new(49152);
 static ISN_SEQ: AtomicU32 = AtomicU32::new(0x1234_5678);
 
-fn next_ephem_port() -> u16 { NEXT_EPHEM.fetch_add(1, Ordering::Relaxed) }
 fn next_isn() -> u32 { ISN_SEQ.fetch_add(0x10001, Ordering::Relaxed) ^ (now_ms() as u32) }
 
 // ---------- 线上发送 ----------
@@ -744,16 +742,27 @@ pub fn tick() {
 pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
     {
         let mut table = SOCKET_TABLE.lock();
+        // 先校验槽位/状态并看是否需要自动分配端口(不可变借用);
+        // 分配器要传 &table,与下面的可变借用互斥,故拆成两段
+        let need_port = match table.slots.get(fd).and_then(|s| s.as_ref()).and_then(as_tcp) {
+            Some(t) if t.state == TcpState::Closed => t.local_port == 0,
+            _ => return -1,
+        };
+        if need_port {
+            // 统一走 socket 层分配器(49152+,带全表冲突检查),取代旧的 NEXT_EPHEM 盲递增
+            match alloc_ephem_port(&table) {
+                Some(p) => {
+                    if let Some(t) = table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+                        t.local_port = p;
+                    }
+                }
+                None => return -1,
+            }
+        }
         let t = match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
             Some(t) => t,
             None => return -1,
         };
-        if t.state != TcpState::Closed {
-            return -1;
-        }
-        if t.local_port == 0 {
-            t.local_port = next_ephem_port();
-        }
         let isn = next_isn();
         t.remote = Some(SocketAddr { ip, port });
         t.snd_una = isn;

@@ -1,5 +1,5 @@
 use crate::drivers::net::ip::{IpHeader, my_ip, checksum, send as ip_send};
-use crate::drivers::net::socket::{SOCKET_TABLE, Socket, SocketAddr};
+use crate::drivers::net::socket::{self, SOCKET_TABLE, Socket, SocketAddr};
 use alloc::vec::Vec;
 
 #[repr(C, packed)]
@@ -100,6 +100,13 @@ pub fn input(packet: &[u8], src_ip: u32, dst_ip: u32) {
     for s in table.slots.iter_mut().flatten() {
         if let Socket::Udp(sock) = s {
             if sock.local_port == dst_port {
+                // connect() 过的 socket 只收默认对端的包(POSIX 接收过滤):
+                // 来源不匹配就跳过,继续找下一个绑了同端口的 socket
+                if let Some(r) = sock.remote {
+                    if r.ip != src_ip || r.port != src_port {
+                        continue;
+                    }
+                }
                 if sock.rx_queue.len() < 64 {
                     // 保存 (src_ip, src_port, data)
                     let mut frame = Vec::with_capacity(8 + 2 + data.len());
@@ -131,4 +138,85 @@ pub fn send_broadcast(src_ip: u32, src_port: u16, dst_port: u16, data: &[u8]) {
         core::ptr::write_unaligned(core::ptr::addr_of_mut!((*hdr).checksum), csum.to_be());
     }
     crate::drivers::net::ip::send_broadcast(src_ip, 17, &pkt);
+}
+/// ip==0 且 port==0(0.0.0.0:0) 表示断开,清掉 remote(对应 POSIX connect(AF_UNSPEC));
+/// 允许重复调用改换对端(POSIX 允许 UDP socket 反复 connect);
+/// 无握手、无网络流量,纯本地记账。成功 0,失败 -1(与 tcp::connect 对齐)。
+pub fn connect(slot: usize, ip: u32, port: u16) -> isize {
+    let mut table = SOCKET_TABLE.lock();
+    // 先确认槽位确实是 UDP
+    match table.slots.get(slot) {
+        Some(Some(Socket::Udp(_))) => {}
+        _ => return -1,
+    }
+    if ip == 0 && port == 0 {
+        if let Some(Some(Socket::Udp(u))) = table.slots.get_mut(slot) {
+            u.remote = None;
+        }
+        log::info!("[udp] slot={} disconnect (remote cleared)", slot);
+        return 0;
+    }
+    if socket::ensure_udp_port(&mut table, slot).is_none() {
+        return -1;
+    }
+    if let Some(Some(Socket::Udp(u))) = table.slots.get_mut(slot) {
+        u.remote = Some(SocketAddr { ip, port });
+        let lp = u.local_port;
+        log::info!(
+            "[udp] slot={} connect {}.{}.{}.{}:{}, local_port={}",
+            slot,
+            (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff,
+            port, lp
+        );
+        0
+    } else {
+        -1
+    }
+}
+
+/// sendto 语义:经 socket 表发送 UDP 数据报。
+/// 未 bind 的 socket 先自动分配临时端口(POSIX autobind),
+pub fn sendto(slot: usize, dst: SocketAddr, data: &[u8]) -> bool {
+    let mut table = SOCKET_TABLE.lock();
+    let src_port = match socket::ensure_udp_port(&mut table, slot) {
+        Some(p) => p,
+        None => return false,
+    };
+    drop(table);
+    send(dst.ip, src_port, dst.port, data);
+    true
+}
+
+/// send() 语义:向 connect 记下的默认对端发送(对应 tcp::send_data)。
+/// 未 connect 返回 -1(类 EDESTADDRREQ)。
+pub fn send_data(slot: usize, data: &[u8]) -> isize {
+    let remote = {
+        let table = SOCKET_TABLE.lock();
+        match table.slots.get(slot) {
+            Some(Some(Socket::Udp(u))) => u.remote,
+            _ => None,
+        }
+    };
+    match remote {
+        Some(r) if r.port != 0 => {
+            if sendto(slot, r, data) { data.len() as isize } else { -1 }
+        }
+        _ => -1,
+    }
+}
+
+/// recv() 语义:与 recvfrom 同一数据源,只是不回填对端地址(对应 tcp::recv_data)。
+/// 已 connect 的 socket 由 input() 负责来源过滤。返回 n / 0(超时) / -1。
+pub fn recv_data(slot: usize, out: &mut [u8]) -> isize {
+    let mut spins = 0usize;
+    loop {
+        crate::drivers::net::maybe_poll();
+        if let Some((_src, n)) = socket::socket_recvfrom(slot, out) {
+            return n as isize;
+        }
+        spins += 1;
+        if spins > 50_000_000 {
+            return 0; // 超时,语义同 recvfrom
+        }
+    }
 }

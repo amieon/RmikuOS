@@ -1,5 +1,6 @@
 use alloc::collections::vec_deque::VecDeque;
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU32, Ordering};
 use crate::fs::stat::STAT_TYPE_SOCKET;
 use crate::fs::{File, Stat};
 use crate::sync::spin::Mutex;
@@ -44,6 +45,54 @@ pub fn release_slot(table: &mut SocketTable, fd: usize) {
         table.slots[fd] = None;
         table.free.push_back(fd);
     }
+}
+
+/* 
+ * IANA 临时端口段 49152–65535。bind(0) / UDP connect / UDP 首次 sendto /
+ */
+
+pub const EPHEM_PORT_MIN: u16 = 49152;
+pub const EPHEM_PORT_MAX: u16 = 65535; // 含
+const EPHEM_SPAN: u32 = (EPHEM_PORT_MAX - EPHEM_PORT_MIN + 1) as u32; // 16384
+static EPHEM_CURSOR: AtomicU32 = AtomicU32::new(EPHEM_PORT_MIN as u32);
+
+/// 从游标起绕圈扫描,返回第一个未被任何 socket 占用的临时端口。
+pub fn alloc_ephem_port(table: &SocketTable) -> Option<u16> {
+    let cur = EPHEM_CURSOR.fetch_add(1, Ordering::Relaxed);
+    // wrapping_sub 兜底游标绕回;u32 计数要 40 亿次分配才回绕,实际走不到
+    let base = cur.wrapping_sub(EPHEM_PORT_MIN as u32) % EPHEM_SPAN;
+    for i in 0..EPHEM_SPAN {
+        let p = (EPHEM_PORT_MIN as u32 + (base + i) % EPHEM_SPAN) as u16;
+        let used = table.slots.iter().flatten().any(|s| match s {
+            Socket::Udp(u) => u.local_port == p,
+            Socket::Tcp(t) => t.local_port == p,
+            Socket::Raw(_) => false,
+        });
+        if !used {
+            return Some(p);
+        }
+    }
+    log::info!("[net] ephemeral port range exhausted (49152-65535 all in use)");
+    None
+}
+
+/// 取 UDP socket 的本端端口;为 0 时先自动分配(POSIX autobind 语义:
+/// 未显式 bind 的 socket 首次发送/connect 时由内核指派临时端口)。
+/// 返回 None 表示槽位不是 UDP 或端口耗尽。调用方须已持有表锁。
+pub(crate) fn ensure_udp_port(table: &mut SocketTable, slot: usize) -> Option<u16> {
+    let cur = match table.slots.get(slot) {
+        Some(Some(Socket::Udp(u))) => u.local_port,
+        _ => return None,
+    };
+    if cur != 0 {
+        return Some(cur);
+    }
+    let p = alloc_ephem_port(table)?;
+    if let Some(Some(Socket::Udp(u))) = table.slots.get_mut(slot) {
+        u.local_port = p;
+    }
+    log::info!("[udp] slot={} autobind ephemeral port {}", slot, p);
+    Some(p)
 }
 
 
@@ -127,14 +176,12 @@ pub fn socket_bind(fd: usize, port: u16) -> bool {
         })
     };
     
-    /* 端口 0 = 请求内核自动分配（POSIX bind 语义）。
-     * 注意不能直接赋 0: 未绑定 socket 的默认 local_port 也是 0, 会撞冲突检查。 */
+    /* 端口 0 = 请求内核自动分配（POSIX bind 语义）。 */
     let actual = if port == 0 {
-        let mut p = 20000u16;
-        while p < 65535 && used(p) {
-            p += 1;
+        match alloc_ephem_port(&table) {
+            Some(p) => p,
+            None => return false,
         }
-        p
     } else {
         if used(port) {
             return false;
@@ -148,20 +195,14 @@ pub fn socket_bind(fd: usize, port: u16) -> bool {
         _ => false,
     }
 }
-/// UDP 发送（TCP fd 传进来返回 false）
-pub fn socket_sendto(fd: usize, dst: SocketAddr, data: &[u8]) -> bool {
+/// RAW 发送:用户已组好 ICMP 报文,内核只套 IP 头(UDP 发送见 udp::sendto)
+pub fn socket_raw_sendto(fd: usize, dst: SocketAddr, data: &[u8]) -> bool {
     let table = SOCKET_TABLE.lock();
     match table.slots.get(fd) {
-        Some(Some(Socket::Udp(sock))) => {
-            let src_port = sock.local_port;
-            drop(table);
-            udp::send(dst.ip, src_port, dst.port, data);
-            true
-        }
         Some(Some(Socket::Raw(sock))) => {
             let proto = sock.protocol;
             drop(table);
-            ip::send(dst.ip, proto, data);   // 用户已组好 ICMP,内核只套 IP 头
+            ip::send(dst.ip, proto, data);
             true
         }
         _ => false,
@@ -213,7 +254,8 @@ pub fn deliver_raw(protocol: u8, src_ip: u32, data: &[u8]) {
     }
 }
 
-fn slot_kind(slot: usize) -> Option<SlotKind> {
+/// 槽位的 socket 类型,syscall 层按它做 TCP/UDP/RAW 分派
+pub(crate) fn slot_kind(slot: usize) -> Option<SlotKind> {
     let table = SOCKET_TABLE.lock();
     match table.slots.get(slot) {
         Some(Some(Socket::Tcp(_))) => Some(SlotKind::Tcp),
@@ -239,14 +281,6 @@ fn raw_set_remote(slot: usize, ip: u32) {
 }
 
 /// write 的前置:读默认对端。未设置(None)时 write 返回 -1(类 ENOTCONN)。
-fn udp_get_remote(slot: usize) -> Option<SocketAddr> {
-    let table = SOCKET_TABLE.lock();
-    match table.slots.get(slot) {
-        Some(Some(Socket::Udp(u))) => u.remote,
-        _ => None,
-    }
-}
-
 fn raw_get_remote(slot: usize) -> Option<u32> {
     let table = SOCKET_TABLE.lock();
     match table.slots.get(slot) {
@@ -260,7 +294,7 @@ fn raw_get_remote(slot: usize) -> Option<u32> {
 pub struct SocketFile {
     pub slot: usize,
 }
-enum SlotKind { Tcp, Udp, Raw }
+pub(crate) enum SlotKind { Tcp, Udp, Raw }
 
 impl File for SocketFile {
     fn readable(&self) -> bool { true }
@@ -288,12 +322,9 @@ impl File for SocketFile {
     fn write(&self, buf: &[u8]) -> isize {
         match slot_kind(self.slot) {
             Some(SlotKind::Tcp) => tcp::send_data(self.slot, buf),
-            Some(SlotKind::Udp) => match udp_get_remote(self.slot) {
-                Some(remote) if socket_sendto(self.slot, remote, buf) => buf.len() as isize,
-                _ => -1,  
-            },
+            Some(SlotKind::Udp) => udp::send_data(self.slot, buf),
             Some(SlotKind::Raw) => match raw_get_remote(self.slot) {
-                Some(ip) if socket_sendto(self.slot, SocketAddr { ip, port: 0 }, buf) => {
+                Some(ip) if socket_raw_sendto(self.slot, SocketAddr { ip, port: 0 }, buf) => {
                     buf.len() as isize
                 }
                 _ => -1,
