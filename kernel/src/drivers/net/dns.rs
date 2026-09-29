@@ -9,6 +9,7 @@ use alloc::vec::{Vec};
 use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 
 use crate::drivers::net::socket::{self, SocketAddr, SOCKET_TABLE};
+use crate::drivers::net::udp;
 use crate::sync::spin::Mutex;
 
 /// DNS 服务器地址，默认 slirp 内置 DNS(10.0.2.3)；DHCP 租约落地后 set_dns_server 热切换。
@@ -282,7 +283,7 @@ pub fn resolve(name: &str) -> Option<u32> {
     let mut buf = [0u8; 512];
     let mut spins = 0usize;
     let mut sent = 1u32;
-    socket::socket_sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
+    udp::sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
 
     let result = loop {
         crate::drivers::net::poll();
@@ -309,7 +310,7 @@ pub fn resolve(name: &str) -> Option<u32> {
         spins += 1;
         if spins % 5_000_000 == 0 && sent < 4 {
             log::info!("[dns] resend #{} for '{}'", sent, name);
-            socket::socket_sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
+            udp::sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
             sent += 1;
         }
         if spins >= 20_000_000 {
@@ -352,7 +353,7 @@ pub fn resolve_many(names: &[&str]) -> Vec<Option<u32>> {
     for (i, name) in names.iter().enumerate() {
         let id = next_id();
         let query = build_query(id, name);
-        socket::socket_sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
+        udp::sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
         pending.insert(id, (i, query, 1));
         log::info!("[dns] >>> batch#{} '{}' id={}", i, name, id);
     }
@@ -396,7 +397,7 @@ pub fn resolve_many(names: &[&str]) -> Vec<Option<u32>> {
             }
             for (id, q) in to_resend {
                 log::info!("[dns] resend id={}", id);
-                socket::socket_sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &q);
+                udp::sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &q);
                 if let Some(e) = pending.get_mut(&id) {
                     e.2 += 1;
                 }
