@@ -21,6 +21,7 @@ extern "C" {
 #include "signal.h"
 #include "net.h"
 #include "env.h"
+#include "utime.h"
 
 #ifdef __cplusplus
 }
