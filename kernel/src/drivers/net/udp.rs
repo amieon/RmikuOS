@@ -205,13 +205,35 @@ pub fn send_data(slot: usize, data: &[u8]) -> isize {
     }
 }
 
+/// recvfrom 语义:弹一帧数据报并回传来源地址。
+/// 帧格式 [src_ip(4B) + src_port(2B) + data] 由上面的 input() 定义,
+/// 生产者/消费者同文件,改格式不用跨文件对账。
+pub fn recvfrom(slot: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
+    let mut table = SOCKET_TABLE.lock();
+    match table.slots.get_mut(slot) {
+        Some(Some(Socket::Udp(sock))) => {
+            let frame = sock.rx_queue.pop_front()?;
+            if frame.len() < 6 {
+                return None;
+            }
+            let src_ip = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
+            let src_port = u16::from_be_bytes([frame[4], frame[5]]);
+            let data = &frame[6..];
+            let len = data.len().min(buf.len());
+            buf[..len].copy_from_slice(&data[..len]);
+            Some((SocketAddr { ip: src_ip, port: src_port }, len))
+        }
+        _ => None,
+    }
+}
+
 /// recv() 语义:与 recvfrom 同一数据源,只是不回填对端地址(对应 tcp::recv_data)。
 /// 已 connect 的 socket 由 input() 负责来源过滤。返回 n / 0(超时) / -1。
 pub fn recv_data(slot: usize, out: &mut [u8]) -> isize {
     let mut spins = 0usize;
     loop {
         crate::drivers::net::maybe_poll();
-        if let Some((_src, n)) = socket::socket_recvfrom(slot, out) {
+        if let Some((_src, n)) = recvfrom(slot, out) {
             return n as isize;
         }
         spins += 1;

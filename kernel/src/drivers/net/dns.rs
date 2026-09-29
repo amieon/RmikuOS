@@ -287,7 +287,7 @@ pub fn resolve(name: &str) -> Option<u32> {
 
     let result = loop {
         crate::drivers::net::poll();
-        if let Some((src, n)) = socket::socket_recvfrom(fd, &mut buf) {
+        if let Some((src, n)) = udp::recvfrom(fd, &mut buf) {
             // 只认 DNS 服务器发回的响应，其余来源的包忽略
             if src.ip == server && src.port == DNS_PORT {
                 match parse_response(&buf[..n], id) {
@@ -363,7 +363,7 @@ pub fn resolve_many(names: &[&str]) -> Vec<Option<u32>> {
     let mut spins = 0usize;
     while !pending.is_empty() {
         crate::drivers::net::poll();
-        if let Some((src, n)) = socket::socket_recvfrom(fd, &mut buf) {
+        if let Some((src, n)) = udp::recvfrom(fd, &mut buf) {
             if src.ip == server && src.port == DNS_PORT {
                 // 先读包的 ID 验明正身，在 pending 里才解析（多路复用的关键一步）
                 let pkt_id = u16::from_be_bytes([buf[0], buf[1]]);

@@ -109,7 +109,7 @@ fn wait_reply(fd: usize, xid: u32, want: &[u8], resend: &dyn Fn()) -> Option<Rep
     let mut spins = 0usize;
     loop {
         crate::drivers::net::poll();
-        if let Some((_, n)) = socket::socket_recvfrom(fd, &mut buf) {
+        if let Some((_, n)) = udp::recvfrom(fd, &mut buf) {
             if let Some(r) = parse_reply(&buf[..n], xid) {
                 if want.contains(&r.msg_type) {
                     return Some(r);

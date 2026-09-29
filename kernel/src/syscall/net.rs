@@ -71,9 +71,15 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
     let cap = maxlen.min(2048);
     let mut kbuf = alloc::vec![0u8; cap];
     let mut spins = 0usize;
+    let slot = slot as usize;
     loop {
         crate::drivers::net::maybe_poll(); 
-        if let Some((src, n)) = socket::socket_recvfrom(slot as usize, &mut kbuf) {
+        let got = match socket::slot_kind(slot) {
+            Some(SlotKind::Udp) => udp::recvfrom(slot, &mut kbuf),
+            Some(SlotKind::Raw) => socket::socket_raw_recvfrom(slot, &mut kbuf),
+            _ => None,
+        };
+        if let Some((src, n)) = got {
             if write_current_user_bytes(buf, &kbuf[..n]).is_none() {
                 return -1;
             }

@@ -209,21 +209,11 @@ pub fn socket_raw_sendto(fd: usize, dst: SocketAddr, data: &[u8]) -> bool {
     }
 }
 
-pub fn socket_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
+/// RAW 接收:弹一帧 [src_ip(4B) + data],回传来源 IP(port 恒 0)。
+/// UDP 接收见 udp::recvfrom(帧格式不同,各管各的)。
+pub fn socket_raw_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
     let mut table = SOCKET_TABLE.lock();
     match table.slots.get_mut(fd) {
-        Some(Some(Socket::Udp(sock))) => {
-            let frame = sock.rx_queue.pop_front()?;
-            if frame.len() < 6 {
-                return None;
-            }
-            let src_ip = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
-            let src_port = u16::from_be_bytes([frame[4], frame[5]]);
-            let data = &frame[6..];
-            let len = data.len().min(buf.len());
-            buf[..len].copy_from_slice(&data[..len]);
-            Some((SocketAddr { ip: src_ip, port: src_port }, len))
-        }
         Some(Some(Socket::Raw(sock))) => {
             let frame = sock.rx_queue.pop_front()?;
             if frame.len() < 4 {
@@ -307,11 +297,11 @@ impl File for SocketFile {
     fn read(&self, buf: &mut [u8]) -> isize {
         match slot_kind(self.slot) {
             Some(SlotKind::Tcp) => tcp::recv_data(self.slot, buf),
-            Some(SlotKind::Udp) => match socket_recvfrom(self.slot, buf) {
+            Some(SlotKind::Udp) => match udp::recvfrom(self.slot, buf) {
                 Some((addr, n)) => { udp_set_remote(self.slot, addr); n as isize }
                 None => 0, 
             },
-            Some(SlotKind::Raw) => match socket_recvfrom(self.slot, buf) {
+            Some(SlotKind::Raw) => match socket_raw_recvfrom(self.slot, buf) {
                 Some((addr, n)) => { raw_set_remote(self.slot, addr.ip); n as isize }
                 None => 0,
             },
