@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 use crate::drivers::net::ip::{checksum as ip_checksum, send as ip_send, my_ip};
 use crate::drivers::net::socket::{alloc_ephem_port, alloc_slot, release_slot, Socket, SocketAddr, SOCKET_TABLE};
+use crate::fs::{POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT};
 use crate::println;
 use crate::sync::spin::Mutex;
 
@@ -914,6 +915,64 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
             }
         }
     }
+}
+
+/// poll 就绪:listen 看 accept 队列;已建连看接收队列/EOF 与有效发送窗口。
+/// POLLERR/POLLHUP 不依赖 events,与 POSIX 一样由内核主动回填。
+pub fn poll_ready(fd: usize, events: i16) -> i16 {
+    let table = SOCKET_TABLE.lock();
+    let t = match table.slots.get(fd).and_then(|s| s.as_ref()).and_then(as_tcp) {
+        Some(t) => t,
+        None => return POLLNVAL,
+    };
+
+    let mut revents = 0;
+    if t.rst {
+        revents |= POLLERR;
+    }
+
+    match t.state {
+        TcpState::Closed => {
+            // 新建未 connect 的 TCP 不算挂断;只有 RST 落地后的 Closed 才报 HUP。
+            if t.rst {
+                revents |= POLLHUP;
+            }
+        }
+        TcpState::Listen => {
+            if events & POLLIN != 0 && !t.accept_queue.is_empty() {
+                revents |= POLLIN;
+            }
+        }
+        TcpState::SynSent | TcpState::SynReceived => {
+            // 非阻塞 connect 尚未实现:握手中 neither readable nor writable。
+        }
+        TcpState::Established | TcpState::FinWait1 | TcpState::FinWait2
+        | TcpState::CloseWait | TcpState::Closing | TcpState::LastAck
+        | TcpState::TimeWait => {
+            let eof = t.rx_shutdown
+                || matches!(
+                    t.state,
+                    TcpState::CloseWait | TcpState::Closing | TcpState::LastAck | TcpState::TimeWait
+                );
+            if events & POLLIN != 0 && (!t.rx_queue.is_empty() || eof) {
+                revents |= POLLIN;
+            }
+
+            // 与 send_data 同一把尺子:min(对端窗口, CUBIC cwnd) 还有余量才可写。
+            // CloseWait 是"对端已关、本端还能写"的半关闭状态,也算可写。
+            if events & POLLOUT != 0
+                && matches!(t.state, TcpState::Established | TcpState::CloseWait)
+            {
+                let cwnd_bytes = (t.cwnd / CWND_SCALE) as usize * MAX_PAYLOAD;
+                let eff_wnd = (t.snd_wnd as usize).min(cwnd_bytes);
+                let in_flight = t.snd_nxt.wrapping_sub(t.snd_una) as usize;
+                if in_flight < eff_wnd {
+                    revents |= POLLOUT;
+                }
+            }
+        }
+    }
+    revents
 }
 
 pub fn close(fd: usize) -> isize {
