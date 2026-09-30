@@ -33,7 +33,7 @@ pub struct PipeWriteEnd { pub inner: Arc<Mutex<Pipe>> }
 
 use alloc::sync::Arc;
 
-use super::file::{File, FileRef,PipeCloseKind};
+use super::file::{File, FileRef, PipeCloseKind, POLLERR, POLLIN, POLLOUT};
 use super::stat::*;
 
 
@@ -44,6 +44,16 @@ impl File for PipeReadEnd {
 
     fn writable(&self) -> bool {
         false
+    }
+
+    /// 读端:缓冲非空可读;所有写端关闭后读 EOF,也算可读。
+    fn poll_ready(&self, events: i16) -> i16 {
+        let pipe = self.inner.lock();
+        if events & POLLIN != 0 && (pipe.len != 0 || pipe.writer_count == 0) {
+            POLLIN
+        } else {
+            0
+        }
     }
 
     fn on_fork(&self){
@@ -96,6 +106,20 @@ impl File for PipeWriteEnd {
 
     fn writable(&self) -> bool {
         true
+    }
+
+    /// 写端:读端全关闭后写会 EPIPE,poll 报 POLLERR;
+    /// 否则缓冲未满即可写(POLLOUT 只保证能写进至少一个字节)。
+    fn poll_ready(&self, events: i16) -> i16 {
+        let pipe = self.inner.lock();
+        if pipe.reader_count == 0 {
+            return POLLERR;
+        }
+        if events & POLLOUT != 0 && pipe.len < PIPE_BUF_SIZE {
+            POLLOUT
+        } else {
+            0
+        }
     }
 
     fn on_fork(&self){

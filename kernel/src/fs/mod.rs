@@ -15,7 +15,7 @@ pub mod flag;
 //pub mod initramfs;
 mod stdio;
 
-pub use file::{File, FileRef};
+pub use file::{File, FileRef, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT};
 pub use inode::{Inode, InodeRef, Metadata, InodeType};
 use crate::fs::inode::{check_access, R_OK, W_OK, X_OK};
 pub use stdio::{stdin, stdout};
