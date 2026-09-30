@@ -113,6 +113,8 @@ pub struct TcpSocket {
     pub has_rtt: bool,
     pub time_wait_deadline: u64,
     pub accept_queue: VecDeque<usize>,
+   
+    pub backlog: usize,
     pub parent: Option<usize>,
     pub rst: bool,
     // ---------- 拥塞控制(CUBIC) ----------
@@ -161,6 +163,7 @@ impl TcpSocket {
             has_rtt: false,
             time_wait_deadline: 0,
             accept_queue: VecDeque::new(),
+            backlog: 0,
             parent: None,
             rst: false,
             cwnd: INIT_CWND,
@@ -545,6 +548,36 @@ pub fn input(segment: &[u8], src_ip: u32) {
         if flags & SYN == 0 {
             return;
         }
+
+        /* listen backlog 教学语义:半连接(SynReceived) + 已完成但未 accept
+         * 的全连接共用一个额度。满了就丢 SYN;客户端会重传,accept()
+         * 腾出位置后重传仍能成功。 */
+        let (backlog, accepted) = match &table.slots[i] {
+            Some(Socket::Tcp(l)) => (l.backlog, l.accept_queue.len()),
+            _ => return,
+        };
+        let half_open = table
+            .slots
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s,
+                    Some(Socket::Tcp(t))
+                        if t.parent == Some(i) && t.state == TcpState::SynReceived
+                )
+            })
+            .count();
+        let pending = accepted + half_open;
+        if pending >= backlog {
+            log::info!(
+                "[tcp] backlog full: port={} pending={}/{}, drop SYN from {}.{}.{}.{}:{}",
+                dst_port, pending, backlog,
+                (src_ip >> 24) & 0xff, (src_ip >> 16) & 0xff,
+                (src_ip >> 8) & 0xff, src_ip & 0xff, src_port
+            );
+            return;
+        }
+
         let child_idx = match alloc_slot(&mut table) {
             Some(c) => c,
             None => return,
@@ -797,11 +830,15 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
     }
 }
 
-pub fn listen(fd: usize) -> isize {
+pub fn listen(fd: usize, backlog: usize) -> isize {
     let mut table = SOCKET_TABLE.lock();
     match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
         Some(t) if t.state == TcpState::Closed && t.local_port != 0 => {
+            // POSIX 允许实现自行处理 backlog=0;教学版按 1 处理,避免服务直接不可用。
+            let backlog = backlog.max(1);
+            t.backlog = backlog;
             t.state = TcpState::Listen;
+            log::info!("[tcp] listen slot={} port={} backlog={}", fd, t.local_port, backlog);
             0
         }
         _ => -1,

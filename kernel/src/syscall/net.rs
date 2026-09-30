@@ -113,10 +113,10 @@ pub fn sys_net_connect(fd: usize, ip: usize, port: usize) -> isize {
     }
 }
 
-pub fn sys_net_listen(fd: usize, _backlog: usize) -> isize {
+pub fn sys_net_listen(fd: usize, backlog: usize) -> isize {
     let mut slot = get_slot_from_fd(fd);
     if slot < 0 {return -1;}
-    tcp::listen(slot as usize)
+    tcp::listen(slot as usize, backlog)
 }
 
 /// accept(fd, info) -> child_fd / -1；info 同 recvfrom 的 8 字节格式
@@ -165,7 +165,7 @@ pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
 
 /// recv 返回 n / 0(EOF或超时) / -1
 pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize) -> isize {
-    let slot = get_slot_from_fd(fd);
+    let mut slot = get_slot_from_fd(fd);
     if slot < 0 {return -1;}
     let mut kbuf = alloc::vec![0u8; maxlen.min(2048)];
     let slot = slot as usize;
