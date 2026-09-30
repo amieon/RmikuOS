@@ -199,7 +199,7 @@ fn primary_init(id: usize) -> ! {
     drivers::net::init();
     
     #[cfg(not(feature = "pair-net"))]
-    drivers::net::dhcp::dhcp_test();
+    drivers::net::dhcp::handshake();
 
     HART_LOCALS[id].ready.store(true, Ordering::Release);
     MASTER_READY.store(true, Ordering::Release);

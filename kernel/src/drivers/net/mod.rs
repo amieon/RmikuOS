@@ -43,6 +43,7 @@ pub fn poll() {
         }
     }
     tcp::tick();
+    dhcp::tick(); 
 }
 /// 供 UDP/IP 层发送时获取网卡引用（调用者已持有锁或确保单核执行）
 pub fn with_net<F, R>(f: F) -> R
