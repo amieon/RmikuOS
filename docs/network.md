@@ -4,20 +4,21 @@
 
 ## Network Stack
 
-RmikuOS 自带一套 TCP/IP 协议栈：自 virtio-net 驱动起，经 Ethernet / ARP / IPv4 / ICMP / UDP / TCP 与 DHCP，到一组专用的 socket 系统调用（号段 100–117），最终在用户态跑起一个真实的 HTTP 服务器与 TFTP 客户端——宿主机浏览器经 QEMU `hostfwd` 直接访问 guest 内的页面，两台 QEMU 经 socket pair 互 ping。协议栈每一层都是内核 `drivers/net/` 下的 Rust 代码，不依赖任何外部网络 crate。
+RmikuOS 自带一套 TCP/IP 协议栈：自 virtio-net 驱动起，经 Ethernet / ARP / IPv4 / ICMP / UDP / TCP 与 DHCP（含 T1/T2 租约续期），到一组专用的 socket 系统调用（号段 100–117）和通用 `poll()`，最终在用户态跑起一个真实的 HTTP 服务器与 TFTP 客户端——宿主机浏览器经 QEMU `hostfwd` 直接访问 guest 内的页面，两台 QEMU 经 socket pair 互 ping。协议栈每一层都是内核 `drivers/net/` 下的 Rust 代码，不依赖任何外部网络 crate。
 
 ```text
 用户态   httpd(静态文件 + JSON API)   tftp(文件注入)   ping / udp_test / tcp_test
-            │  socket syscalls:100 SOCKET … 109 RECV(专用网络号段)
+            │  socket syscalls:100 SOCKET … 117 SETSOCKOPT + POLL
 ────────────┼───────────────────────────────────────────────────
-内核       Socket 层(UDP / TCP 统一 socket table,端口冲突检查)
+内核       Socket 层(UDP / TCP 统一 socket table,UDP connect,
+            │        listen backlog,poll 就绪分派,端口冲突检查)
             │
-            ├─ TCP   11 态状态机 · 滑动窗口 · Jacobson/Karn 自适应 RTO
-            ├─ UDP   无连接收发 · 校验和
+            ├─ TCP   11 态状态机 · 滑动窗口 · Jacobson/Karn 自适应 RTO · listen backlog
+            ├─ UDP   无连接收发 · connect 默认对端/接收过滤 · 校验和
             └─ ICMP  echo request / reply(ping)
             │
             IPv4   头部校验和 · 按 protocol 字段分发(17=UDP,6=TCP,1=ICMP) · 同网段直连路由
-            DHCP   四步交互(DORA)· 广播位 · options 解析,自动配置地址
+            DHCP   四步交互(DORA)· 广播位 · options 解析 · T1/T2 租约续期
             ARP    地址缓存 + 挂起队列(未命中先存整包,解析成功补发)
             │
             Ethernet → virtio-net 驱动 → QEMU slirp → 宿主机协议栈
@@ -41,13 +42,21 @@ QEMU 侧使用 slirp 用户态网络（`-netdev user`）：无需宿主机 root 
 * 11 态状态机（Closed → Listen → SynSent / SynReceived → Established → FinWait1 / 2 → CloseWait / Closing / LastAck → TimeWait），主动 open（connect）与被动 open（listen / accept）均支持；
 * 发送侧：`tx_unacked` 重传队列（SYN / FIN 各占一个序号），**Jacobson/Karn 自适应 RTO**（RFC 6298 定点 SRTT/RTTVAR，RTO = SRTT + max(G, 4·RTTVAR)，200ms–16s，指数退避，最多 8 次；详见 Network Experiments 一节）；
 * 接收侧：按序交付 + 固定窗口广告（65535），乱序段丢弃并重复 ACK；
-* 定时器不依赖硬件中断：RTO / TIME_WAIT 等全部期限由 socket 层 `poll()` 内嵌的 `tick()` 驱动；
+* 定时器不依赖硬件中断：RTO / TIME_WAIT 等全部期限由网络轮询 `maybe_poll()` 内嵌的 `tick()` 驱动；
 * 两条路径均已实机验证：主动 connect 经 slirp 访问宿主机 `nc -l`；被动 listen 经 hostfwd 接受宿主机浏览器连接。
+* **listen backlog**：listener 收到 SYN 时按教学版合并额度计算 `pending = SynReceived 半连接数 + accept_queue.len()`；`pending >= backlog` 时静默丢 SYN（客户端会自然重传），否则创建 SynReceived 子 socket。握手完成只是把同一笔额度从半连接搬到待 accept，`accept()` 弹出后才真正腾位；`listen(fd, 0)` 按 1 处理，验证程序是 `user/tests/net_backlog_test.c`。
 
 
 ### DHCP 客户端
 
-内核态 DHCP 客户端：BOOTP 236 字节头 + magic cookie（`99,130,83,99`）+ options 编解码（53 消息类型 / 50 请求地址 / 54 服务器标识 / 55 参数请求 / 3 网关 / 6 DNS / 51 租期）。flags 置广播位 `0x8000`，使 OFFER / ACK 走二层广播——租约落地之前本机没有合法地址，单播回复无从送达。四步交互后 `set_my_ip(yiaddr)`，实测租得 `10.0.2.15`、租期 86400s。
+内核态 DHCP 客户端：BOOTP 236 字节头 + magic cookie（`99,130,83,99`）+ options 编解码（53 消息类型 / 50 请求地址 / 54 服务器标识 / 55 参数请求 / 3 网关 / 6 DNS / 51 租期 / 58 T1 / 59 T2）。flags 置广播位 `0x8000`，使 OFFER / ACK 走二层广播——租约落地之前本机没有合法地址，单播回复无从送达。四步交互后 `set_my_ip(yiaddr)`，实测租得 `10.0.2.15`、租期 86400s。
+
+ACK 落地后按 RFC 2131 维护租约状态机：
+
+* **T1 续租**（option 58，缺省 `0.5 * lease`）：单播 REQUEST 给原服务器，`ciaddr` 填当前 IP；
+* **T2 重绑定**（option 59，缺省 `0.875 * lease`）：广播 REQUEST，允许任意 DHCP 服务器应答；
+* **到期处理**：仍无 ACK 就作废旧地址并重新 DISCOVER；续租收到 NAK 也立即作废旧租约；
+* **非阻塞检查**：续租检查挂在网络轮询路径上，REQUEST 有重传节流；`DHCP_DEBUG_LEASE_SECS` 可把租期压短，方便在串口观察 T1/T2。
 
 ### ICMP 与双机互 ping
 
@@ -58,7 +67,7 @@ ICMP echo request / reply 入栈后，两台 QEMU 可以直接对话：经 socke
 
 两个 bug 都由「三段定位法」在 ARP 层现形：tcpdump 里 ARP 请求的目标地址暴露了一切。
 
-### Socket 系统调用：100–117 专用号段
+### Socket 系统调用：100–117 专用号段（poll 走 86）
 
 网络调用不挤占主系统调用表，独立开一段号段——主分发只多一条范围判断，后续扩充也不污染既有编号：
 
@@ -71,6 +80,8 @@ ICMP echo request / reply 入栈后，两台 QEMU 可以直接对话：经 socke
 
 用户态经 `net.h` 封装为 `net_socket()` / `net_socket_tcp()` / `net_bind()` / `net_connect()` / `net_listen()` / `net_accept()` / `net_send()` / `net_recv()` 等，体感与 POSIX 对齐。syscall 号一旦发布就是 ABI，只增不收——`net_close`（104）在 fd 表统一后退化为「仅限 socket 的 close 别名」，保留号位不带缺口。
 
+`poll()` 单独使用 86 号，而不是占用 100–117 网络号段：它不是 socket 专属，而是统一 fd 表上的通用多路复用接口。
+
 ### 统一 fd 表：socket 也是文件
 
 socket fd 与文件 fd 曾是两套命名空间（文件索引进程 fd_table，socket 索引全局 SOCKET_TABLE），本质是 Windows 的 SOCKET/fd 双轨模型。现已统一到 Unix 的「一切皆文件」：
@@ -79,7 +90,7 @@ socket fd 与文件 fd 曾是两套命名空间（文件索引进程 fd_table，
 进程 fd_table                全局 SOCKET_TABLE(协议层注册表,保留)
 ┌─────────────┐             ┌──────────────────────────┐
 │ 0 stdin     │             │ 槽 n: Tcp(TimeWait)       │ ← fd 已死,状态机服刑中
-│ 1 stdout    │             │ 槽 m: Udp(:20000)         │ ←──┐
+│ 1 stdout    │             │ 槽 m: Udp(:49152)         │ ←──┐
 │ 3 SocketFile│── slot m ──→│ 槽 k: Tcp(Established)    │ ←─┐│
 │ 4 SocketFile│── slot k ──→└──────────────────────────┘   ││
 └─────────────┘   fd 从进程表发,表项只持槽号 ───────────────┘│
@@ -91,7 +102,20 @@ socket fd 与文件 fd 曾是两套命名空间（文件索引进程 fd_table，
 * **白捡的语义**：fork 后经 Arc 引用计数共享 socket（最后一个 close 才真正告别）；`read(fd)`/`write(fd)` 可直接用于 TCP socket（POSIX 语义）；`close(10)` 通吃文件与 socket。
 * **锁纪律**：SOCKET_TABLE 的 guard 持有期间不得调用任何会再次进锁的函数（tcp::recv_data 等内部自行进锁）——模式为「锁内探测变体，锁外行动」，否则自旋锁的同核重入检测直接 trap。
 
-### shutdown（114）：半关闭
+### poll：通用 fd 多路复用
+
+`poll()` 复用统一 fd 表：用户态 `poll.h` 传入 `pollfd` 数组，内核逐项调用 `File::poll_ready(events)`，由具体文件类型回填 `revents`。等待模型保持教学版简单：一轮扫描无果就 `maybe_poll()` 驱动网卡，再让出 CPU，下一拍重新扫描；`timeout=-1` 映射为无限等待。
+
+* **通用语义**：fd 为负的项忽略；fd 非法回填 `POLLNVAL`；`POLLERR/POLLHUP/POLLNVAL` 不受 `events` 过滤；
+* **普通文件/目录**：有读/写权限即报 `POLLIN/POLLOUT`——磁盘文件总是就绪，它不表示「文件被修改」；
+* **管道**：读端有数据或写端全关报 `POLLIN`；写端有缓冲空间报 `POLLOUT`，读端全关报 `POLLERR`；
+* **UDP/RAW socket**：接收队列非空报 `POLLIN`，发送始终报 `POLLOUT`；
+* **TCP socket**：listen socket 的 `accept_queue` 非空报 `POLLIN`；已建连 socket 的接收队列非空或 EOF 报 `POLLIN`；`in_flight < min(snd_wnd, cwnd_bytes)` 时报 `POLLOUT`；RST 报 `POLLERR`，RST 后关闭顺带 `POLLHUP`；
+* **字符设备边界**：stdin 暂不会报 `POLLIN`——当前串口只有消费式读取，没有可 peek 的输入缓冲，poll 不能为了探测而吃掉字符。
+
+验证程序 `user/tests/io_poll_test.c` 覆盖管道、非法 fd、UDP 与 DNS 查询等待路径。
+
+### shutdown：半关闭
 
 四次挥手的 FIN 与 ACK 由不同主体驱动（FIN 是应用行为，ACK 是内核行为），两个方向本就独立。`shutdown(fd, how)` 把「发 FIN」从「摘 fd」的组合拳里拆出来：
 
@@ -101,18 +125,29 @@ socket fd 与文件 fd 曾是两套命名空间（文件索引进程 fd_table，
 * 实现上 `send_fin()` 由 close 与 shutdown 共用（FIN 占一个序号、进重传队列受 RTO 约束）；
 * 验证程序 `halfclose.c`（配套 `halfclose_server.py`）：SHUT_WR 后 send 返回 -1、recv 照常收完、对端 FIN 表现为 EOF——长度未知的双向交换正是 shutdown 的主场（HTTP 靠 Content-Length 绕开了这个问题，FTP 数据连接则是 FIN 即 EOF 的另一流派）。
 
+### UDP connect 与统一临时端口
+
+UDP `connect()` 没有握手、不发任何网络包，只是在 socket 上记录默认对端并打开接收过滤：
+
+* `connect(ip, port)` 后，`send()` / `write()` 使用该默认对端，接收路径只收这个来源地址 + 端口；
+* `connect(0.0.0.0:0)` 清掉 remote，对应 POSIX `connect(AF_UNSPEC)` 的断开语义；也允许重复 connect 改换对端；
+* 未 bind 的 UDP socket 在首次 `connect()` / `sendto()` 时自动绑定临时端口（POSIX autobind）；
+* TCP connect、UDP autobind、显式 `bind(0)` 统一走 IANA 临时端口段 **49152–65535**：原子游标起步 + 全 socket 表冲突扫描，耗尽时打日志并失败；旧的两套分配器（TCP 49152+ / UDP 20000+）已废弃。
+
+验证程序 `user/tests/net_udp_connect_test.c` 覆盖默认对端发送、来源过滤、断开与重复 connect。
+
 ### getsockname / getpeername / setsockopt（115–117）
 
-* **getsockname**：本端 MY_IP + local_port（UDP `bind(0)` 自动分配的端口可读回，≥20000）；
-* **getpeername**：TCP 取建连四元组；未连接返回 -1；
+* **getsockname**：本端 MY_IP + local_port（自动分配的临时端口可读回，范围 49152–65535）；
+* **getpeername**：TCP 取建连四元组；UDP/RAW 取 connect 或 read 记录的 remote；未连接返回 -1；
 * **setsockopt(SO_REUSEADDR)**：bind 冲突检查跳过 TimeWait 尸体，修复 httpd 退出后 10s 内重启 bind 失败。**注意语义边界**：TimeWait 槽位本身保留、协议职责（最后 ACK 重传）不受影响，松绑的只是端口命名空间——报文隔离由四元组分发 + ISN 随机化负责。真正激进的 `tcp_tw_recycle` 因在 NAT 场景误判正常连接，已被 Linux 4.12 移除；
 * 地址回传与 accept 同款约定（内核 `to_ne_bytes`，用户态小端拼回转网络序）；验证程序 `netapi_test.c` 6 检查点全绿，含「裸 bind 被 TimeWait 尸体拦截 / REUSEADDR 放行」的对照实验。
 
 ### 已知不一致（留待后续）
 
-* TCP 临时端口（`next_ephem_port`，49152 起）与 UDP bind(0) 自动分配（20000 起）是两套分配器，可统一；
-* UDP `connect()`（默认对端 + 接收过滤）未实现，暂由 read 记录最近对端的教学语义顶替；
-* select/poll、SO_RCVTIMEO、sendmsg/recvmsg 未覆盖。
+* TCP backlog 当前把 SYN 半连接和 accept 全连接合并计数，后续可拆成两张独立队列；
+* `SO_RCVTIMEO`、`sendmsg/recvmsg` 未覆盖；
+* poll 当前是「扫描 + 网络轮询 + 让出 CPU」，还没有按 fd 精确唤醒的等待队列；stdin 等字符设备也还缺 peek 缓冲。
 
 ### httpd：跑在自研协议栈上的 Web 服务器
 
