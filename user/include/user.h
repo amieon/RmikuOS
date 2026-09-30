@@ -15,6 +15,7 @@ extern "C" {
 #include "thread.h"
 #include "sched.h"
 #include "ipc.h"
+#include "poll.h"
 #include "string.h"
 #include "stdio.h"
 #include "arch.h"

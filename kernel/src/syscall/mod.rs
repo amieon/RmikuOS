@@ -81,6 +81,7 @@ pub const SYSCALL_GET_TIME_US: usize = 72;
 pub const SYSCALL_SET_WALL_CLOCK: usize = 73;
 pub const SYSCALL_GET_EPOCH: usize = 74;
 pub const SYSCALL_MPROTECT: usize = 75;
+pub const SYSCALL_POLL: usize = 76;
 
 
 
@@ -197,6 +198,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SET_WALL_CLOCK => process::sys_set_wall_clock(args[0]),
         SYSCALL_GET_EPOCH => process::sys_get_epoch(),
         SYSCALL_MPROTECT => process::sys_mprotect(args[0], args[1], args[2]),
+        SYSCALL_POLL => fs::sys_poll(args[0], args[1], args[2]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

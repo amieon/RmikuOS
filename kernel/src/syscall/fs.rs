@@ -1,6 +1,90 @@
-use alloc::{format, string::String, vec};
+use alloc::{format, string::String, vec, vec::Vec};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::fs;
+
+const POLLFD_SIZE: usize = 8; // fd(i32) + events(i16) + revents(i16)
+const MAX_POLL_FDS: usize = 1024;
+static POLL_LOGGED: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(target_arch = "riscv64")]
+fn poll_now_ms() -> u64 {
+    (crate::timer::monotonic_time() / 10_000) as u64
+}
+
+#[cfg(target_arch = "loongarch64")]
+fn poll_now_ms() -> u64 {
+    (crate::timer::monotonic_time() / 100_000) as u64
+}
+
+/// poll(fds, nfds, timeout_ms) -> 就绪 fd 数 / 0(超时) / -1。
+/// timeout_ms: 0=立即返回,usize::MAX=无限等待(用户态 timeout=-1 映射)。
+/// 这里没有等待队列:每轮扫描后让出 CPU,靠定时器节拍驱动网卡 poll。
+pub fn sys_poll(fds_ptr: usize, nfds: usize, timeout_ms: usize) -> isize {
+    if nfds > MAX_POLL_FDS || (nfds != 0 && fds_ptr == 0) {
+        return -1;
+    }
+
+    let byte_len = match nfds.checked_mul(POLLFD_SIZE) {
+        Some(n) => n,
+        None => return -1,
+    };
+    let mut raw = if byte_len == 0 {
+        Vec::new()
+    } else {
+        match crate::task::read_current_user_bytes(fds_ptr, byte_len) {
+            Some(bytes) if bytes.len() == byte_len => bytes,
+            _ => return -1,
+        }
+    };
+
+    let infinite = timeout_ms == usize::MAX;
+    let deadline = if infinite {
+        u64::MAX
+    } else {
+        poll_now_ms().saturating_add(timeout_ms as u64)
+    };
+
+    loop {
+        let mut ready = 0isize;
+        for i in 0..nfds {
+            let off = i * POLLFD_SIZE;
+            let fd = i32::from_ne_bytes(raw[off..off + 4].try_into().unwrap());
+            let events = i16::from_ne_bytes(raw[off + 4..off + 6].try_into().unwrap());
+            let mut revents = 0i16;
+
+            // POSIX:fd 为负数表示忽略这一项(常用于临时摘掉某个槽)。
+            if fd >= 0 {
+                revents = match crate::task::current_file(fd as usize) {
+                    Some(file) => file.poll_ready(events),
+                    None => fs::POLLNVAL,
+                };
+            }
+            raw[off + 6..off + 8].copy_from_slice(&revents.to_ne_bytes());
+            if revents != 0 {
+                ready += 1;
+            }
+        }
+
+        if ready != 0 || timeout_ms == 0 || (!infinite && poll_now_ms() >= deadline) {
+            if byte_len != 0
+                && crate::task::write_current_user_bytes(fds_ptr, &raw).is_none()
+            {
+                return -1;
+            }
+            if POLL_LOGGED.fetch_add(1, Ordering::Relaxed) < 8 {
+                log::info!(
+                    "[poll] nfds={} timeout_ms={} ready={}",
+                    nfds, timeout_ms, ready
+                );
+            }
+            return ready;
+        }
+
+        crate::drivers::net::maybe_poll();
+        crate::task::suspend_current_and_run_next();
+    }
+}
 
 pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
     if len == 0 {
