@@ -2,7 +2,7 @@ use alloc::collections::vec_deque::VecDeque;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 use crate::fs::stat::STAT_TYPE_SOCKET;
-use crate::fs::{File, Stat};
+use crate::fs::{File, Stat, POLLIN, POLLNVAL, POLLOUT};
 use crate::sync::spin::Mutex;
 use crate::drivers::net::{socket, tcp, udp};
 use crate::drivers::net::tcp::TcpSocket;
@@ -229,6 +229,24 @@ pub fn socket_raw_recvfrom(fd: usize, buf: &mut [u8]) -> Option<(SocketAddr, usi
     }
 }
 
+/// RAW poll 就绪:接收队列非空可读;原始 IP 发送无协议层缓冲,恒可写。
+pub fn socket_raw_poll_ready(fd: usize, events: i16) -> i16 {
+    let table = SOCKET_TABLE.lock();
+    match table.slots.get(fd) {
+        Some(Some(Socket::Raw(sock))) => {
+            let mut revents = 0;
+            if events & POLLIN != 0 && !sock.rx_queue.is_empty() {
+                revents |= POLLIN;
+            }
+            if events & POLLOUT != 0 {
+                revents |= POLLOUT;
+            }
+            revents
+        }
+        _ => POLLNVAL,
+    }
+}
+
 pub fn deliver_raw(protocol: u8, src_ip: u32, data: &[u8]) {
     let mut table = SOCKET_TABLE.lock();
     for slot in table.slots.iter_mut().flatten() {
@@ -292,6 +310,16 @@ impl File for SocketFile {
 
     fn stat(&self) -> Stat {
         Stat::new(STAT_TYPE_SOCKET, 0, 0o666, 0, 0)
+    }
+
+    /// socket 就绪判断仍按协议分派:syscall 不直接翻 TCP/UDP 内部字段。
+    fn poll_ready(&self, events: i16) -> i16 {
+        match slot_kind(self.slot) {
+            Some(SlotKind::Tcp) => tcp::poll_ready(self.slot, events),
+            Some(SlotKind::Udp) => udp::poll_ready(self.slot, events),
+            Some(SlotKind::Raw) => socket_raw_poll_ready(self.slot, events),
+            None => POLLNVAL,
+        }
     }
 
     fn read(&self, buf: &mut [u8]) -> isize {

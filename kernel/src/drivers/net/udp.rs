@@ -1,5 +1,6 @@
 use crate::drivers::net::ip::{IpHeader, my_ip, checksum, send as ip_send};
 use crate::drivers::net::socket::{self, SOCKET_TABLE, Socket, SocketAddr};
+use crate::fs::{POLLIN, POLLNVAL, POLLOUT};
 use alloc::vec::Vec;
 
 #[repr(C, packed)]
@@ -240,5 +241,23 @@ pub fn recv_data(slot: usize, out: &mut [u8]) -> isize {
         if spins > 50_000_000 {
             return 0; // 超时,语义同 recvfrom
         }
+    }
+}
+
+/// poll 就绪:接收队列非空可读;UDP 无发送缓冲/窗口,恒可写。
+pub fn poll_ready(slot: usize, events: i16) -> i16 {
+    let table = SOCKET_TABLE.lock();
+    match table.slots.get(slot) {
+        Some(Some(Socket::Udp(sock))) => {
+            let mut revents = 0;
+            if events & POLLIN != 0 && !sock.rx_queue.is_empty() {
+                revents |= POLLIN;
+            }
+            if events & POLLOUT != 0 {
+                revents |= POLLOUT;
+            }
+            revents
+        }
+        _ => POLLNVAL,
     }
 }
