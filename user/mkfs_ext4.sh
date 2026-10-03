@@ -176,8 +176,9 @@ rm -f "$IMG"
 FS_SIZE_MB="${FS_SIZE_MB:-96}"
 truncate -s "${FS_SIZE_MB}M" "$IMG"
 
-mkfs.ext4 -q -F -d "$ROOT" "$IMG"
-echo "created $IMG"
+# -L 卷标是"约定式身份"：discover_disks 按超级块 s_volume_name 识别 rootfs
+mkfs.ext4 -q -F -L RMikuOS-ROOT -d "$ROOT" "$IMG"
+echo "created $IMG (label=RMikuOS-ROOT)"
 
 if [ ! -f "$FAT_IMG" ]; then
   echo "=== 构建 FAT 镜像 ($ARCH) ==="
