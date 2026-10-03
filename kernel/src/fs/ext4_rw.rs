@@ -29,10 +29,6 @@ fn fname(name: &str) -> Option<FileName<'_>> {
     FileName::new(name.as_bytes()).ok()
 }
 
-// ============================================================================
-// FileSystem
-// ============================================================================
-
 pub struct Ext4RwFs {
     ext4: Mutex<Ext4Mount>,
     root: InodeNumber,
@@ -62,8 +58,6 @@ pub fn on_timer_tick() {
     }
 }
 
-// 若编译报 Ext4Mount 非 Send/Sync（rsext4 内部有非 Sync 类型），
-// 照 FatFs 的先例放开下面两行（单核 + 全局锁兜底）：
 // unsafe impl Send for Ext4RwFs {}
 // unsafe impl Sync for Ext4RwFs {}
 
@@ -134,9 +128,6 @@ impl FileSystem for Ext4RwFs {
     }
 }
 
-// ============================================================================
-// Inode
-// ============================================================================
 
 pub struct Ext4RwInode {
     fs: Arc<Ext4RwFs>,
@@ -373,9 +364,6 @@ impl Inode for Ext4RwInode {
     }
 }
 
-// ============================================================================
-// File
-// ============================================================================
 
 pub struct Ext4RwFile {
     fs: Arc<Ext4RwFs>,
