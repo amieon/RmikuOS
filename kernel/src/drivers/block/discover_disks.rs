@@ -144,7 +144,10 @@ pub fn discover_disks() -> DiskSet {
         }
 
         let mut devices: Vec<Arc<dyn BlockDevice>> = Vec::new();
-        for phys_base in all {
+        // QEMU riscv virt 怪癖：命令行第 n 个 -device 拿倒数第 n 个 mmio 地址
+        // （实测 blk0=fs→0x10008000, blk1=fat→0x10007000, blk2=data→0x10006000）。
+        // mmio 探测按地址升序返回 → 反向遍历 = 命令行顺序，顺序兜底语义才正确。
+        for phys_base in all.into_iter().rev() {
             match VirtioBlkDevice::init_from_phys_base(phys_base) {
                 Some(d) => devices.push(d as Arc<dyn BlockDevice>),
                 None => {
