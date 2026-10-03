@@ -142,6 +142,13 @@ if [ ! -f "$KERNEL_ELF" ]; then
   exit 1
 fi
 
+
+DATA_IMG="target/data-${ARCH}.img"
+if [ ! -f "$DATA_IMG" ]; then
+  echo "=== 创建可写数据盘 $DATA_IMG (待内核首次挂载时格式化) ==="
+  truncate -s 64M "$DATA_IMG"
+fi
+
 case "$ARCH" in
   riscv64)
     QEMU_ARGS=(
@@ -156,6 +163,8 @@ case "$ARCH" in
       -device "virtio-blk-device,drive=blk0"
       -drive "file=target/fat-riscv64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-device,drive=blk1"
+      -drive "file=target/data-riscv64.img,format=raw,if=none,id=blk2"
+      -device "virtio-blk-device,drive=blk2"
       "${NET_ARGS[@]}"
     )
     ;;
@@ -173,6 +182,8 @@ case "$ARCH" in
       -device "virtio-blk-pci,drive=blk0,disable-legacy=on"
       -drive "file=target/fat-loongarch64.img,format=raw,if=none,id=blk1"
       -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
+      -drive "file=target/data-loongarch64.img,format=raw,if=none,id=blk2"
+      -device "virtio-blk-pci,drive=blk2,disable-legacy=on"
       "${NET_ARGS[@]}"
     )
     ;;

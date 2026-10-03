@@ -136,14 +136,14 @@ fn primary_init(id: usize) -> ! {
 
 
 
-    let (ext4_dev, fat_dev) = drivers::block::discover_disks::discover_disks();
+    let disks = drivers::block::discover_disks::discover_disks();
 
     #[cfg(feature = "oscomp")]
     {
         crate::oscomp::run_oscomp_stub();
     }
 
-    let rootfs_device = ext4_dev.unwrap_or_else(|| {
+    let rootfs_device = disks.ext4_dev.unwrap_or_else(|| {
         log::warn!("[disk] no ext4 disk, fallback to ramdisk");
         crate::drivers::block::ext4_image::rootfs_ramdisk()
     });
@@ -151,10 +151,16 @@ fn primary_init(id: usize) -> ! {
     fs::ext4fs::init(rootfs_device);
     fs::tmpfs::init();
 
-    if let Some(fdev) = fat_dev {
+    if let Some(fdev) = disks.fat_dev {
         fs::fatfs::init(fdev);
     } else {
         log::warn!("[disk] no FAT disk found, /fat not mounted");
+    }
+
+    if let Some(ddev) = disks.data_dev {
+        fs::ext4_rw::Ext4RwFs::init_and_mount("/home", ddev);
+    } else {
+        log::warn!("[disk] no data disk, /home not mounted");
     }
 
 
