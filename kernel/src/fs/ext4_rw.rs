@@ -42,9 +42,12 @@ static DATA_FS: Mutex<Option<Arc<Ext4RwFs>>> = Mutex::new(None);
 ///
 /// 这是 writeback 机制：把崩溃窗口从"无限"压到"一个周期"。
 /// 中断上下文约束 → 全程 try_lock，锁忙即跳过，绝不自旋阻塞。
-/// riscv64: INTERVAL=10_000 @ 10MHz timebase ≈ 1ms/tick → 5000 ticks ≈ 5s
 pub fn on_timer_tick() {
-    const WRITEBACK_EVERY_TICKS: usize = 5000;
+    #[cfg(target_arch = "riscv64")]
+    const WRITEBACK_EVERY_TICKS: usize = 5000;  
+    #[cfg(target_arch = "loongarch64")]
+    const WRITEBACK_EVERY_TICKS: usize = 10;   
+
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
@@ -110,7 +113,9 @@ impl Ext4RwFs {
     pub fn try_sync(&self) -> bool {
         match self.ext4.try_lock() {
             Some(mut fs) => match fs.sync() {
-                Ok(()) => true,
+                Ok(()) => {
+                    true
+                },
                 Err(e) => {
                     log::warn!("[ext4-rw] try_sync 失败: {:?}", e);
                     false
