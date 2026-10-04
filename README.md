@@ -34,7 +34,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join` | 进程级 fd table,线程共享地址空间                             |
 | 信号         | 通用 `sig_pending` 位图 + 延迟投递                           | 用户态 SIGILL/SIGFPE 不炸内核,shell Ctrl+C                   |
 | 虚拟内存     | buddy 帧分配器、多级页表、ELF 加载、mmap                     |                                                              |
-| 文件系统     | VFS 多挂载:ext4 rootfs / tmpfs / FAT16(落盘)                 | `lseek` / `ftruncate` / `fsync` / `rename`(号段 64–68)       |
+| 文件系统     | VFS 多挂载:ext4 rootfs(只读) / 可写 ext4(rsext4 + JBD2 日志) / tmpfs / FAT16(落盘) | `lseek` / `ftruncate` / `fsync` / `rename`(号段 64–68);数据盘 LABEL 身份识别 + 周期 writeback |
 | 调度器       | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应             | 内置调度实验框架(exp00–exp06,见 docs)                        |
 | 网络         | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd + 域名解析(TTL 缓存) |
 | 用户程序     | C / C++ / Rust / Java(JVM + 装载期 AOT)/ Lua 5.4 / Scheme    | syscall ABI 语言无关                                         |
@@ -174,8 +174,8 @@ target/fat-loongarch64.img   FAT 数据盘(loongarch)
   /    │    \      stride scheduler    fd table
 ext4 tmpfs FAT     (continuous alpha
  │   (mem) (disk)    + AIMD policy)
- ▼          │
-Block      BlockDevice(读写)
+ ▼          │        (另: /home 挂可写 ext4 —— rsext4+JBD2,
+Block      BlockDevice(读写)   经 LABEL 识别数据盘,与 FAT 共享 BlockDevice)
 Cache       │
  │          │
  ▼          ▼
@@ -213,7 +213,8 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 
 * **内核基础**:双架构启动 / trap / syscall / 进程线程 / 信号投递与用户态隔离 / buddy 帧分配器 / SMP 多核(per-hart timer、IPI reschedule、TLB shootdown)
 * **调度器**:stride scheduling + alpha-scaled(连续 alpha `[0,100]`,纯整数幂)+ AIMD / SPSA-AdamW 自适应策略,完整调度实验框架与 7 篇实验报告(见 [docs/experiments/](docs/experiments/))
-* **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)
+* **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ **可写 ext4 数据盘**(rsext4 0.9.2 + JBD2,挂 `/home`:超级块卷标 LABEL 式盘身份识别、周期 writeback + `fsync`、首次开机内核内 mkfs 自举)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)
+  * **崩溃一致性实测**:16MB 大文件写入至 6MB 时 `kill -9` QEMU → 重启后 journal 自动回放,`/home` 干净挂载、已 sync 数据完好;镜像经宿主机 `e2fsck 1.47.2 -fn` 五遍检查零错误——内核内 rsext4 产生的 ext4 结构通过 e2fsprogs 参考实现认证
 * **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP)、socket 100–117、通用 `poll()`(支持 socket / 管道 / 普通文件)、UDP `connect()` 与统一临时端口分配器(49152–65535)、DHCP T1/T2 租约续期、TCP listen backlog、用户态 httpd(宿主机浏览器访问)、DNS 客户端(压缩指针解析 + TTL 缓存,nslookup)、TFTP / NTP / wget(wget/ping/ntpdate 支持域名参数)、shell 命令替换 `$()` / 反引号、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×)
 * **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器
 * **验证**:36 项 CI 回归测试、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
@@ -233,8 +234,9 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 ### Filesystem
 
 * FAT 当前为 FAT16 / 单分区,可扩展 FAT32 与更深的子目录用例
-* 更通用的**块设备写回缓存**(延迟写 + 脏页回收),统一各后端持久化语义
-* 可写文件系统的并发访问(当前 fatfs 单核 + 全局锁)
+* 可写 ext4 精修:virtio-blk 真 flush(`VIRTIO_BLK_T_FLUSH`,当前 capabilities 已声明但驱动为空实现)、per-file fsync(当前退化为挂载点全量 sync)、根命令行 `root=`/设备树别名式盘识别(当前 LABEL 优先 + 顺序兜底)
+* **overlayfs**:只读 rootfs(ext4-view)+ 可写层(rsext4)+ whiteout——整个 `/` 可写、删错可恢复(Docker rootfs 模式)
+* 文件系统并发访问的细粒度锁(当前 rsext4 / fatfs 均为单核 + 全局锁)
 
 ### Scheduler
 
