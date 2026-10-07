@@ -77,6 +77,9 @@ __tlb_refill:
      *
      * TLB entry covers an even/odd 4KiB page pair:
      *   clear low 13 bits, then set PS=12.
+     *
+     * This is only the common-page default. If LDDIR reaches a huge
+     * directory leaf, LDPTE derives the huge-page PS and overwrites it.
      */
     csrrd   $t0, CSR_TLBRBADV
     li.d    $t1, -8192
@@ -94,6 +97,10 @@ __tlb_refill:
      *   PT   = VA[20:12]
      *
      * ldpte loads the even/odd page pair into TLBRELO0 / TLBRELO1.
+     *
+     * The fixed LDDIR sequence also handles huge directory leaves: once a
+     * leaf with bit 6 is reached, later LDDIR instructions propagate it and
+     * LDPTE converts it into a huge-page TLB pair.
      */
     csrrd   $t0, CSR_PGD
 

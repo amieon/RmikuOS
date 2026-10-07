@@ -97,7 +97,6 @@ impl MemorySet {
         lock_detect!(self.page_table).translate(vpn)
     }
 
-    #[cfg(target_arch = "riscv64")]
     pub fn contains_va(&self, va: VirtAddr) -> bool {
         lock_detect!(self.page_table).contains_va(va)
     }
@@ -177,59 +176,39 @@ impl MemorySet {
             va_start,
             crate::mm::KERNEL_OFFSET,
         );
-        assert!(
-            map_start % crate::mm::page_table::GIGA_PAGE_SIZE == 0
-                && (map_end - map_start) % crate::mm::page_table::GIGA_PAGE_SIZE == 0,
-            "RISC-V direct map must be 1GiB aligned: {:#x}..{:#x}",
-            map_start,
-            map_end,
-        );
-        assert!(
-            crate::arch::PCI_MMIO_BASE % crate::mm::page_table::GIGA_PAGE_SIZE == 0
-                && crate::arch::PCI_MMIO_SIZE % crate::mm::page_table::GIGA_PAGE_SIZE == 0,
-            "PCI MMIO window must be 1GiB aligned",
-        );
-        assert!(
-            crate::arch::PCI_ECAM_BASE % crate::mm::page_table::MEGA_PAGE_SIZE == 0
-                && crate::arch::PCI_ECAM_SIZE % crate::mm::page_table::MEGA_PAGE_SIZE == 0,
-            "PCI ECAM window must be 2MiB aligned",
-        );
 
-        {
+        let (ram_mappings, pci_mmio_mappings, ecam_mappings) = {
             let mut page_table = lock_detect!(self.page_table);
 
-            let mut pa = map_start;
-            while pa < map_end {
-                page_table.map_1g(
-                    VirtAddr(crate::mm::kernel_phys_to_virt(pa)),
-                    PhysAddr(pa),
-                    kernel_flags,
-                );
-                pa += crate::mm::page_table::GIGA_PAGE_SIZE;
-            }
+            let ram_mappings = page_table.map_range(
+                VirtAddr(crate::mm::kernel_phys_to_virt(map_start)),
+                PhysAddr(map_start),
+                map_end - map_start,
+                kernel_flags,
+            );
 
-            page_table.map_1g(
+            let pci_mmio_mappings = page_table.map_range(
                 VirtAddr(crate::mm::kernel_phys_to_virt(crate::arch::PCI_MMIO_BASE)),
                 PhysAddr(crate::arch::PCI_MMIO_BASE),
+                crate::arch::PCI_MMIO_SIZE,
                 mmio_flags,
             );
 
-            let mut ecam_pa = crate::arch::PCI_ECAM_BASE;
-            let ecam_end = crate::arch::PCI_ECAM_BASE + crate::arch::PCI_ECAM_SIZE;
-            while ecam_pa < ecam_end {
-                page_table.map_2m(
-                    VirtAddr(crate::mm::kernel_phys_to_virt(ecam_pa)),
-                    PhysAddr(ecam_pa),
-                    mmio_flags,
-                );
-                ecam_pa += crate::mm::page_table::MEGA_PAGE_SIZE;
-            }
-        }
+            let ecam_mappings = page_table.map_range(
+                VirtAddr(crate::mm::kernel_phys_to_virt(crate::arch::PCI_ECAM_BASE)),
+                PhysAddr(crate::arch::PCI_ECAM_BASE),
+                crate::arch::PCI_ECAM_SIZE,
+                mmio_flags,
+            );
+
+            (ram_mappings, pci_mmio_mappings, ecam_mappings)
+        };
 
         log::info!(
-            "[mm] riscv64 kernel huge map: ram={} x 1GiB, pci_mmio=1 x 1GiB, ecam={} x 2MiB",
-            (map_end - map_start) / crate::mm::page_table::GIGA_PAGE_SIZE,
-            crate::arch::PCI_ECAM_SIZE / crate::mm::page_table::MEGA_PAGE_SIZE,
+            "[mm] riscv64 kernel auto map: ram={} leaves, pci_mmio={} leaves, ecam={} leaves",
+            ram_mappings,
+            pci_mmio_mappings,
+            ecam_mappings,
         );
 
         // 小块 MMIO 仍走 4 KiB MapArea，避免把整片保留地址空间都映射进来。
@@ -275,6 +254,20 @@ impl MemorySet {
 
     #[cfg(target_arch = "loongarch64")]
     fn map_kernel_areas_loongarch64() {
+        static LOGGED: core::sync::atomic::AtomicBool =
+            core::sync::atomic::AtomicBool::new(false);
+
+        if !LOGGED.swap(true, core::sync::atomic::Ordering::Relaxed) {
+            log::info!(
+                "[mm] loongarch64 kernel direct map uses TLB refill fast path; per-process kernel PTEs skipped"
+            );
+        }
+
+        /*
+         * LoongArch 的 high-half direct map 由 trap/loongarch64/tlb_refill.S
+         * 直接合成 TLB 项，不读取每个进程的页表。因此这里不再为每个地址空间
+         * 建一套永远不会被 walk 的内核 PTE；fork/exec 只保留用户映射。
+         */
     }
 
     pub fn copy_data(&self, start_va: VirtAddr, data: &[u8]) {
@@ -365,6 +358,12 @@ impl MemorySet {
 
         memory_set.map_kernel_areas();
 
+        let user_pages: usize = user_space
+            .areas
+            .iter()
+            .filter(|area| area.is_user())
+            .map(|area| area.page_count())
+            .sum();
 
         for area in user_space.areas.iter() {
             if !area.is_user() {
@@ -538,7 +537,7 @@ impl MemorySet {
             );
         }
 
-
+    
 
         let user_stack_top = crate::mm::USER_STACK_TOP;
         let user_stack_bottom = user_stack_top - crate::mm::USER_STACK_SIZE;
