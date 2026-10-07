@@ -934,6 +934,11 @@ static void print_help(void) {
     fputs("  network:     nslookup <host> [host ...], wget <url> [out], ping <host>\n", stdout);
     fputs("               ntpdate [server] [port], tftp <remote> [local], httpd [file]\n", stdout);
     fputs("               getip, setip <a.b.c.d>\n", stdout);
+    fputs("  accounts:    id, su [name], passwd <name>\n", stdout);
+    fputs("               useradd <name> [uid] [gid], groupadd <name> [gid]  (root only)\n", stdout);
+    fputs("               usermod -aG <group> <user> | -g <gid> <user>       (root only)\n", stdout);
+    fputs("               账户库 /var/etc/{passwd,group} 优先, 回退 /etc/{passwd,group}\n", stdout);
+    fputs("  storage:     data disk mounted at /data; /home & /var are bind mounts of it\n", stdout);
     fputs("  try: ls /bin\n\n", stdout);
 }
 
