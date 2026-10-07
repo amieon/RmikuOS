@@ -15,8 +15,6 @@ mod syscall;
 mod fs;
 mod drivers;
 mod pci;
-mod math;
-mod oscomp;
 
 #[macro_use]
 mod io;

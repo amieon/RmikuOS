@@ -7,6 +7,7 @@ mod thread;
 mod process;
 mod manager_wrapper;
 mod signal;
+mod math;
 
 pub use context::TaskContext;
 pub use kernel_stack::KernelStack;

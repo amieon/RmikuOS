@@ -235,7 +235,7 @@ impl TaskManager {
         if self.cache_alpha != alpha {
             for slot_n in 0..self.scale_cache.len() {
                 self.scale_cache[slot_n] =
-                    crate::math::sched_thread_scale(slot_n, alpha);
+                    super::math::sched_thread_scale(slot_n, alpha);
             }
             self.cache_alpha = alpha;
         }
@@ -243,7 +243,7 @@ impl TaskManager {
         // n 超出当前表长：扩容并补算新格（用当前 alpha）。
         if n >= self.scale_cache.len() {
             for slot_n in self.scale_cache.len()..=n {
-                let f = crate::math::sched_thread_scale(slot_n, alpha);
+                let f = super::math::sched_thread_scale(slot_n, alpha);
                 self.scale_cache.push(f);
             }
         }
@@ -263,7 +263,6 @@ impl TaskManager {
             return;
         }
 
-        // 原来：let factor = crate::math::sched_thread_scale(runnable_threads, alpha);
         let factor = self.scale_factor_cached(runnable_threads);
 
         let base_tickets = self.process(pid).tickets.max(1);

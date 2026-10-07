@@ -1610,7 +1610,7 @@ pub fn get_process_sched_stat(pid: usize, stat_ptr: usize) -> isize {
             .max(1);
 
         let alpha = manager.get_sched_alpha();
-        let factor = crate::math::sched_thread_scale(runnable_threads, alpha);
+        let factor = super::math::sched_thread_scale(runnable_threads, alpha);
 
         let tickets = process.tickets.max(1);
 
