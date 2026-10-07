@@ -156,9 +156,29 @@ fn primary_init(id: usize) -> ! {
     }
 
     if let Some(ddev) = disks.data_dev {
-        fs::ext4_rw::Ext4RwFs::init_and_mount("/home", ddev);
+        match fs::ext4_rw::Ext4RwFs::init_and_mount("/data", ddev) {
+            Some(data_fs) => {
+                data_fs.ensure_layout(); // 建 home/ var/ var/etc/（首次 mkfs 后自动长出）
+
+                match fs::path::lookup_abs_path("/data/home") {
+                    Some(inode) => {
+                        fs::mount::mount_bind("/home", inode);
+                        log::info!("[disk] /home ← /data/home (bind)");
+                    }
+                    None => log::warn!("[disk] /data/home 缺失, /home 未绑定"),
+                }
+                match fs::path::lookup_abs_path("/data/var") {
+                    Some(inode) => {
+                        fs::mount::mount_bind("/var", inode);
+                        log::info!("[disk] /var ← /data/var (bind)");
+                    }
+                    None => log::warn!("[disk] /data/var 缺失, /var 未绑定"),
+                }
+            }
+            None => log::error!("[disk] 数据盘挂载失败, /home 与 /var 不可用"),
+        }
     } else {
-        log::warn!("[disk] no data disk, /home not mounted");
+        log::warn!("[disk] no data disk, /home 与 /var 未挂载");
     }
 
 

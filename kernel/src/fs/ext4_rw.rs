@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::drivers::block::BlockDevice;
 use crate::fs::flag::{O_ACCMODE, O_APPEND, O_RDONLY, O_WRONLY};
 use crate::sync::spin::Mutex;
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use super::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE};
 use super::file::{File, FileRef};
@@ -44,11 +44,16 @@ static DATA_FS: Mutex<Option<Arc<Ext4RwFs>>> = Mutex::new(None);
 /// 中断上下文约束 → 全程 try_lock，锁忙即跳过，绝不自旋阻塞。
 pub fn on_timer_tick() {
     #[cfg(target_arch = "riscv64")]
-    const WRITEBACK_EVERY_TICKS: usize = 5000;  
+    const WRITEBACK_EVERY_TICKS: usize = 5000;
     #[cfg(target_arch = "loongarch64")]
-    const WRITEBACK_EVERY_TICKS: usize = 10;   
+    const WRITEBACK_EVERY_TICKS: usize = 10;
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    
+    static FIRST_CALL: AtomicBool = AtomicBool::new(false);
+    if !FIRST_CALL.swap(true, Ordering::Relaxed) {
+        log::info!("[ext4-rw] timer 钩子首次触发（此后每周期一条 writeback ok）");
+    }
 
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     if n % WRITEBACK_EVERY_TICKS != 0 {
@@ -83,18 +88,48 @@ impl Ext4RwFs {
         }))
     }
 
-    /// 一站式接线：挂载（必要时 mkfs）+ 注册到 VFS。
-    /// main.rs: `fs::ext4_rw::Ext4RwFs::init_and_mount("/home", dev);`
-    pub fn init_and_mount(mount_point: &str, dev: Arc<dyn BlockDevice>) {
+    pub fn init_and_mount(mount_point: &str, dev: Arc<dyn BlockDevice>) -> Option<Arc<Self>> {
         match Self::mount_or_format(dev, mount_point) {
             Some(fs) => {
                 mount::mount(mount_point, fs.clone());
                 // 全局句柄：writeback timer 钩子从这里拿
-                *DATA_FS.lock() = Some(fs);
+                *DATA_FS.lock() = Some(fs.clone());
                 log::info!("[ext4-rw] {} 挂载完成 (rsext4, 可写, JBD2)", mount_point);
+                Some(fs)
             }
-            None => log::error!("[ext4-rw] {} 挂载失败", mount_point),
+            None => {
+                log::error!("[ext4-rw] {} 挂载失败", mount_point);
+                None
+            }
         }
+    }
+
+    /// 确保数据盘上的标准结构目录存在（首次 mkfs 后自动建好）。
+    pub fn ensure_layout(&self) {
+        let mut fs = self.ext4.lock();
+        let root = self.root;
+
+        let home = Self::ensure_child(&mut fs, root, "home");
+        let var = Self::ensure_child(&mut fs, root, "var");
+        if let Some(var) = var {
+            Self::ensure_child(&mut fs, var, "etc");
+        }
+        if home.is_none() || var.is_none() {
+            log::warn!("[ext4-rw] 结构目录创建失败(盘已满?)");
+        }
+    }
+
+    /// 目录不存在则创建，存在则直接返回其 inode 号。
+    fn ensure_child(fs: &mut Ext4Mount, parent: InodeNumber, name: &str) -> Option<InodeNumber> {
+        let bytes = name.as_bytes();
+        if let Ok(Some(info)) = fs.lookup_child(parent, FileName::new(bytes).ok()?) {
+            return Some(info.number);
+        }
+        let fname = FileName::new(bytes).ok()?;
+        let perm = FilePermissions::new(0o755).ok()?;
+        fs.create_directory(MutationContext::new(0, 0, 0, 0o022), parent, fname, perm)
+            .ok()
+            .map(|i| i.number)
     }
 
     /// 全量同步（数据缓存→元数据→journal commit）。
@@ -114,8 +149,9 @@ impl Ext4RwFs {
         match self.ext4.try_lock() {
             Some(mut fs) => match fs.sync() {
                 Ok(()) => {
+                    //log::info!("[ext4-rw] writeback ok");
                     true
-                },
+                }
                 Err(e) => {
                     log::warn!("[ext4-rw] try_sync 失败: {:?}", e);
                     false

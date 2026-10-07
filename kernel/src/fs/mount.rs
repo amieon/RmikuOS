@@ -10,17 +10,27 @@ pub trait FileSystem: Send + Sync {
 
 pub struct Mount {
     mount_point : String,
-    fs : Arc<dyn FileSystem>,
+    root : InodeRef,
 }
 
 static MOUNTS: Mutex<Vec<Mount>> = Mutex::new(Vec::new());
 
 
 pub fn mount(mount_point: &str, fs: Arc<dyn FileSystem>) {
+    let root = fs.clone().root_inode();
     let mut mounts = MOUNTS.lock();
     mounts.push(Mount {
         mount_point: String::from(mount_point),
-        fs,
+        root,
+    });
+}
+
+
+pub fn mount_bind(mount_point: &str, inode: InodeRef) {
+    let mut mounts = MOUNTS.lock();
+    mounts.push(Mount {
+        mount_point: String::from(mount_point),
+        root: inode,
     });
 }
 
@@ -42,7 +52,7 @@ pub fn resolve_mount(abs_path: &str) -> Option<(InodeRef, String)> {
     }
 
     let m = best?;
-    let root = m.fs.clone().root_inode();
+    let root = m.root.clone();
     let rel = relative_path(abs_path, &m.mount_point);
     Some((root, rel))
 }
