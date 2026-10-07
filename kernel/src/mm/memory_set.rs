@@ -354,7 +354,7 @@ impl MemorySet {
 
     pub fn from_existed_user(user_space: &Self) -> Self {
         let mut memory_set = Self::new_bare();
-        
+
 
         memory_set.map_kernel_areas();
 
@@ -393,32 +393,49 @@ impl MemorySet {
 //elf section
 impl MemorySet {
     fn write_bytes_to_user(&self, user_va: usize, data: &[u8]) -> Option<()> {
-        for (offset, byte) in data.iter().enumerate() {
-            let va = user_va.checked_add(offset)?;
+        user_va.checked_add(data.len())?;
 
+        let mut offset = 0usize;
+        while offset < data.len() {
+            let va = user_va + offset;
             let vpn = VirtAddr(va).floor();
             let page_offset = va & (PAGE_SIZE - 1);
+            let chunk_len = core::cmp::min(
+                PAGE_SIZE - page_offset,
+                data.len() - offset,
+            );
 
+            // 每页只 translate 一次；页内交给 slice copy，通常会展成 memcpy。
             let pte = self.translate(vpn)?;
-
             let page = pte.ppn().bytes_array();
-            page[page_offset] = *byte;
+            page[page_offset..page_offset + chunk_len]
+                .copy_from_slice(&data[offset..offset + chunk_len]);
+
+            offset += chunk_len;
         }
 
         Some(())
     }
 
     fn zero_user(&self, user_va: usize, len: usize) -> Option<()> {
-        for offset in 0..len {
-            let va = user_va.checked_add(offset)?;
+        user_va.checked_add(len)?;
 
+        let mut offset = 0usize;
+        while offset < len {
+            let va = user_va + offset;
             let vpn = VirtAddr(va).floor();
             let page_offset = va & (PAGE_SIZE - 1);
+            let chunk_len = core::cmp::min(
+                PAGE_SIZE - page_offset,
+                len - offset,
+            );
 
+            // BSS 也按页批量清零，避免每个字节都 walk 一次页表。
             let pte = self.translate(vpn)?;
-
             let page = pte.ppn().bytes_array();
-            page[page_offset] = 0;
+            page[page_offset..page_offset + chunk_len].fill(0);
+
+            offset += chunk_len;
         }
 
         Some(())
@@ -438,7 +455,7 @@ impl MemorySet {
 
         let mut memory_set = MemorySet::new_bare();
         memory_set.map_kernel_areas();
-
+    
         let mut copied_bytes = 0usize;
         let mut zeroed_bytes = 0usize;
 
@@ -537,7 +554,7 @@ impl MemorySet {
             );
         }
 
-    
+        
 
         let user_stack_top = crate::mm::USER_STACK_TOP;
         let user_stack_bottom = user_stack_top - crate::mm::USER_STACK_SIZE;
