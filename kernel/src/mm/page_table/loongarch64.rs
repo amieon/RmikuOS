@@ -33,10 +33,32 @@ use alloc::vec::Vec;
 
 use crate::mm::{
     alloc_frame, dealloc_frame, align_down, align_up, PhysAddr, PhysPageNum,
-    VirtPageNum, PAGE_SIZE, PAGE_SIZE_BITS,
+    VirtAddr, VirtPageNum, PAGE_SIZE, PAGE_SIZE_BITS,
 };
 
 use super::FrameTracker;
+
+/// LoongArch huge-page encoding at directory levels.
+///
+/// A directory entry with bit 6 set is a huge leaf. Unlike a common PTE,
+/// whose G bit is also bit 6, a huge leaf stores G at bit 12. The in-memory
+/// entry keeps bits 14:13 clear; LDDIR fills those bits with the directory
+/// level while walking, and LDPTE derives the TLB page size from them.
+const HUGE_DIRECTORY: usize = 1 << 6;
+const HUGE_GLOBAL: usize = 1 << 12;
+
+/// Leaf sizes supported by the automatic range mapper.
+///
+/// Dir3 leaf: 512GiB, Dir2 leaf: 1GiB, Dir1 leaf: 2MiB, PT leaf: 4KiB.
+const DIR3_PAGE_SIZE: usize = 1usize << 39;
+const DIR2_PAGE_SIZE: usize = 1usize << 30;
+const DIR1_PAGE_SIZE: usize = 1usize << 21;
+const SUPPORTED_PAGE_SIZES: [usize; 4] = [
+    DIR3_PAGE_SIZE,
+    DIR2_PAGE_SIZE,
+    DIR1_PAGE_SIZE,
+    PAGE_SIZE,
+];
 
 /// LoongArch64 page table.
 ///
@@ -239,6 +261,12 @@ impl PageTable {
                 let tracker = FrameTracker::new(frame);
                 *entry = frame.0 << PAGE_SIZE_BITS;
                 self.frames.push(tracker);
+            } else if *entry & HUGE_DIRECTORY != 0 {
+                panic!(
+                    "cannot create a 4KiB mapping below a huge directory entry: vpn {:?}, level {}",
+                    vpn,
+                    level
+                );
             }
             ppn = PhysPageNum(*entry >> PAGE_SIZE_BITS);
         }
@@ -259,12 +287,13 @@ impl PageTable {
                 return None;
             }
 
-            // If bit 6 is set here, this is a huge-page directory entry.
-            // We do not support huge pages yet.
-            assert!(
-                entry & (1 << 6) == 0,
-                "LoongArch huge page directory entry is not supported yet"
-            );
+            // A directory entry with bit 6 set terminates the walk as a
+            // huge leaf. translate() is still a 4KiB-PTE lookup helper, so
+            // report no ordinary PTE instead of treating the physical page
+            // base as another page-table page.
+            if entry & HUGE_DIRECTORY != 0 {
+                return None;
+            }
 
             ppn = PhysPageNum(entry >> PAGE_SIZE_BITS);
         }
@@ -300,6 +329,178 @@ impl PageTable {
         *pte = PageTableEntry::new(ppn, flags).bits();
     }
 
+    /// Map `[va, va + size)` to `[pa, pa + size)` with the largest usable
+    /// LoongArch leaf at every step.
+    ///
+    /// The caller does not choose a page size. For example, an aligned
+    /// 2.5GiB range is split into 1GiB + 1GiB + 256 * 2MiB mappings.
+    /// Unaligned prefixes/suffixes automatically fall back to smaller pages.
+    /// Returns the number of page-table leaves created.
+    pub fn map_range(
+        &mut self,
+        va_start: VirtAddr,
+        pa_start: PhysAddr,
+        size: usize,
+        flags: PteFlags,
+    ) -> usize {
+        assert!(size > 0, "cannot map an empty range");
+        assert!(
+            va_start.0 % PAGE_SIZE == 0,
+            "range VA is not page aligned: {:#x}",
+            va_start.0
+        );
+        assert!(
+            pa_start.0 % PAGE_SIZE == 0,
+            "range PA is not page aligned: {:#x}",
+            pa_start.0
+        );
+        assert!(
+            size % PAGE_SIZE == 0,
+            "range size is not page aligned: {:#x}",
+            size
+        );
+        va_start
+            .0
+            .checked_add(size)
+            .expect("virtual range overflows");
+        pa_start
+            .0
+            .checked_add(size)
+            .expect("physical range overflows");
+
+        let mut va = va_start.0;
+        let mut pa = pa_start.0;
+        let mut remaining = size;
+        let mut mapped_leaves = 0usize;
+
+        while remaining > 0 {
+            let page_size = Self::largest_usable_page(va, pa, remaining);
+
+            if page_size == PAGE_SIZE {
+                self.map(VirtAddr(va).floor(), PhysAddr(pa).floor(), flags);
+            } else {
+                self.map_huge_leaf(VirtAddr(va), PhysAddr(pa), page_size, flags);
+            }
+
+            va += page_size;
+            pa += page_size;
+            remaining -= page_size;
+            mapped_leaves += 1;
+        }
+
+        mapped_leaves
+    }
+
+    fn largest_usable_page(va: usize, pa: usize, remaining: usize) -> usize {
+        for &page_size in SUPPORTED_PAGE_SIZES.iter() {
+            if remaining >= page_size && va % page_size == 0 && pa % page_size == 0 {
+                return page_size;
+            }
+        }
+
+        PAGE_SIZE
+    }
+
+    fn map_huge_leaf(
+        &mut self,
+        va: VirtAddr,
+        pa: PhysAddr,
+        page_size: usize,
+        flags: PteFlags,
+    ) {
+        assert!(
+            va.0 % page_size == 0,
+            "huge leaf VA is not aligned: va={:#x}, size={:#x}",
+            va.0,
+            page_size
+        );
+        assert!(
+            pa.0 % page_size == 0,
+            "huge leaf PA is not aligned: pa={:#x}, size={:#x}",
+            pa.0,
+            page_size
+        );
+
+        let idxs = vpn_indexes(va.floor());
+        let entry = match page_size {
+            DIR3_PAGE_SIZE => &mut raw_entry_array(self.root_ppn)[idxs[0]],
+            DIR2_PAGE_SIZE => {
+                let dir2 = self.create_next_directory(self.root_ppn, idxs[0]);
+                &mut raw_entry_array(dir2)[idxs[1]]
+            }
+            DIR1_PAGE_SIZE => {
+                let dir2 = self.create_next_directory(self.root_ppn, idxs[0]);
+                let dir1 = self.create_next_directory(dir2, idxs[1]);
+                &mut raw_entry_array(dir1)[idxs[2]]
+            }
+            _ => unreachable!("map_huge_leaf called with a non-huge page size"),
+        };
+
+        assert!(
+            *entry == 0,
+            "huge mapping conflicts at va={:#x}, old_entry={:#x}",
+            va.0,
+            *entry
+        );
+
+        *entry = huge_directory_entry(pa, flags);
+    }
+
+    fn create_next_directory(
+        &mut self,
+        table_ppn: PhysPageNum,
+        index: usize,
+    ) -> PhysPageNum {
+        let entry = &mut raw_entry_array(table_ppn)[index];
+
+        if *entry == 0 {
+            let frame = alloc_frame().expect("failed to allocate LoongArch page table");
+            let pa = frame.0 << PAGE_SIZE_BITS;
+            let va = crate::mm::kernel_phys_to_virt(pa);
+            unsafe { core::ptr::write_bytes(va as *mut u8, 0, PAGE_SIZE); }
+
+            let tracker = FrameTracker::new(frame);
+            *entry = pa;
+            self.frames.push(tracker);
+        }
+
+        assert!(
+            *entry & HUGE_DIRECTORY == 0,
+            "cannot create a lower page table below a huge leaf"
+        );
+
+        PhysPageNum(*entry >> PAGE_SIZE_BITS)
+    }
+
+    /// Return whether any 4KiB/2MiB/1GiB/512GiB mapping covers `va`.
+    ///
+    /// Unlike translate(), this is safe to call on an address covered by a
+    /// huge directory leaf.
+    pub fn contains_va(&self, va: VirtAddr) -> bool {
+        let idxs = vpn_indexes(va.floor());
+        let mut ppn = self.root_ppn;
+
+        for level in 0..4 {
+            let entry = raw_entry_array(ppn)[idxs[level]];
+            if entry == 0 {
+                return false;
+            }
+
+            if level == 3 {
+                return entry & PteFlags::V.bits() != 0;
+            }
+
+            if entry & HUGE_DIRECTORY != 0 {
+                return entry & PteFlags::V.bits() != 0;
+            }
+
+            ppn = PhysPageNum(entry >> PAGE_SIZE_BITS);
+        }
+
+        false
+    }
+
+
     /// mprotect 用: 只改已有 PTE 的权限位, 不重新映射(不分配新帧)。
     pub fn update_flags(&mut self, vpn: VirtPageNum, flags: PteFlags) {
         let pte = self.find_pte(vpn).expect("update_flags: pte not found");
@@ -328,16 +529,16 @@ pub fn map_range_identity(
     end: usize,
     flags: PteFlags,
 ) {
-    let mut addr = align_down(start, PAGE_SIZE);
+    let start = align_down(start, PAGE_SIZE);
     let end = align_up(end, PAGE_SIZE);
 
-    while addr < end {
-        pt.map(
-            crate::mm::VirtAddr::from(addr).floor(),
-            PhysAddr::from(addr).floor(),
+    if start < end {
+        pt.map_range(
+            VirtAddr::from(start),
+            PhysAddr::from(start),
+            end - start,
             flags,
         );
-        addr += PAGE_SIZE;
     }
 }
 pub fn map_range_identity_exclude(
@@ -413,6 +614,29 @@ pub fn mmio_rw_flags() -> PteFlags {
         .union(PteFlags::NX)
 }
 
+fn huge_directory_entry(pa: PhysAddr, flags: PteFlags) -> usize {
+    assert!(
+        pa.0 & (DIR1_PAGE_SIZE - 1) == 0,
+        "huge leaf PA must be at least 2MiB aligned: {:#x}",
+        pa.0
+    );
+
+    // Bit 6 means "huge directory leaf" here, so the common-PTE G bit must
+    // be moved to bit 12. Bits 14:13 stay clear in memory; LDDIR marks the
+    // directory level while walking the entry.
+    let mut bits = pa.0
+        | (flags.bits() & !PteFlags::G.bits())
+        | HUGE_DIRECTORY
+        | PteFlags::V.bits()
+        | PteFlags::P.bits();
+
+    if flags.contains(PteFlags::G) {
+        bits |= HUGE_GLOBAL;
+    }
+
+    bits
+}
+
 fn raw_entry_array(ppn: PhysPageNum) -> &'static mut [usize] {
     let pa = ppn.0 << PAGE_SIZE_BITS;
     let va = crate::mm::kernel_phys_to_virt(pa);
@@ -452,18 +676,14 @@ pub fn map_range(
     size: usize,
     flags: PteFlags,
 ) {
-    let mut va = align_down(va_start, PAGE_SIZE);
-    let mut pa = align_down(pa_start, PAGE_SIZE);
+    let va = align_down(va_start, PAGE_SIZE);
+    let pa = align_down(pa_start, PAGE_SIZE);
     let end = align_up(va_start + size, PAGE_SIZE);
 
-    while va < end {
-        pt.map(
-            crate::mm::VirtAddr::from(va).floor(),
-            PhysAddr::from(pa).floor(),
-            flags,
-        );
-
-        va += PAGE_SIZE;
-        pa += PAGE_SIZE;
-    }
+    pt.map_range(
+        VirtAddr::from(va),
+        PhysAddr::from(pa),
+        end - va,
+        flags,
+    );
 }

@@ -19,17 +19,17 @@ pub fn user_memory_set_test() {
     #[cfg(target_arch = "riscv64")]
     {
         let kernel_va = crate::mm::kernel_phys_to_virt(crate::arch::MEMORY_START);
-        let kernel_pte = user_space
-            .translate(VirtAddr(kernel_va).floor())
-            .expect("kernel mapping is not mapped in user page table");
+        assert!(
+            user_space.contains_va(VirtAddr(kernel_va)),
+            "kernel huge mapping is missing from user page table"
+        );
 
         log::info!(
-            "[mm] user MemorySet test passed: entry={:#x}, sp={:#x}, text_ppn={:?}, stack_ppn={:?}, kernel_ppn={:?}",
+            "[mm] user MemorySet test passed: entry={:#x}, sp={:#x}, text_ppn={:?}, stack_ppn={:?}, kernel huge mapping present",
             entry,
             user_sp,
             text_pte.ppn(),
             stack_pte.ppn(),
-            kernel_pte.ppn(),
         );
     }
 

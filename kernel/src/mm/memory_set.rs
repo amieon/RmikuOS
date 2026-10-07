@@ -96,6 +96,11 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<crate::mm::page_table::PageTableEntry> {
         lock_detect!(self.page_table).translate(vpn)
     }
+
+    #[cfg(target_arch = "riscv64")]
+    pub fn contains_va(&self, va: VirtAddr) -> bool {
+        lock_detect!(self.page_table).contains_va(va)
+    }
 }
 
 impl MemorySet {
@@ -135,12 +140,30 @@ impl MemorySet {
     
 
     fn map_kernel_areas(&mut self) {
-        let kernel_perm = MapPermission::R
-            .union(MapPermission::W)
-            .union(MapPermission::X);
+        #[cfg(target_arch = "riscv64")]
+        {
+            let kernel_perm = MapPermission::R
+                .union(MapPermission::W)
+                .union(MapPermission::X);
 
-        let mmio_perm = MapPermission::R
-            .union(MapPermission::W);
+            let mmio_perm = MapPermission::R
+                .union(MapPermission::W);
+
+            self.map_kernel_areas_riscv64(kernel_perm, mmio_perm);
+        }
+
+        #[cfg(target_arch = "loongarch64")]
+        Self::map_kernel_areas_loongarch64();
+    }
+
+    #[cfg(target_arch = "riscv64")]
+    fn map_kernel_areas_riscv64(
+        &mut self,
+        kernel_perm: MapPermission,
+        mmio_perm: MapPermission,
+    ) {
+        let kernel_flags = map_perm_to_pte_flags(kernel_perm);
+        let mmio_flags = map_perm_to_pte_flags(mmio_perm);
 
         let map_start = crate::arch::MEMORY_START;
         let map_end = crate::arch::MEMORY_START + crate::arch::KERNEL_DIRECT_MAP_SIZE;
@@ -154,34 +177,63 @@ impl MemorySet {
             va_start,
             crate::mm::KERNEL_OFFSET,
         );
+        assert!(
+            map_start % crate::mm::page_table::GIGA_PAGE_SIZE == 0
+                && (map_end - map_start) % crate::mm::page_table::GIGA_PAGE_SIZE == 0,
+            "RISC-V direct map must be 1GiB aligned: {:#x}..{:#x}",
+            map_start,
+            map_end,
+        );
+        assert!(
+            crate::arch::PCI_MMIO_BASE % crate::mm::page_table::GIGA_PAGE_SIZE == 0
+                && crate::arch::PCI_MMIO_SIZE % crate::mm::page_table::GIGA_PAGE_SIZE == 0,
+            "PCI MMIO window must be 1GiB aligned",
+        );
+        assert!(
+            crate::arch::PCI_ECAM_BASE % crate::mm::page_table::MEGA_PAGE_SIZE == 0
+                && crate::arch::PCI_ECAM_SIZE % crate::mm::page_table::MEGA_PAGE_SIZE == 0,
+            "PCI ECAM window must be 2MiB aligned",
+        );
 
-        #[cfg(target_arch = "loongarch64")]
-        let mmio_ranges: &[(usize, usize)] = &[
-            (
-                crate::mm::align_down(crate::arch::UART_PADDR, crate::mm::PAGE_SIZE),
-                crate::mm::align_down(
-                    crate::arch::UART_PADDR + crate::mm::PAGE_SIZE - 1,
-                    crate::mm::PAGE_SIZE,
-                ) + crate::mm::PAGE_SIZE,
-            ),
-            (
-                crate::mm::align_down(crate::arch::PCI_ECAM_BASE, crate::mm::PAGE_SIZE),
-                crate::mm::align_down(
-                    crate::arch::PCI_ECAM_BASE + crate::arch::PCI_ECAM_SIZE - 1,
-                    crate::mm::PAGE_SIZE,
-                ) + crate::mm::PAGE_SIZE,
-            ),
-            (
-                crate::mm::align_down(crate::arch::PCI_MMIO_BASE, crate::mm::PAGE_SIZE),
-                crate::mm::align_down(
-                    crate::arch::PCI_MMIO_BASE + crate::arch::PCI_MMIO_SIZE - 1,
-                    crate::mm::PAGE_SIZE,
-                ) + crate::mm::PAGE_SIZE,
-            ),
-        ];
+        {
+            let mut page_table = lock_detect!(self.page_table);
 
-        #[cfg(target_arch = "riscv64")]
-        let mmio_ranges: &[(usize, usize)] = &[
+            let mut pa = map_start;
+            while pa < map_end {
+                page_table.map_1g(
+                    VirtAddr(crate::mm::kernel_phys_to_virt(pa)),
+                    PhysAddr(pa),
+                    kernel_flags,
+                );
+                pa += crate::mm::page_table::GIGA_PAGE_SIZE;
+            }
+
+            page_table.map_1g(
+                VirtAddr(crate::mm::kernel_phys_to_virt(crate::arch::PCI_MMIO_BASE)),
+                PhysAddr(crate::arch::PCI_MMIO_BASE),
+                mmio_flags,
+            );
+
+            let mut ecam_pa = crate::arch::PCI_ECAM_BASE;
+            let ecam_end = crate::arch::PCI_ECAM_BASE + crate::arch::PCI_ECAM_SIZE;
+            while ecam_pa < ecam_end {
+                page_table.map_2m(
+                    VirtAddr(crate::mm::kernel_phys_to_virt(ecam_pa)),
+                    PhysAddr(ecam_pa),
+                    mmio_flags,
+                );
+                ecam_pa += crate::mm::page_table::MEGA_PAGE_SIZE;
+            }
+        }
+
+        log::info!(
+            "[mm] riscv64 kernel huge map: ram={} x 1GiB, pci_mmio=1 x 1GiB, ecam={} x 2MiB",
+            (map_end - map_start) / crate::mm::page_table::GIGA_PAGE_SIZE,
+            crate::arch::PCI_ECAM_SIZE / crate::mm::page_table::MEGA_PAGE_SIZE,
+        );
+
+        // 小块 MMIO 仍走 4 KiB MapArea，避免把整片保留地址空间都映射进来。
+        let small_mmio_ranges: &[(usize, usize)] = &[
             (
                 crate::mm::align_down(crate::arch::UART_PADDR, crate::mm::PAGE_SIZE),
                 crate::mm::align_down(
@@ -196,51 +248,9 @@ impl MemorySet {
                     crate::mm::PAGE_SIZE,
                 ) + crate::mm::PAGE_SIZE,
             ),
-            // 新增：PCIe ECAM（config space，256MB）
-            (
-                crate::mm::align_down(crate::arch::PCI_ECAM_BASE, crate::mm::PAGE_SIZE),
-                crate::mm::align_down(
-                    crate::arch::PCI_ECAM_BASE + crate::arch::PCI_ECAM_SIZE - 1,
-                    crate::mm::PAGE_SIZE,
-                ) + crate::mm::PAGE_SIZE,
-            ),
-            // 新增：PCIe MMIO 窗口（1GB，BAR 分配从这里切）
-            (
-                crate::mm::align_down(crate::arch::PCI_MMIO_BASE, crate::mm::PAGE_SIZE),
-                crate::mm::align_down(
-                    crate::arch::PCI_MMIO_BASE + crate::arch::PCI_MMIO_SIZE - 1,
-                    crate::mm::PAGE_SIZE,
-                ) + crate::mm::PAGE_SIZE,
-            ),
         ];
 
-        let mut cursor = map_start;
-
-        for &(raw_start, raw_end) in mmio_ranges.iter() {
-            let start = core::cmp::max(raw_start, map_start);
-            let end = core::cmp::min(raw_end, map_end);
-
-            if end <= map_start || start >= map_end || start >= end {
-                continue;
-            }
-
-            if cursor < start {
-                self.insert_linear_pa_range(cursor, start, kernel_perm);
-            }
-
-            if cursor < end {
-                cursor = end;
-            }
-        }
-
-        if cursor < map_end {
-            self.insert_linear_pa_range(cursor, map_end, kernel_perm);
-        }
-
-        
-        //MMIO 区域单独映射。
-        
-        for &(start, end) in mmio_ranges.iter() {
+        for &(start, end) in small_mmio_ranges.iter() {
             log::info!(
                 "[mm] map mmio: pa={:#x}..{:#x}, va={:#x}..{:#x}",
                 start,
@@ -252,21 +262,19 @@ impl MemorySet {
             self.insert_linear_pa_range(start, end, mmio_perm);
         }
 
+        let shutdown_begin = crate::mm::align_down(
+            crate::arch::shutdown::SIFIVE_TEST_BASE,
+            crate::mm::PAGE_SIZE,
+        );
+        let shutdown_end = crate::mm::align_down(
+            crate::arch::shutdown::SIFIVE_TEST_BASE + crate::mm::PAGE_SIZE - 1,
+            crate::mm::PAGE_SIZE,
+        ) + crate::mm::PAGE_SIZE;
+        self.insert_linear_pa_range(shutdown_begin, shutdown_end, kernel_perm);
+    }
 
-        #[cfg(target_arch = "riscv64")]
-        {
-            let shutdown_begin = crate::mm::align_down(
-                crate::arch::shutdown::SIFIVE_TEST_BASE,
-                crate::mm::PAGE_SIZE,
-            );
-            let shutdown_end = crate::mm::align_down(
-                crate::arch::shutdown::SIFIVE_TEST_BASE + crate::mm::PAGE_SIZE - 1,
-                crate::mm::PAGE_SIZE,
-            ) + crate::mm::PAGE_SIZE;
-            self.insert_linear_pa_range(shutdown_begin, shutdown_end, kernel_perm);
-        }
-
-
+    #[cfg(target_arch = "loongarch64")]
+    fn map_kernel_areas_loongarch64() {
     }
 
     pub fn copy_data(&self, start_va: VirtAddr, data: &[u8]) {
@@ -353,10 +361,10 @@ impl MemorySet {
 
     pub fn from_existed_user(user_space: &Self) -> Self {
         let mut memory_set = Self::new_bare();
-
+        
 
         memory_set.map_kernel_areas();
-        
+
 
         for area in user_space.areas.iter() {
             if !area.is_user() {
@@ -432,6 +440,9 @@ impl MemorySet {
         let mut memory_set = MemorySet::new_bare();
         memory_set.map_kernel_areas();
 
+        let mut copied_bytes = 0usize;
+        let mut zeroed_bytes = 0usize;
+
         for i in 0..header.e_phnum as usize {
             let ph = header.program_header(elf_data, i)?;
 
@@ -501,16 +512,19 @@ impl MemorySet {
                 seg_start_va,
                 &elf_data[file_start..file_end],
             )?;
+            copied_bytes += file_size;
 
             
             // 清零 .bss:
             // [p_vaddr + p_filesz, p_vaddr + p_memsz)
 
             if seg_mem_end_va > seg_file_end_va {
+                let zero_len = seg_mem_end_va - seg_file_end_va;
                 memory_set.zero_user(
                     seg_file_end_va,
-                    seg_mem_end_va - seg_file_end_va,
+                    zero_len,
                 )?;
+                zeroed_bytes += zero_len;
             }
 
             log::info!(

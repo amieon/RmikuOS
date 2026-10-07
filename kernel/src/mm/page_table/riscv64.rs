@@ -9,6 +9,17 @@ use super::FrameTracker;
 
 const SATP_MODE_SV39: usize = 8usize << 60;
 
+/// Sv39 leaf sizes supported by the automatic range mapper.
+///
+/// Level-2 leaf: 1GiB, level-1 leaf: 2MiB, level-0 leaf: 4KiB.
+const LEVEL2_PAGE_SIZE: usize = 1usize << 30;
+const LEVEL1_PAGE_SIZE: usize = 1usize << 21;
+const SUPPORTED_PAGE_SIZES: [usize; 3] = [
+    LEVEL2_PAGE_SIZE,
+    LEVEL1_PAGE_SIZE,
+    PAGE_SIZE,
+];
+
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -79,6 +90,12 @@ impl PageTableEntry {
 
     pub fn is_valid(self) -> bool {
         self.flags().contains(PteFlags::V)
+    }
+
+    /// Sv39 non-leaf PTEs have V set and R/W/X all clear. Any R/W/X bit
+    /// means this entry directly maps a 4KiB/2MiB/1GiB page.
+    pub fn is_leaf(self) -> bool {
+        self.readable() || self.writable() || self.executable()
     }
 
     pub fn readable(self) -> bool {
@@ -155,19 +172,16 @@ pub fn map_range(
     size: usize,
     flags: PteFlags,
 ) {
-    let mut va = crate::mm::align_down(va_start, crate::mm::PAGE_SIZE);
-    let mut pa = crate::mm::align_down(pa_start, crate::mm::PAGE_SIZE);
+    let va = crate::mm::align_down(va_start, crate::mm::PAGE_SIZE);
+    let pa = crate::mm::align_down(pa_start, crate::mm::PAGE_SIZE);
     let end = crate::mm::align_up(va_start + size, crate::mm::PAGE_SIZE);
 
-    while va < end {
-        pt.map(
-            crate::mm::VirtAddr::from(va).floor(),
-            crate::mm::PhysAddr::from(pa).floor(),
-            flags,
-        );
-        va += crate::mm::PAGE_SIZE;
-        pa += crate::mm::PAGE_SIZE;
-    }
+    pt.map_range(
+        crate::mm::VirtAddr::from(va),
+        crate::mm::PhysAddr::from(pa),
+        end - va,
+        flags,
+    );
 }
 
 
@@ -198,6 +212,12 @@ impl PageTable {
                 let tracker = FrameTracker::new(frame);
                 *pte = PageTableEntry::new(frame, PteFlags::V);
                 self.frames.push(tracker);
+            } else if pte.is_leaf() {
+                panic!(
+                    "cannot create 4KiB mapping below a huge page: vpn {:?}, level {}",
+                    vpn,
+                    i
+                );
             }
 
             ppn = pte.ppn();
@@ -210,6 +230,144 @@ impl PageTable {
         let pte = self.find_pte_create(vpn).expect("failed to create pte");
         assert!(!pte.is_valid(), "vpn {:?} is already mapped", vpn);
         *pte = PageTableEntry::new(ppn, flags.union(PteFlags::V));
+    }
+
+    /// Map `[va, va + size)` to `[pa, pa + size)` with the largest usable
+    /// Sv39 leaf at every step.
+    ///
+    /// The caller does not choose a page size. For example, an aligned
+    /// 2.5GiB range is split into 1GiB + 1GiB + 256 * 2MiB mappings.
+    /// Unaligned prefixes/suffixes automatically fall back to smaller pages.
+    /// Returns the number of page-table leaves created.
+    pub fn map_range(
+        &mut self,
+        va_start: VirtAddr,
+        pa_start: PhysAddr,
+        size: usize,
+        flags: PteFlags,
+    ) -> usize {
+        assert!(size > 0, "cannot map an empty range");
+        assert!(
+            va_start.0 % PAGE_SIZE == 0,
+            "range VA is not page aligned: {:#x}",
+            va_start.0
+        );
+        assert!(
+            pa_start.0 % PAGE_SIZE == 0,
+            "range PA is not page aligned: {:#x}",
+            pa_start.0
+        );
+        assert!(
+            size % PAGE_SIZE == 0,
+            "range size is not page aligned: {:#x}",
+            size
+        );
+        va_start
+            .0
+            .checked_add(size)
+            .expect("virtual range overflows");
+        pa_start
+            .0
+            .checked_add(size)
+            .expect("physical range overflows");
+
+        let mut va = va_start.0;
+        let mut pa = pa_start.0;
+        let mut remaining = size;
+        let mut mapped_leaves = 0usize;
+
+        while remaining > 0 {
+            let page_size = Self::largest_usable_page(va, pa, remaining);
+
+            match page_size {
+                LEVEL2_PAGE_SIZE => self.map_level2_leaf(VirtAddr(va), PhysAddr(pa), flags),
+                LEVEL1_PAGE_SIZE => self.map_level1_leaf(VirtAddr(va), PhysAddr(pa), flags),
+                PAGE_SIZE => self.map(VirtAddr(va).floor(), PhysAddr(pa).floor(), flags),
+                _ => unreachable!("unsupported Sv39 page size"),
+            }
+
+            va += page_size;
+            pa += page_size;
+            remaining -= page_size;
+            mapped_leaves += 1;
+        }
+
+        mapped_leaves
+    }
+
+    fn largest_usable_page(va: usize, pa: usize, remaining: usize) -> usize {
+        for &page_size in SUPPORTED_PAGE_SIZES.iter() {
+            if remaining >= page_size && va % page_size == 0 && pa % page_size == 0 {
+                return page_size;
+            }
+        }
+
+        PAGE_SIZE
+    }
+
+    /// Map one aligned 1GiB region with a level-2 leaf PTE.
+    fn map_level2_leaf(&mut self, va: VirtAddr, pa: PhysAddr, flags: PteFlags) {
+        assert!(
+            va.0 % LEVEL2_PAGE_SIZE == 0,
+            "level-2 leaf VA is not aligned: {:#x}",
+            va.0
+        );
+        assert!(
+            pa.0 % LEVEL2_PAGE_SIZE == 0,
+            "level-2 leaf PA is not aligned: {:#x}",
+            pa.0
+        );
+
+        let index = (va.0 >> 30) & 0x1ff;
+        let pte = &mut pte_array(self.root_ppn)[index];
+        assert!(
+            !pte.is_valid(),
+            "level-2 leaf conflicts at va={:#x}, old_bits={:#x}",
+            va.0,
+            pte.bits()
+        );
+
+        *pte = PageTableEntry::new(pa.floor(), flags.union(PteFlags::V));
+    }
+
+    /// Map one aligned 2MiB region with a level-1 leaf PTE.
+    fn map_level1_leaf(&mut self, va: VirtAddr, pa: PhysAddr, flags: PteFlags) {
+        assert!(
+            va.0 % LEVEL1_PAGE_SIZE == 0,
+            "level-1 leaf VA is not aligned: {:#x}",
+            va.0
+        );
+        assert!(
+            pa.0 % LEVEL1_PAGE_SIZE == 0,
+            "level-1 leaf PA is not aligned: {:#x}",
+            pa.0
+        );
+
+        let idxs = vpn_indexes(va.floor());
+        let root_pte = &mut pte_array(self.root_ppn)[idxs[0]];
+
+        if !root_pte.is_valid() {
+            let frame = alloc_frame().expect("failed to allocate level-1 page table");
+            let tracker = FrameTracker::new(frame);
+            *root_pte = PageTableEntry::new(frame, PteFlags::V);
+            self.frames.push(tracker);
+        } else {
+            assert!(
+                !root_pte.is_leaf(),
+                "level-1 leaf conflicts with a level-2 leaf at va={:#x}",
+                va.0
+            );
+        }
+
+        let pte = &mut pte_array(root_pte.ppn())[idxs[1]];
+        assert!(
+            !pte.is_valid(),
+            "level-1 leaf conflicts at va={:#x}, old_bits={:#x}",
+            va.0,
+            pte.bits()
+        );
+
+        *pte = PageTableEntry::new(pa.floor(), flags.union(PteFlags::V));
     }
 
     /// mprotect 用: 只改已有 PTE 的权限位, 不重新映射(不分配新帧)。
@@ -229,6 +387,31 @@ impl PageTable {
         self.find_pte(vpn).map(|pte| *pte)
     }
 
+    /// Return whether any 4KiB/2MiB/1GiB mapping covers `va`.
+    ///
+    /// Unlike translate(), this is safe to call on addresses covered by a
+    /// kernel huge mapping.
+    pub fn contains_va(&self, va: VirtAddr) -> bool {
+        let idxs = vpn_indexes(va.floor());
+        let mut ppn = self.root_ppn;
+
+        for i in 0..3 {
+            let pte = pte_array(ppn)[idxs[i]];
+            if !pte.is_valid() {
+                return false;
+            }
+            if pte.is_leaf() {
+                return true;
+            }
+            if i == 2 {
+                return false;
+            }
+            ppn = pte.ppn();
+        }
+
+        false
+    }
+
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&'static mut PageTableEntry> {
         let idxs = vpn_indexes(vpn);
         let mut ppn = self.root_ppn;
@@ -240,6 +423,12 @@ impl PageTable {
             }
             if i == 2 {
                 return Some(pte);
+            }
+            if pte.is_leaf() {
+                // A 1GiB/2MiB kernel mapping cannot provide a 4KiB PTE.
+                // Kernel direct-map access goes through the active TLB entry,
+                // not through this software lookup helper.
+                return None;
             }
             ppn = pte.ppn();
         }
