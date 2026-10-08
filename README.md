@@ -34,7 +34,8 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join` | 进程级 fd table,线程共享地址空间                             |
 | 信号         | 通用 `sig_pending` 位图 + 延迟投递                           | 用户态 SIGILL/SIGFPE 不炸内核,shell Ctrl+C                   |
 | 虚拟内存     | buddy 帧分配器、多级页表、ELF 加载、mmap                     |                                                              |
-| 文件系统     | VFS 多挂载:ext4 rootfs(只读) / 可写 ext4(rsext4 + JBD2 日志) / tmpfs / FAT16(落盘) | `lseek` / `ftruncate` / `fsync` / `rename`(号段 64–68);数据盘 LABEL 身份识别 + 周期 writeback |
+| 文件系统     | VFS 多挂载:ext4 rootfs(只读) / **可写 ext4**(rsext4 + JBD2 日志) / tmpfs / FAT16(落盘) | `lseek` / `ftruncate` / `fsync` / `rename`;数据盘 LABEL 身份识别 + 周期 writeback |
+| 用户与组     | `useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`(身份类仅 root) | 账户库 defaults + overrides:可写 `/var/etc/{passwd,group}` 覆盖只读出厂 `/etc/{passwd,group}` |
 | 调度器       | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应             | 内置调度实验框架(exp00–exp06,见 docs)                        |
 | 网络         | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd + 域名解析(TTL 缓存) |
 | 用户程序     | C / C++ / Rust / Java(JVM + 装载期 AOT)/ Lua 5.4 / Scheme    | syscall ABI 语言无关                                         |
@@ -65,12 +66,14 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 
 ```text
 双架构交叉编译 -> rootfs 制作 -> QEMU 启动 -> 自动登录 -> 36 项回归测试 -> 检查汇总 -> shutdown 关机
+                                            \-> 可写 ext4 崩溃一致性测试(kill -9 + journal 回放 + e2fsck)
 ```
 
-* 流水线文件:`.github/workflows/ci.yml`,冒烟脚本:`scripts/smoke_test.sh`
+* 流水线文件:`.github/workflows/ci.yml`;冒烟脚本 `scripts/smoke_test.sh`,崩溃一致性脚本 `scripts/crash_consistency_test.sh`
 * 触发方式:仓库 **Actions** 页 → 左侧 **CI/CD** → 右侧 **Run workflow**,选择 `riscv64` / `loongarch64` / `both`
 * 构建产物(内核 ELF + rootfs + FAT 镜像)自动缓存,二次运行大幅提速
 * 回归测试:进系统后 `run_all` 一键执行 36 个测试(断言库 `user/include/test.h`,覆盖进程/线程/内存/文件系统/管道/syscall/SQLite 落盘/数学库/printf/setjmp/C++ 容器/语言运行时),任一失败即流水线红
+* 崩溃一致性测试:`bigwrite` 写大文件到一半时 `kill -9` QEMU 模拟掉电,再用同一块数据盘重启,断言 journal 自动回放、`/home` 重新绑定成功、已 sync 数据仍在,最后用宿主机 `e2fsck -fn` 校验磁盘结构干净——把"JBD2 真的在工作"从一次性手工实验变成每次提交都验证的事实(测试用 `/tmp` 下的临时数据盘,不碰 `target/data-*.img`)
 * 打 `v` 开头的标签(如 `v1.0`)时,自动构建双架构 release 产物并上传 GitHub Release
 
 ---
@@ -215,9 +218,11 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 * **调度器**:stride scheduling + alpha-scaled(连续 alpha `[0,100]`,纯整数幂)+ AIMD / SPSA-AdamW 自适应策略,完整调度实验框架与 7 篇实验报告(见 [docs/experiments/](docs/experiments/))
 * **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ **可写 ext4 数据盘**(rsext4 0.9.2 + JBD2,挂 `/home`:超级块卷标 LABEL 式盘身份识别、周期 writeback + `fsync`、首次开机内核内 mkfs 自举)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)
   * **崩溃一致性实测**:16MB 大文件写入至 6MB 时 `kill -9` QEMU → 重启后 journal 自动回放,`/home` 干净挂载、已 sync 数据完好;镜像经宿主机 `e2fsck 1.47.2 -fn` 五遍检查零错误——内核内 rsext4 产生的 ext4 结构通过 e2fsprogs 参考实现认证
+  * **存储布局 / bind mount**:一块可写数据盘(rsext4 + JBD2,经超级块卷标 `RMikuOS-DATA` 识别)挂载在 `/data`,`/home`(用户目录)与 `/var`(系统运行时状态)是它的 **bind mount**——Linux `mount --bind` / 容器卷的同款机制。VFS 挂载表存的是 inode 引用而非文件系统,因此一份盘可服务多个路径;盘上由内核首次挂载时自动建出 `home/`、`var/etc/`
+  * **多用户与可写系统状态**:`useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`;账户库采用 **defaults + overrides**(可写 `/var/etc/{passwd,group}` 优先,回退只读出厂 `/etc/{passwd,group}`,写入即 fsync)。身份类命令仅 root 可执   ,`passwd` 是唯一例外:非 root 只能改自己的,且必须先验证旧口令
 * **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP)、socket 100–117、通用 `poll()`(支持 socket / 管道 / 普通文件)、UDP `connect()` 与统一临时端口分配器(49152–65535)、DHCP T1/T2 租约续期、TCP listen backlog、用户态 httpd(宿主机浏览器访问)、DNS 客户端(压缩指针解析 + TTL 缓存,nslookup)、TFTP / NTP / wget(wget/ping/ntpdate 支持域名参数)、shell 命令替换 `$()` / 反引号、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×)
 * **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器
-* **验证**:36 项 CI 回归测试、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
+* **验证**:36 项 CI 回归测试 + 可写 ext4 崩溃一致性 CI 项(kill -9 → journal 回放 → `e2fsck -fn` 零错误)、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
 
 ---
 
