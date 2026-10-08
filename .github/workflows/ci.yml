@@ -107,12 +107,26 @@ jobs:
           # 总超时 360s,失败时日志自动上传可排查
           bash ./scripts/smoke_test.sh riscv64
 
+      # 可写 ext4 的崩溃一致性:bigwrite 写到一半 kill -9(模拟掉电),
+      # 再用同一块盘重启,验证 journal 回放 + 已 sync 数据仍在 + e2fsck 干净。
+      # 使用 /tmp 下的临时数据盘,不碰 target/data-*.img。
+      - name: 崩溃一致性测试(写一半 kill -9 + journal 回放 + e2fsck)
+        run: |
+          bash ./scripts/crash_consistency_test.sh riscv64
+
       - name: 上传启动日志(失败时便于排查)
         if: failure()
         uses: actions/upload-artifact@v5
         with:
           name: smoke-log-riscv64
           path: /tmp/smoke_*.log
+
+      - name: 上传崩溃测试日志(失败时便于排查)
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: crash-log-riscv64
+          path: /tmp/crash_*
 
   # 第二步(loongarch64):内容同上,额外缓存交叉工具链
   test-loongarch64:
@@ -182,12 +196,23 @@ jobs:
         run: |
           bash ./scripts/smoke_test.sh loongarch64
 
+      - name: 崩溃一致性测试(写一半 kill -9 + journal 回放 + e2fsck)
+        run: |
+          bash ./scripts/crash_consistency_test.sh loongarch64
+
       - name: 上传启动日志(失败时便于排查)
         if: failure()
         uses: actions/upload-artifact@v5
         with:
           name: smoke-log-loongarch64
           path: /tmp/smoke_*.log
+
+      - name: 上传崩溃测试日志(失败时便于排查)
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: crash-log-loongarch64
+          path: /tmp/crash_*
 
   # 第三步:打 v 标签时自动发布 Release 产物(CD,可选)
   release:
