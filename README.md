@@ -34,7 +34,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join` | 进程级 fd table,线程共享地址空间                             |
 | 信号         | 通用 `sig_pending` 位图 + 延迟投递                           | 用户态 SIGILL/SIGFPE 不炸内核,shell Ctrl+C                   |
 | 虚拟内存     | buddy 帧分配器、多级页表、ELF 加载、mmap                     |                                                              |
-| 文件系统     | VFS 多挂载:ext4 rootfs(只读) / **可写 ext4**(rsext4 + JBD2 日志) / tmpfs / FAT16(落盘) | `lseek` / `ftruncate` / `fsync` / `rename`;数据盘 LABEL 身份识别 + 周期 writeback |
+| 文件系统     | VFS 多挂载:ext4 rootfs(只读) / 可写 ext4(rsext4 + JBD2 日志) / tmpfs / FAT32 | `lseek` / `ftruncate` / `fsync` / `rename`;数据盘 LABEL 身份识别 + 周期 writeback |
 | 用户与组     | `useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`(身份类仅 root) | 账户库 defaults + overrides:可写 `/var/etc/{passwd,group}` 覆盖只读出厂 `/etc/{passwd,group}` |
 | 调度器       | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应             | 内置调度实验框架(exp00–exp06,见 docs)                        |
 | 网络         | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd + 域名解析(TTL 缓存) |
@@ -51,7 +51,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 文档                                           | 内容                                                         |
 | ---------------------------------------------- | ------------------------------------------------------------ |
 | [docs/shell.md](docs/shell.md)                 | Shell 词法 / 管道 / 重定向 / 环境变量 / `$?` 展开,TCC 自托管工具链,kilo 编辑器 |
-| [docs/filesystem.md](docs/filesystem.md)       | VFS 与 fd table,ext4 / tmpfs / FAT16,文件系统调用 64–68,virtio 块设备 |
+| [docs/filesystem.md](docs/filesystem.md)       | VFS 与 fd table,ext4 / tmpfs / FAT32,文件系统调用,virtio 块设备 |
 | [docs/network.md](docs/network.md)             | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / DNS / ICMP / NTP),socket 100–117 + `poll()` ,UDP connect,DHCP T1/T2,listen backlog,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
 | [docs/user-programs.md](docs/user-programs.md) | C 分层库 / C++ `stdcompat.h` 桥接 / Rust `ulib` / 自研 JVM / Lua 5.4 / Scheme,堆分配器与裸运行时数学库 |
 | [docs/scheduler.md](docs/scheduler.md)         | stride 与 alpha-scaled 调度机制,调度统计接口,SMP 与计时注意事项 |
@@ -147,14 +147,7 @@ user/
 └── build.py                统一构建脚本(按来源/语言分派编译)
 ```
 
-构建产物进入 `user/build/<arch>/`(bin / samples / programs / gcn),由 `user/mkfs_ext4.sh` 打包进 ext4 镜像,FAT 盘镜像由同一脚本生成(`mkfs.fat -F 16`):
-
-```text
-target/fs-riscv64.img        ext4 rootfs(riscv)
-target/fs-loongarch64.img    ext4 rootfs(loongarch)
-target/fat-riscv64.img       FAT 数据盘(riscv)
-target/fat-loongarch64.img   FAT 数据盘(loongarch)
-```
+构建产物进入 `user/build/<arch>/`(bin / samples / programs / gcn),由 `user/mkfs_ext4.sh` 打包进 ext4 镜像,FAT 盘镜像由同一脚本生成
 
 修改 `user/rootfs`、`user/src`、`user/tests`、`user/gcn` 或 `user/rust` 后重新运行 `./run.sh <arch> debug`,即可在系统 shell 中看到新的文件结构与用户程序。
 
@@ -216,7 +209,7 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 
 * **内核基础**:双架构启动 / trap / syscall / 进程线程 / 信号投递与用户态隔离 / buddy 帧分配器 / SMP 多核(per-hart timer、IPI reschedule、TLB shootdown)
 * **调度器**:stride scheduling + alpha-scaled(连续 alpha `[0,100]`,纯整数幂)+ AIMD / SPSA-AdamW 自适应策略,完整调度实验框架与 7 篇实验报告(见 [docs/experiments/](docs/experiments/))
-* **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ **可写 ext4 数据盘**(rsext4 0.9.2 + JBD2,挂 `/home`:超级块卷标 LABEL 式盘身份识别、周期 writeback + `fsync`、首次开机内核内 mkfs 自举)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)
+* **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ 可写 ext4 数据盘(rsext4 0.9.2 + JBD2,挂 `/home`:超级块卷标 LABEL 式盘身份识别、周期 writeback + `fsync`、首次开机内核内 mkfs 自举)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)
   * **崩溃一致性实测**:16MB 大文件写入至 6MB 时 `kill -9` QEMU → 重启后 journal 自动回放,`/home` 干净挂载、已 sync 数据完好;镜像经宿主机 `e2fsck 1.47.2 -fn` 五遍检查零错误——内核内 rsext4 产生的 ext4 结构通过 e2fsprogs 参考实现认证
   * **存储布局 / bind mount**:一块可写数据盘(rsext4 + JBD2,经超级块卷标 `RMikuOS-DATA` 识别)挂载在 `/data`,`/home`(用户目录)与 `/var`(系统运行时状态)是它的 **bind mount**——Linux `mount --bind` / 容器卷的同款机制。VFS 挂载表存的是 inode 引用而非文件系统,因此一份盘可服务多个路径;盘上由内核首次挂载时自动建出 `home/`、`var/etc/`
   * **多用户与可写系统状态**:`useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`;账户库采用 **defaults + overrides**(可写 `/var/etc/{passwd,group}` 优先,回退只读出厂 `/etc/{passwd,group}`,写入即 fsync)。身份类命令仅 root 可执   ,`passwd` 是唯一例外:非 root 只能改自己的,且必须先验证旧口令
@@ -238,7 +231,6 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 
 ### Filesystem
 
-* FAT 当前为 FAT16 / 单分区,可扩展 FAT32 与更深的子目录用例
 * 可写 ext4 精修:virtio-blk 真 flush(`VIRTIO_BLK_T_FLUSH`,当前 capabilities 已声明但驱动为空实现)、per-file fsync(当前退化为挂载点全量 sync)、根命令行 `root=`/设备树别名式盘识别(当前 LABEL 优先 + 顺序兜底)
 * **overlayfs**:只读 rootfs(ext4-view)+ 可写层(rsext4)+ whiteout——整个 `/` 可写、删错可恢复(Docker rootfs 模式)
 * 文件系统并发访问的细粒度锁(当前 rsext4 / fatfs 均为单核 + 全局锁)

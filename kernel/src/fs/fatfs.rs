@@ -662,10 +662,21 @@ impl Inode for FatInode {
     }
 }
 
-pub fn init(device: Arc<dyn BlockDevice>) {
+
+pub fn init(device: Arc<dyn BlockDevice>) -> bool {
     let num_sectors = device.num_blocks() as u64;
-    let fs = FatFs::load(device, num_sectors)
-        .expect("[fat] load failed");
-    crate::fs::mount::mount("/fat", fs);
-    log::info!("[fat] mounted at /fat");
+    match FatFs::load(device, num_sectors) {
+        Some(fs) => {
+            crate::fs::mount::mount("/fat", fs);
+            log::info!("[fat] mounted at /fat");
+            true
+        }
+        None => {
+            log::warn!(
+                "[fat] 挂载失败: 盘未格式化, 或簇数不满足该 FAT 类型的下限(FAT32 需 ≥65525 簇)。\
+                 /fat 不可用, 内核继续启动"
+            );
+            false
+        }
+    }
 }
