@@ -11,8 +11,7 @@ pub mod pipe;
 pub mod mount;
 pub mod fatfs;
 pub mod flag;
-pub mod rsext4_adapter;
-pub mod ext4_rw;
+pub mod rsext4fs;
 
 //pub mod initramfs;
 mod stdio;

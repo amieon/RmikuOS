@@ -201,7 +201,7 @@ fn handle_interrupt(cx: &mut TrapContext) {
 
     if pending & ESTAT_IS_TIMER != 0 {
         crate::drivers::net::on_timer_tick();
-        crate::fs::ext4_rw::on_timer_tick();
+        crate::fs::rsext4fs::on_timer_tick();
         let from_user = cx.is_from_user();
 
         let should_schedule =

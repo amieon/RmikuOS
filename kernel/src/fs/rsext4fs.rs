@@ -14,20 +14,154 @@ use super::mount::{self, FileSystem};
 use super::stat::{Stat, STAT_TYPE_FILE};
 use super::ReadOnlyDirFile;
 
-use crate::fs::rsext4_adapter::{format_ext4, mount_ext4, Ext4Mount};
 use rsext4::{
-    DirectoryCursor, DirectoryEntryType, FileName, FilePermissions, InodeMetadataUpdate,
-    InodeNumber, MutationContext, RenameOptions,
+    BlockIo, Clock, DeviceCapabilities, DeviceGeometry, DirectoryCursor, DirectoryEntryType,
+    EntropySource, Ext4, Ext4Error, Ext4Result, Ext4Timestamp, FileName, FilePermissions,
+    InodeMetadataUpdate, InodeNumber, MountOptions, MountServices, MountedServices, MutationContext,
+    NoopObserver, RenameOptions, SectorId,
 };
 
+// 1. BlockIo 适配
+
+pub struct RmikuBlockIo {
+    inner: Arc<dyn BlockDevice>,
+}
+
+impl RmikuBlockIo {
+    pub fn new(inner: Arc<dyn BlockDevice>) -> Self {
+        assert_eq!(inner.block_size(), 512, "rsext4 适配层假设 512 字节扇区");
+        Self { inner }
+    }
+}
+
+fn io_errno(errno: isize) -> Ext4Error {
+    // ErrorContext 是 Copy 枚举（只能装 'static str），动态 errno 记日志。
+    log::warn!("[ext4-rw] block io error: errno={}", errno);
+    Ext4Error::io().with_operation("rmiku-blk-io")
+}
+
+impl BlockIo for RmikuBlockIo {
+    fn write(&mut self, buffer: &[u8], sector: SectorId, count: u32) -> Ext4Result<()> {
+        let base = sector.raw() as usize;
+        for i in 0..count as usize {
+            let chunk = &buffer[i * 512..(i + 1) * 512];
+            // RmikuOS 约定：成功返回写入字节数(512)，失败返回负数（同 blockio.rs）
+            let rc = self.inner.write_block(base + i, chunk);
+            if rc != 512 {
+                return Err(io_errno(rc));
+            }
+        }
+        Ok(())
+    }
+
+    fn read(&mut self, buffer: &mut [u8], sector: SectorId, count: u32) -> Ext4Result<()> {
+        let base = sector.raw() as usize;
+        for i in 0..count as usize {
+            let chunk = &mut buffer[i * 512..(i + 1) * 512];
+            let rc = self.inner.read_block(base + i, chunk);
+            if rc != 512 {
+                return Err(io_errno(rc));
+            }
+        }
+        Ok(())
+    }
+
+    fn geometry(&self) -> DeviceGeometry {
+        DeviceGeometry::new(512, self.inner.num_blocks() as u64)
+    }
+
+    fn capabilities(&self) -> DeviceCapabilities {
+        DeviceCapabilities {
+            read_only: false,
+            flush: true,
+            barrier: false,
+            fua: false,
+            discard: false,
+        }
+    }
+
+    fn flush(&mut self) -> Ext4Result<()> {
+        // trait 默认实现返回 0=成功；设备覆盖时也应遵守（负数=错）
+        let rc = self.inner.flush();
+        if rc < 0 {
+            return Err(io_errno(rc));
+        }
+        Ok(())
+    }
+}
+
+// 2. runtime services
+
+/// 时钟：接 RTC。sec 是 Unix 秒。
+pub struct RmikuClock;
+
+impl Clock for RmikuClock {
+    fn now(&self) -> Ext4Result<Ext4Timestamp> {
+        // TODO: 换成 RmikuOS 的 RTC 读取
+        Ok(Ext4Timestamp::new(rmiku_rtc_unix_seconds(), 0))
+    }
+}
+
+// 占位：接内核 RTC 后删掉
+fn rmiku_rtc_unix_seconds() -> i64 {
+    0
+}
+
+/// 熵源：接内核 RNG。
+pub struct RmikuEntropy;
+
+impl EntropySource for RmikuEntropy {
+    fn fill_bytes(&mut self, output: &mut [u8]) -> Ext4Result<()> {
+        // TODO: 换成内核 RNG；返回 Err 则 rsext4 报 unsupported_capability("runtime:entropy")
+        output.fill(0);
+        Ok(())
+    }
+}
+
+// 3. 组装
+//    MountServices::new(clock, entropy, observer) —— mmp_delay 默认 ()
+//    mount 消费 services，clock 移入内部，Ext4 持有 MountedServices<E, O, W>
+
+pub type Ext4Mount = Ext4<RmikuBlockIo, MountedServices<RmikuEntropy, NoopObserver>>;
+
+/// 数据盘固定卷标（约定式身份）：discover_disks 按 s_volume_name 识别角色。
+/// 与 mkfs_ext4.sh 里 rootfs 的 -L RMikuOS-ROOT 对应。
+pub const DATA_VOLUME_LABEL: &[u8] = b"RMikuOS-DATA";
+
+/// 在块设备上格式化 ext4（会抹掉盘上所有数据！）
+/// 数据盘首次挂载流程：mount 失败 → format_ext4 → 重新 mount。
+pub fn format_ext4(dev: Arc<dyn BlockDevice>) -> Ext4Result<()> {
+    let io = RmikuBlockIo::new(dev);
+    // 写入约定卷标（需 vendored rsext4 的 MkfsOptions.volume_label 补丁）
+    let mut opts = rsext4::MkfsOptions::default();
+    let n = DATA_VOLUME_LABEL.len().min(16);
+    opts.volume_label[..n].copy_from_slice(&DATA_VOLUME_LABEL[..n]);
+    // format 吃掉设备再还回来（mkfs 内部临时关 journal，结束前恢复）
+    rsext4::format(io, RmikuClock, opts).map(|_| ())
+}
+
+pub fn mount_ext4(dev: Arc<dyn BlockDevice>) -> Ext4Result<Ext4Mount> {
+    let io = RmikuBlockIo::new(dev);
+    let services = MountServices::new(RmikuClock, RmikuEntropy, NoopObserver);
+    // read_write() = { readonly: false, replay_journal: true, block_validity: true }
+    // 若要启用 MMP：services.with_mmp(RmikuDelay, MmpIdentity{...}) 再传进来
+    Ext4::mount(io, services, MountOptions::read_write())
+}
+
+// 4. VFS 接入层
+
+/// 写操作的身份上下文。TODO: 多用户后从当前进程取 uid/gid/umask。
 fn ctx() -> MutationContext {
-    // TODO: 多用户后从当前进程取 uid/gid/umask
     MutationContext::new(0, 0, 0, 0o022)
 }
 
+/// str → rsext4 的 FileName（含非法字符检查）
 fn fname(name: &str) -> Option<FileName<'_>> {
     FileName::new(name.as_bytes()).ok()
 }
+
+
+// FileSystem
 
 pub struct Ext4RwFs {
     ext4: Mutex<Ext4Mount>,
@@ -35,21 +169,16 @@ pub struct Ext4RwFs {
     mount_point: String,
 }
 
-/// 数据盘文件系统的全局句柄：writeback timer 钩子从这里取。
+
 static DATA_FS: Mutex<Option<Arc<Ext4RwFs>>> = Mutex::new(None);
 
-/// timer 周期钩子（trap 里 net::on_timer_tick() 旁边调用）：限频 try_sync。
-///
-/// 这是 writeback 机制：把崩溃窗口从"无限"压到"一个周期"。
-/// 中断上下文约束 → 全程 try_lock，锁忙即跳过，绝不自旋阻塞。
 pub fn on_timer_tick() {
     #[cfg(target_arch = "riscv64")]
     const WRITEBACK_EVERY_TICKS: usize = 5000;
     #[cfg(target_arch = "loongarch64")]
     const WRITEBACK_EVERY_TICKS: usize = 10;
-
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
-    
+
     static FIRST_CALL: AtomicBool = AtomicBool::new(false);
     if !FIRST_CALL.swap(true, Ordering::Relaxed) {
         log::info!("[ext4-rw] timer 钩子首次触发（此后每周期一条 writeback ok）");
@@ -88,6 +217,16 @@ impl Ext4RwFs {
         }))
     }
 
+    /// 一站式接线：挂载（必要时 mkfs）+ 注册到 VFS。
+    /// 返回文件系统句柄，供调用方接着做绑定挂载 / ensure_layout。
+    ///
+    /// 典型用法（一块数据盘服务多个路径）:
+    /// ```ignore
+    /// let data = Ext4RwFs::init_and_mount("/data", dev)?;   // 盘根挂 /data
+    /// data.ensure_layout();                                // 建 home/ var/ var/etc/
+    /// mount_bind("/home", lookup_abs_path("/data/home")?); // 绑定出去
+    /// mount_bind("/var",  lookup_abs_path("/data/var")?);
+    /// ```
     pub fn init_and_mount(mount_point: &str, dev: Arc<dyn BlockDevice>) -> Option<Arc<Self>> {
         match Self::mount_or_format(dev, mount_point) {
             Some(fs) => {
@@ -105,6 +244,10 @@ impl Ext4RwFs {
     }
 
     /// 确保数据盘上的标准结构目录存在（首次 mkfs 后自动建好）。
+    ///
+    /// 布局（盘内视角）:
+    ///   /  → home/        用户家目录，绑定到 /home
+    ///     → var/etc/     系统运行时状态，绑定到 /var 后的 etc/
     pub fn ensure_layout(&self) {
         let mut fs = self.ext4.lock();
         let root = self.root;
@@ -145,6 +288,7 @@ impl Ext4RwFs {
     }
 
     /// 非阻塞版本：timer 中断上下文用。锁被占用就跳过本轮，绝不自旋等待。
+    /// 成功时打 info 日志——writeback 是否真的在跑，LOG=info 下一目了然。
     pub fn try_sync(&self) -> bool {
         match self.ext4.try_lock() {
             Some(mut fs) => match fs.sync() {
@@ -169,7 +313,7 @@ impl FileSystem for Ext4RwFs {
     }
 }
 
-
+// Inode
 pub struct Ext4RwInode {
     fs: Arc<Ext4RwFs>,
     number: InodeNumber,
@@ -405,6 +549,7 @@ impl Inode for Ext4RwInode {
     }
 }
 
+// File
 
 pub struct Ext4RwFile {
     fs: Arc<Ext4RwFs>,
@@ -495,7 +640,7 @@ impl File for Ext4RwFile {
 
     /// fsync(fd)：rsext4 没有 per-file sync，退化为整个挂载点的全量 sync
     /// （数据缓存→inode 表→bitmap→GDT→超级块→journal commit）。
-    /// POSIX 语义上偏强（刷了别的文件），对教学 OS 可接受，文档写明即可。
+    /// POSIX 语义上偏强（刷了别的文件），对教学 OS 可接受，文档写明。
     fn fsync(&self) -> isize {
         if self.fs.sync() {
             0

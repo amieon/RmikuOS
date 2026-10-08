@@ -156,7 +156,7 @@ fn primary_init(id: usize) -> ! {
     }
 
     if let Some(ddev) = disks.data_dev {
-        match fs::ext4_rw::Ext4RwFs::init_and_mount("/data", ddev) {
+        match fs::rsext4fs::Ext4RwFs::init_and_mount("/data", ddev) {
             Some(data_fs) => {
                 data_fs.ensure_layout(); // 建 home/ var/ var/etc/（首次 mkfs 后自动长出）
 

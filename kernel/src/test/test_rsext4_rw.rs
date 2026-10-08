@@ -11,7 +11,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::drivers::block::BlockDevice;
-use crate::fs::rsext4_adapter::{format_ext4, mount_ext4, RmikuClock};
+use crate::fs::rsext4fs::{format_ext4, mount_ext4, RmikuClock};
 use rsext4::{FilePermissions, FileName, MutationContext};
 
 pub fn test_rsext4_rw(dev: Arc<dyn BlockDevice>) {
