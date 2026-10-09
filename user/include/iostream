@@ -1,8 +1,58 @@
 #pragma once
-// RmikuOS C++ 标准库子集：<iostream> —— std::cout / std::cerr / std::endl
-//
-// 教学 OS 里没有 libstdc++：这些符号由 stdimpl/ 下的实现提供。
-// 本文件只是薄封装，指向同一份实现(stdimpl/stdcompat.h, 带 #pragma once,
-// 重复包含无开销)。这样移植程序可以照原生 C++ 写 #include <iostream>,
-// 不必把源码里的 include 路径改成移植专用的名字。
-#include "stdimpl/stdcompat.h"
+
+#include "stdio.h"            /* FILE, fputs, fputc, fwrite, fflush, snprintf */
+#include "stdimpl/vector.h"    /* mv::Vector<char>：my::string 的底层容器 */
+#include "stdimpl/string.h"    /* my::string, mystr::strlen */
+
+namespace std {
+    using string = my::string;   /* 与 <string> 重复声明同一别名是合法的 */
+
+    class ostream {
+        FILE* fp_;
+    public:
+        constexpr explicit ostream(FILE* fp) : fp_(fp) {}
+
+        FILE* fp() const { return fp_; }
+
+        ostream& put(char c) { if (fp_) fputc((int)(unsigned char)c, fp_); return *this; }
+        ostream& write(const char* s, size_t n) {
+            if (fp_ && s) fwrite(s, 1, n, fp_);
+            return *this;
+        }
+        void flush() { if (fp_) fflush(fp_); }
+
+        ostream& operator<<(const char* s)   { if (fp_) fputs(s ? s : "(null)", fp_); return *this; }
+        ostream& operator<<(const string& s) { return *this << s.c_str(); }
+        ostream& operator<<(char c)          { return put(c); }
+        ostream& operator<<(bool v)          { return *this << (v ? "1" : "0"); }
+
+        // 数字统一先 snprintf 成临时缓冲再写出（stdio.h 的 vsnprintf 支持 %d %u %ld %lu %g）
+        ostream& operator<<(int v) {
+            char b[24]; snprintf(b, sizeof b, "%d", v);  return *this << b;
+        }
+        ostream& operator<<(unsigned int v) {
+            char b[24]; snprintf(b, sizeof b, "%u", v);  return *this << b;
+        }
+        ostream& operator<<(long v) {
+            char b[32]; snprintf(b, sizeof b, "%ld", v); return *this << b;
+        }
+        ostream& operator<<(unsigned long v) {
+            char b[32]; snprintf(b, sizeof b, "%lu", v); return *this << b;
+        }
+        ostream& operator<<(double v) {
+            char b[64]; snprintf(b, sizeof b, "%g", v);  return *this << b;
+        }
+    };
+
+    // endl：换行 + 刷新。做成空结构体类型，避免和普通字符串混淆。
+    struct _Endl {};
+    inline ostream& operator<<(ostream& os, const _Endl&) { os.put('\n'); os.flush(); return os; }
+
+    inline const _Endl endl{};
+
+    // 标准流对象。这里直接取 &_stdout / &_stderr（file.h 中声明的全局 FILE），
+    // 而不是用 stdout/stderr 宏——那两个宏是函数调用(__init_stdout)，会触发
+    // 动态初始化；取地址是常量表达式，编译期就能初始化，不依赖全局构造。
+    inline ostream cout(&_stdout);
+    inline ostream cerr(&_stderr);
+}

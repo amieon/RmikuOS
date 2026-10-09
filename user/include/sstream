@@ -1,8 +1,137 @@
 #pragma once
-// RmikuOS C++ 标准库子集：<sstream> —— std::istringstream / std::ostringstream
-//
-// 教学 OS 里没有 libstdc++：这些符号由 stdimpl/ 下的实现提供。
-// 本文件只是薄封装，指向同一份实现(stdimpl/stdcompat.h, 带 #pragma once,
-// 重复包含无开销)。这样移植程序可以照原生 C++ 写 #include <sstream>,
-// 不必把源码里的 include 路径改成移植专用的名字。
-#include "stdimpl/stdcompat.h"
+
+#include "stdimpl/vector.h"    /* mv::Vector<char>：my::string 的底层容器 */
+#include "stdimpl/string.h"    /* my::string, mystr::strlen, mystr::str_to_int */
+#include "stdio.h"            /* snprintf：数字 → 字符串 */
+
+namespace std {
+    using string = my::string;
+
+    // ========== std::istringstream（照抄 stdcompat.h 的实现） ==========
+    class istringstream {
+        char* ptr_; char* end_; bool ok_; bool last_success_;
+    public:
+        istringstream() : ptr_(nullptr), end_(nullptr), ok_(false), last_success_(false) {}
+        istringstream(const char* s) { str(s); }
+        istringstream(const string& s) { str(s.c_str()); }
+        void str(const char* s) { 
+            ptr_ = (char*)s; 
+            end_ = ptr_ + (s ? mystr::strlen(s) : 0); 
+            ok_ = (s != nullptr); 
+            last_success_ = false;
+        }
+        void str(const string& s) { str(s.c_str()); }
+
+        istringstream& operator>>(string& out) {
+            out = string();
+            last_success_ = false;
+            if (!ok_ || ptr_ >= end_) { ok_ = false; return *this; }
+            while (ptr_ < end_ && (*ptr_ == ' ' || *ptr_ == '\t' || *ptr_ == '\r' || *ptr_ == '\n')) ptr_++;
+            if (ptr_ >= end_) { ok_ = false; return *this; }
+            while (ptr_ < end_ && *ptr_ != ' ' && *ptr_ != '\t' && *ptr_ != '\r' && *ptr_ != '\n') {
+                out += *ptr_++;
+                last_success_ = true;
+            }
+            return *this;
+        }
+        operator bool() const { return last_success_; }
+    };
+
+    // ========== std::ostringstream（新补：只写，拼字符串） ==========
+    class ostringstream {
+        string buf_;
+    public:
+        ostringstream() {}
+
+        // 取值 / 重置内容
+        string str() const { return buf_; }
+        void str(const char* s) { buf_ = s; }
+        void str(const string& s) { buf_ = s; }
+        void clear() { buf_.clear(); }
+        size_t size() const { return buf_.size(); }
+
+        ostringstream& operator<<(const char* s)   { if (s) buf_ += s; return *this; }
+        ostringstream& operator<<(const string& s) { buf_ += s; return *this; }
+        ostringstream& operator<<(char c)          { buf_ += c; return *this; }
+        ostringstream& operator<<(bool v)          { return *this << (v ? "1" : "0"); }
+
+        // 数字：snprintf 转字符串后追加
+        ostringstream& operator<<(int v) {
+            char b[24]; snprintf(b, sizeof b, "%d", v);  return *this << b;
+        }
+        ostringstream& operator<<(unsigned int v) {
+            char b[24]; snprintf(b, sizeof b, "%u", v);  return *this << b;
+        }
+        ostringstream& operator<<(long v) {
+            char b[32]; snprintf(b, sizeof b, "%ld", v); return *this << b;
+        }
+        ostringstream& operator<<(unsigned long v) {
+            char b[32]; snprintf(b, sizeof b, "%lu", v); return *this << b;
+        }
+        ostringstream& operator<<(double v) {
+            char b[64]; snprintf(b, sizeof b, "%g", v);  return *this << b;
+        }
+    };
+
+    // ========== std::stringstream（新补：可读可写） ==========
+    class stringstream {
+        string buf_;
+        size_t pos_;          // 读游标
+        bool last_success_;
+    public:
+        stringstream() : pos_(0), last_success_(false) {}
+        stringstream(const char* s) : buf_(s), pos_(0), last_success_(false) {}
+        stringstream(const string& s) : buf_(s), pos_(0), last_success_(false) {}
+
+        string str() const { return buf_; }
+        void str(const char* s) { buf_ = s; pos_ = 0; last_success_ = false; }
+        void str(const string& s) { buf_ = s; pos_ = 0; last_success_ = false; }
+        void clear() { buf_.clear(); pos_ = 0; last_success_ = false; }
+
+        stringstream& operator<<(const char* s)   { if (s) buf_ += s; return *this; }
+        stringstream& operator<<(const string& s) { buf_ += s; return *this; }
+        stringstream& operator<<(char c)          { buf_ += c; return *this; }
+        stringstream& operator<<(bool v)          { return *this << (v ? "1" : "0"); }
+
+        stringstream& operator<<(int v) {
+            char b[24]; snprintf(b, sizeof b, "%d", v);  return *this << b;
+        }
+        stringstream& operator<<(unsigned int v) {
+            char b[24]; snprintf(b, sizeof b, "%u", v);  return *this << b;
+        }
+        stringstream& operator<<(long v) {
+            char b[32]; snprintf(b, sizeof b, "%ld", v); return *this << b;
+        }
+        stringstream& operator<<(unsigned long v) {
+            char b[32]; snprintf(b, sizeof b, "%lu", v); return *this << b;
+        }
+        stringstream& operator<<(double v) {
+            char b[64]; snprintf(b, sizeof b, "%g", v);  return *this << b;
+        }
+
+        // 写入后读：从 pos_ 处切一个空白分隔的 token
+        stringstream& operator>>(string& out) {
+            out = string();
+            last_success_ = false;
+            size_t n = buf_.size();
+            while (pos_ < n && (buf_[pos_] == ' ' || buf_[pos_] == '\t' || buf_[pos_] == '\r' || buf_[pos_] == '\n')) pos_++;
+            if (pos_ >= n) return *this;
+            while (pos_ < n && buf_[pos_] != ' ' && buf_[pos_] != '\t' && buf_[pos_] != '\r' && buf_[pos_] != '\n') {
+                out += buf_[pos_++];
+                last_success_ = true;
+            }
+            return *this;
+        }
+        stringstream& operator>>(int& out) {
+            string s; *this >> s;
+            out = mystr::str_to_int(s.c_str());
+            return *this;
+        }
+        stringstream& operator>>(double& out) {
+            string s; *this >> s;
+            out = mystr::str_to_double(s.c_str());
+            return *this;
+        }
+        operator bool() const { return last_success_; }
+    };
+}

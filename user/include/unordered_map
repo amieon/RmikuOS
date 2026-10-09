@@ -1,8 +1,33 @@
 #pragma once
-// RmikuOS C++ 标准库子集：<unordered_map> —— std::unordered_map
-//
-// 教学 OS 里没有 libstdc++：这些符号由 stdimpl/ 下的实现提供。
-// 本文件只是薄封装，指向同一份实现(stdimpl/stdcompat.h, 带 #pragma once,
-// 重复包含无开销)。这样移植程序可以照原生 C++ 写 #include <unordered_map>,
-// 不必把源码里的 include 路径改成移植专用的名字。
-#include "stdimpl/stdcompat.h"
+
+#include "stdimpl/compat.h"    // operator new/delete（malloc/free 后端）、size_t
+#include "stdimpl/vector.h"    // mv::Vector：条目存储与 mv::move
+
+namespace std {
+    template<typename K, typename V>
+    class unordered_map {
+        struct Entry { K first; V second; };
+        mv::Vector<Entry> entries;
+    public:
+        struct iterator {
+            Entry* p;
+            iterator(Entry* _p = nullptr) : p(_p) {}
+            Entry* operator->() { return p; }
+            bool operator!=(const iterator& o) const { return p != o.p; }
+            bool operator==(const iterator& o) const { return p == o.p; }
+        };
+        iterator end() { return iterator(nullptr); }
+        iterator find(const K& key) {
+            for (size_t i = 0; i < entries.size(); i++)
+                if (entries[i].first == key) return iterator(&entries[i]);
+            return end();
+        }
+        V& operator[](const K& key) {
+            for (size_t i = 0; i < entries.size(); i++)
+                if (entries[i].first == key) return entries[i].second;
+            entries.push_back(Entry{key, V()});
+            return entries.back().second;
+        }
+        size_t size() const { return entries.size(); }
+    };
+}

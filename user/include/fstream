@@ -1,8 +1,123 @@
 #pragma once
-// RmikuOS C++ 标准库子集：<fstream> —— std::ifstream / std::ofstream
-//
-// 教学 OS 里没有 libstdc++：这些符号由 stdimpl/ 下的实现提供。
-// 本文件只是薄封装，指向同一份实现(stdimpl/stdcompat.h, 带 #pragma once,
-// 重复包含无开销)。这样移植程序可以照原生 C++ 写 #include <fstream>,
-// 不必把源码里的 include 路径改成移植专用的名字。
-#include "stdimpl/stdcompat.h"
+
+// ifstream 直接沿用 stdcompat.h 里的实现（整文件读进内存再按行/token 解析）；
+// ofstream 是新补的：现有实现只有读没有写，移植程序一用 ofstream 就编不过。
+// 它建立在 file.h 的 FILE* 之上（fopen/fputs/fputc/fflush/fclose），
+// 数字先经 stdio.h 的 snprintf 转成字符串再写出。
+
+#include "stdimpl/vector.h"    /* mv::Vector<char>：my::string 的底层容器 */
+#include "stdimpl/string.h"    /* my::string, mystr::strlen, mystr::read_file */
+#include "stdio.h"            /* FILE, fopen, fputs, fputc, fclose, fflush, snprintf */
+
+namespace std {
+    using string = my::string;
+
+    // ========== std::ifstream（照抄 stdcompat.h 的实现） ==========
+    class ifstream {
+        char* buf_;
+        size_t sz_;
+        char* cur_;
+        bool ok_;
+    public:
+        ifstream() : buf_(nullptr), sz_(0), cur_(nullptr), ok_(false) {}
+        explicit ifstream(const char* path) { open(path); }
+        explicit ifstream(const string& path) { open(path.c_str()); }
+        void open(const char* path) {
+            buf_ = mystr::read_file(path, sz_);
+            ok_ = (buf_ != nullptr); cur_ = buf_;
+        }
+        void open(const string& path) { open(path.c_str()); }
+        bool is_open() const { return ok_; }
+        operator bool() const {  return ok_ && cur_ && (size_t)(cur_ - buf_) < sz_;  }
+        bool operator!() const { return !ok_; }
+        void close() { if (buf_) { free(buf_); buf_ = nullptr; } ok_ = false; }
+        ~ifstream() { close(); }
+        size_t size() {return ok_ ? sz_ : 0;}
+
+        bool getline(string& out) {
+            out = string();
+            if (!ok_ || !cur_ || (size_t)(cur_ - buf_) >= sz_) return false;
+            while ((size_t)(cur_ - buf_) < sz_ && *cur_ != '\n') { out += *cur_++; }
+            if ((size_t)(cur_ - buf_) < sz_ && *cur_ == '\n') cur_++;   
+            if (out.size() > 0 && out[out.size() - 1] == '\r') {
+                out[out.size() - 1] = '\0';
+            }
+            return true;
+        }
+
+        // operator>> for string
+        ifstream& operator>>(string& out) {
+            out = string();
+            if (!ok_ || !cur_ || (size_t)(cur_ - buf_) >= sz_) {
+                ok_ = false;  // ← 到达 EOF，标记失败
+                return *this;
+            }
+            // 跳过空白
+            while ((size_t)(cur_ - buf_) < sz_ && (*cur_ == ' ' || *cur_ == '\t' || *cur_ == '\r' || *cur_ == '\n')) cur_++;
+            if ((size_t)(cur_ - buf_) >= sz_) {
+                ok_ = false;  // ← 只有空白，没有实质内容
+                return *this;
+            }
+            // 读取 token
+            while ((size_t)(cur_ - buf_) < sz_ && *cur_ != ' ' && *cur_ != '\t' && *cur_ != '\r' && *cur_ != '\n') {
+                out += *cur_++;
+            }
+            return *this;
+        }
+
+        // operator>> for int
+        ifstream& operator>>(int& out) {
+            string s; *this >> s;
+            out = mystr::str_to_int(s.c_str());
+            return *this;
+        }
+
+        // operator>> for double
+        ifstream& operator>>(double& out) {
+            string s; *this >> s;
+            out = mystr::str_to_double(s.c_str());
+            return *this;
+        }
+    };
+    inline bool getline(ifstream& f, string& out) { return f.getline(out); }
+
+    // ========== std::ofstream（新补：只写，文本模式） ==========
+    class ofstream {
+        FILE* fp_;
+    public:
+        ofstream() : fp_(nullptr) {}
+        explicit ofstream(const char* path) : fp_(nullptr) { open(path); }
+        explicit ofstream(const string& path) : fp_(nullptr) { open(path.c_str()); }
+        ~ofstream() { close(); }   // 析构自动 flush + close
+
+        // "w"：不存在则创建，存在则截断（file.h 的 fopen 走 O_WRONLY|O_CREAT|O_TRUNC）
+        void open(const char* path) { if (fp_) close(); fp_ = fopen(path, "w"); }
+        void open(const string& path) { open(path.c_str()); }
+
+        bool is_open() const { return fp_ != nullptr; }
+        void flush() { if (fp_) fflush(fp_); }
+        void close() { if (fp_) { fflush(fp_); fclose(fp_); fp_ = nullptr; } }
+
+        ofstream& operator<<(const char* s)   { if (fp_) fputs(s ? s : "", fp_); return *this; }
+        ofstream& operator<<(const string& s) { return *this << s.c_str(); }
+        ofstream& operator<<(char c)          { if (fp_) fputc((int)(unsigned char)c, fp_); return *this; }
+        ofstream& operator<<(bool v)          { return *this << (v ? "1" : "0"); }
+
+        // 数字：snprintf 转字符串后写出
+        ofstream& operator<<(int v) {
+            char b[24]; snprintf(b, sizeof b, "%d", v);  return *this << b;
+        }
+        ofstream& operator<<(unsigned int v) {
+            char b[24]; snprintf(b, sizeof b, "%u", v);  return *this << b;
+        }
+        ofstream& operator<<(long v) {
+            char b[32]; snprintf(b, sizeof b, "%ld", v); return *this << b;
+        }
+        ofstream& operator<<(unsigned long v) {
+            char b[32]; snprintf(b, sizeof b, "%lu", v); return *this << b;
+        }
+        ofstream& operator<<(double v) {
+            char b[64]; snprintf(b, sizeof b, "%g", v);  return *this << b;
+        }
+    };
+}
