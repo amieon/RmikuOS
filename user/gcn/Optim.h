@@ -1,6 +1,6 @@
 #pragma once
 #include "Tensor.h"
-#include "my/stdcompat.h"
+#include <cmath>
 
 // AdamW：自适应步长 + 解耦权重衰减
 //   m_t = b1 m + (1-b1) g

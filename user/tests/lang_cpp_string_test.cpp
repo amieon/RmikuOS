@@ -1,6 +1,6 @@
 // C++ 桥接:mystr 字符串工具 + my::string 基础操作
 #include "test.h"
-#include "my/stdcompat.h"
+#include <string>
 
 extern "C" int main() {
     TEST_START("lang_cpp_string");

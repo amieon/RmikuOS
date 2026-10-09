@@ -1,6 +1,6 @@
 
 
-#include "my/stdcompat.h"
+#include <string>
 
 extern "C" int main() {
     int errors = 0;

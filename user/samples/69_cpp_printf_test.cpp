@@ -1,5 +1,5 @@
 
-#include "my/stdcompat.h"
+#include <vector>
 
 extern "C" int main() {
     int errors = 0;

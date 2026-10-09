@@ -1,4 +1,4 @@
-#include "my/stdcompat.h"
+#include <type_traits>
 
 extern "C" int main() {
     int errors = 0;

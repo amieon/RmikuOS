@@ -1,6 +1,15 @@
 
 
-#include "my/stdcompat.h"
+#include <algorithm>
+#include <cmath>
+#include <random>
+#include <sstream>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 extern "C" int main() {
     int errors = 0;

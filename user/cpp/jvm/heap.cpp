@@ -1,6 +1,6 @@
 #include "heap.h"
 #include "interp.h"
-#include "my/stdcompat.h"
+#include <algorithm>
 #include "aot.h"
 
 Object* Heap::alloc_object(ClassFile* clazz) {

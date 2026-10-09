@@ -3,7 +3,8 @@
 #include "heap.h"
 #include "interp.h"
 #include "native.h"
-#include "my/stdcompat.h"
+#include <string>
+#include <vector>
 #include "lock.h"
 #include "aot.h"
 

@@ -1,5 +1,6 @@
 
-#include "my/stdcompat.h"
+#include <cmath>
+#include <random>
 
 extern "C" int main() {
     int errors = 0;

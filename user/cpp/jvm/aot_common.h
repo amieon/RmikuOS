@@ -103,7 +103,7 @@ extern "C" void AOT_FREE(void*);
 static void* aot_drv_alloc(size_t n) { return AOT_MALLOC(n); }
 static void aot_drv_free(void* p) { AOT_FREE(p); }
 #else
-#include "my/stdcompat.h"
+#include <vector>
 static void* aot_drv_alloc(size_t n) { return malloc(n); }
 static void aot_drv_free(void* p) { free(p); }
 #endif

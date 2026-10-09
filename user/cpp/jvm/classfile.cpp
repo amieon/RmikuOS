@@ -1,5 +1,6 @@
 #include "classfile.h"
-#include "my/stdcompat.h"
+#include <string>
+#include <utility>
 
 struct Reader {
     const uint8_t* p;

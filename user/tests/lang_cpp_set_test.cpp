@@ -1,6 +1,7 @@
 // C++ 桥接:stdcompat 的 set(my::set,基于 map)
 #include "test.h"
-#include "my/stdcompat.h"
+#include <set>
+#include <string>
 
 extern "C" int main() {
     TEST_START("lang_cpp_set");

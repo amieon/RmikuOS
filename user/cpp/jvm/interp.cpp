@@ -1,7 +1,9 @@
 #include "interp.h"
 #include "native.h"
 #include "heap.h"
-#include "my/stdcompat.h"
+#include <string>
+#include <utility>
+#include <vector>
 #include "aot.h"
 
 // helpers

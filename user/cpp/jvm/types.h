@@ -1,5 +1,6 @@
 #pragma once
-#include "my/stdcompat.h"
+#include <string>
+#include <vector>
 
 inline void jvm_panic(const char* msg) {
     printf("JVM panic: %s\n", msg);

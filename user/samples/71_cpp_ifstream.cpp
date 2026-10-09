@@ -1,4 +1,5 @@
-#include "my/stdcompat.h"
+#include <fstream>
+#include <string>
 
 extern "C" int main() {
     printf("=== ifstream operator>> chain test ===\n");

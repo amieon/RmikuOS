@@ -1,7 +1,8 @@
 #include "interp.h"
 #include "native.h"
 #include "heap.h"
-#include "my/stdcompat.h"
+#include <string>
+#include <vector>
 #include "lock.h"
 #include "process.h"
 #include "net.h"

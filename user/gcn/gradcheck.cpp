@@ -1,6 +1,7 @@
 #include "GATLayer.h"
 #include "Func.h"
-#include "my/stdcompat.h"
+#include <algorithm>
+#include <cmath>
 
 // 用 double + 中心差分验证反向传播：解析梯度 vs 数值梯度
 using T = double;

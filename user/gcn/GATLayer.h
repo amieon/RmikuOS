@@ -1,6 +1,6 @@
 #pragma once
 #include "Tensor.h"
-#include "my/stdcompat.h"
+#include <vector>
 
 template<typename T>
 class GATLayer {

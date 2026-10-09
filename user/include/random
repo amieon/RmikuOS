@@ -1,0 +1,8 @@
+#pragma once
+// RmikuOS C++ 标准库子集：<random> —— std::mt19937 / uniform_*_distribution / normal_distribution
+//
+// 教学 OS 里没有 libstdc++：这些符号由 stdimpl/ 下的实现提供。
+// 本文件只是薄封装，指向同一份实现(stdimpl/stdcompat.h, 带 #pragma once,
+// 重复包含无开销)。这样移植程序可以照原生 C++ 写 #include <random>,
+// 不必把源码里的 include 路径改成移植专用的名字。
+#include "stdimpl/stdcompat.h"

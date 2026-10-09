@@ -1,6 +1,7 @@
 // C++ 桥接:stdcompat 的 map(my::map,treap 实现)
 #include "test.h"
-#include "my/stdcompat.h"
+#include <map>
+#include <string>
 
 extern "C" int main() {
     TEST_START("lang_cpp_map");

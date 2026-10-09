@@ -1,6 +1,6 @@
 #include "GCNLayer.h"
 #include "Func.h"
-#include "my/stdcompat.h"
+#include <vector>
 
 using namespace std;
 

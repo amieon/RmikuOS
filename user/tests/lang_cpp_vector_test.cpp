@@ -1,6 +1,6 @@
 // C++ 桥接:stdcompat 的 vector(mv::Vector)基本操作
 #include "test.h"
-#include "my/stdcompat.h"
+#include <vector>
 
 extern "C" int main() {
     TEST_START("lang_cpp_vector");
