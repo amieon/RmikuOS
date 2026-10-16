@@ -149,6 +149,39 @@ hello fat
 
 > **两文件系统对称、上层零改动**：FAT 的整条上层（`BlockIo` / `fatfs` / VFS 适配）完全建立在 `BlockDevice` trait 之上，不含任何架构分支。riscv（virtio-mmio）与 loongarch（virtio-pci）只需各自实现 `BlockDevice` 的读写，FAT 挂载层一份代码两个架构通用——这正是把架构差异收敛到 `BlockDevice` 接缝之下的回报。
 
+### Links（symlink / hard link / lstat / readlink）
+
+VFS 支持完整的 link 语义：`symlink` / `readlink` / `lstat` / `link`（hard link），对应系统调用号 77–80。
+
+**分层原则：跟随 symlink 是 VFS 路径解析层的语义，不是下层文件系统的语义。** 下层 FS 的 `lookup()` 只负责「在目录里找到这个名字并返回它的 inode」，找到 symlink 就返回 symlink 本身；是否跳转由 `fs/path.rs` 的 resolver 决定：
+
+```text
+lookup_abs_path(path)             跟随所有 symlink（含最后一个），open/stat 走这里
+lookup_abs_path_no_follow(path)   中间组件跟随、最后一个不跟随，lstat/readlink/unlink 走这里
+```
+
+resolver 命中 symlink 时读出目标、拼接剩余路径段后递归重解析：绝对目标从 `/` 重来，相对目标以**链接所在目录**（而非进程 cwd）为基准。循环上限 40 层，超出报 `[fs] too many symlinks` 并失败。因为目标替换后重新走完整路径解析，symlink 可以跨挂载点（如 `/tmp` 里的链接指向 `/home` 的文件）。
+
+几个由此自然得到的语义：
+
+* **dangling symlink 合法**：`symlink()` 不要求目标存在，`lstat` 可以看到它，`stat` 则失败。
+* **`unlink` 删除链接本身**：它经父目录按名字移除目录项，不会碰到目标。
+* **`stat` vs `lstat`**：前者跟随最终 symlink 报告目标，后者报告链接自身（`st_mode` 带 `S_IFLNK`，`st_size` 为目标字符串长度）。
+* **`link()` 不跟随源路径的最终 symlink**（Linux 风格）：对 symlink 做 hard link 得到的是指向同一链接 inode 的另一个名字，而非指向目标。
+
+**各后端的支持情况**：
+
+| 后端 | symlink | hard link | 说明 |
+|------|---------|-----------|------|
+| tmpfs (`/tmp`) | ✅ | ✅ | hard link 即多个目录项共享同一个 `Arc<TmpfsNode>`，`Arc` 引用计数天然保证「删一个名字数据不死」 |
+| rsext4 (`/data`, `/home`, `/var`) | ✅ | ✅ | 直接调 rsext4 的 `create_symlink` / `hard_link`，inode link count 落盘，跨重启存活；fast symlink（目标 ≤60 字节）存在 inode 内部 |
+| 只读 ext4 rootfs (`/`) | 只读识别 | ❌ | 用 `symlink_metadata()` 识别镜像中已有 symlink 并可 `readlink`，但不能创建（`ext4_view` 只读） |
+| FAT (`/fat`) | ❌ | ❌ | FAT 格式本身无 link 概念，`Inode` 默认方法返回失败 |
+
+`Inode` trait 新增三个默认「不支持」的方法（`symlink` / `readlink` / `hard_link`），不支持的后端无需改动；hard link 需要确认「目标和自己同属一个后端实例」，通过 `as_any()` downcast 到具体 inode 类型（tmpfs 比 `Arc` root 指针、rsext4 比 fs 指针）来拒绝跨文件系统/跨挂载的硬链接，目录一律拒绝。
+
+用户态 `ls` 相应升级：目录遍历改用 `lstat`（看到链接本身而非目标），长格式下 symlink 显示为 `name -> target`，类型字符 `l`。
+
 ---
 
 ## Virtio Block Device

@@ -494,7 +494,7 @@ shell.c 是标准 POSIX 程序，依赖一组 RmikuOS 之前没有的 libc 设�
 
 * **POSIX 头**（`user/include/`）：`sys/stat.h`、`sys/types.h`、`sys/time.h`、`sys/resource.h`、`unistd.h`、`dirent.h`、`pwd.h`、`fcntl.h`、`limits.h`、`memory.h`、`utime.h`
 * **stat 统一（方案 A）**：`fs.h` 成为用户态唯一 `struct stat`（POSIX `st_*` 字段 + 内部翻译内核 32 字节布局，类型位并入 `st_mode`），`sys/stat.h` 等头退化为薄壳——不再有"内核版 vs POSIX 版"双结构
-* **shim 实现**（`rmiku_shims.c`）：`isatty` / `access` / `strdup` / `opendir`/`readdir`/`closedir`（基于 SYS_GETDENTS 真实现）/ `getpwuid` / `symlink` / `readlink`
+* **shim 实现**（`rmiku_shims.c`）：`isatty` / `access` / `strdup` / `opendir`/`readdir`/`closedir`（基于 SYS_GETDENTS 真实现）/ `getpwuid`（`symlink` / `readlink` 曾为 shim，现由 SYS_SYMLINK / SYS_READLINK 真实实现，见 `fs.h` 内联封装）
 * **file.h 增强**：FILE 池槽位回收（不再"开 8 次就满"）、`fseek`/`ftell`/`rewind`/`ungetc`（基于真实 lseek）、`sscanf`/`setvbuf`/`fileno`
 * **终端回显**：内核无终端驱动，libc 在 stdin 读取层做"行模式 + 回显"（仅字符设备回显、管道不回显），sqlite3/lua 等交互程序获得正常终端体验
 
