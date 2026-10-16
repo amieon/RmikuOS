@@ -42,6 +42,14 @@ pub fn lookup_at(cwd: &str, path: &str) -> Option<InodeRef> {
     path::lookup_path_at(cwd, path)
 }
 
+pub fn lookup_no_follow(path: &str) -> Option<InodeRef> {
+    path::lookup_abs_path_no_follow(path)
+}
+
+pub fn lookup_no_follow_at(cwd: &str, path: &str) -> Option<InodeRef> {
+    path::lookup_path_at_no_follow(cwd, path)
+}
+
 pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Option<FileRef> {
     let inode = match path::lookup_path_at(cwd, path) {
         Some(i) => i,
@@ -101,6 +109,7 @@ pub use stat::{
     STAT_TYPE_FILE,
     STAT_TYPE_DIR,
     STAT_TYPE_CHAR,
+    STAT_TYPE_SYMLINK,
 };
 pub use common_file::{
     ReadOnlyDirFile,
@@ -108,28 +117,36 @@ pub use common_file::{
 };
 
 
-pub fn stat_at(cwd: &str, path: &str) -> Option<Stat> {
-    let inode = path::lookup_path_at(cwd, path)?;
+fn stat_of_inode(inode: &InodeRef) -> Stat {
     let meta = inode.metadata();
-
     let file_type = match meta.inode_type {
         InodeType::File => STAT_TYPE_FILE,
         InodeType::Directory => STAT_TYPE_DIR,
+        InodeType::Symlink => STAT_TYPE_SYMLINK,
     };
 
-    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32).with_mtime(crate::timer::now_secs() as u32))
+    Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32)
+        .with_mtime(crate::timer::now_secs() as u32)
+}
+
+pub fn stat_at(cwd: &str, path: &str) -> Option<Stat> {
+    let inode = path::lookup_path_at(cwd, path)?;
+    Some(stat_of_inode(&inode))
+}
+
+pub fn lstat_at(cwd: &str, path: &str) -> Option<Stat> {
+    let inode = path::lookup_path_at_no_follow(cwd, path)?;
+    Some(stat_of_inode(&inode))
 }
 
 pub fn stat(path: &str) -> Option<Stat> {
     let inode = path::lookup_abs_path(path)?;
-    let meta = inode.metadata();
+    Some(stat_of_inode(&inode))
+}
 
-    let file_type = match meta.inode_type {
-        InodeType::File => STAT_TYPE_FILE,
-        InodeType::Directory => STAT_TYPE_DIR,
-    };
-
-    Some(Stat::new(file_type, meta.size, meta.mode, meta.uid as u32, meta.gid as u32).with_mtime(crate::timer::now_secs() as u32))
+pub fn lstat(path: &str) -> Option<Stat> {
+    let inode = path::lookup_abs_path_no_follow(path)?;
+    Some(stat_of_inode(&inode))
 }
 
 
@@ -204,6 +221,72 @@ pub fn make_dir(path: &str) -> Option<InodeRef> {
         return None;
     }
     parent_inode.mkdir(&name)
+}
+
+/// symlink(target, linkpath): 创建内容为 target 的符号链接。
+/// target 按字符串原样保存，不要求存在；相对 target 在使用时按链接所在目录解析。
+pub fn symlink_file(target: &str, path: &str) -> Option<InodeRef> {
+    if target.is_empty() {
+        return None;
+    }
+
+    let abs = normalize_path("/", path)?;
+    let (parent, name) = split_parent(&abs);
+    let parent_inode = path::lookup_abs_path(&parent)?;
+    if !check_dir_write(&parent_inode) {
+        return None;
+    }
+    parent_inode.symlink(&name, target)
+}
+
+/// readlink(path): 读取链接本身保存的目标，不跟随最后一个 symlink。
+pub fn readlink_path(path: &str) -> Option<alloc::string::String> {
+    let inode = path::lookup_abs_path_no_follow(path)?;
+    inode.readlink()
+}
+
+/// link(oldpath, newpath): 为现有 inode 增加一个硬链接目录项。
+/// 源路径不跟随最后一个 symlink（与 Linux link() 一致），并且不允许链接目录。
+pub fn link_file(old: &str, new: &str) -> isize {
+    let old_abs = match normalize_path("/", old) {
+        Some(path) => path,
+        None => return -1,
+    };
+    let new_abs = match normalize_path("/", new) {
+        Some(path) => path,
+        None => return -1,
+    };
+
+    let old_mount = match mount::mount_point_of(&old_abs) {
+        Some(mount) => mount,
+        None => return -1,
+    };
+    let new_mount = match mount::mount_point_of(&new_abs) {
+        Some(mount) => mount,
+        None => return -1,
+    };
+    if old_mount != new_mount {
+        return -1; // EXDEV
+    }
+
+    let target = match path::lookup_abs_path_no_follow(&old_abs) {
+        Some(inode) => inode,
+        None => return -1,
+    };
+    if target.is_dir() {
+        return -1;
+    }
+
+    let (parent, name) = split_parent(&new_abs);
+    let parent_inode = match path::lookup_abs_path(&parent) {
+        Some(inode) => inode,
+        None => return -1,
+    };
+    if !check_dir_write(&parent_inode) {
+        return -1;
+    }
+
+    parent_inode.hard_link(&name, &target)
 }
 
 pub fn unlink_file(path: &str) -> Option<isize>{

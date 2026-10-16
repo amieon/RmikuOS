@@ -7,7 +7,7 @@ use crate::fs::flag::{O_ACCMODE, O_APPEND, O_RDONLY, O_WRONLY};
 use crate::sync::spin::Mutex;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use super::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE};
+use super::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE, FILE_TYPE_SYMLINK};
 use super::file::{File, FileRef};
 use super::inode::{Inode, InodeRef, InodeType, Metadata};
 use super::mount::{self, FileSystem};
@@ -328,6 +328,7 @@ impl Ext4RwInode {
 fn inode_type_of(t: DirectoryEntryType) -> InodeType {
     match t {
         DirectoryEntryType::Directory => InodeType::Directory,
+        DirectoryEntryType::Symlink => InodeType::Symlink,
         _ => InodeType::File,
     }
 }
@@ -366,6 +367,9 @@ impl Inode for Ext4RwInode {
         if info.file_type() == DirectoryEntryType::Directory {
             // 目录 fd：快照式（同 FatInode 的做法）
             Some(Arc::new(ReadOnlyDirFile::new(self.getdents())))
+        } else if info.file_type() == DirectoryEntryType::Symlink {
+            // symlink 的直接 open 没有意义；正常 open 已由 VFS resolver 跳到目标。
+            None
         } else {
             Some(Arc::new(Ext4RwFile {
                 fs: self.fs.clone(),
@@ -396,10 +400,10 @@ impl Inode for Ext4RwInode {
                             continue;
                         }
                         let name = core::str::from_utf8(&e.name).unwrap_or("");
-                        let t = if e.file_type == DirectoryEntryType::Directory {
-                            FILE_TYPE_DIR
-                        } else {
-                            FILE_TYPE_FILE
+                        let t = match e.file_type {
+                            DirectoryEntryType::Directory => FILE_TYPE_DIR,
+                            DirectoryEntryType::Symlink => FILE_TYPE_SYMLINK,
+                            _ => FILE_TYPE_FILE,
                         };
                         out.push(DirEntry::new(name, t));
                     }
@@ -412,6 +416,67 @@ impl Inode for Ext4RwInode {
             }
         }
         out
+    }
+
+    fn as_any(&self) -> Option<&dyn core::any::Any> {
+        Some(self)
+    }
+
+    fn symlink(&self, name: &str, target: &str) -> Option<InodeRef> {
+        if target.is_empty() {
+            return None;
+        }
+        let name = fname(name)?;
+        let mut fs = self.fs.ext4.lock();
+        let info = fs
+            .create_symlink(ctx(), self.number, name, target.as_bytes())
+            .ok()?;
+        Some(Arc::new(Ext4RwInode {
+            fs: self.fs.clone(),
+            number: info.number,
+        }))
+    }
+
+    fn readlink(&self) -> Option<String> {
+        let info = self.info()?;
+        if info.file_type() != DirectoryEntryType::Symlink {
+            return None;
+        }
+
+        let mut target = alloc::vec![0u8; info.size as usize];
+        let n = self
+            .fs
+            .ext4
+            .lock()
+            .read_inode(self.number, 0, &mut target)
+            .ok()?;
+        target.truncate(n);
+        String::from_utf8(target).ok()
+    }
+
+    fn hard_link(&self, name: &str, target: &InodeRef) -> isize {
+        let target = match target.as_any().and_then(|any| any.downcast_ref::<Ext4RwInode>()) {
+            Some(inode) => inode,
+            None => return -1,
+        };
+        if !Arc::ptr_eq(&self.fs, &target.fs) {
+            return -1;
+        }
+        let Some(name) = fname(name) else { return -1 };
+        let Some(info) = target.info() else { return -1 };
+        if info.file_type() == DirectoryEntryType::Directory {
+            return -1;
+        }
+
+        match self
+            .fs
+            .ext4
+            .lock()
+            .hard_link(target.number, self.number, name)
+        {
+            Ok(_) => 0,
+            Err(_) => -1,
+        }
     }
 
     fn create(&self, name: &str) -> Option<InodeRef> {

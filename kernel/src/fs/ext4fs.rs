@@ -25,6 +25,7 @@ use super::dirent::{
     DirEntry,
     FILE_TYPE_DIR,
     FILE_TYPE_FILE,
+    FILE_TYPE_SYMLINK,
 };
 use super::file::FileRef;
 use super::inode::{
@@ -173,6 +174,8 @@ fn inode_type_from_ext4(file_type: FileType) -> Option<InodeType> {
         Some(InodeType::Directory)
     } else if file_type.is_regular_file() {
         Some(InodeType::File)
+    } else if file_type.is_symlink() {
+        Some(InodeType::Symlink)
     } else {
         None
     }
@@ -183,6 +186,8 @@ fn dirent_type_from_ext4(file_type: FileType) -> Option<u8> {
         Some(FILE_TYPE_DIR)
     } else if file_type.is_regular_file() {
         Some(FILE_TYPE_FILE)
+    } else if file_type.is_symlink() {
+        Some(FILE_TYPE_SYMLINK)
     } else {
         None
     }
@@ -194,7 +199,7 @@ impl Inode for Ext4Inode {
         let fs = self.fs.inner.lock();
 
         let meta = fs
-            .metadata(self.path.as_str())
+            .symlink_metadata(self.path.as_str())
             .expect("[ext4] metadata failed");
 
         let inode_type = inode_type_from_ext4(meta.file_type())
@@ -229,8 +234,10 @@ impl Inode for Ext4Inode {
 
         let fs = self.fs.inner.lock();
 
-        match fs.exists(child_path.as_str()) {
-            Ok(true) => Some(Arc::new(Self {
+        // 不能用 exists()/metadata()：ext4-view 默认会跟随最后一个 symlink，
+        // 而是否跟随最后一个链接是 VFS 解析层的语义，不是下层 FS 的语义。
+        match fs.symlink_metadata(child_path.as_str()) {
+            Ok(_) => Some(Arc::new(Self {
                 fs: self.fs.clone(),
                 path: child_path,
             })),
@@ -245,7 +252,7 @@ impl Inode for Ext4Inode {
 
         let meta = {
             let fs = self.fs.inner.lock();
-            fs.metadata(self.path.as_str()).ok()?
+            fs.symlink_metadata(self.path.as_str()).ok()?
         };
 
         let file_type = meta.file_type();
@@ -267,6 +274,12 @@ impl Inode for Ext4Inode {
         }
 
         None
+    }
+
+    fn readlink(&self) -> Option<String> {
+        let fs = self.fs.inner.lock();
+        let target = fs.read_link(self.path.as_str()).ok()?;
+        String::from_utf8(target.as_ref().to_vec()).ok()
     }
 
     fn getdents(&self) -> Vec<DirEntry> {
