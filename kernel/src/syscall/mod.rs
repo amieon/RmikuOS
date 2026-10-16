@@ -82,6 +82,10 @@ pub const SYSCALL_SET_WALL_CLOCK: usize = 73;
 pub const SYSCALL_GET_EPOCH: usize = 74;
 pub const SYSCALL_MPROTECT: usize = 75;
 pub const SYSCALL_POLL: usize = 76;
+pub const SYSCALL_LSTAT: usize = 77;
+pub const SYSCALL_SYMLINK: usize = 78;
+pub const SYSCALL_READLINK: usize = 79;
+pub const SYSCALL_LINK: usize = 80;
 
 
 
@@ -199,6 +203,10 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GET_EPOCH => process::sys_get_epoch(),
         SYSCALL_MPROTECT => process::sys_mprotect(args[0], args[1], args[2]),
         SYSCALL_POLL => fs::sys_poll(args[0], args[1], args[2]),
+        SYSCALL_LSTAT => fs::sys_lstat(args[0], args[1], args[2]),
+        SYSCALL_SYMLINK => fs::sys_symlink(args[0], args[1], args[2], args[3]),
+        SYSCALL_READLINK => fs::sys_readlink(args[0], args[1], args[2], args[3]),
+        SYSCALL_LINK => fs::sys_link(args[0], args[1], args[2], args[3]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

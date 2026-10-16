@@ -325,12 +325,38 @@ pub fn sys_fstat(fd: usize, stat_ptr: usize) -> isize {
     write_stat_to_user(stat_ptr, &stat)
 }
 
+pub fn sys_lstat(path_ptr: usize, path_len: usize, stat_ptr: usize) -> isize {
+    let path_bytes = match crate::task::read_current_user_bytes(path_ptr, path_len) {
+        Some(bytes) => bytes,
+        None => return -1,
+    };
+
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s.trim_matches('\0').trim(),
+        Err(_) => return -1,
+    };
+
+    let cwd = crate::task::current_cwd();
+    let stat = match crate::fs::lstat_at(&cwd, path) {
+        Some(stat) => stat,
+        None => return -1,
+    };
+
+    write_stat_to_user(stat_ptr, &stat)
+}
+
 pub fn sys_pipe(fd : usize) -> isize {
     crate::task::new_pipe(fd)
 }
 
 pub fn sys_dup2(old_fd : usize,new_fd : usize) -> isize {
     crate::task::dup2(old_fd,new_fd)
+}
+
+fn user_raw_string(ptr: usize, len: usize) -> Option<String> {
+    let bytes = crate::task::read_current_user_bytes(ptr, len)?;
+    let s = core::str::from_utf8(&bytes).ok()?;
+    Some(String::from(s.trim_matches('\0')))
 }
 
 fn user_path_to_abs(path_ptr : usize, len : usize) -> Option<String>{
@@ -429,6 +455,58 @@ pub fn sys_unlink(path_ptr : usize, len : usize) -> isize {
         },
         None => -1,
     }
+}
+
+/// symlink(target, linkpath): target 原样保存，linkpath 按 cwd 解析。
+pub fn sys_symlink(target_ptr: usize, target_len: usize, path_ptr: usize, path_len: usize) -> isize {
+    let target = match user_raw_string(target_ptr, target_len) {
+        Some(target) => target,
+        None => return -1,
+    };
+    let path = match user_path_to_abs(path_ptr, path_len) {
+        Some(path) => path,
+        None => return -1,
+    };
+
+    match crate::fs::symlink_file(&target, &path) {
+        Some(_) => 0,
+        None => -1,
+    }
+}
+
+/// readlink(path, buf, bufsiz): 返回实际写入字节数，不写 NUL。
+pub fn sys_readlink(path_ptr: usize, path_len: usize, buf: usize, bufsiz: usize) -> isize {
+    let path = match user_path_to_abs(path_ptr, path_len) {
+        Some(path) => path,
+        None => return -1,
+    };
+    let target = match crate::fs::readlink_path(&path) {
+        Some(target) => target,
+        None => return -1,
+    };
+
+    let copy_len = core::cmp::min(bufsiz, target.len());
+    if copy_len == 0 {
+        return 0;
+    }
+    if buf == 0 || crate::task::write_current_user_bytes(buf, &target.as_bytes()[..copy_len]).is_none() {
+        return -1;
+    }
+    copy_len as isize
+}
+
+/// link(oldpath, newpath): 创建硬链接，不允许跨挂载点，源路径不跟随最终 symlink。
+pub fn sys_link(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize) -> isize {
+    let old = match user_path_to_abs(old_ptr, old_len) {
+        Some(path) => path,
+        None => return -1,
+    };
+    let new = match user_path_to_abs(new_ptr, new_len) {
+        Some(path) => path,
+        None => return -1,
+    };
+
+    crate::fs::link_file(&old, &new)
 }
 
 pub fn sys_chmod(path_ptr: usize, len: usize, mode: usize) -> isize {

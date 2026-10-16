@@ -83,6 +83,10 @@ extern "C" {
 #define SYS_GET_EPOCH                74
 #define SYS_MPROTECT                 75
 #define SYS_POLL                     76
+#define SYS_LSTAT                    77
+#define SYS_SYMLINK                  78
+#define SYS_READLINK                 79
+#define SYS_LINK                     80
 
 
 

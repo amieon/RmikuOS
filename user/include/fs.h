@@ -20,6 +20,7 @@ extern "C" {
 
 #define FILE_TYPE_FILE 1
 #define FILE_TYPE_DIR  2
+#define FILE_TYPE_SYMLINK 3
 
 struct dirent {
     unsigned char file_type;   /* 1=文件 2=目录（内核值） */
@@ -57,6 +58,7 @@ static inline char *getcwd(char *buf, usize len) {
 #define STAT_TYPE_DIR  2
 #define STAT_TYPE_CHAR 3
 #define STAT_TYPE_PIPE 4
+#define STAT_TYPE_SYMLINK 6
 
 /* ---- 文件类型位（POSIX, 并入 st_mode 高 4 位） ---- */
 #define S_IFMT   0170000
@@ -134,6 +136,7 @@ static inline int rk_stat_convert(const rk_stat_kernel_t *k, struct stat *st) {
         case STAT_TYPE_DIR:  st->st_mode |= S_IFDIR; break;
         case STAT_TYPE_CHAR: st->st_mode |= S_IFCHR; break;
         case STAT_TYPE_PIPE: st->st_mode |= S_IFIFO; break;
+        case STAT_TYPE_SYMLINK: st->st_mode |= S_IFLNK; break;
         default:             st->st_mode |= S_IFREG; break;
     }
     /* 墙钟校准后 mtime 为真值(epoch 秒); 未校准=0。
@@ -152,6 +155,7 @@ static inline int stat_type_of(mode_t m) {
     if (S_ISDIR(m))  return STAT_TYPE_DIR;
     if (S_ISCHR(m))  return STAT_TYPE_CHAR;
     if (S_ISFIFO(m)) return STAT_TYPE_PIPE;
+    if (S_ISLNK(m))  return STAT_TYPE_SYMLINK;
     return STAT_TYPE_FILE;
 }
 
@@ -166,9 +170,16 @@ static inline int stat(const char *path, struct stat *st) {
     return (int)stat2(path, strlen(path), st);
 }
 
-/* 本 OS 无符号链接, lstat 与 stat 行为一致 */
+/* lstat: 路径中间 symlink 仍跟随，但最终 symlink 返回链接自身 */
+static inline isize lstat2(const char *path, usize len, struct stat *st) {
+    rk_stat_kernel_t k;
+    isize r = syscall3(SYS_LSTAT, (usize)path, len, (usize)&k);
+    if (r < 0) return r;
+    return (isize)rk_stat_convert(&k, st);
+}
+
 static inline int lstat(const char *path, struct stat *st) {
-    return stat(path, st);
+    return (int)lstat2(path, strlen(path), st);
 }
 
 static inline int fstat(int fd, struct stat *st) {
@@ -264,6 +275,34 @@ static inline isize rename2(const char *oldpath, usize oldlen, const char *newpa
 
 static inline int rename(const char *oldpath, const char *newpath) {
     return (int)rename2(oldpath, strlen(oldpath), newpath, strlen(newpath));
+}
+
+/* ---- 链接 ---- */
+
+static inline isize symlink2(const char *target, usize target_len,
+                             const char *linkpath, usize link_len) {
+    return syscall6(SYS_SYMLINK, (usize)target, target_len,
+                    (usize)linkpath, link_len, 0, 0);
+}
+
+static inline int symlink(const char *target, const char *linkpath) {
+    return (int)symlink2(target, strlen(target), linkpath, strlen(linkpath));
+}
+
+/* POSIX: 返回实际写入字节数，readlink 不写 NUL */
+static inline ssize_t readlink(const char *path, char *buf, size_t bufsiz) {
+    return (ssize_t)syscall6(SYS_READLINK, (usize)path, strlen(path),
+                             (usize)buf, (usize)bufsiz, 0, 0);
+}
+
+static inline isize link2(const char *oldpath, usize oldlen,
+                          const char *newpath, usize newlen) {
+    return syscall6(SYS_LINK, (usize)oldpath, oldlen,
+                    (usize)newpath, newlen, 0, 0);
+}
+
+static inline int link(const char *oldpath, const char *newpath) {
+    return (int)link2(oldpath, strlen(oldpath), newpath, strlen(newpath));
 }
 
 #ifdef __cplusplus

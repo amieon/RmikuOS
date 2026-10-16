@@ -59,6 +59,7 @@ static void join_path(const char *dir, const char *name, char *out, int out_size
 static void print_mode(mode_t m) {
     char t;
     if (S_ISDIR(m))        t = 'd';
+    else if (S_ISLNK(m))   t = 'l';
     else if (S_ISCHR(m))   t = 'c';
     else if (S_ISFIFO(m))  t = 'p';
     else                   t = '-';
@@ -97,7 +98,18 @@ static void print_long(const char *name, const char *full_path, struct stat *st)
     }
 
     fputs(name, stdout);
-    if (S_ISDIR(st->st_mode)) fputs("/", stdout);
+    if (S_ISDIR(st->st_mode)) {
+        fputs("/", stdout);
+    } else if (S_ISLNK(st->st_mode)) {
+        /* symlink 长格式显示 "name -> target", 与 Linux ls -l 一致 */
+        char target[128];
+        isize n = readlink(full_path, target, sizeof(target) - 1);
+        if (n >= 0) {
+            target[n] = 0;
+            fputs(" -> ", stdout);
+            fputs(target, stdout);
+        }
+    }
     fputs("\n", stdout);
 }
 
@@ -150,7 +162,9 @@ int main(int argc, char *argv[]) {
             copy_dirent_name(&entries[i], name, sizeof(name));
             join_path(path, name, full_path, sizeof(full_path));
 
-            if (stat(full_path, &st) < 0) {
+            /* 用 lstat 而不是 stat: 目录里的 symlink 要显示链接本身,
+             * 而不是跟随到目标( dangling 链接的目标甚至可能不存在 )。 */
+            if (lstat(full_path, &st) < 0) {
                 fputs("?       ", stdout);
                 fputs(name, stdout);
                 fputs("\n", stdout);
@@ -167,6 +181,8 @@ int main(int argc, char *argv[]) {
                 fputs("dir     ", stdout);
             } else if (stat_type_of(st.st_mode) == STAT_TYPE_FILE) {
                 fputs("file    ", stdout);
+            } else if (stat_type_of(st.st_mode) == STAT_TYPE_SYMLINK) {
+                fputs("link    ", stdout);
             } else if (stat_type_of(st.st_mode) == STAT_TYPE_CHAR) {
                 fputs("char    ", stdout);
             } else {
