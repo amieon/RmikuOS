@@ -66,23 +66,6 @@ int access(const char *path, int amode) {
 }
 
 /* ----------------------------------------------------------------------------
- * symlink —— 本 OS 无符号链接; 仅供 writefile() 的 S_ISLNK 死分支引用
- * （我们平台 S_ISLNK 恒 0, 此函数不会被真实调用）。返回 ENOSYS。
- * -------------------------------------------------------------------------- */
-int symlink(const char *target, const char *linkpath) {
-    (void)target; (void)linkpath;
-    errno = ENOSYS;
-    return -1;
-}
-
-/* readlink: no symlinks on RmikuOS. POSIX: EINVAL if not a symlink. */
-ssize_t readlink(const char *path, char *buf, size_t bufsiz) {
-    (void)path; (void)buf; (void)bufsiz;
-    errno = EINVAL;
-    return -1;
-}
-
-/* ----------------------------------------------------------------------------
  * getpwuid —— 无 passwd 数据库, 诚实返回 NULL（shell 的 ~ 展开退回 getenv）。
  * -------------------------------------------------------------------------- */
 struct passwd *getpwuid(uid_t uid) {
