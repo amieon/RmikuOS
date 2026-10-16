@@ -3,7 +3,7 @@ use alloc::str;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use crate::fs::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE};
+use crate::fs::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE, FILE_TYPE_SYMLINK};
 use crate::fs::mount::FileSystem;
 use crate::sync::spin::Mutex;
 use super::*;
@@ -27,9 +27,15 @@ struct TmpfsDirNode {
     children: Arc<Mutex<BTreeMap<String, TmpfsNode>>>,
 }
 
+struct TmpfsSymlinkNode {
+    perms: Mutex<Perms>,
+    target: String,
+}
+
 enum TmpfsNode {
     File(Arc<TmpfsFileNode>),
     Dir(Arc<TmpfsDirNode>),
+    Symlink(Arc<TmpfsSymlinkNode>),
 }
 
 impl TmpfsNode {
@@ -37,6 +43,7 @@ impl TmpfsNode {
         match self {
             TmpfsNode::File(f) => TmpfsNode::File(f.clone()),
             TmpfsNode::Dir(d) => TmpfsNode::Dir(d.clone()),
+            TmpfsNode::Symlink(link) => TmpfsNode::Symlink(link.clone()),
         }
     }
 
@@ -44,6 +51,7 @@ impl TmpfsNode {
         match self {
             TmpfsNode::File(f) => *f.perms.lock(),
             TmpfsNode::Dir(d) => *d.perms.lock(),
+            TmpfsNode::Symlink(link) => *link.perms.lock(),
         }
     }
 }
@@ -119,6 +127,14 @@ impl Inode for TmpfsInode {
                 gid: p.gid,
                 mode: p.mode,
             },
+            TmpfsNode::Symlink(link) =>
+            Metadata {
+                inode_type: InodeType::Symlink,
+                size: link.target.len(),
+                uid: p.uid,
+                gid: p.gid,
+                mode: p.mode,
+            },
         }
     }
 
@@ -143,7 +159,7 @@ impl Inode for TmpfsInode {
                 let child = dir.get(name)?;        
                 Some(Arc::new(TmpfsInode { node: child.clone_ref(), root: self.root.clone() }))  
             }
-            TmpfsNode::File(_) => None,  
+            TmpfsNode::File(_) | TmpfsNode::Symlink(_) => None,
         }
     }
 
@@ -168,13 +184,15 @@ impl Inode for TmpfsInode {
                     p.gid as u32,
                 )))
             }
+            // VFS 路径解析层会先跟随 symlink；走到这里说明调用方试图直接 open 链接本身。
+            TmpfsNode::Symlink(_) => None,
         }
     }
 
     fn truncate(&self) -> isize {
         match &self.node {
             TmpfsNode::File(file_node) => { file_node.data.lock().clear(); 0 }
-            TmpfsNode::Dir(_) => -1,
+            TmpfsNode::Dir(_) | TmpfsNode::Symlink(_) => -1,
         }
     }
 
@@ -186,13 +204,71 @@ impl Inode for TmpfsInode {
             for (name, node) in dir.iter() {
                 let typ = match node {
                     TmpfsNode::Dir(_) => FILE_TYPE_DIR,
-                    TmpfsNode::File(_) => FILE_TYPE_FILE,  
+                    TmpfsNode::File(_) => FILE_TYPE_FILE,
+                    TmpfsNode::Symlink(_) => FILE_TYPE_SYMLINK,
                 };
                 entries.push(DirEntry::new(name,typ));
             }
         }
 
         entries
+    }
+
+    fn as_any(&self) -> Option<&dyn core::any::Any> {
+        Some(self)
+    }
+
+    fn symlink(&self, name: &str, target: &str) -> Option<InodeRef> {
+        match &self.node {
+            TmpfsNode::Dir(dir) => {
+                let mut dir = dir.children.lock();
+                if dir.contains_key(name) || target.is_empty() {
+                    return None;
+                }
+                let (_u, ue, _g, ge) = crate::task::current_creds();
+                let link_node = TmpfsNode::Symlink(Arc::new(TmpfsSymlinkNode {
+                    perms: Mutex::new(Perms { uid: ue, gid: ge, mode: 0o777 }),
+                    target: String::from(target),
+                }));
+                dir.insert(String::from(name), link_node.clone_ref());
+                Some(Arc::new(TmpfsInode { node: link_node, root: self.root.clone() }))
+            }
+            _ => None,
+        }
+    }
+
+    fn readlink(&self) -> Option<String> {
+        match &self.node {
+            TmpfsNode::Symlink(link) => Some(link.target.clone()),
+            _ => None,
+        }
+    }
+
+    fn hard_link(&self, name: &str, target: &InodeRef) -> isize {
+        let target = match target.as_any().and_then(|any| any.downcast_ref::<TmpfsInode>()) {
+            Some(inode) => inode,
+            None => return -1,
+        };
+        if !Arc::ptr_eq(&self.root, &target.root) {
+            return -1;
+        }
+
+        let target_node = match &target.node {
+            TmpfsNode::File(_) | TmpfsNode::Symlink(_) => target.node.clone_ref(),
+            TmpfsNode::Dir(_) => return -1,
+        };
+
+        match &self.node {
+            TmpfsNode::Dir(dir) => {
+                let mut dir = dir.children.lock();
+                if dir.contains_key(name) {
+                    return -1;
+                }
+                dir.insert(String::from(name), target_node);
+                0
+            }
+            _ => -1,
+        }
     }
 
     fn create(&self, name: &str) -> Option<InodeRef> {
@@ -211,7 +287,7 @@ impl Inode for TmpfsInode {
                 dir.insert(String::from(name), file_node.clone_ref());
                 Some(Arc::new(TmpfsInode { node: file_node, root: self.root.clone() }))
             }
-            TmpfsNode::File(_) => None,   
+            TmpfsNode::File(_) | TmpfsNode::Symlink(_) => None,
         }
     }
 
@@ -230,7 +306,7 @@ impl Inode for TmpfsInode {
                 dir.insert(String::from(name), dir_node.clone_ref());
                 Some(Arc::new(TmpfsInode { node: dir_node, root: self.root.clone() }))
             }
-            TmpfsNode::File(_) => None,
+            TmpfsNode::File(_) | TmpfsNode::Symlink(_) => None,
         }
     }
 
@@ -239,15 +315,15 @@ impl Inode for TmpfsInode {
             TmpfsNode::Dir(dir) => {
                 let mut dir = dir.children.lock(); 
                 match dir.get(name) {
-                    Some(TmpfsNode::File(_)) => {
+                    Some(TmpfsNode::File(_)) | Some(TmpfsNode::Symlink(_)) => {
                         dir.remove(name);
                         0
                     }
-                    Some(TmpfsNode::Dir(_)) => -1,  
+                    Some(TmpfsNode::Dir(_)) => -1,
                     None => -1,                     
                 }
             }
-            TmpfsNode::File(_) => -1, 
+            TmpfsNode::File(_) | TmpfsNode::Symlink(_) => -1,
         }
     }
 
@@ -263,7 +339,7 @@ impl Inode for TmpfsInode {
                     None => -1,                     
                 }
             }
-            TmpfsNode::File(_) => -1, 
+            TmpfsNode::File(_) | TmpfsNode::Symlink(_) => -1,
         }
     }
 
@@ -275,8 +351,8 @@ impl Inode for TmpfsInode {
                     Some(TmpfsNode::Dir(child)) => {
                         child.children.lock().is_empty()
                     }
-                    Some(TmpfsNode::File(_)) => false,  
-                    None => false,                     
+                    Some(TmpfsNode::File(_)) | Some(TmpfsNode::Symlink(_)) => false,
+                    None => false,
                 };
                 if is_empty_dir {
                     dir.remove(name);
@@ -286,7 +362,7 @@ impl Inode for TmpfsInode {
                     -1
                 }
             }
-            TmpfsNode::File(_) => -1, 
+            TmpfsNode::File(_) | TmpfsNode::Symlink(_) => -1,
         }
     }
 
@@ -300,6 +376,11 @@ impl Inode for TmpfsInode {
             }
             TmpfsNode::Dir(d) => {
                 let mut p = d.perms.lock();
+                p.mode = new_mode;
+                0
+            }
+            TmpfsNode::Symlink(link) => {
+                let mut p = link.perms.lock();
                 p.mode = new_mode;
                 0
             }
@@ -318,6 +399,12 @@ impl Inode for TmpfsInode {
             }
             TmpfsNode::Dir(d) => {
                 let mut p = d.perms.lock();
+                if uid != NO_CHANGE { p.uid = uid; }
+                if gid != NO_CHANGE { p.gid = gid; }
+                0
+            }
+            TmpfsNode::Symlink(link) => {
+                let mut p = link.perms.lock();
                 if uid != NO_CHANGE { p.uid = uid; }
                 if gid != NO_CHANGE { p.gid = gid; }
                 0
@@ -383,7 +470,7 @@ impl Inode for TmpfsInode {
                 f.data.lock().resize(len, 0);
                 0
             }
-            TmpfsNode::Dir(_) => -1,
+            TmpfsNode::Dir(_) | TmpfsNode::Symlink(_) => -1,
         }
     }
 }
