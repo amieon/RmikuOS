@@ -1,5 +1,7 @@
 use alloc::sync::Arc;
+use alloc::string::String;
 use alloc::vec::Vec;
+use core::any::Any;
 
 use super::dirent::DirEntry;
 use super::file::FileRef;
@@ -10,6 +12,7 @@ pub type InodeRef = Arc<dyn Inode>;
 pub enum InodeType {
     File,
     Directory,
+    Symlink,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -76,6 +79,29 @@ pub trait Inode: Send + Sync {
 
     fn is_file(&self) -> bool {
         self.metadata().inode_type == InodeType::File
+    }
+
+    fn is_symlink(&self) -> bool {
+        self.metadata().inode_type == InodeType::Symlink
+    }
+
+    /// hard_link 需要确认目标 inode 与本目录属于同一个具体文件系统。
+    /// 支持硬链接的后端返回 Some(self)，只读/不支持的后端沿用 None。
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
+
+
+    fn symlink(&self, _name: &str, _target: &str) -> Option<InodeRef> {
+        None
+    }
+
+    fn readlink(&self) -> Option<String> {
+        None
+    }
+
+    fn hard_link(&self, _name: &str, _target: &InodeRef) -> isize {
+        -1
     }
 
     fn create(&self, name: &str) -> Option<InodeRef>{

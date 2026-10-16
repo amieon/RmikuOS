@@ -11,6 +11,7 @@ pub const DIRENT_SIZE: usize = core::mem::size_of::<DirEntry>();
 
 pub const FILE_TYPE_FILE: u8 = 1;
 pub const FILE_TYPE_DIR: u8 = 2;
+pub const FILE_TYPE_SYMLINK: u8 = 3;
 
 impl DirEntry {
     pub fn new(name: &str, file_type: u8) -> Self {
