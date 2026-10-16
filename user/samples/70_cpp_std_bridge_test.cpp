@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
 extern "C" int main() {
     int errors = 0;
 

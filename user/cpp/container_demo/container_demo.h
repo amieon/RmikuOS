@@ -3,6 +3,8 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <algorithm>
+#include <random>
 
 // 测试 std::vector / std::string / std::pair / std::tuple
 void test_vector();

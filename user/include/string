@@ -7,3 +7,7 @@
 namespace std {
     using string = my::string;
 }
+namespace std {
+    inline double stod(const string& s) { return mystr::str_to_double(s.c_str()); }
+    inline int stoi(const string& s) { return mystr::str_to_int(s.c_str()); }
+}

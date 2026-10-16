@@ -1,7 +1,8 @@
 
 
 #include <string>
-
+#include <stdio.h>
+#include <stdimpl/string.h>
 extern "C" int main() {
     int errors = 0;
 

@@ -1,6 +1,7 @@
 #include "heap.h"
 #pragma once
 #include "types.h"
+#include <map>
 
 struct AotFrame;
 

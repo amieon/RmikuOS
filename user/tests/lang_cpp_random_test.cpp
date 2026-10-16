@@ -1,7 +1,7 @@
 // C++ 桥接:mymath::RNG(线性同余)可复现性与范围
 #include "test.h"
 #include <cmath>
-
+#include "stdimpl/random.h"
 extern "C" int main() {
     TEST_START("lang_cpp_random");
 

@@ -1,7 +1,7 @@
 #include "mem.h"
-#include "my/cmath.h"
-#include "my/io.h"
-#include "my/vector.h"
+#include "cmath"
+#include "stdimpl/io.h"
+#include "vector"
     using namespace mymath;
     using namespace mv;
     using namespace io;

@@ -1,4 +1,6 @@
 #include <type_traits>
+#include <stdio.h>
+#include <stdimpl/compat.h>
 
 extern "C" int main() {
     int errors = 0;

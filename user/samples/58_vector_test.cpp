@@ -1,5 +1,5 @@
 #include "../include/mem.h"
-#include "../include/my/vector.h"
+#include "../include/vector"
 
 // extern "C" {
 //     long syscall3(unsigned long id, unsigned long a0, unsigned long a1, unsigned long a2);

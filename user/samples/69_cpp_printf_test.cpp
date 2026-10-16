@@ -1,6 +1,6 @@
 
 #include <vector>
-
+#include <stdio.h>
 extern "C" int main() {
     int errors = 0;
 
