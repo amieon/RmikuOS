@@ -258,7 +258,7 @@ impl File for FatFile {
         self.fs.dev.flush()
     }
 
-        fn inode(&self) -> Option<crate::fs::InodeRef> {
+    fn inode(&self) -> Option<crate::fs::InodeRef> {
         Some(Arc::new(FatInode {
             fs: self.fs.clone(),
             path: self.path.clone(),
@@ -377,7 +377,7 @@ impl Inode for FatInode {
         }
     }
 
-    fn open(&self, flags : usize) -> Option<FileRef> {
+    fn open(&self, flags : usize, abs_path: &str) -> Option<FileRef> {
         // 判断类型(在块里),拿到结论后构造
         enum Kind { Dir, File, NotFound }
 
@@ -400,7 +400,7 @@ impl Inode for FatInode {
         };
 
         match kind {
-            Kind::Dir => Some(Arc::new(ReadOnlyDirFile::new(self.getdents()))),
+            Kind::Dir => Some(Arc::new(ReadOnlyDirFile::new(self.getdents(), abs_path))),
             Kind::File => {
                 // 可写 FatFile,存 owned 路径
                 let fat_path = to_fat_path(&self.path).to_string();

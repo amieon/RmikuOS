@@ -92,6 +92,16 @@ pub const SYSCALL_ACCESS: usize = 83;
 pub const SYSCALL_FCHMOD: usize = 84;
 pub const SYSCALL_DUP: usize = 85;
 pub const SYSCALL_DUP3: usize = 86;
+pub const SYSCALL_OPENAT: usize = 87;
+pub const SYSCALL_FSTATAT: usize = 88;
+pub const SYSCALL_UNLINKAT: usize = 89;
+pub const SYSCALL_MKDIRAT: usize = 90;
+pub const SYSCALL_FACCESSAT: usize = 91;
+pub const SYSCALL_FCHMODAT: usize = 92;
+pub const SYSCALL_FCHOWN: usize = 93;
+pub const SYSCALL_FCHDIR: usize = 94;
+pub const SYSCALL_RENAMEAT: usize = 95;
+pub const SYSCALL_LINKAT: usize = 96;
 
 
 
@@ -219,6 +229,16 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_FCHMOD => fs::sys_fchmod(args[0], args[1]),
         SYSCALL_DUP => fs::sys_dup(args[0]),
         SYSCALL_DUP3 => fs::sys_dup3(args[0], args[1], args[2]),
+        SYSCALL_OPENAT => fs::sys_openat(args[0], args[1], args[2], args[3], args[4]),
+        SYSCALL_FSTATAT => fs::sys_fstatat(args[0], args[1], args[2], args[3], args[4]),
+        SYSCALL_UNLINKAT => fs::sys_unlinkat(args[0], args[1], args[2], args[3]),
+        SYSCALL_MKDIRAT => fs::sys_mkdirat(args[0], args[1], args[2], args[3]),
+        SYSCALL_FACCESSAT => fs::sys_faccessat(args[0], args[1], args[2], args[3], args[4]),
+        SYSCALL_FCHMODAT => fs::sys_fchmodat(args[0], args[1], args[2], args[3], args[4]),
+        SYSCALL_FCHOWN => fs::sys_fchown(args[0], args[1], args[2]),
+        SYSCALL_FCHDIR => fs::sys_fchdir(args[0]),
+        SYSCALL_RENAMEAT => fs::sys_renameat(args[0], args[1], args[2], args[3], args[4], args[5]),
+        SYSCALL_LINKAT => fs::sys_linkat(args[0], args[1], args[2], args[3], args[4], args[5]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

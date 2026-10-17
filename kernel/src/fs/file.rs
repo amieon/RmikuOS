@@ -42,6 +42,11 @@ pub trait File: Send + Sync {
         false
     }
 
+
+    fn abs_path(&self) -> Option<alloc::string::String> {
+        None
+    }
+
     fn stat(&self) -> Stat;
 
     fn read(&self, buf: &mut [u8]) -> isize;
@@ -51,8 +56,9 @@ pub trait File: Send + Sync {
 
     fn write(&self, buf: &[u8]) -> isize;
 
-
-    fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
+    /// 从 offset 处读，不改变文件偏移（pread 语义）。
+    /// 返回读到的字节数；offset 已达/超过 EOF 返回 0；失败返回 -1。
+   fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
         if buf.is_empty() {
             return 0;
         }
@@ -68,6 +74,7 @@ pub trait File: Send + Sync {
         n
     }
 
+    /// 从 offset 处写，不改变文件偏移（pwrite 语义）。语义同 read_at。
     fn write_at(&self, buf: &[u8], offset: usize) -> isize {
         if buf.is_empty() {
             return 0;
@@ -104,7 +111,7 @@ pub trait File: Send + Sync {
         -1
     }
 
-    /// 反查本 File 对应的 inode
+    /// 反查本 File 对应的 inode，供 fchmod/fchown 这类"按 fd 改 inode"的操作复用
     fn inode(&self) -> Option<crate::fs::InodeRef> {
         None
     }

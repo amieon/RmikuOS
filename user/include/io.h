@@ -60,6 +60,29 @@ static inline isize open_create(const char *path, usize flags) {
     return open2(path, strlen(path), flags|O_CREAT);
 }
 
+/* openat(dirfd, path, flags, ...) —— 相对目录 fd 打开。
+ *
+ * dirfd 的三种取值（与 POSIX 一致）：
+ *   - 已打开的目录 fd：path 相对它解析
+ *   - AT_FDCWD(-100)：相对进程 cwd（此时等价 open）
+ *   - path 本身是绝对路径：dirfd 被忽略，哪怕是无效值
+ * 内核把这个值当 isize 解释，所以这里必须 (usize)(isize)dirfd 转换——
+ * 直接把 -100 当 usize 传会让内核看到 0xFFFFFFFFFFFFFF9C，虽然内核也是按
+ * isize 转回来，但显式转换更能表达意图。
+ *
+ * mode 只在 O_CREAT 时有效，与 open 一致用变参取。 */
+static inline isize openat(int dirfd, const char *path, usize flags, ...) {
+    usize mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, usize);
+        va_end(ap);
+    }
+    return syscall6(SYS_OPENAT, (usize)(isize)dirfd, (usize)path,
+                    (usize)strlen(path), flags, mode, 0);
+}
+
 
 static inline isize close(int fd) {
     return syscall3(SYS_CLOSE, (usize)fd, 0, 0);

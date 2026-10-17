@@ -245,7 +245,7 @@ impl Inode for Ext4Inode {
         }
     }
 
-    fn open(&self, flags: usize) -> Option<FileRef> {
+    fn open(&self, flags: usize, abs_path: &str) -> Option<FileRef> {
         if flags&(O_APPEND|O_WRONLY|O_TRUNC|O_RDWR) != 0 {
             return None;
         }
@@ -261,7 +261,7 @@ impl Inode for Ext4Inode {
         let gid = meta.gid() as u32;
 
         if file_type.is_dir() {
-            return Some(Arc::new(ReadOnlyDirFile::new_perms(self.getdents(), mode, uid, gid)));
+            return Some(Arc::new(ReadOnlyDirFile::new_perms(self.getdents(), mode, uid, gid, abs_path)));
         }
 
         if file_type.is_regular_file() {

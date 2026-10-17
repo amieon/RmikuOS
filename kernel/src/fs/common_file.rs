@@ -1,5 +1,6 @@
 extern crate alloc;
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::sync::spin::Mutex;
@@ -140,23 +141,27 @@ pub struct ReadOnlyDirFile {
     offset: Mutex<usize>,
     // (mode, uid, gid) —— 供 fstat 返回真实属主/权限
     perms: (u16, u32, u32),
+    // 目录的绝对路径 —— at 系列把它当 dirfd 的基准
+    path: String,
 }
 
 impl ReadOnlyDirFile {
-    pub fn new(entries: Vec<DirEntry>) -> Self {
+    pub fn new(entries: Vec<DirEntry>, path: &str) -> Self {
         Self {
             entries,
             offset: Mutex::new(0),
             perms: (0o755, 0, 0),
+            path: alloc::string::String::from(path),
         }
     }
 
     /// 携带真实属主/权限的构造
-    pub fn new_perms(entries: Vec<DirEntry>, mode: u16, uid: u32, gid: u32) -> Self {
+    pub fn new_perms(entries: Vec<DirEntry>, mode: u16, uid: u32, gid: u32, path: &str) -> Self {
         Self {
             entries,
             offset: Mutex::new(0),
             perms: (mode, uid, gid),
+            path: alloc::string::String::from(path),
         }
     }
 }
@@ -172,6 +177,10 @@ impl File for ReadOnlyDirFile {
 
     fn is_dir(&self) -> bool {
         true
+    }
+
+    fn abs_path(&self) -> Option<alloc::string::String> {
+        Some(self.path.clone())
     }
 
     fn stat(&self) -> Stat {

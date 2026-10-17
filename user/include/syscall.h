@@ -93,6 +93,16 @@ extern "C" {
 #define SYS_FCHMOD                   84
 #define SYS_DUP                      85
 #define SYS_DUP3                     86
+#define SYS_OPENAT                   87
+#define SYS_FSTATAT                  88
+#define SYS_UNLINKAT                 89
+#define SYS_MKDIRAT                  90
+#define SYS_FACCESSAT                91
+#define SYS_FCHMODAT                 92
+#define SYS_FCHOWN                   93
+#define SYS_FCHDIR                   94
+#define SYS_RENAMEAT                 95
+#define SYS_LINKAT                   96
 
 
 

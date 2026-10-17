@@ -362,11 +362,11 @@ impl Inode for Ext4RwInode {
         }))
     }
 
-    fn open(&self, flags: usize) -> Option<FileRef> {
+    fn open(&self, flags: usize, abs_path: &str) -> Option<FileRef> {
         let info = self.info()?;
         if info.file_type() == DirectoryEntryType::Directory {
             // 目录 fd：快照式（同 FatInode 的做法）
-            Some(Arc::new(ReadOnlyDirFile::new(self.getdents())))
+            Some(Arc::new(ReadOnlyDirFile::new(self.getdents(), abs_path)))
         } else if info.file_type() == DirectoryEntryType::Symlink {
             // symlink 的直接 open 没有意义；正常 open 已由 VFS resolver 跳到目标。
             None
@@ -664,7 +664,7 @@ impl File for Ext4RwFile {
         }
     }
 
-
+    
     fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
         let mut fs = self.fs.ext4.lock();
         match fs.read_inode(self.number, offset as u64, buf) {

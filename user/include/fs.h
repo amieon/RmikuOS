@@ -8,20 +8,37 @@ extern "C" {
 #include "sys/types.h"   /* mode_t / uid_t / gid_t / time_t / off_t */
 #include "errno.h"       /* access() 失败时按 amode 粗设 errno */
 
-/* 
+/* ======================================================================
  * 本文件是用户态唯一的 struct stat / struct dirent 定义点（方案 A 统一）。
  *
  *   - struct stat   是 POSIX 布局（st_mode 等），stat()/fstat() 内部
  *                   用私有 32 字节内核布局接收 syscall 结果再翻译。
  *   - struct dirent 保持内核 getdents 字节布局（64 字节/条, 内核契约），
  *                   但加了 d_name 别名, 让 POSIX 代码也能直接读名字。
- */
+ * ====================================================================== */
 
 /* ---- 目录项 ---- */
 
 #define FILE_TYPE_FILE 1
 #define FILE_TYPE_DIR  2
 #define FILE_TYPE_SYMLINK 3
+
+/* ======================================================================
+ * at 家族（openat/fstatat/unlinkat/mkdirat/faccessat/fchmodat）的 flag
+ *
+ * dirfd 的语义（与 POSIX 一致）：
+ *   - 已打开的目录 fd → path 相对它解析
+ *   - AT_FDCWD        → 相对进程 cwd
+ *   - path 是绝对路径 → dirfd 被完全忽略（哪怕是 -1 这种无效值）
+ * AT_EACCESS 与 AT_REMOVEDIR 数值相同是**故意的**：POSIX 里它们分属
+ * faccessat 与 unlinkat，不会同时出现在一个调用里。
+ * ====================================================================== */
+
+#define AT_FDCWD            (-100)
+#define AT_SYMLINK_NOFOLLOW 0x100   /* fstatat/fchmodat: 不跟随最终 symlink */
+#define AT_REMOVEDIR        0x200   /* unlinkat: 删目录（等价 rmdir） */
+#define AT_EACCESS          0x200   /* faccessat: 用有效身份(euid)而非真实身份(ruid) */
+#define AT_SYMLINK_FOLLOW   0x400   /* linkat: 跟随源 symlink（未实现，返回 -1） */
 
 struct dirent {
     unsigned char file_type;   /* 1=文件 2=目录（内核值） */
@@ -45,6 +62,13 @@ static inline isize chdir2(const char *path, usize len) {
 
 static inline int chdir(const char *path) {
     return (int)chdir2(path, strlen(path));
+}
+
+/* fchdir(fd): 切到已打开的目录 fd。
+ * 比 chdir("路径") 安全：路径在"解析完到切换"之间可能被别的线程改掉，
+ * fd 指向的已经是那个目录本身。非目录 fd / 目录已被删除 → -1。 */
+static inline int fchdir(int fd) {
+    return (int)syscall3(SYS_FCHDIR, (usize)fd, 0, 0);
 }
 
 /* POSIX 语义: 成功返回 buf, 失败返回 NULL */
@@ -190,6 +214,21 @@ static inline int fstat(int fd, struct stat *st) {
     return rk_stat_convert(&k, st);
 }
 
+/* fstatat(dirfd, path, st, flags): 相对目录 fd 取属性。
+ * flags 带 AT_SYMLINK_NOFOLLOW → 等价 lstat（看链接本身）。 */
+static inline isize fstatat2(int dirfd, const char *path, usize len,
+                             struct stat *st, usize flags) {
+    rk_stat_kernel_t k;
+    isize r = syscall6(SYS_FSTATAT, (usize)(isize)dirfd, (usize)path, len,
+                       (usize)&k, flags, 0);
+    if (r < 0) return r;
+    return (isize)rk_stat_convert(&k, st);
+}
+
+static inline int fstatat(int dirfd, const char *path, struct stat *st, int flags) {
+    return (int)fstatat2(dirfd, path, strlen(path), st, (usize)flags);
+}
+
 /* chmod(path, mode): 修改文件权限位(低 12 位)。仅 root 或文件属主可改。 */
 static inline isize chmod2(const char *path, usize len, usize mode) {
     return syscall3(SYS_CHMOD, (usize)path, len, mode);
@@ -205,7 +244,17 @@ static inline int fchmod(int fd, mode_t mode) {
     return (int)syscall3(SYS_FCHMOD, (usize)fd, (usize)mode, 0);
 }
 
+/* fchmodat(dirfd, path, mode, flags): 相对目录 fd 改权限。
+ * 目前不接受 AT_SYMLINK_NOFOLLOW（内核明确返回 -1，而不是静默忽略 flag）。 */
+static inline int fchmodat(int dirfd, const char *path, mode_t mode, int flags) {
+    return (int)syscall6(SYS_FCHMODAT, (usize)(isize)dirfd, (usize)path,
+                         (usize)strlen(path), (usize)mode, (usize)flags, 0);
+}
 
+/*
+ * access(path, amode) 的 amode 位，取值与 Linux/POSIX 一致。
+ * unistd.h 里也有一份（#ifndef 保护，两边同时包含不会冲突）。
+ */
 #ifndef F_OK
 #define F_OK 0   /* 只查存在性 */
 #define X_OK 1   /* 可执行 */
@@ -213,13 +262,37 @@ static inline int fchmod(int fd, mode_t mode) {
 #define R_OK 4   /* 可读 */
 #endif
 
-
+/*
+ * access(path, amode): 以**真实 uid/gid** 检查访问权限（内核 syscall 实现）。
+ *   F_OK=0 只查存在; R_OK=4 / W_OK=2 / X_OK=1 可按位或。
+ * 与 open 的分野：open 按有效身份(euid)放行，access 按真实身份(ruid)，
+ * 所以 setuid/su 过的程序用它才能得到"调用者本人能否访问"的答案。
+ * 成功返回 0，失败返回 -1 并按 amode 粗设 errno（F_OK→ENOENT，其余→EACCES）。
+ * 注意：内核只有一个返回码，无法区分"不存在"和"权限不足"，这个粗分与
+ * 大多数调用方的用法（只看成败）兼容。
+ */
 static inline isize access2(const char *path, usize len, usize amode) {
     return syscall3(SYS_ACCESS, (usize)path, len, amode);
 }
 
 static inline int access(const char *path, int amode) {
     int r = (int)access2(path, strlen(path), (usize)amode);
+    if (r != 0) {
+        errno = (amode == 0) ? ENOENT : EACCES;
+    }
+    return r;
+}
+
+/* faccessat(dirfd, path, amode, flags): 相对目录 fd 的 access。
+ * flags 带 AT_EACCESS 时按**有效身份**(euid)检查，否则按真实身份(ruid)。 */
+static inline isize faccessat2(int dirfd, const char *path, usize len,
+                               usize amode, usize flags) {
+    return syscall6(SYS_FACCESSAT, (usize)(isize)dirfd, (usize)path, len,
+                    amode, flags, 0);
+}
+
+static inline int faccessat(int dirfd, const char *path, int amode, int flags) {
+    int r = (int)faccessat2(dirfd, path, strlen(path), (usize)amode, (usize)flags);
     if (r != 0) {
         errno = (amode == 0) ? ENOENT : EACCES;
     }
@@ -237,6 +310,13 @@ static inline int chown(const char *path, uid_t uid, gid_t gid) {
     return (int)chown2(path, strlen(path), (usize)uid, (usize)gid);
 }
 
+/* fchown(fd, uid, gid): 按 fd 改属主，省一次路径解析、也不受改名影响。
+ * 特权与 chown 一致（仅 root）；pipe/终端/只读 rootfs 的 fd → -1。
+ * 不支持 Linux 的 (uid_t)-1 哨兵，与 chown 保持一致。 */
+static inline int fchown(int fd, uid_t uid, gid_t gid) {
+    return (int)syscall6(SYS_FCHOWN, (usize)fd, (usize)uid, (usize)gid, 0, 0, 0);
+}
+
 /* ---- 目录 / 文件增删 ---- */
 
 /* POSIX 签名: mkdir(path, mode)。内核不记录新建目录的权限, mode 忽略。 */
@@ -249,12 +329,28 @@ static inline int mkdir(const char *path, mode_t mode) {
     return (int)mkdir2(path, strlen(path));
 }
 
+/* mkdirat(dirfd, path, mode): 相对目录 fd 建目录，mode 会真正落到权限位上
+ * （与 mkdir 不同——那条老路径的 mode 被历史忽略，at 版本按 POSIX 生效）。 */
+static inline int mkdirat(int dirfd, const char *path, mode_t mode) {
+    return (int)syscall6(SYS_MKDIRAT, (usize)(isize)dirfd, (usize)path,
+                         (usize)strlen(path), (usize)mode, 0, 0);
+}
+
 static inline isize unlink2(const char *path, usize len) {
     return syscall3(SYS_UNLINK, (usize)path, len, 0);
 }
 
 static inline int unlink(const char *path) {
     return (int)unlink2(path, strlen(path));
+}
+
+/* unlinkat(dirfd, path, flags):
+ *   flags=0            → 删文件（等价 unlink）
+ *   flags=AT_REMOVEDIR → 删目录（等价 rmdir）
+ * 其他值内核一律拒绝（POSIX 只定义这两个）。 */
+static inline int unlinkat(int dirfd, const char *path, int flags) {
+    return (int)syscall6(SYS_UNLINKAT, (usize)(isize)dirfd, (usize)path,
+                         (usize)strlen(path), (usize)flags, 0, 0);
 }
 
 static inline isize rmdir2(const char *path, usize len) {
@@ -312,6 +408,16 @@ static inline int rename(const char *oldpath, const char *newpath) {
     return (int)rename2(oldpath, strlen(oldpath), newpath, strlen(newpath));
 }
 
+/* renameat(olddirfd, oldpath, newdirfd, newpath): 两侧各自相对自己的 dirfd。
+ * 两个 dirfd 可以不同，也可以任意一个是 AT_FDCWD；路径是绝对路径时该侧的
+ * dirfd 被忽略。跨挂载点的 rename 仍由底层拒绝。 */
+static inline int renameat(int olddirfd, const char *oldpath,
+                           int newdirfd, const char *newpath) {
+    return (int)syscall6(SYS_RENAMEAT,
+                         (usize)(isize)olddirfd, (usize)oldpath, (usize)strlen(oldpath),
+                         (usize)(isize)newdirfd, (usize)newpath, (usize)strlen(newpath));
+}
+
 /* ---- 链接 ---- */
 
 static inline isize symlink2(const char *target, usize target_len,
@@ -338,6 +444,21 @@ static inline isize link2(const char *oldpath, usize oldlen,
 
 static inline int link(const char *oldpath, const char *newpath) {
     return (int)link2(oldpath, strlen(oldpath), newpath, strlen(newpath));
+}
+
+/* linkat(olddirfd, oldpath, newdirfd, newpath, flags): 两侧各自相对 dirfd。
+ *
+ * flags 只接受 0。POSIX 的 AT_SYMLINK_FOLLOW（跟随源 symlink）没有实现——
+ * 内核 ABI 的 6 个参数被两个路径 + 两个 dirfd 用满了，没地方放 flags。
+ * 与其静默忽略，不如明确拒绝：调用方至少能发现语义没生效。 */
+static inline int linkat(int olddirfd, const char *oldpath,
+                         int newdirfd, const char *newpath, int flags) {
+    if (flags != 0) {
+        return -1;
+    }
+    return (int)syscall6(SYS_LINKAT,
+                         (usize)(isize)olddirfd, (usize)oldpath, (usize)strlen(oldpath),
+                         (usize)(isize)newdirfd, (usize)newpath, (usize)strlen(newpath));
 }
 
 #ifdef __cplusplus

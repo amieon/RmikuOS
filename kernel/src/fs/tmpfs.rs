@@ -163,7 +163,7 @@ impl Inode for TmpfsInode {
         }
     }
 
-    fn open(&self, flags:usize) -> Option<FileRef> {
+    fn open(&self, flags: usize, abs_path: &str) -> Option<FileRef> {
         match &self.node {
             TmpfsNode::File(file_node) => {
                 let p = *file_node.perms.lock();
@@ -184,6 +184,7 @@ impl Inode for TmpfsInode {
                     p.mode,
                     p.uid as u32,
                     p.gid as u32,
+                    abs_path,
                 )))
             }
             // VFS 路径解析层会先跟随 symlink；走到这里说明调用方试图直接 open 链接本身。
@@ -491,7 +492,7 @@ pub fn is_available() -> bool {
 }
 
 pub struct TmpfsFile {
-    node: TmpfsNode,   
+    node: TmpfsNode,
     root: Arc<TmpfsDirNode>, 
     data: Arc<Mutex<Vec<u8>>>,
     offset: Mutex<usize>,

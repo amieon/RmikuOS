@@ -51,13 +51,14 @@ pub fn lookup_no_follow_at(cwd: &str, path: &str) -> Option<InodeRef> {
 }
 
 pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Option<FileRef> {
+    // 绝对路径只算一次,建文件与"告诉目录 fd 自己是谁"都要用
+    let abs = path::normalize_path(cwd, path)?;
     let inode = match path::lookup_path_at(cwd, path) {
         Some(i) => i,
         None => {
             // 文件不存在
             if flags & O_CREAT != 0 {
-                // 算出绝对路径,复用 create_file; 创建后按 mode 设权限位
-                let abs = path::normalize_path(cwd, path)?;
+                // 创建后按 mode 设权限位
                 let inode = create_file(&abs)?;
                 inode.chmod((mode & 0o777) as u16);
                 inode
@@ -75,15 +76,16 @@ pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Option<FileR
     if flags & O_TRUNC != 0 {
         inode.truncate();
     }
-    inode.open(flags)
+    inode.open(flags, &abs)
 }
 
 pub fn open(path: &str, flags: usize, mode: usize) -> Option<FileRef> {
-    let inode = match path::lookup_abs_path(path) {
+    let abs = path::normalize_path("/", path)?;
+    let inode = match path::lookup_abs_path(&abs) {
         Some(i) => i,
         None => {
             if flags & O_CREAT != 0 {
-                let inode = create_file(path)?;   // open 的 path 已是绝对路径
+                let inode = create_file(&abs)?;
                 inode.chmod((mode & 0o777) as u16);
                 inode
             } else {
@@ -99,7 +101,7 @@ pub fn open(path: &str, flags: usize, mode: usize) -> Option<FileRef> {
     if flags & O_TRUNC != 0 {
         inode.truncate();
     }
-    inode.open(flags)
+    inode.open(flags, &abs)
 }
 
 pub mod stat;
@@ -165,7 +167,7 @@ pub fn read_all(path: &str) -> Option<Vec<u8>> {
         return None;
     }
 
-    let file = inode.open(O_RDONLY)?;
+    let file = inode.open(O_RDONLY, path)?;
 
     let mut data = Vec::new();
     let mut buf = [0u8; 512];
@@ -358,6 +360,11 @@ pub fn chmod_path(path: &str, mode: u16) -> isize {
 }
 
 pub fn access_path(path: &str, request: u16) -> isize {
+    let (ruid, _euid, rgid, _egid) = crate::task::current_creds();
+    access_path_as(path, request, ruid, rgid)
+}
+
+pub fn access_path_as(path: &str, request: u16, uid: usize, gid: usize) -> isize {
     let abs = match normalize_path("/", path) {
         Some(p) => p,
         None => return -1,
@@ -370,9 +377,8 @@ pub fn access_path(path: &str, request: u16) -> isize {
         return 0;                    // F_OK：能解析到 inode 即视为存在
     }
     let meta = inode.metadata();
-    let (ruid, _euid, rgid, _egid) = crate::task::current_creds();
     let (groups, ngroups) = crate::task::current_groups();
-    if check_access(meta.mode, meta.uid, meta.gid, ruid, rgid, &groups[..ngroups], request) {
+    if check_access(meta.mode, meta.uid, meta.gid, uid, gid, &groups[..ngroups], request) {
         0
     } else {
         -1

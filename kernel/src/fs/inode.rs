@@ -67,7 +67,7 @@ pub trait Inode: Send + Sync {
         None
     }
 
-    fn open(&self, flags:usize) -> Option<FileRef>;
+    fn open(&self, flags: usize, abs_path: &str) -> Option<FileRef>;
 
     fn getdents(&self) -> Vec<DirEntry> {
         Vec::new()

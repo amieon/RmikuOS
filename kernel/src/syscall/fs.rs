@@ -126,6 +126,8 @@ pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
     n as isize
 }
 
+/// pread(fd, buf, count, offset)：从 offset 处读，**不改变文件偏移**。
+/// 对 pipe/终端等无偏移概念的对象返回 -1（对应 Linux 的 -ESPIPE）。
 pub fn sys_pread(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize {
     if len == 0 {
         return 0;
@@ -158,7 +160,8 @@ pub fn sys_pread(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize
     n as isize
 }
 
-
+/// pwrite(fd, buf, count, offset)：从 offset 处写，**不改变文件偏移**。
+/// O_APPEND 的文件按 Linux 语义忽略 offset 写到末尾。
 pub fn sys_pwrite(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize {
     if len == 0 {
         return 0;
@@ -411,6 +414,7 @@ pub fn sys_dup2(old_fd : usize,new_fd : usize) -> isize {
     crate::task::dup2(old_fd,new_fd)
 }
 
+/// dup(fd)：复制到**最低空闲** fd（目标由内核挑，dup2 是调用方指定）。
 pub fn sys_dup(fd: usize) -> isize {
     crate::task::dup(fd)
 }
@@ -418,6 +422,8 @@ pub fn sys_dup(fd: usize) -> isize {
 /// dup3(fd, newfd, flags)：dup2 加上 flags。
 ///
 /// 目前只接受 `flags == 0`。dup3 唯一的 flag 是 O_CLOEXEC，而 fd 表还没有
+/// close-on-exec 位——与其"假装支持"让调用方以为设置生效了，不如明确返回 -1。
+/// 另一处与 dup2 的语义差别：**oldfd == newfd 时 dup3 返回 -1**（dup2 是成功的 no-op）。
 pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
     if flags != 0 {
         return -1;
@@ -428,7 +434,11 @@ pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
     crate::task::dup2(old_fd, new_fd)
 }
 
-
+/// fchmod(fd, mode)：按 fd 改权限位（省掉一次路径解析，也不受路径被改名影响）。
+///
+/// 特权检查与 chmod 一致：root 或文件属主，其余拒绝。
+/// fd → inode 走 `File::inode()`；pipe/终端/只读内存副本没有可定位的 inode，
+/// 返回 None 即 -1（与 Linux 在只读文件系统上一致）。
 pub fn sys_fchmod(fd: usize, mode: usize) -> isize {
     let file = match crate::task::current_file(fd) {
         Some(f) => f,
@@ -602,11 +612,15 @@ pub fn sys_link(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize) 
     crate::fs::link_file(&old, &new)
 }
 
+/// access(path, amode)：以**真实 uid/gid** 检查权限（open 用 effective，这是两者的分野）。
+/// amode 与 Linux 一致：F_OK=0 / X_OK=1 / W_OK=2 / R_OK=4，可按位或。
+/// 文件不存在、或权限不足都返回 -1（不区分，用户态包装按 amode 设 errno）。
 pub fn sys_access(path_ptr: usize, len: usize, mode: usize) -> isize {
     let abs = match user_path_to_abs(path_ptr, len) {
         Some(abs) => abs,
         None => return -1,
     };
+    // amode 只取低 3 位（X_OK|W_OK|R_OK），其余位忽略
     crate::fs::access_path(&abs, (mode & 0x7) as u16)
 }
 
@@ -707,4 +721,287 @@ pub fn sys_rename(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize
 pub fn sys_set_echo(on: usize) -> isize {
     crate::io::uart::set_echo(on != 0);
     0
+}
+
+/* ==================== at 系列：dirfd 相对路径 ====================
+ *
+ * 设计：本 VFS 是按"路径字符串"解析的——挂载表按路径前缀匹配、symlink 也按路径
+ * 重新解析。所以 dirfd **不能**像 Linux 那样从 dentry 往下走（一往下走就断了
+ * 挂载点，例如 dirfd=/ + "fat/x" 会落到 rootfs 里那个空的 fat 目录，而不是 FAT 盘）。
+ *
+ * 做法：让目录 fd 自报绝对路径（File::abs_path，open 时写入），拼成绝对路径后
+ * **完全复用**现有实现。好处是 at 与非 at 的行为天然一致——同一套 lookup、
+ * 挂载穿越、symlink 跟随逻辑，不需要给每个操作维护两份。
+ *
+ * 已知取舍：目录被 rename 之后，旧的 dirfd 仍指向旧路径（Linux 用 inode 就不会）。
+ * 教学系统里可接受；若要修，得把 VFS 改成 dentry/inode 式解析。
+ */
+
+/// POSIX 的 AT_FDCWD：用进程 cwd，而不是某个 dirfd
+pub const AT_FDCWD: isize = -100;
+/// 不跟随最终 symlink（fstatat/fchmodat/faccessat 共用）
+pub const AT_SYMLINK_NOFOLLOW: usize = 0x100;
+/// unlinkat：目标是目录时删除目录（非空则失败）
+pub const AT_REMOVEDIR: usize = 0x200;
+
+/// faccessat 的 AT_EACCESS：注意它和 AT_REMOVEDIR 数值相同，但分属不同 syscall。
+pub const AT_EACCESS: usize = 0x200;
+
+/// 把 (dirfd, path) 解析成绝对路径。三条规则与 Linux 一致：
+///   1. path 是绝对路径 → **忽略 dirfd**（哪怕 dirfd 是无效的）
+///   2. dirfd == AT_FDCWD → 相对进程 cwd
+///   3. 否则 dirfd 必须是一个**已打开的目录**（普通文件/pipe 当 dirfd 会失败）
+fn resolve_at(dirfd: isize, path: &str) -> Option<String> {
+    if path.starts_with('/') {
+        return crate::fs::normalize_path("/", path);
+    }
+    if dirfd == AT_FDCWD {
+        return crate::fs::normalize_path(&crate::task::current_cwd(), path);
+    }
+    if dirfd < 0 {
+        return None;
+    }
+    let file = crate::task::current_file(dirfd as usize)?;
+    if !file.is_dir() {
+        return None;                  // ENOTDIR: 不是目录 fd
+    }
+    let base = file.abs_path()?;      // 非目录 fd 拿不到路径，自然失败
+    crate::fs::normalize_path(&base, path)
+}
+
+/// 读用户态路径 + dirfd 解析，一步到位
+fn user_path_to_abs_at(dirfd: isize, path_ptr: usize, len: usize) -> Option<String> {
+    let bytes = crate::task::read_current_user_bytes(path_ptr, len)?;
+    let path = core::str::from_utf8(&bytes).ok()?.trim_matches('\0').trim();
+    resolve_at(dirfd, path)
+}
+
+/// openat(dirfd, path, flags, mode)
+///
+/// 解析成绝对路径后走 `fs::open`（不是 `fs::open_at`，后者还要再叠一次 cwd）。
+pub fn sys_openat(dirfd: usize, path_ptr: usize, len: usize, flags: usize, mode: usize) -> isize {
+    let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    let file = match crate::fs::open(&abs, flags, mode) {
+        Some(file) => file,
+        None => {
+            log::info!("[fs] openat failed: dirfd={}, abs={}", dirfd as isize, abs);
+            return -1;
+        }
+    };
+    crate::task::alloc_fd_current(file)
+}
+
+/// fstatat(dirfd, path, statbuf, flags)
+///
+/// flags 带 AT_SYMLINK_NOFOLLOW 时等价于 lstat（看链接本身而不是目标）；
+/// 否则等价于 stat。
+pub fn sys_fstatat(dirfd: usize, path_ptr: usize, len: usize, stat_ptr: usize, flags: usize) -> isize {
+    // 只支持 AT_SYMLINK_NOFOLLOW。AT_EMPTY_PATH / AT_NO_AUTOMOUNT 没有实现，
+    // 明确拒绝好过按"跟随 symlink"的默认语义糊过去。
+    if flags & !AT_SYMLINK_NOFOLLOW != 0 {
+        return -1;
+    }
+    let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    let stat = if flags & AT_SYMLINK_NOFOLLOW != 0 {
+        crate::fs::lstat(&abs)
+    } else {
+        crate::fs::stat(&abs)
+    };
+    match stat {
+        Some(stat) => write_stat_to_user(stat_ptr, &stat),
+        None => -1,
+    }
+}
+
+/// unlinkat(dirfd, path, flags)
+///
+/// flags == 0        → 删文件（等价 unlink）
+/// flags == AT_REMOVEDIR → 删目录（等价 rmdir，非空目录失败）
+/// 其他位一律拒绝：POSIX 只允许这两个取值，多出来的位不该被静默忽略。
+pub fn sys_unlinkat(dirfd: usize, path_ptr: usize, len: usize, flags: usize) -> isize {
+    if flags != 0 && flags != AT_REMOVEDIR {
+        return -1;
+    }
+    let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    let ret = if flags & AT_REMOVEDIR != 0 {
+        match crate::fs::remove_dir(&abs) {
+            Some(r) => r,
+            None => return -1,
+        }
+    } else {
+        match crate::fs::unlink_file(&abs) {
+            Some(r) => r,
+            None => return -1,
+        }
+    };
+    if ret == 0 { 0 } else { -1 }
+}
+
+/// mkdirat(dirfd, path, mode)
+pub fn sys_mkdirat(dirfd: usize, path_ptr: usize, len: usize, mode: usize) -> isize {
+    let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    match crate::fs::make_dir(&abs) {
+        Some(inode) => {
+            // 与 open(O_CREAT) 一致：建完按 mode 落权限位
+            inode.chmod((mode & 0o777) as u16);
+            0
+        }
+        None => -1,
+    }
+}
+
+/// faccessat(dirfd, path, amode, flags)
+///
+/// 默认用**真实身份**(ruid/rgid)，带 AT_EACCESS 时用**有效身份**(euid/egid)。
+/// amode 与 access 一致：F_OK=0 / X_OK=1 / W_OK=2 / R_OK=4。
+pub fn sys_faccessat(dirfd: usize, path_ptr: usize, len: usize, amode: usize, flags: usize) -> isize {
+    // AT_SYMLINK_NOFOLLOW 需要"检查链接本身"，本内核的 access 一定跟随 symlink，
+    // 做不到就明确拒绝（而不是悄悄按跟随语义给个结果）。
+    if flags & AT_SYMLINK_NOFOLLOW != 0 {
+        return -1;
+    }
+    let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    let (ruid, euid, rgid, egid) = crate::task::current_creds();
+    let (uid, gid) = if flags & AT_EACCESS != 0 {
+        (euid, egid)
+    } else {
+        (ruid, rgid)
+    };
+    crate::fs::access_path_as(&abs, (amode & 0x7) as u16, uid, gid)
+}
+
+/// fchmodat(dirfd, path, mode, flags)
+///
+/// 特权检查与 chmod 相同：euid==0 或文件属主。AT_SYMLINK_NOFOLLOW 未实现——
+/// 明确返回 -1，而不是"忽略 flag 当作已生效"。
+pub fn sys_fchmodat(dirfd: usize, path_ptr: usize, len: usize, mode: usize, flags: usize) -> isize {
+    if flags & AT_SYMLINK_NOFOLLOW != 0 {
+        return -1;
+    }
+    let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    let inode = match crate::fs::lookup(&abs) {
+        Some(i) => i,
+        None => return -1,
+    };
+    let meta = inode.metadata();
+    let (_u, ue, _g, _ge) = crate::task::current_creds();
+    if ue != 0 && ue != meta.uid {
+        return -1;
+    }
+    crate::fs::chmod_path(&abs, (mode & 0o7777) as u16)
+}
+
+/// fchown(fd, uid, gid)：按 fd 改属主/属组。
+///
+/// 与 chown 的差别只有"用 fd 还是用路径"：省一次路径解析，也不受文件被改名影响。
+/// 反查 inode 走 `File::inode()`（fchmod 时建的那条路），所以 pipe / 终端 /
+/// 只读 rootfs 的内存副本这些"定位不到 inode"的 fd 一律 -1。
+///
+/// 特权模型与 chown 一致（简化）：仅 euid==0 可改。
+/// 不支持 Linux 的 (uid_t)-1 哨兵（"这一项不动"），与现有 chown 的行为保持一致。
+pub fn sys_fchown(fd: usize, uid: usize, gid: usize) -> isize {
+    let file = match crate::task::current_file(fd) {
+        Some(f) => f,
+        None => return -1,
+    };
+    let inode = match file.inode() {
+        Some(i) => i,
+        None => return -1,
+    };
+    let (_u, ue, _g, _ge) = crate::task::current_creds();
+    if ue != 0 {
+        return -1;
+    }
+    inode.chown(uid, gid)
+}
+
+/// fchdir(fd)：把进程 cwd 切到 fd 指向的目录。
+///
+/// 相比 `chdir("路径")` 的价值：路径在"解析完到真正切换"之间可能被别的线程改掉，
+/// 而 fd 指向的是**已经打开的那个目录**，没有这个窗口。
+/// 本 VFS 存的是路径字符串，所以这里靠 `File::abs_path()` 取回绝对路径。
+pub fn sys_fchdir(fd: usize) -> isize {
+    let file = match crate::task::current_file(fd) {
+        Some(f) => f,
+        None => return -1,
+    };
+    if !file.is_dir() {
+        return -1;                    // ENOTDIR: 只有目录 fd 能 chdir
+    }
+    let abs = match file.abs_path() {
+        Some(p) => p,
+        None => return -1,
+    };
+    // 目录可能在 fd 打开之后被删掉了（fd 还活着，但路径已失效）。
+    // 重新解析一次再切，免得把进程 cwd 设成一个悬空路径——否则之后每个
+    // 相对路径操作都会莫名其妙失败，排查起来很痛苦。
+    // （Linux 允许 fchdir 到已删除的目录，因为它持有 inode；这里按路径实现，
+    //   所以选择"宁可失败也不留悬空 cwd"。）
+    let inode = match crate::fs::lookup(&abs) {
+        Some(i) => i,
+        None => return -1,
+    };
+    if !inode.is_dir() {
+        return -1;
+    }
+    crate::task::set_current_cwd(abs)
+}
+
+/// renameat(olddirfd, old, newdirfd, new)：双路径各自相对自己的 dirfd。
+///
+/// 两侧独立解析，可以任意组合：`(dirfd, "a") → (AT_FDCWD, "/x/b")` 也合法。
+/// 解析成两个绝对路径后交给 `fs::rename`——跨挂载点、目标存在时的覆盖语义都由
+/// 底层统一处理，at 版本不重复实现一遍。
+///
+/// 参数说明：本项目的路径**显式带长度**，所以两个路径占 4 个参数 + 2 个 dirfd
+/// = **正好 6 个**，刚好用满寄存器（Linux 因为路径以 NUL 结尾，只要 4 个参数）。
+/// renameat2 的 flags 就没地方放了——那才需要换调用约定。
+pub fn sys_renameat(d1: usize, old_ptr: usize, old_len: usize,
+                    d2: usize, new_ptr: usize, new_len: usize) -> isize {
+    let old = match user_path_to_abs_at(d1 as isize, old_ptr, old_len) {
+        Some(p) => p,
+        None => return -1,
+    };
+    let new = match user_path_to_abs_at(d2 as isize, new_ptr, new_len) {
+        Some(p) => p,
+        None => return -1,
+    };
+    crate::fs::rename(&old, &new)
+}
+
+/// linkat(olddirfd, old, newdirfd, new)：硬链接，两侧各自相对 dirfd。
+///
+/// 语义与 `link` 一致（源路径**不跟随**最终 symlink，不允许跨挂载点）。
+/// 同样用满 6 个参数，所以 **没有 flags 参数**：
+/// POSIX 的 `AT_SYMLINK_FOLLOW`（跟随源 symlink）目前无法表达，用户态包装对
+/// flags != 0 直接返回 -1，而不是悄悄按"不跟随"执行。
+pub fn sys_linkat(d1: usize, old_ptr: usize, old_len: usize,
+                  d2: usize, new_ptr: usize, new_len: usize) -> isize {
+    let old = match user_path_to_abs_at(d1 as isize, old_ptr, old_len) {
+        Some(p) => p,
+        None => return -1,
+    };
+    let new = match user_path_to_abs_at(d2 as isize, new_ptr, new_len) {
+        Some(p) => p,
+        None => return -1,
+    };
+    crate::fs::link_file(&old, &new)
 }
