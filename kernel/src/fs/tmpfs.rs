@@ -166,15 +166,12 @@ impl Inode for TmpfsInode {
     fn open(&self, flags: usize, abs_path: &str) -> Option<FileRef> {
         match &self.node {
             TmpfsNode::File(file_node) => {
-                let p = *file_node.perms.lock();
+                // 不再把 perms 塞进 File 里——File 只持 node，stat 现读。
                 Some(Arc::new(TmpfsFile::new(
                     self.node.clone_ref(),
                     self.root.clone(),
                     file_node.data.clone(),
                     flags,
-                    p.uid as u32,
-                    p.gid as u32,
-                    p.mode,
                 )))
             }
             TmpfsNode::Dir(_) => {
@@ -492,14 +489,14 @@ pub fn is_available() -> bool {
 }
 
 pub struct TmpfsFile {
-    node: TmpfsNode,
+    node: TmpfsNode,  
     root: Arc<TmpfsDirNode>, 
     data: Arc<Mutex<Vec<u8>>>,
     offset: Mutex<usize>,
     flags: usize,
-    mode: u16,
-    uid: u32,
-    gid: u32,
+    // 这里不缓存 mode/uid/gid：权限的唯一真源是 node 上的 perms，stat 每次现读。
+    // 缓存副本会让"同一个 fd 上做了 fchmod/fchown 之后 fstat 仍返回旧值"——
+    // 那正是 Linux 语义明确不允许的（fstat 看到的是 inode 的当前状态）。
 }
 
 impl File for TmpfsFile {
@@ -576,7 +573,11 @@ impl File for TmpfsFile {
     }
 
     fn stat(&self) -> Stat {
-        Stat::new(STAT_TYPE_FILE, self.data.lock().len(), self.mode, self.uid, self.gid).with_mtime(crate::timer::now_secs() as u32)
+        // 现读 node 上的 perms：fchmod/fchown 改的就是它，
+        // 这样同一个 fd 上的 fstat 才和路径 stat 看到同一份数据。
+        let p = self.node.perms();
+        Stat::new(STAT_TYPE_FILE, self.data.lock().len(), p.mode, p.uid as u32, p.gid as u32)
+            .with_mtime(crate::timer::now_secs() as u32)
     }
 
     fn seek(&self, offset: isize, whence: usize) -> isize {
@@ -607,7 +608,6 @@ impl File for TmpfsFile {
     }
 
     /// 反查 inode：TmpfsFile 持有 node + root，正好够构造 TmpfsInode，
-    /// 于是 fchmod 能复用 TmpfsInode::chmod（改 node 上的 perms）。
     fn inode(&self) -> Option<crate::fs::InodeRef> {
         Some(Arc::new(TmpfsInode {
             node: self.node.clone_ref(),
@@ -618,16 +618,13 @@ impl File for TmpfsFile {
 }
 
 impl TmpfsFile {
-    pub fn new(node: TmpfsNode, root: Arc<TmpfsDirNode>, data: Arc<Mutex<Vec<u8>>>, flags: usize, uid: u32, gid: u32, mode: u16) -> Self {
+    pub fn new(node: TmpfsNode, root: Arc<TmpfsDirNode>, data: Arc<Mutex<Vec<u8>>>, flags: usize) -> Self {
         TmpfsFile {
             node,
             root,
             data,
             offset: Mutex::new(0),
             flags,
-            mode,
-            uid,
-            gid,
         }
     }
 
