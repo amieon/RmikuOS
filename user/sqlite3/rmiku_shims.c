@@ -1,10 +1,10 @@
 /* ============================================================================
  * rmiku_shims.c —— RmikuOS libc 缺失符号的补充实现（sqlite3 shell 专用）
  *
- * 原则（用户明确要求"尽量不 stub"）：
+ * 原则：
  *   - 有 syscall 支撑的做真实实现：
  *       isatty        → 标准流 fd 0/1/2 视为 tty（shell 据此决定交互模式）
- *       access        → stat() + 权限位检查, 真实判存在/可读/可写/可执行
+ *       access        → 已移至 fs.h（内核 SYS_ACCESS：check_access + 真实 uid/gid）
  *       opendir/readdir/closedir → 基于 SYS_GETDENTS 的真实目录遍历
  *       errno         → 全局变量定义（errno.h 只声明 extern）
  *   - 无 syscall 支撑的做语义诚实的空实现：
@@ -49,21 +49,6 @@ int isatty(int fd) {
     return (fd == 0 || fd == 1 || fd == 2) ? 1 : 0;
 }
 
-/* ----------------------------------------------------------------------------
- * access(path, amode) —— F_OK=0 / R_OK=4 / W_OK=2 / X_OK=1
- * 存在性用 stat() 真实判断; 权限位与 stat 的 st_mode 比对。
- * -------------------------------------------------------------------------- */
-int access(const char *path, int amode) {
-    struct stat st;
-    if (stat(path, &st) != 0) { errno = ENOENT; return -1; }
-    if (amode == 0) return 0;                      /* F_OK: 只看存在 */
-    mode_t need = 0;
-    if (amode & 4) need |= S_IRUSR;
-    if (amode & 2) need |= S_IWUSR;
-    if (amode & 1) need |= S_IXUSR;
-    if ((st.st_mode & need) != need) { errno = EACCES; return -1; }
-    return 0;
-}
 
 /* ----------------------------------------------------------------------------
  * getpwuid —— 无 passwd 数据库, 诚实返回 NULL（shell 的 ~ 展开退回 getenv）。

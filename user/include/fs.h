@@ -6,15 +6,16 @@ extern "C" {
 
 #include "io.h"
 #include "sys/types.h"   /* mode_t / uid_t / gid_t / time_t / off_t */
+#include "errno.h"       /* access() 失败时按 amode 粗设 errno */
 
-/* ======================================================================
+/*
  * 本文件是用户态唯一的 struct stat / struct dirent 定义点（方案 A 统一）。
  *
  *   - struct stat   是 POSIX 布局（st_mode 等），stat()/fstat() 内部
  *                   用私有 32 字节内核布局接收 syscall 结果再翻译。
  *   - struct dirent 保持内核 getdents 字节布局（64 字节/条, 内核契约），
  *                   但加了 d_name 别名, 让 POSIX 代码也能直接读名字。
- * ====================================================================== */
+ */
 
 /* ---- 目录项 ---- */
 
@@ -196,6 +197,27 @@ static inline isize chmod2(const char *path, usize len, usize mode) {
 
 static inline int chmod(const char *path, mode_t mode) {
     return (int)chmod2(path, strlen(path), (usize)mode);
+}
+
+
+#ifndef F_OK
+#define F_OK 0   /* 只查存在性 */
+#define X_OK 1   /* 可执行 */
+#define W_OK 2   /* 可写 */
+#define R_OK 4   /* 可读 */
+#endif
+
+
+static inline isize access2(const char *path, usize len, usize amode) {
+    return syscall3(SYS_ACCESS, (usize)path, len, amode);
+}
+
+static inline int access(const char *path, int amode) {
+    int r = (int)access2(path, strlen(path), (usize)amode);
+    if (r != 0) {
+        errno = (amode == 0) ? ENOENT : EACCES;
+    }
+    return r;
 }
 
 /*

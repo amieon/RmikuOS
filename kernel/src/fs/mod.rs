@@ -357,6 +357,28 @@ pub fn chmod_path(path: &str, mode: u16) -> isize {
     }
 }
 
+pub fn access_path(path: &str, request: u16) -> isize {
+    let abs = match normalize_path("/", path) {
+        Some(p) => p,
+        None => return -1,
+    };
+    let inode = match path::lookup_abs_path(&abs) {
+        Some(i) => i,
+        None => return -1,           // 不存在，或路径上有组件不可穿越
+    };
+    if request == 0 {
+        return 0;                    // F_OK：能解析到 inode 即视为存在
+    }
+    let meta = inode.metadata();
+    let (ruid, _euid, rgid, _egid) = crate::task::current_creds();
+    let (groups, ngroups) = crate::task::current_groups();
+    if check_access(meta.mode, meta.uid, meta.gid, ruid, rgid, &groups[..ngroups], request) {
+        0
+    } else {
+        -1
+    }
+}
+
 /// chown(path, uid, gid): 修改文件属主。usize::MAX 表示不修改该项。特权检查由系统调用层完成。
 pub fn chown_path(path: &str, uid: usize, gid: usize) -> isize {
     let abs = match normalize_path("/", path) {

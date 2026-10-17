@@ -567,6 +567,14 @@ pub fn sys_link(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize) 
     crate::fs::link_file(&old, &new)
 }
 
+pub fn sys_access(path_ptr: usize, len: usize, mode: usize) -> isize {
+    let abs = match user_path_to_abs(path_ptr, len) {
+        Some(abs) => abs,
+        None => return -1,
+    };
+    crate::fs::access_path(&abs, (mode & 0x7) as u16)
+}
+
 pub fn sys_chmod(path_ptr: usize, len: usize, mode: usize) -> isize {
     let abs = match user_path_to_abs(path_ptr, len) {
         Some(abs) => abs,
