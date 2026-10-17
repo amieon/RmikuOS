@@ -2,12 +2,15 @@
 #include "Func.h"
 #include "Dataset.h"
 #include "Optim.h"
+#include "safetensors.h"
 #include <string>
 #include <vector>
+#include <stdio.h>
 
 using T = float;
 
-void train(Graph<T>& g, int hidden, int epochs, T lr, T wd, bool use_adam, T drop_p) {
+void train(Graph<T>& g, int hidden, int epochs, T lr, T wd, bool use_adam, T drop_p,
+           const char* save_path = nullptr) {
     DenseMatrix<T> W1(g.X.cols, hidden), W2(hidden, g.num_classes);
     init_xavier(W1); init_xavier(W2);
     GCNLayer<T> L1(W1, GCNLayer<T>::Activation::Relu);
@@ -47,16 +50,37 @@ void train(Graph<T>& g, int hidden, int epochs, T lr, T wd, bool use_adam, T dro
     }
     DenseMatrix<T> lg = eval();
     printf("\n==> final TEST accuracy = %.4f\n", accuracy_masked(lg, g.labels, g.test_mask));
+
+    // ---- 保存权重（推理侧从这里接）----
+    if (save_path) {
+        st::Entry es[2] = {{"layer1.weight", &L1.weight}, {"layer2.weight", &L2.weight}};
+        // 元数据记下形状：推理时用它自证"模型与数据是否配套"
+        char meta[256];
+        snprintf(meta, sizeof meta,
+                 "{\"arch\":\"gcn-2layer\",\"features\":\"%d\",\"hidden\":\"%d\",\"classes\":\"%d\"}",
+                 g.X.cols, L1.weight.cols, g.num_classes);
+        std::string err;
+        if (st::save(save_path, es, 2, meta, err)) {
+            printf("已保存权重 -> %s (layer1.weight %dx%d, layer2.weight %dx%d)\n",
+                   save_path, L1.weight.rows, L1.weight.cols, L2.weight.rows, L2.weight.cols);
+            printf("提示: 落盘由内核周期 writeback 完成; 需要立即持久化可在保存后执行 sync\n");
+        } else {
+            printf("保存失败: %s\n", err.c_str());
+        }
+    }
 }
 
 int main(int argc, char** argv) {
     seed_rng(42);
     std::vector<std::string> files;
+    const char* save_path = nullptr;
     bool use_adam = true;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "sgd") use_adam = false;
         else if (a == "adam") use_adam = true;
+        else if (a == "--save" && i + 1 < argc) save_path = argv[++i];
+        else if (a.rfind("--save=", 0) == 0) save_path = a.c_str() + 7;
         else files.push_back(a);
     }
 
@@ -74,6 +98,6 @@ int main(int argc, char** argv) {
     train(g, /*hidden=*/16, /*epochs=*/200,
           /*lr=*/use_adam ? T(0.01) : T(0.2),
           /*wd=*/use_adam ? T(5e-4) : T(0),
-          use_adam, /*drop_p=*/T(0.5));
+          use_adam, /*drop_p=*/T(0.5), save_path);
     return 0;
 }

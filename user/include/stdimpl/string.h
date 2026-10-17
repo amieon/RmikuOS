@@ -1,6 +1,7 @@
 #pragma once
 #include "compat.h"
-#include "../io.h"  
+#include "vector.h"   /* my::string 内部用 mv::Vector<char> 作存储 */
+#include "../io.h"
 #include "flag.h"  
 
 
@@ -253,6 +254,72 @@ namespace my {
         bool operator!=(const string& o) const { return !(*this == o); }
         bool operator==(const char* s) const { return mystr::strcmp(c_str(), s) == 0; }
         bool operator!=(const char* s) const { return !(*this == s); }
+
+
+        // 填充构造: string(n, 'x')
+        string(size_t n, char c) {
+            buf.reserve(n + 1);
+            for (size_t i = 0; i < n; i++) buf.push_back(c);
+            buf.push_back('\0');
+        }
+
+        // data(): 与 c_str() 等价(C++17 起 std::string::data() 也有非 const 重载)
+        char* data() { return buf.data(); }
+        const char* data() const { return buf.data(); }
+
+        // assign 家族
+        string& assign(const char* s) { return *this = s; }
+        string& assign(const string& o) { return *this = o; }
+        // 从"指针 + 长度"赋值: 缓冲区不一定以 '\0' 结尾时用这个
+        // (safetensors 截取 __metadata__ 原文、解析二进制头都靠它)
+        string& assign(const char* s, size_t n) {
+            buf.clear();
+            if (s) for (size_t i = 0; i < n; i++) buf.push_back(s[i]);
+            buf.push_back('\0');
+            return *this;
+        }
+        string& assign(size_t n, char c) {
+            buf.clear();
+            for (size_t i = 0; i < n; i++) buf.push_back(c);
+            buf.push_back('\0');
+            return *this;
+        }
+
+        // rfind: 从后往前找, pos = npos 表示从末尾开始。
+        // 惯用法 `s.rfind("--x=", 0) == 0` 即"是否以 --x= 开头"(std::string 语义)。
+        size_t rfind(const char* s, size_t pos = npos) const {
+            if (!s || !*s) return size();
+            size_t n = mystr::strlen(s);
+            size_t sz = size();
+            if (n > sz) return npos;
+            size_t start = (pos >= sz - n) ? sz - n : pos;
+            for (size_t i = start + 1; i-- > 0;) {
+                if (mystr::strncmp(c_str() + i, s, n) == 0) return i;
+            }
+            return npos;
+        }
+        size_t rfind(char c, size_t pos = npos) const {
+            size_t sz = size();
+            size_t i = (pos < sz) ? pos + 1 : sz;
+            while (i-- > 0) if (buf[i] == c) return i;
+            return npos;
+        }
+
+        // append 家族(与 operator+= 等价, 语义更明确)
+        string& append(const char* s) { return *this += s; }
+        string& append(const string& o) { return *this += o; }
+        string& append(const char* s, size_t n) {
+            buf.pop_back();
+            if (s) for (size_t i = 0; i < n; i++) buf.push_back(s[i]);
+            buf.push_back('\0');
+            return *this;
+        }
+        string& append(size_t n, char c) {
+            buf.pop_back();
+            for (size_t i = 0; i < n; i++) buf.push_back(c);
+            buf.push_back('\0');
+            return *this;
+        }
     };
     inline string operator+(const string& a, const string& b) { string r = a; r += b; return r; }
     inline string operator+(const string& a, const char* b) { string r = a; r += b; return r; }
