@@ -51,6 +51,39 @@ pub trait File: Send + Sync {
 
     fn write(&self, buf: &[u8]) -> isize;
 
+
+    fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
+        if buf.is_empty() {
+            return 0;
+        }
+        let saved = self.seek(0, 1);            // whence=1: SEEK_CUR
+        if saved < 0 {
+            return -1;
+        }
+        if self.seek(offset as isize, 0) < 0 {  // whence=0: SEEK_SET
+            return -1;
+        }
+        let n = self.read(buf);
+        self.seek(saved, 0);
+        n
+    }
+
+    fn write_at(&self, buf: &[u8], offset: usize) -> isize {
+        if buf.is_empty() {
+            return 0;
+        }
+        let saved = self.seek(0, 1);
+        if saved < 0 {
+            return -1;
+        }
+        if self.seek(offset as isize, 0) < 0 {
+            return -1;
+        }
+        let n = self.write(buf);
+        self.seek(saved, 0);
+        n
+    }
+
     fn getdents(&self, _buf: &mut [u8]) -> isize {
         -1
     }

@@ -524,15 +524,48 @@ impl File for TmpfsFile {
         let mut data = self.data.lock();
         let mut off = self.offset.lock();
         if self.is_append() {
-            *off = data.len(); 
+            *off = data.len();
         }
         for &b in buf {
             if *off < data.len() {
-                data[*off] = b;       
+                data[*off] = b;
             } else {
-                data.push(b);         
+                data.push(b);
             }
             *off += 1;
+        }
+        buf.len() as isize
+    }
+
+    fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
+        if buf.is_empty() {
+            return 0;
+        }
+        let data = self.data.lock();
+        let mut n = 0usize;
+        while offset + n < data.len() && n < buf.len() {
+            buf[n] = data[offset + n];
+            n += 1;
+        }
+        n as isize
+    }
+
+    fn write_at(&self, buf: &[u8], offset: usize) -> isize {
+        if buf.is_empty() {
+            return 0;
+        }
+        if !self.writable() {
+            return -1;
+        }
+        let mut data = self.data.lock();
+        let mut off = if self.is_append() { data.len() } else { offset };
+        for &b in buf {
+            if off < data.len() {
+                data[off] = b;
+            } else {
+                data.push(b);
+            }
+            off += 1;
         }
         buf.len() as isize
     }

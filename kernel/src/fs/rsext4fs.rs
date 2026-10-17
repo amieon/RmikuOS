@@ -664,6 +664,15 @@ impl File for Ext4RwFile {
         }
     }
 
+    
+    fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
+        let mut fs = self.fs.ext4.lock();
+        match fs.read_inode(self.number, offset as u64, buf) {
+            Ok(n) => n as isize,
+            Err(_) => -1,
+        }
+    }
+
     fn write(&self, buf: &[u8]) -> isize {
         let mut off = self.offset.lock();
         if self.flags & O_APPEND != 0 {
@@ -677,6 +686,20 @@ impl File for Ext4RwFile {
                 *off += buf.len() as u64;
                 buf.len() as isize
             }
+            Err(_) => -1,
+        }
+    }
+
+    fn write_at(&self, buf: &[u8], offset: usize) -> isize {
+        let mut off = offset as u64;
+        if self.flags & O_APPEND != 0 {
+            if let Ok(i) = self.fs.ext4.lock().inode(self.number) {
+                off = i.size;
+            }
+        }
+        let mut fs = self.fs.ext4.lock();
+        match fs.write_inode(self.number, off, buf) {
+            Ok(()) => buf.len() as isize,
             Err(_) => -1,
         }
     }

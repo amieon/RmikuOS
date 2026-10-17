@@ -101,6 +101,21 @@ impl File for ReadOnlyMemFile {
         -1
     }
 
+
+    fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
+        let data = self.data.as_slice();
+        if offset >= data.len() {
+            return 0;
+        }
+        let read_len = core::cmp::min(buf.len(), data.len() - offset);
+        buf[..read_len].copy_from_slice(&data[offset..offset + read_len]);
+        read_len as isize
+    }
+
+    fn write_at(&self, _buf: &[u8], _offset: usize) -> isize {
+        -1
+    }
+
     /// lseek: ext4 只读文件也要支持随机读(TCC 读 .o 用 lseek+read)。
     /// whence: 0=SET 1=CUR 2=END。越界返回 -1。
     fn seek(&self, offset: isize, whence: usize) -> isize {
