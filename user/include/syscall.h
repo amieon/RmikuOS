@@ -87,6 +87,8 @@ extern "C" {
 #define SYS_SYMLINK                  78
 #define SYS_READLINK                 79
 #define SYS_LINK                     80
+#define SYS_PREAD                    81
+#define SYS_PWRITE                   82
 
 
 

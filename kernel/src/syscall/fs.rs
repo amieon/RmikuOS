@@ -126,6 +126,64 @@ pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
     n as isize
 }
 
+pub fn sys_pread(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize {
+    if len == 0 {
+        return 0;
+    }
+    // 负 offset 传上来会是极大的 usize，提前拦掉（Linux 返回 EINVAL）
+    if offset > isize::MAX as usize {
+        return -1;
+    }
+
+    let file = match crate::task::current_file(fd) {
+        Some(file) => file,
+        None => return -1,
+    };
+
+    if !file.readable() {
+        return -1;
+    }
+
+    let mut kbuf = vec![0u8; len];
+    let n = file.read_at(&mut kbuf, offset);
+    if n <= 0 {
+        return n;
+    }
+
+    let n = n as usize;
+    if crate::task::write_current_user_bytes(user_buf, &kbuf[..n]).is_none() {
+        return -1;
+    }
+
+    n as isize
+}
+
+
+pub fn sys_pwrite(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize {
+    if len == 0 {
+        return 0;
+    }
+    if offset > isize::MAX as usize {
+        return -1;
+    }
+
+    let file = match crate::task::current_file(fd) {
+        Some(file) => file,
+        None => return -1,
+    };
+
+    if !file.writable() {
+        return -1;
+    }
+
+    let kbuf = match crate::task::read_current_user_bytes(user_buf, len) {
+        Some(buf) => buf,
+        None => return -1,
+    };
+
+    file.write_at(&kbuf, offset)
+}
+
 pub fn sys_write(fd: usize, user_buf: usize, len: usize) -> isize {
     if len == 0 {
         return 0;

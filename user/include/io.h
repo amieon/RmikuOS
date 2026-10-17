@@ -17,6 +17,14 @@ static inline isize read(int fd, char *buf, usize len) {
     return syscall3(SYS_READ, (usize)fd, (usize)buf, len);
 }
 
+static inline isize pread(int fd, char *buf, usize count, usize offset) {
+    return syscall6(SYS_PREAD, (usize)fd, (usize)buf, count, offset, 0, 0);
+}
+
+static inline isize pwrite(int fd, const char *buf, usize count, usize offset) {
+    return syscall6(SYS_PWRITE, (usize)fd, (usize)buf, count, offset, 0, 0);
+}
+
 static inline void put_char(char ch) {
     write(1, &ch, 1);
 }
