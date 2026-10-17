@@ -664,7 +664,7 @@ impl File for Ext4RwFile {
         }
     }
 
-    
+
     fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
         let mut fs = self.fs.ext4.lock();
         match fs.read_inode(self.number, offset as u64, buf) {
@@ -735,5 +735,14 @@ impl File for Ext4RwFile {
         } else {
             -1
         }
+    }
+
+    /// 反查 inode：Ext4RwFile 的 {fs, number} 与 Ext4RwInode 一致，直接构造，
+    /// 于是 fchmod 复用 Ext4RwInode::chmod（改盘上 inode 的 mode）。
+    fn inode(&self) -> Option<crate::fs::InodeRef> {
+        Some(Arc::new(Ext4RwInode {
+            fs: self.fs.clone(),
+            number: self.number,
+        }))
     }
 }

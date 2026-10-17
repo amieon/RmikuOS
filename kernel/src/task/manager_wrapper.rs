@@ -1750,6 +1750,9 @@ pub fn wake_pipe_writers() {
     ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 }
 
+/// dup2/dup3 的 fd 表上限。
+const MAX_FD_PER_PROCESS: usize = 1024;
+
 pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     let mut manager = lock_detect!(TASK_MANAGER);
     let current_tid = processor::current_tid();
@@ -1757,6 +1760,9 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     
     if old_fd == new_fd {
         return new_fd as isize;
+    }
+    if new_fd >= MAX_FD_PER_PROCESS {
+        return -1;
     }
     
     let old_file = {
@@ -1774,9 +1780,25 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     let new_file = {
         let process = manager.process_mut(current_pid);
         if new_fd >= process.fd_table.len(){
-            return -1;
+            // 增长到 new_fd+1。中间新增的空槽必须登记进 free_fds，
+            // 否则 alloc_fd 的两条路径（pop free_fds / push 到表尾）都看不到它们，
+            // 这些 fd 就永久泄漏了。new_fd 自己马上被占用，不进 free_fds。
+            let old_len = process.fd_table.len();
+            for _ in old_len..=new_fd {
+                process.fd_table.push(None);
+            }
+            for i in old_len..new_fd {
+                process.free_fds.push(i);
+            }
+            None
+        } else {
+            // 覆盖已关闭的低位 fd 时，必须把它从 free_fds 里摘掉：
+            // 否则后续 open 会 pop 到它，而 alloc_fd 的 assert!(slot.is_none()) 会 panic。
+            if let Some(pos) = process.free_fds.iter().position(|&x| x == new_fd) {
+                process.free_fds.remove(pos);
+            }
+            process.fd_table[new_fd].take()
         }
-        process.fd_table[new_fd].take()
     };
     
     if let Some(f) = &new_file {
@@ -1790,6 +1812,53 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     }
 
     new_fd as isize
+}
+
+pub fn dup(old_fd: usize) -> isize {
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let current_tid = processor::current_tid();
+    let current_pid = manager.pid_of_tid(current_tid);
+
+    let old_file = {
+        let process = manager.process_mut(current_pid);
+        if old_fd >= process.fd_table.len() {
+            return -1;
+        }
+        match &process.fd_table[old_fd] {
+            Some(f) => f.clone(),
+            None => return -1,
+        }
+    };
+
+    {
+        let process = manager.process(current_pid);
+        if process.free_fds.is_empty() && process.fd_table.len() >= MAX_FD_PER_PROCESS {
+            return -1;
+        }
+    }
+
+    old_file.on_fork();
+    let new_fd = {
+        let process = manager.process_mut(current_pid);
+        // 扫最低空闲槽；一个都没有就追加到末尾
+        let mut target = usize::MAX;
+        for (i, slot) in process.fd_table.iter().enumerate() {
+            if slot.is_none() {
+                target = i;
+                break;
+            }
+        }
+        if target == usize::MAX {
+            process.fd_table.push(None);
+            target = process.fd_table.len() - 1;
+        } else if let Some(pos) = process.free_fds.iter().position(|&x| x == target) {
+            // 摘掉 free_fds 里的同一项，保持两个结构一致
+            process.free_fds.remove(pos);
+        }
+        process.fd_table[target] = Some(old_file);
+        target as isize
+    };
+    new_fd
 }
 
 /// 前台进程 pid（Ctrl+C 的投递目标）。单终端简化模型:

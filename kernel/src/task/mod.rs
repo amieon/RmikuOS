@@ -78,6 +78,7 @@ pub use manager_wrapper::{
     wake_pipe_readers,
     wake_pipe_writers,
     dup2,
+    dup,
 
     kill,
     do_signal,

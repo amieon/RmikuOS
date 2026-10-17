@@ -257,6 +257,13 @@ impl File for FatFile {
         }
         self.fs.dev.flush()
     }
+
+        fn inode(&self) -> Option<crate::fs::InodeRef> {
+        Some(Arc::new(FatInode {
+            fs: self.fs.clone(),
+            path: self.path.clone(),
+        }))
+    }
 }
 
 

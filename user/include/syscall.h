@@ -90,6 +90,10 @@ extern "C" {
 #define SYS_PREAD                    81
 #define SYS_PWRITE                   82
 #define SYS_ACCESS                   83
+#define SYS_FCHMOD                   84
+#define SYS_DUP                      85
+#define SYS_DUP3                     86
+
 
 
 

@@ -89,6 +89,9 @@ pub const SYSCALL_LINK: usize = 80;
 pub const SYSCALL_PREAD: usize = 81;
 pub const SYSCALL_PWRITE: usize = 82;
 pub const SYSCALL_ACCESS: usize = 83;
+pub const SYSCALL_FCHMOD: usize = 84;
+pub const SYSCALL_DUP: usize = 85;
+pub const SYSCALL_DUP3: usize = 86;
 
 
 
@@ -213,6 +216,9 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_PREAD => fs::sys_pread(args[0], args[1], args[2], args[3]),
         SYSCALL_PWRITE => fs::sys_pwrite(args[0], args[1], args[2], args[3]),
         SYSCALL_ACCESS => fs::sys_access(args[0], args[1], args[2]),
+        SYSCALL_FCHMOD => fs::sys_fchmod(args[0], args[1]),
+        SYSCALL_DUP => fs::sys_dup(args[0]),
+        SYSCALL_DUP3 => fs::sys_dup3(args[0], args[1], args[2]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

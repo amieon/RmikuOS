@@ -411,6 +411,41 @@ pub fn sys_dup2(old_fd : usize,new_fd : usize) -> isize {
     crate::task::dup2(old_fd,new_fd)
 }
 
+pub fn sys_dup(fd: usize) -> isize {
+    crate::task::dup(fd)
+}
+
+/// dup3(fd, newfd, flags)：dup2 加上 flags。
+///
+/// 目前只接受 `flags == 0`。dup3 唯一的 flag 是 O_CLOEXEC，而 fd 表还没有
+pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
+    if flags != 0 {
+        return -1;
+    }
+    if old_fd == new_fd {
+        return -1;
+    }
+    crate::task::dup2(old_fd, new_fd)
+}
+
+
+pub fn sys_fchmod(fd: usize, mode: usize) -> isize {
+    let file = match crate::task::current_file(fd) {
+        Some(f) => f,
+        None => return -1,
+    };
+    let inode = match file.inode() {
+        Some(i) => i,
+        None => return -1,
+    };
+    let meta = inode.metadata();
+    let (_u, ue, _g, _ge) = crate::task::current_creds();
+    if ue != 0 && ue != meta.uid {
+        return -1;
+    }
+    inode.chmod((mode & 0o7777) as u16)
+}
+
 fn user_raw_string(ptr: usize, len: usize) -> Option<String> {
     let bytes = crate::task::read_current_user_bytes(ptr, len)?;
     let s = core::str::from_utf8(&bytes).ok()?;

@@ -168,6 +168,8 @@ impl Inode for TmpfsInode {
             TmpfsNode::File(file_node) => {
                 let p = *file_node.perms.lock();
                 Some(Arc::new(TmpfsFile::new(
+                    self.node.clone_ref(),
+                    self.root.clone(),
                     file_node.data.clone(),
                     flags,
                     p.uid as u32,
@@ -489,8 +491,10 @@ pub fn is_available() -> bool {
 }
 
 pub struct TmpfsFile {
+    node: TmpfsNode,   
+    root: Arc<TmpfsDirNode>, 
     data: Arc<Mutex<Vec<u8>>>,
-    offset: Mutex<usize>,  
+    offset: Mutex<usize>,
     flags: usize,
     mode: u16,
     uid: u32,
@@ -601,12 +605,23 @@ impl File for TmpfsFile {
         0 // tmpfs 数据常驻内存,没有后备块设备需要刷盘
     }
 
+    /// 反查 inode：TmpfsFile 持有 node + root，正好够构造 TmpfsInode，
+    /// 于是 fchmod 能复用 TmpfsInode::chmod（改 node 上的 perms）。
+    fn inode(&self) -> Option<crate::fs::InodeRef> {
+        Some(Arc::new(TmpfsInode {
+            node: self.node.clone_ref(),
+            root: self.root.clone(),
+        }))
+    }
+
 }
 
 impl TmpfsFile {
-    pub fn new(data: Arc<Mutex<Vec<u8>>>,flags : usize, uid: u32, gid: u32, mode: u16) -> Self {
+    pub fn new(node: TmpfsNode, root: Arc<TmpfsDirNode>, data: Arc<Mutex<Vec<u8>>>, flags: usize, uid: u32, gid: u32, mode: u16) -> Self {
         TmpfsFile {
-            data,                         
+            node,
+            root,
+            data,
             offset: Mutex::new(0),
             flags,
             mode,

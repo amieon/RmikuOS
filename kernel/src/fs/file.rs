@@ -104,6 +104,11 @@ pub trait File: Send + Sync {
         -1
     }
 
+    /// 反查本 File 对应的 inode
+    fn inode(&self) -> Option<crate::fs::InodeRef> {
+        None
+    }
+
     fn on_fork(&self) {}
     fn on_close_kind(&self) -> PipeCloseKind {PipeCloseKind::Nothing}
     fn socket_slot(&self) -> Option<usize> { None }

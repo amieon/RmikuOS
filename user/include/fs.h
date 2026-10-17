@@ -8,7 +8,7 @@ extern "C" {
 #include "sys/types.h"   /* mode_t / uid_t / gid_t / time_t / off_t */
 #include "errno.h"       /* access() 失败时按 amode 粗设 errno */
 
-/*
+/* 
  * 本文件是用户态唯一的 struct stat / struct dirent 定义点（方案 A 统一）。
  *
  *   - struct stat   是 POSIX 布局（st_mode 等），stat()/fstat() 内部
@@ -199,6 +199,12 @@ static inline int chmod(const char *path, mode_t mode) {
     return (int)chmod2(path, strlen(path), (usize)mode);
 }
 
+/* fchmod(fd, mode): 按 fd 改权限位（省一次路径解析，也不受文件被改名影响）。
+ * 特权检查同 chmod：root 或文件属主。pipe/终端/只读 rootfs 的 fd 返回 -1。 */
+static inline int fchmod(int fd, mode_t mode) {
+    return (int)syscall3(SYS_FCHMOD, (usize)fd, (usize)mode, 0);
+}
+
 
 #ifndef F_OK
 #define F_OK 0   /* 只查存在性 */
@@ -281,6 +287,13 @@ static inline int ftruncate(int fd, off_t length) {
 
 static inline int fsync(int fd) {
     return (int)syscall3(SYS_FSYNC, (usize)fd, 0, 0);
+}
+
+/* fdatasync(fd): 只保证数据落盘（不含 metadata）。本内核的 fsync 已经是
+ * "数据缓存→inode→bitmap→journal" 的全量刷盘，粒度比 fdatasync 更粗，
+ * 所以直接 alias 过去即可 —— 教学系统没必要为省一次元数据写再分一套路径。 */
+static inline int fdatasync(int fd) {
+    return fsync(fd);
 }
 
 static inline isize truncate2(const char *path, usize len, usize length) {
