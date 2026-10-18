@@ -139,6 +139,12 @@ struct stat {
     time_t   st_ctime;      /* 教学简化: 同 mtime */
     long     st_blksize;    /* 近似值 512 */
     long     st_blocks;     /* 恒 0 */
+
+    /* 以下三个字段本内核没有真实语义, 但必须存在 —— POSIX 程序会直接读它们*/
+    dev_t    st_dev;        /* 恒 0(无设备号概念) */
+    ino_t    st_ino;        /* 恒 0(无 inode 号) */
+    nlink_t  st_nlink;      /* 目录 2 / 其余 1(假装没有子目录, du/find 够用) */
+    dev_t    st_rdev;       /* 恒 0(无设备文件) */
 };
 
 /* 内核 Stat 的私有字节布局（32 字节, 必须与 kernel/src/fs/stat.rs 一致） */
@@ -171,6 +177,14 @@ static inline int rk_stat_convert(const rk_stat_kernel_t *k, struct stat *st) {
     st->st_atime = (time_t)k->mtime;
     st->st_ctime = (time_t)k->mtime;
     st->st_blksize = 512; st->st_blocks = 0;
+
+    /* 内核没有设备号 / inode 号 / 硬链接计数, 这里填常量占位 —— 字段的存在性
+     * 比取值重要(见 struct stat 里的说明)。目录给 2 是 POSIX 惯例(自身 + "."),
+     * 我们不计子目录, 对 du/find 这类"判断是否还有别的链接"的用法足够。 */
+    st->st_dev   = 0;
+    st->st_ino   = 0;
+    st->st_rdev  = 0;
+    st->st_nlink = ((st->st_mode & S_IFMT) == S_IFDIR) ? 2 : 1;
     return 0;
 }
 

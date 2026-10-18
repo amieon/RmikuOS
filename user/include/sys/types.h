@@ -21,6 +21,10 @@ typedef long          time_t;
 #endif
 typedef long          pid_t;
 
+typedef unsigned long dev_t;     /* 设备号 */
+typedef unsigned long ino_t;     /* inode 号 */
+typedef unsigned long nlink_t;   /* 硬链接数（文件 1 / 目录 2） */
+
 #ifdef __cplusplus
 }
 #endif
