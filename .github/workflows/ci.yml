@@ -101,6 +101,12 @@ jobs:
           #   3) 编译内核(debug,与 run.sh 默认一致)
           cargo build --target riscv64gc-unknown-none-elf
 
+      - name: 测试覆盖门禁(源码 riscv64)
+        run: |
+          # run_all 只认 /tests 里的 ELF；某个测试没编译出来就会"静默少跑一个"，
+          # 汇总仍是 0 failed。这一步把"静默少跑"变成构建期红灯。
+          bash ./scripts/check_test_coverage.sh riscv64
+
       - name: QEMU 冒烟测试(自动登录,shutdown 关机)
         run: |
           # 脚本内部:启动 QEMU → 输 root/root 登录 → 看到 /home/root 提示符 → shutdown
@@ -191,6 +197,12 @@ jobs:
           # CI 里 rootfs 较大,FS_SIZE_MB=96 覆盖默认 32M(32M 会爆盘)
           FS_SIZE_MB=96 ./user/mkfs_ext4.sh loongarch64
           cargo build --target loongarch64-unknown-none
+
+      - name: 测试覆盖门禁(源码 loongarch64)
+        run: |
+          # run_all 只认 /tests 里的 ELF；某个测试没编译出来就会"静默少跑一个"，
+          # 汇总仍是 0 failed。这一步把"静默少跑"变成构建期红灯。
+          bash ./scripts/check_test_coverage.sh loongarch64
 
       - name: QEMU 冒烟测试(自动登录,shutdown 关机)
         run: |
