@@ -74,6 +74,21 @@ echo "[smoke] ${ARCH}: ${summary}"
 failed_count="$(echo "${summary}" | sed -E 's/.* ([0-9]+) failed.*/\1/')"
 if [ -z "${failed_count}" ] || [ "${failed_count}" != "0" ]; then
   echo "[smoke] ✗ 回归测试存在失败: ${summary}"
+
+  # 把失败项的名字 + 它自己的断言输出直接打出来。
+  grep -a '\[RUNALL\].*\.\.\. FAIL' "${LOG}" | sed 's/^/[smoke]   /' || true
+
+  for t in $(grep -a '\[RUNALL\].*\.\.\. FAIL' "${LOG}" \
+              | sed -E 's/.*\[RUNALL\] ([^ ]+) \.\.\. FAIL.*/\1/'); do
+    echo "[smoke]   ---- ${t} 的输出(尾部 25 行) ----"
+    awk -v t="${t}" '
+      $0 == "===== " t " ====="   { inblock = 1; print; next }
+      inblock && /^===== .* =====$/ { exit }
+      inblock                      { print }
+    ' "${LOG}" | tail -25 | sed 's/^/[smoke]     /'
+  done
+
+  echo "[smoke]   (完整日志: ${LOG}; CI 失败时会上传为 artifact)"
   exit 1
 fi
 echo "[smoke] ${ARCH}: 回归测试全部通过 ✓"

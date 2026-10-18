@@ -105,11 +105,16 @@ int main() {
           "faccessat 带 AT_SYMLINK_NOFOLLOW 明确拒绝(未实现)");
     check(fstatat(dirfd, "a.txt", &st, 0x800) == -1, "fstatat 未知 flag 被拒绝");
 
-    /* 造一个"属主是 1000、other 只读"的文件，然后让本进程变成 (ruid=1000, euid=0)：
-     * 默认 faccessat 按 ruid(1000) 判 → 属主/other 里都无 w；AT_EACCESS 按
-     * euid(0) 判 → 特权绕过。同一文件、同一 amode，结论相反。 */
+    /* 造一个"属主不是本进程、other 只读"的文件，然后让本进程变成 (ruid=1000, euid=0)：
+     * 默认 faccessat 按 ruid(1000) 判 → 落在 other 组，只有 r 没有 w → 拒绝；
+     * AT_EACCESS 按 euid(0) 判 → 特权绕过 → 放行。同一文件、同一 amode，结论相反。
+     *
+     * 坑：这里**必须**把属主设成 2000，不能设成 1000。
+     * 如果属主 = 1000 = ruid，就命中了 owner 权限位（0604 的 owner 是 rw），
+     * W_OK 本来就该放行，断言会反着挂掉——这条测试第一次写就是这么错的。 */
     check(chmod(dir, 0755) == 0, "chmod(dir, 0755) 让 1000 能穿越");
-    check(chown("/tmp/atdir/a.txt", 1000, 1000) == 0, "chown(a.txt, 1000, 1000)");
+    check(chown("/tmp/atdir/a.txt", 2000, 2000) == 0,
+          "chown(a.txt, 2000, 2000) —— 属主故意不是本进程");
     check(chmod("/tmp/atdir/a.txt", 0604) == 0, "chmod(a.txt, 0604) other 只读");
     check(setreuid(1000, 0) == 0, "setreuid(1000, 0) —— ruid=1000, euid=0");
     check(getuid() == 1000 && geteuid() == 0, "身份确认 ruid=1000 euid=0");
