@@ -6,6 +6,9 @@
  *     并发或残留锁会静默损坏索引。
  *   - umask：git checkout 传 0666/0777，指望内核剥掉掩码位。
  *     不生效的话工作区文件全是 0666/0777（世界可写）。
+ *
+ * 注意：open 的 mode 参数**只在新建时生效**。所以每条权限断言都必须用
+ * 全新的文件名，否则测的是上次留下的权限位（会假通过）。
  */
 #include "user.h"
 
@@ -21,6 +24,23 @@ static void check(int cond, const char *msg) {
         puts("\n");
         fails++;
     }
+}
+
+/* 专用于权限位：失败时把期望/实际都打出来，省得再来回猜 */
+static void check_mode(const char *path, int expect, const char *msg) {
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        printf("  FAIL  %s (stat 失败)\n", msg);
+        fails++;
+        return;
+    }
+    int got = (int)(st.st_mode & 0777);
+    if (got == expect) {
+        puts("  OK   \n");
+        return;
+    }
+    printf("  FAIL  %s (期望 0%o, 实际 0%o)\n", msg, expect, got);
+    fails++;
 }
 
 int main() {
@@ -64,33 +84,45 @@ int main() {
     mode_t old = umask(0);
     check(old == 022, "默认 umask 是 022");
 
-    int g = open(f1, O_CREAT | O_TRUNC | O_RDWR, 0666);
-    check(g >= 0, "umask=0 时创建文件");
+    int g = open("/tmp/excl/m0.bin", O_CREAT | O_EXCL | O_RDWR, 0666);
+    check(g >= 0, "umask=0 时新建文件");
     if (g >= 0) close(g);
-    check(stat(f1, &st) == 0 && (st.st_mode & 0777) == 0666,
-          "umask=0 → 0666 原样落盘");
+    check_mode("/tmp/excl/m0.bin", 0666, "umask=0 → 新文件 0666 原样落盘");
 
-    check(umask(022) == 0, "umask(022) 返回旧值 0");
+    mode_t prev = umask(022);
+    check(prev == 0, "umask(022) 返回旧值 0");
 
-    int g2 = open(f2, O_CREAT | O_WRONLY, 0666);
-    check(g2 >= 0, "umask=022 时创建文件");
+    /* 读回确认掩码真的存进去了（失败时这行能立刻定位问题） */
+    mode_t rb = umask(0);
+    umask(rb);
+    printf("  [信息] umask 读回 = 0%o (应为 022)\n", (int)rb);
+    check(rb == 022, "umask(022) 之后读回仍是 022");
+
+    int g2 = open("/tmp/excl/m22.bin", O_CREAT | O_EXCL | O_WRONLY, 0666);
+    check(g2 >= 0, "umask=022 时新建文件");
     if (g2 >= 0) close(g2);
-    check(stat(f2, &st) == 0 && (st.st_mode & 0777) == 0644,
-          "umask=022 → 0666 收窄成 0644(不能再是世界可写)");
+    check_mode("/tmp/excl/m22.bin", 0644,
+               "umask=022 → 新文件 0666 收窄成 0644(不能再是世界可写)");
 
-    /* 目录同理：mkdirat(0777) 应当落成 0755 */
+    /* 目录：0777 应落成 0755；再用 0700 交叉验证 ——
+     * 若 chmod 路径根本没生效，目录会停在新建默认值 0755，
+     * 那样 0700 这条就会失败（0777 那条反而可能假通过）。 */
     int dfd2 = open(d, O_RDONLY);
     if (dfd2 >= 0) {
         check(mkdirat(dfd2, "sub", 0777) == 0, "mkdirat(0777)");
-        check(fstatat(dfd2, "sub", &st, 0) == 0 && (st.st_mode & 0777) == 0755,
-              "umask=022 → 目录 0777 收窄成 0755");
+        check_mode("/tmp/excl/sub", 0755, "umask=022 → 目录 0777 收窄成 0755");
+
+        check(mkdirat(dfd2, "sub2", 0700) == 0, "mkdirat(0700)");
+        check_mode("/tmp/excl/sub2", 0700,
+                   "mkdirat 的 mode 真的落盘(0700，不是默认 0755)");
         close(dfd2);
+    } else {
+        puts("  [跳过] 打不开 /tmp/excl，目录断言未执行\n");
     }
 
     /* 显式 chmod 不受 umask 影响（POSIX：umask 只管"创建"） */
-    check(chmod(f2, 0666) == 0, "显式 chmod 0666");
-    check(stat(f2, &st) == 0 && (st.st_mode & 0777) == 0666,
-          "chmod 不受 umask 影响");
+    check(chmod("/tmp/excl/m22.bin", 0666) == 0, "显式 chmod 0666");
+    check_mode("/tmp/excl/m22.bin", 0666, "chmod 不受 umask 影响");
 
     check(umask(old) == 022, "恢复原 umask");
 
