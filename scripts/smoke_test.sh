@@ -29,9 +29,44 @@ qemu_start
 qemu_login
 echo "[smoke] ${ARCH}: 已进入 shell ✓"
 
-# ---- 回归测试:run_all 一键执行 36 个测试 ----
+# ---- 回归测试:run_all 一键执行全部测试 ----
 qemu_send "run_all"
+
+# net_backlog_test 是"手工联测": 它先 listen(8080), 然后等**宿主机**来连两条 nc
+# (要复现 backlog 满 → SYN 被丢 → 重传成功的时序, 必须由外部发起连接)。
+# CI 里没人坐在键盘前, 所以这里在后台守候它的 READY 标记, 一出现就替人补上。
+#
+# 注: 没有 nc 的环境不致命 —— 测试会自己打印 SKIP(退出码 77), run_all 记成 SKIP,
+#     不会伪装成 PASS, 也不会挂住整个回归(以前就是因为 accept() 阻塞把 CI 拖到超时)。
+NC_WATCH_PID=""
+if command -v nc >/dev/null 2>&1; then
+  (
+    while kill -0 "${QEMU_PID}" 2>/dev/null; do
+      if grep -aqF "READY: run on host now" "${LOG}" 2>/dev/null; then
+        echo "[smoke] ${ARCH}: 检测到 net_backlog READY → 宿主侧连 127.0.0.1:${HOST_FWD_PORT}"
+        if nc -z 127.0.0.1 "${HOST_FWD_PORT}" >/dev/null 2>&1; then
+          echo "[smoke]   nc#1 已连上(占用唯一 backlog 名额后立刻断开)"
+        fi
+        # 第二条: 此刻 backlog 已满, SYN 会被丢; 靠内核重传在 5~10s 后握手成功
+        if nc -z -w 25 127.0.0.1 "${HOST_FWD_PORT}" >/dev/null 2>&1; then
+          echo "[smoke]   nc#2 已连上(SYN 重传后补进 backlog)"
+        fi
+        break
+      fi
+      sleep 1
+    done
+  ) &
+  NC_WATCH_PID=$!
+else
+  echo "[smoke] ${ARCH}: 宿主没有 nc, net_backlog_test 将自行 SKIP"
+fi
+
 qemu_wait_for "[RUNALL] 汇总" "run_all 汇总"
+
+if [ -n "${NC_WATCH_PID}" ]; then
+  kill "${NC_WATCH_PID}" 2>/dev/null || true
+  wait "${NC_WATCH_PID}" 2>/dev/null || true
+fi
 
 # -a:测试输出可能含二进制字节,不加会把日志当 binary 导致 grep 不给匹配行
 summary="$(grep -a '\[RUNALL\] 汇总' "${LOG}" | tail -1)"

@@ -12,9 +12,13 @@
  * 输出约定(机器可解析):
  *   [RUNALL] 共发现 N 个测试
  *   [RUNALL] <name> ... PASS
+ *   [RUNALL] <name> ... SKIP        (测试返回 77: 依赖外部条件, 本次没跑)
  *   [RUNALL] <name> ... FAIL (exit=X)
- *   [RUNALL] 汇总: X passed, Y failed
- * 退出码:0=全部通过, 1=有失败。
+ *   [RUNALL] 汇总: X passed, Y failed, Z skipped
+ * 退出码:0=没有失败(含 skip), 1=有失败。
+ *
+ * 为什么区分 SKIP 与 PASS: 像 net_backlog_test 这种"必须有人在宿主机跑 nc"
+ * 的测试, 没条件跑就该明说没跑, 不能计入 PASS —— 否则汇总里的数字会撒谎。
  */
 
 #define MAX_TESTS 128
@@ -44,11 +48,11 @@ int main(int argc, char *argv[]) {
         if (count >= MAX_TESTS) break;
         /* 跳过 . 和 .. */
         if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0) continue;
-        int skipped = 0;
+        int is_skip = 0;
         for (int j = 0; j < nskip; j++) {
-            if (strcmp(d->d_name, skip[j]) == 0) { skipped = 1; break; }
+            if (strcmp(d->d_name, skip[j]) == 0) { is_skip = 1; break; }
         }
-        if (skipped) continue;
+        if (is_skip) continue;
         strncpy(names[count], d->d_name, NAME_MAX_LEN - 1);
         names[count][NAME_MAX_LEN - 1] = 0;
         count++;
@@ -57,7 +61,7 @@ int main(int argc, char *argv[]) {
 
     printf("[RUNALL] 共发现 %d 个测试\n", count);
 
-    int passed = 0, failed = 0;
+    int passed = 0, failed = 0, skipped = 0;
     for (int i = 0; i < count; i++) {
         char path[128];
         strcpy(path, "/tests/");
@@ -89,12 +93,16 @@ int main(int argc, char *argv[]) {
         if (code == 0) {
             printf("[RUNALL] %s ... PASS\n", names[i]);
             passed++;
+        } else if (code == 77) {
+            /* 77 = SKIP: 测试自己判定"本次不具备运行条件"(如需要宿主配合) */
+            printf("[RUNALL] %s ... SKIP\n", names[i]);
+            skipped++;
         } else {
             printf("[RUNALL] %s ... FAIL (exit=%d)\n", names[i], code);
             failed++;
         }
     }
 
-    printf("\n[RUNALL] 汇总: %d passed, %d failed\n", passed, failed);
+    printf("\n[RUNALL] 汇总: %d passed, %d failed, %d skipped\n", passed, failed, skipped);
     return failed > 0 ? 1 : 0;
 }

@@ -63,7 +63,9 @@ jobs:
       - name: 安装 QEMU
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-riscv64 qemu-system-loongarch64
+          # netcat-openbsd: smoke_test.sh 会代替人手给 net_backlog_test 发两条 nc
+          # (该测试要验 backlog 满 -> SYN 被丢 -> 重传成功, 必须由宿主机主动连)
+          sudo apt-get install -y qemu-system-riscv64 qemu-system-loongarch64 netcat-openbsd
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -145,7 +147,9 @@ jobs:
       - name: 安装 QEMU
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-riscv64 qemu-system-loongarch64
+          # netcat-openbsd: smoke_test.sh 会代替人手给 net_backlog_test 发两条 nc
+          # (该测试要验 backlog 满 -> SYN 被丢 -> 重传成功, 必须由宿主机主动连)
+          sudo apt-get install -y qemu-system-riscv64 qemu-system-loongarch64 netcat-openbsd
 
       - uses: dtolnay/rust-toolchain@stable
         with:

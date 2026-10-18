@@ -25,6 +25,8 @@ if [ ! -f "${LOG}" ]; then
 fi
 
 checked=0
+passed=0
+skipped=0
 missing=()
 
 for elf in "${BUILD}"/*.elf; do
@@ -34,8 +36,14 @@ for elf in "${BUILD}"/*.elf; do
   clean="$(printf '%s' "${base}" | sed -E 's/^([0-9]+_)+//')"
   checked=$((checked + 1))
 
-  # -a: 日志里可能有二进制字节；-F: 名字里有 [] 之类字符时按字面匹配
-  if ! grep -aqF "[RUNALL] ${clean} ... PASS" "${LOG}"; then
+  # -a: 日志里可能有二进制字节；-F: 名字里有 [] 之类字符时按字面匹配。
+  # SKIP 也算"这一项有交代"：它表示测试自己判定本次不具备运行条件
+  # (例如 net_backlog_test 需要宿主机跑 nc)。但会单独计数, 不混进 PASS。
+  if grep -aqF "[RUNALL] ${clean} ... PASS" "${LOG}"; then
+    passed=$((passed + 1))
+  elif grep -aqF "[RUNALL] ${clean} ... SKIP" "${LOG}"; then
+    skipped=$((skipped + 1))
+  else
     missing+=("${clean}")
   fi
 done
@@ -46,10 +54,13 @@ if [ "${checked}" -eq 0 ]; then
 fi
 
 if [ "${#missing[@]}" -gt 0 ]; then
-  echo "✗ ${ARCH}: ${#missing[@]}/${checked} 个已编译的测试没有出现在 PASS 列表里："
+  echo "✗ ${ARCH}: ${#missing[@]}/${checked} 个已编译的测试既没有 PASS 也没有 SKIP："
   printf '    - %s\n' "${missing[@]}"
   echo "  常见原因：没被拷进镜像(/tests)、exec 失败、卡住超时、或退出码非 0。"
   exit 1
 fi
 
-echo "✓ ${ARCH}: ${checked} 个已编译测试全部在 run_all 中 PASS"
+echo "✓ ${ARCH}: ${checked} 个已编译测试全部有交代 — ${passed} PASS, ${skipped} SKIP"
+if [ "${skipped}" -gt 0 ]; then
+  echo "  注意: SKIP 表示该测试本次没跑(通常需要宿主机配合), 不算验证过。"
+fi

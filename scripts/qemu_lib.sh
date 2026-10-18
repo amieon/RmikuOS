@@ -42,6 +42,12 @@ qemu_init() {
     loongarch64) KERNEL_TARGET="loongarch64-unknown-none" ;;
     *) echo "[qemu] 未知架构: ${arch}(只支持 riscv64 / loongarch64)" >&2; return 1 ;;
   esac
+  # 宿主侧转发端口(两个架构故意不同, 方便同一台机同时跑):
+  # 客机内所有服务都监听 8080, 所以 hostfwd 一律映射到 guest 8080。
+  case "${arch}" in
+    riscv64)     HOST_FWD_PORT=8080 ;;
+    loongarch64) HOST_FWD_PORT=8081 ;;
+  esac
   KERNEL_PROFILE="${KERNEL_PROFILE:-debug}"
   KERNEL_ELF="${REPO_ROOT}/target/${KERNEL_TARGET}/${KERNEL_PROFILE}/RmikuOS"
 
@@ -69,8 +75,8 @@ qemu_make_cmd() {
       -kernel ${KERNEL_ELF} \
       -drive file=${ROOTFS_IMG},format=raw,if=none,id=blk0 -device virtio-blk-pci,drive=blk0,disable-legacy=on \
       -drive file=${FAT_IMG},format=raw,if=none,id=blk1 -device virtio-blk-pci,drive=blk1,disable-legacy=on \
-      -drive file=${data_img},format=raw,if=none,id=blk2 -device virtio-blk-device,drive=blk2 \
-      -netdev user,id=net0,hostfwd=tcp::8081-:8081,tftp=${REPO_ROOT}/tftpboot \
+      -drive file=${data_img},format=raw,if=none,id=blk2 -device virtio-blk-pci,drive=blk2,disable-legacy=on \
+      -netdev user,id=net0,hostfwd=tcp::8081-:8080,tftp=${REPO_ROOT}/tftpboot \
       -device virtio-net-pci,disable-legacy=on,netdev=net0,romfile= \
       -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap < ${IN_FIFO}"
   fi
