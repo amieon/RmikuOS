@@ -98,4 +98,7 @@ pub use manager_wrapper::{
     set_current_creds,
     current_groups,
     set_current_groups,
+
+    current_umask,
+    set_current_umask,
 };

@@ -5,6 +5,7 @@ extern "C" {
 #define O_WRONLY   1
 #define O_RDWR     2
 #define O_CREAT    0x40
+#define O_EXCL     0x80    /* 与 O_CREAT 连用: 已存在则失败 */
 #define O_TRUNC    0x200
 #define O_APPEND   0x400 
 #define O_BINARY   0       /* POSIX 无此标志; TCC 兼容 */

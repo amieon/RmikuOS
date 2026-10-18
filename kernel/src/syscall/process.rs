@@ -451,3 +451,11 @@ pub fn sys_setgroups(size: usize, list_ptr: usize) -> isize {
     crate::task::set_current_groups(groups, size);
     0
 }
+
+/// umask(mask)：设置文件创建掩码，**返回旧值**。
+///
+/// 只保留低 9 位（0o777）——POSIX 里 umask 只影响权限位，不影响类型位。
+/// 新建文件/目录时内核按 `mode & !umask` 收窄（见 fs::mode_with_umask）。
+pub fn sys_umask(mask: usize) -> isize {
+    crate::task::set_current_umask((mask & 0o777) as u16) as isize
+}

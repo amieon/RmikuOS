@@ -50,17 +50,27 @@ pub fn lookup_no_follow_at(cwd: &str, path: &str) -> Option<InodeRef> {
     path::lookup_path_at_no_follow(cwd, path)
 }
 
+/// 新建文件时该落什么权限位：mode 先按 umask 收窄（POSIX），再应用到 inode。
+pub fn mode_with_umask(mode: usize) -> u16 {
+    ((mode & 0o777) & !(crate::task::current_umask() as usize)) as u16
+}
+
 pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Option<FileRef> {
-    // 绝对路径只算一次,建文件与"告诉目录 fd 自己是谁"都要用
+    // 绝对路径只算一次：建文件与"告诉目录 fd 自己是谁"都要用
     let abs = path::normalize_path(cwd, path)?;
     let inode = match path::lookup_path_at(cwd, path) {
-        Some(i) => i,
+        Some(i) => {
+            if flags & O_CREAT != 0 && flags & O_EXCL != 0 {
+                return None;
+            }
+            i
+        }
         None => {
             // 文件不存在
             if flags & O_CREAT != 0 {
-                // 创建后按 mode 设权限位
+                // 创建后按 mode（经 umask 收窄）设权限位
                 let inode = create_file(&abs)?;
-                inode.chmod((mode & 0o777) as u16);
+                inode.chmod(mode_with_umask(mode));
                 inode
             } else {
                 return None;
@@ -82,11 +92,16 @@ pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Option<FileR
 pub fn open(path: &str, flags: usize, mode: usize) -> Option<FileRef> {
     let abs = path::normalize_path("/", path)?;
     let inode = match path::lookup_abs_path(&abs) {
-        Some(i) => i,
+        Some(i) => {
+            if flags & O_CREAT != 0 && flags & O_EXCL != 0 {
+                return None;
+            }
+            i
+        }
         None => {
             if flags & O_CREAT != 0 {
                 let inode = create_file(&abs)?;
-                inode.chmod((mode & 0o777) as u16);
+                inode.chmod(mode_with_umask(mode));
                 inode
             } else {
                 return None;

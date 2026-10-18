@@ -441,6 +441,7 @@ pub fn fork_current() -> isize {
             manager.process(parent_pid).egid,
             manager.process(parent_pid).groups,
             manager.process(parent_pid).ngroups,
+            manager.process(parent_pid).umask,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
@@ -943,6 +944,24 @@ pub fn set_current_cwd(new_cwd: String) -> isize {
     let mut manager = lock_detect!(TASK_MANAGER);
     manager.process_mut(pid).cwd = new_cwd;
     0
+}
+
+/// 当前进程的文件创建掩码。新建文件/目录时按 `mode & !umask` 收窄。
+pub fn current_umask() -> u16 {
+    let pid = current_pid();
+    let manager = lock_detect!(TASK_MANAGER);
+    manager.process(pid).umask
+}
+
+/// 设置 umask，返回旧值（POSIX umask(2) 就是这么约定的：
+/// 调用方常常写 `old = umask(0); umask(old);` 来"读一下当前掩码"）。
+pub fn set_current_umask(mask: u16) -> u16 {
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let p = manager.process_mut(pid);
+    let old = p.umask;
+    p.umask = mask & 0o777;
+    old
 }
 
 // ===== 环境变量子系统（内核态 PCB 存储，用户态经下方封装访问）=====

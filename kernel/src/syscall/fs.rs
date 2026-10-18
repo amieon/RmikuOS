@@ -126,8 +126,6 @@ pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
     n as isize
 }
 
-/// pread(fd, buf, count, offset)：从 offset 处读，**不改变文件偏移**。
-/// 对 pipe/终端等无偏移概念的对象返回 -1（对应 Linux 的 -ESPIPE）。
 pub fn sys_pread(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize {
     if len == 0 {
         return 0;
@@ -160,8 +158,7 @@ pub fn sys_pread(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize
     n as isize
 }
 
-/// pwrite(fd, buf, count, offset)：从 offset 处写，**不改变文件偏移**。
-/// O_APPEND 的文件按 Linux 语义忽略 offset 写到末尾。
+
 pub fn sys_pwrite(fd: usize, user_buf: usize, len: usize, offset: usize) -> isize {
     if len == 0 {
         return 0;
@@ -414,7 +411,6 @@ pub fn sys_dup2(old_fd : usize,new_fd : usize) -> isize {
     crate::task::dup2(old_fd,new_fd)
 }
 
-/// dup(fd)：复制到**最低空闲** fd（目标由内核挑，dup2 是调用方指定）。
 pub fn sys_dup(fd: usize) -> isize {
     crate::task::dup(fd)
 }
@@ -422,8 +418,6 @@ pub fn sys_dup(fd: usize) -> isize {
 /// dup3(fd, newfd, flags)：dup2 加上 flags。
 ///
 /// 目前只接受 `flags == 0`。dup3 唯一的 flag 是 O_CLOEXEC，而 fd 表还没有
-/// close-on-exec 位——与其"假装支持"让调用方以为设置生效了，不如明确返回 -1。
-/// 另一处与 dup2 的语义差别：**oldfd == newfd 时 dup3 返回 -1**（dup2 是成功的 no-op）。
 pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
     if flags != 0 {
         return -1;
@@ -434,11 +428,7 @@ pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
     crate::task::dup2(old_fd, new_fd)
 }
 
-/// fchmod(fd, mode)：按 fd 改权限位（省掉一次路径解析，也不受路径被改名影响）。
-///
-/// 特权检查与 chmod 一致：root 或文件属主，其余拒绝。
-/// fd → inode 走 `File::inode()`；pipe/终端/只读内存副本没有可定位的 inode，
-/// 返回 None 即 -1（与 Linux 在只读文件系统上一致）。
+
 pub fn sys_fchmod(fd: usize, mode: usize) -> isize {
     let file = match crate::task::current_file(fd) {
         Some(f) => f,
@@ -612,15 +602,11 @@ pub fn sys_link(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize) 
     crate::fs::link_file(&old, &new)
 }
 
-/// access(path, amode)：以**真实 uid/gid** 检查权限（open 用 effective，这是两者的分野）。
-/// amode 与 Linux 一致：F_OK=0 / X_OK=1 / W_OK=2 / R_OK=4，可按位或。
-/// 文件不存在、或权限不足都返回 -1（不区分，用户态包装按 amode 设 errno）。
 pub fn sys_access(path_ptr: usize, len: usize, mode: usize) -> isize {
     let abs = match user_path_to_abs(path_ptr, len) {
         Some(abs) => abs,
         None => return -1,
     };
-    // amode 只取低 3 位（X_OK|W_OK|R_OK），其余位忽略
     crate::fs::access_path(&abs, (mode & 0x7) as u16)
 }
 
@@ -723,8 +709,7 @@ pub fn sys_set_echo(on: usize) -> isize {
     0
 }
 
-/* ==================== at 系列：dirfd 相对路径 ====================
- *
+/* 
  * 设计：本 VFS 是按"路径字符串"解析的——挂载表按路径前缀匹配、symlink 也按路径
  * 重新解析。所以 dirfd **不能**像 Linux 那样从 dentry 往下走（一往下走就断了
  * 挂载点，例如 dirfd=/ + "fat/x" 会落到 rootfs 里那个空的 fat 目录，而不是 FAT 盘）。
@@ -970,10 +955,6 @@ pub fn sys_fchdir(fd: usize) -> isize {
 /// 两侧独立解析，可以任意组合：`(dirfd, "a") → (AT_FDCWD, "/x/b")` 也合法。
 /// 解析成两个绝对路径后交给 `fs::rename`——跨挂载点、目标存在时的覆盖语义都由
 /// 底层统一处理，at 版本不重复实现一遍。
-///
-/// 参数说明：本项目的路径**显式带长度**，所以两个路径占 4 个参数 + 2 个 dirfd
-/// = **正好 6 个**，刚好用满寄存器（Linux 因为路径以 NUL 结尾，只要 4 个参数）。
-/// renameat2 的 flags 就没地方放了——那才需要换调用约定。
 pub fn sys_renameat(d1: usize, old_ptr: usize, old_len: usize,
                     d2: usize, new_ptr: usize, new_len: usize) -> isize {
     let old = match user_path_to_abs_at(d1 as isize, old_ptr, old_len) {
@@ -988,11 +969,7 @@ pub fn sys_renameat(d1: usize, old_ptr: usize, old_len: usize,
 }
 
 /// linkat(olddirfd, old, newdirfd, new)：硬链接，两侧各自相对 dirfd。
-///
-/// 语义与 `link` 一致（源路径**不跟随**最终 symlink，不允许跨挂载点）。
-/// 同样用满 6 个参数，所以 **没有 flags 参数**：
-/// POSIX 的 `AT_SYMLINK_FOLLOW`（跟随源 symlink）目前无法表达，用户态包装对
-/// flags != 0 直接返回 -1，而不是悄悄按"不跟随"执行。
+/// 语义与link一致（源路径不跟随最终 symlink，不允许跨挂载点）。
 pub fn sys_linkat(d1: usize, old_ptr: usize, old_len: usize,
                   d2: usize, new_ptr: usize, new_len: usize) -> isize {
     let old = match user_path_to_abs_at(d1 as isize, old_ptr, old_len) {

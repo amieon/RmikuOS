@@ -103,6 +103,7 @@ extern "C" {
 #define SYS_FCHDIR                   94
 #define SYS_RENAMEAT                 95
 #define SYS_LINKAT                   96
+#define SYS_UMASK                    97
 
 
 
