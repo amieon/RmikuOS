@@ -840,7 +840,11 @@ pub fn sys_mkdirat(dirfd: usize, path_ptr: usize, len: usize, mode: usize) -> is
     match crate::fs::make_dir(&abs) {
         Some(inode) => {
             // 与 open(O_CREAT) 一致：建完按 mode 落权限位
-            inode.chmod((mode & 0o777) as u16);
+            let perm = crate::fs::mode_with_umask(mode);
+            if inode.chmod(perm) != 0 {
+                log::warn!("[fs] mkdirat: chmod(0o{:o}) failed on {}", perm, abs);
+                return -1;
+            }
             0
         }
         None => -1,
