@@ -2,3 +2,26 @@ user/c/lua/** linguist-vendored
 user/sqlite3/** linguist-vendored
 user/tcc/** linguist-vendored
 user/samples/**  linguist-detectable=false
+
+Windows 上 core.autocrlf=true 会让检出的脚本带 CRLF，一旦不小心提交，
+Linux 的 bash 会报 "$'\r': command not found"，YAML/Python 也可能出诡异问题。
+这里显式钉成 LF：无论 autocrlf 怎么设，checkout 都是 LF、提交时会规范化。
+*.sh text eol=lf
+*.bash text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.py text eol=lf
+*.rs text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
+*.S text eol=lf
+*.toml text eol=lf
+Dockerfile text eol=lf
+
+第三方/衍生代码保持原样，不做任何换行转换（避免大面积无意义 diff）
+user/tcc/** -text
+user/sqlite3/** -text
+user/c/lua/** -text
+vendor/** -text
+third_party/** -text
