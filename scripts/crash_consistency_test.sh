@@ -58,13 +58,13 @@ if grep -aqF "/home ← /data/home (bind)" "${LOG}"; then ok "/home 由 /data/ho
 if grep -aqF "/var ← /data/var (bind)" "${LOG}";  then ok "/var 由 /data/var 绑定而来";  else bad "未见到 /var 绑定日志"; fi
 
 echo "[crash] ${ARCH}: 写 marker.txt,等待 writeback 落盘..."
-send "echo persisted > /home/root/marker.txt"
+qemu_send "echo persisted > /home/root/marker.txt"
 qemu_wait_for "writeback ok" "writeback 周期落盘"
 sleep 3
 ok "marker.txt 已随 writeback 落盘"
 
 echo "[crash] ${ARCH}: 启动 bigwrite(${BIGWRITE_MB}MB),写到 ${KILL_AT_MB}MB 时 kill -9..."
-send "bigwrite /home/root/big.bin ${BIGWRITE_MB}"
+qemu_send "bigwrite /home/root/big.bin ${BIGWRITE_MB}"
 qemu_wait_for "已写 ${KILL_AT_MB} /" "bigwrite 进度 ${KILL_AT_MB}MB"
 qemu_kill_hard
 ok "已在写入中途 kill -9(模拟掉电)"
@@ -77,13 +77,13 @@ ok "崩溃后仍能启动并进入 shell"
 if grep -aqF "数据盘挂载失败" "${LOG}"; then bad "数据盘挂载失败(journal 回放没救回来)"; else ok "/data 挂载成功(journal 已回放)"; fi
 if grep -aqF "/home ← /data/home (bind)" "${LOG}"; then ok "/home 重新绑定成功"; else bad "/home 未绑定"; fi
 
-send "ls /home/root"
+qemu_send "ls /home/root"
 sleep 3
 if grep -aqF "marker.txt" "${LOG}"; then ok "marker.txt 跨崩溃仍存在(writeback 有效)"; else bad "marker.txt 丢失"; fi
 if grep -aqF "big.bin"   "${LOG}"; then ok "big.bin 存在(崩溃瞬间已落盘的部分)";   else bad "big.bin 完全丢失"; fi
 
 # 正常关机,让盘处于干净状态便于宿主侧校验
-send "shutdown"
+qemu_send "shutdown"
 sleep 5
 qemu_kill_hard
 

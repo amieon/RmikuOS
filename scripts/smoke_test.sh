@@ -20,6 +20,9 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/qemu_lib.sh"
 qemu_init "${1:?用法: smoke_test.sh <riscv64|loongarch64>}"
 TIMEOUT_SEC="${SMOKE_TIMEOUT:-${TIMEOUT_SEC}}"
+# 冒烟测试每次都从**空白数据盘**开始: 免得上一次跑挂留下的半成品盘
+# 让这一轮出现"上次的错"这种最难查的 flaky。崩溃测试需要跨启动复用, 不受影响。
+DATA_IMG_FRESH="${DATA_IMG_FRESH:-1}"
 
 echo "[smoke] ${ARCH}: 启动 QEMU(总超时 ${TIMEOUT_SEC}s)..."
 qemu_start
@@ -27,7 +30,7 @@ qemu_login
 echo "[smoke] ${ARCH}: 已进入 shell ✓"
 
 # ---- 回归测试:run_all 一键执行 36 个测试 ----
-send "run_all"
+qemu_send "run_all"
 qemu_wait_for "[RUNALL] 汇总" "run_all 汇总"
 
 # -a:测试输出可能含二进制字节,不加会把日志当 binary 导致 grep 不给匹配行
@@ -46,7 +49,7 @@ bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify_runall.sh" "${ARCH}" 
 
 # 让系统正常关机,顺带验证关机路径
 echo "[smoke] ${ARCH}: 发送 shutdown,等待系统关机..."
-send "shutdown"
+qemu_send "shutdown"
 SHUTDOWN_WAIT="${SHUTDOWN_WAIT:-30}"
 waited=0
 while [ "${waited}" -lt "${SHUTDOWN_WAIT}" ] && kill -0 "${QEMU_PID}" 2>/dev/null; do

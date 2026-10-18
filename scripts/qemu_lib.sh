@@ -9,10 +9,13 @@
 #
 # 用法(在 scripts/ 下的脚本里):
 #   source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/qemu_lib.sh"
-#   qemu_init riscv64                       # 设默认路径/超时
-#   qemu_start                               # 起 QEMU
-#   qemu_login                               # 自动登录,等 shell 提示符
-#   send "run_all"; wait_for "[RUNALL] 汇总"
+#   qemu_init riscv64                            # 设默认路径/超时
+#   qemu_start                                   # 起 QEMU(自动建数据盘+预检镜像)
+#   qemu_login                                   # 自动登录,等 shell 提示符
+#   qemu_send "run_all"; qemu_wait_for "[RUNALL] 汇总" "run_all 汇总"
+#
+# 注意: 函数名统一带 qemu_ 前缀。曾经这里是 send/wait_for, 重构后改名却没同步
+# 调用方, 结果 CI 报 "send: command not found"(第 3 个被前一个错误掩盖的 bug)。
 #
 # 可调(环境变量):
 #   ROOTFS_IMG / FAT_IMG / DATA_IMG / TIMEOUT_SEC / LOGIN_USER / LOGIN_PASS / SHELL_PROMPT
