@@ -390,41 +390,32 @@ static inline const char *_mkstemp_alphabet(void) {
     return "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 }
 
-static unsigned long long seq = 0;
-static unsigned long long tmpll = 123456;
-static unsigned long long base_seed;
-static int seeded = 0;
+/* 状态一律放文件作用域：内联函数里"可变的 static 局部变量"同样会触发 TCC
+ * 生成原子守卫，所以放函数里也不行。 */
+static unsigned long long _mkstemp_seq  = 0;
+static unsigned long long _mkstemp_base = 0;
 
-static inline unsigned long long mix64(unsigned long long z) {
+/* splitmix64：把"pid ^ tick ^ 计数器"这种弱种子摊匀，避免低位扎堆 */
+static inline unsigned long long _mkstemp_mix64(unsigned long long z) {
     z ^= z >> 30; z *= 0xBF58476D1CE4E5B9ull;
     z ^= z >> 27; z *= 0x94D049BB133111EBull;
     z ^= z >> 31;
     return z;
 }
 
-static unsigned long long seed_once(void) {
-    unsigned long long s = 0;
-    s ^= (unsigned long long)syscall3(SYS_GETPID, 0, 0, 0) * 0x9E3779B97F4A7C15ull;
-    s ^= (unsigned long long)syscall3(SYS_GET_TICKS, 0, 0, 0) * 0xBF58476D1CE4E5B9ull;
-    s ^= ((unsigned long long)(usize)tmpll >> 4) * 0xC2B2AE3D27D4EB4Full;
-    return mix64(s);
-}
-
-static unsigned long long next_name_seed(void) {
-    if (!__atomic_load_n(&seeded, __ATOMIC_ACQUIRE)) {
-        unsigned long long expected = 0;
-        unsigned long long v = seed_once();
-        if (__atomic_compare_exchange_n(&base_seed, &expected, v, 0,
-                                        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
-            __atomic_store_n(&seeded, 1, __ATOMIC_RELEASE);
-        else
-            while (!__atomic_load_n(&seeded, __ATOMIC_ACQUIRE)) { /* 等别人播完 */ }
+/* 取本次调用的名字种子。
+ * 用 syscall3 直接取 pid 而不是 getpid()：fs.h 不该依赖 process.h，
+ * 否则"只 include <fs.h>"的翻译单元会缺声明。 */
+static inline unsigned long long _mkstemp_next_seed(const void *tmpl) {
+    if (_mkstemp_base == 0) {
+        unsigned long long s = (unsigned long long)syscall3(SYS_GETPID, 0, 0, 0)
+                             * 0x9E3779B97F4A7C15ull;
+        s ^= (unsigned long long)syscall3(SYS_GET_TICKS, 0, 0, 0)
+                             * 0xC2B2AE3D27D4EB4Full;
+        s ^= (unsigned long long)(usize)tmpl * 0x165667B19E3779F9ull;
+        _mkstemp_base = _mkstemp_mix64(s) | 1ull;   /* 保证非 0，用于"已播种"判断 */
     }
-
-    unsigned long long n = __atomic_fetch_add(&seq, 1, __ATOMIC_RELAXED);
-    unsigned long long state = __atomic_load_n(&base_seed, __ATOMIC_ACQUIRE)
-                             + (n + 1) * 0x9E3779B97F4A7C15ull;
-    return mix64(state);
+    return _mkstemp_mix64(_mkstemp_base + (++_mkstemp_seq) * 0x9E3779B97F4A7C15ull);
 }
 
 /* 内部实现：把模板末尾 6 个 X 换成随机字符并**原子创建**。
@@ -440,8 +431,10 @@ static inline int _mkstemp_create(char *tmpl, int is_dir) {
         }
     }
 
-    tmpll =(unsigned long long)tmpl;
-    unsigned long long s = next_name_seed();
+    /* 种子：pid ^ 内核 tick ^ 调用序号 ^ 模板地址，经 splitmix64 打散。
+     * 刻意不碰 rand()/srand()——程序自己 srand(1) 不该让临时名变可预测；
+     * 也刻意不碰 __atomic_*——理由见上面 _mkstemp_seq 处的说明。 */
+    unsigned long long s = _mkstemp_next_seed(tmpl);
 
     const char *alpha = _mkstemp_alphabet();
     const usize nchars = strlen(alpha);
