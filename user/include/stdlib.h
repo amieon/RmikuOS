@@ -9,6 +9,7 @@
 #include "string.h"
 #include "stdio.h"
 #include "env.h"      /* 真实 getenv/setenv: 基于 SYS_GETENV 系统调用 */
+#include "fs.h"       /* mkstemp/mkdtemp：POSIX 归 stdlib，实现在 fs.h */
 
 /* ---- misc (inline) ---- */
 static inline void abort(void) {

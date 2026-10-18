@@ -7,15 +7,16 @@ extern "C" {
 #include "io.h"
 #include "sys/types.h"   /* mode_t / uid_t / gid_t / time_t / off_t */
 #include "errno.h"       /* access() 失败时按 amode 粗设 errno */
+#include "process.h"
 
-/* ======================================================================
+/* 
  * 本文件是用户态唯一的 struct stat / struct dirent 定义点（方案 A 统一）。
  *
  *   - struct stat   是 POSIX 布局（st_mode 等），stat()/fstat() 内部
  *                   用私有 32 字节内核布局接收 syscall 结果再翻译。
  *   - struct dirent 保持内核 getdents 字节布局（64 字节/条, 内核契约），
  *                   但加了 d_name 别名, 让 POSIX 代码也能直接读名字。
- * ====================================================================== */
+ */
 
 /* ---- 目录项 ---- */
 
@@ -23,8 +24,8 @@ extern "C" {
 #define FILE_TYPE_DIR  2
 #define FILE_TYPE_SYMLINK 3
 
-/* ======================================================================
- * at 家族（openat/fstatat/unlinkat/mkdirat/faccessat/fchmodat）的 flag
+/* 
+ * at 家族的 flag
  *
  * dirfd 的语义（与 POSIX 一致）：
  *   - 已打开的目录 fd → path 相对它解析
@@ -32,7 +33,7 @@ extern "C" {
  *   - path 是绝对路径 → dirfd 被完全忽略（哪怕是 -1 这种无效值）
  * AT_EACCESS 与 AT_REMOVEDIR 数值相同是**故意的**：POSIX 里它们分属
  * faccessat 与 unlinkat，不会同时出现在一个调用里。
- * ====================================================================== */
+ */
 
 #define AT_FDCWD            (-100)
 #define AT_SYMLINK_NOFOLLOW 0x100   /* fstatat/fchmodat: 不跟随最终 symlink */
@@ -244,6 +245,15 @@ static inline int fchmod(int fd, mode_t mode) {
     return (int)syscall3(SYS_FCHMOD, (usize)fd, (usize)mode, 0);
 }
 
+/* umask(mask): 设置"新建文件/目录默认要去掉的权限位"，返回**旧值**。
+ *
+ * 内核在 open(O_CREAT) / mkdirat 建东西时按 `mode & ~umask` 收窄权限。
+ * 默认 022 → 新文件 0666 落成 0644、新目录 0777 落成 0755。
+ * POSIX 常见用法是 `old = umask(0); umask(old);` 就是读一下当前掩码。 */
+static inline mode_t umask(mode_t mask) {
+    return (mode_t)syscall3(SYS_UMASK, (usize)mask, 0, 0);
+}
+
 /* fchmodat(dirfd, path, mode, flags): 相对目录 fd 改权限。
  * 目前不接受 AT_SYMLINK_NOFOLLOW（内核明确返回 -1，而不是静默忽略 flag）。 */
 static inline int fchmodat(int dirfd, const char *path, mode_t mode, int flags) {
@@ -334,6 +344,127 @@ static inline int mkdir(const char *path, mode_t mode) {
 static inline int mkdirat(int dirfd, const char *path, mode_t mode) {
     return (int)syscall6(SYS_MKDIRAT, (usize)(isize)dirfd, (usize)path,
                          (usize)strlen(path), (usize)mode, 0, 0);
+}
+
+/* 
+ * 安全临时文件：mkstemp / mkdtemp
+ *
+ * 为什么需要专门的 API —— 经典的"临时文件攻击"(CWE-377, symlink race):
+ *
+ *     sprintf(buf, "/tmp/prog.%d", getpid());   // 名字可预测
+ *     fp = fopen(buf, "w");                     // 盲目打开
+ *
+ * 攻击者在程序运行前就把 /tmp/prog.1234 做成**符号链接**指向
+ * /etc/shadow（或受害者 home 下的 authorized_keys）。程序一 open 就
+ * 顺着链接把目标文件覆盖了——如果是 setuid 程序，就是提权。
+ *
+ * 两道防线，缺一不可：
+ *   1. **原子性**（真正起作用的）：O_CREAT|O_EXCL。目标只要以任何形式存在
+ *      （普通文件、目录、**哪怕是 dangling symlink**）就失败，绝不重用。
+ *      "先 stat 看存不存在、再 open"是错的——中间有窗口，那正是 TOCTOU。
+ *   2. **不可预测的名字**：降低"被提前占位"的概率，只是减少重试次数，
+ *      不是安全边界。所以随机数弱一点没关系，O_EXCL 才是底线。
+ *
+ * 还有第三条容易被忽略：**返回 fd，而不是让你再按名字打开一次**。
+ * 按名字重新 fopen 就又把刚消掉的竞态装回去了。
+ *
+ * 权限固定 0600 / 0700：内容可能敏感，不能等 umask 给到 0666 的窗口期。
+ */
+
+/* 随机字符表：去掉 0/O/1/l 这类易混字符（纯可读性，与安全性无关） */
+static inline const char *_mkstemp_alphabet(void) {
+    return "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+}
+
+static unsigned long long seq = 0;
+static unsigned long long tmpll = 123456;
+static unsigned long long base_seed;
+static int seeded = 0;
+
+static inline unsigned long long mix64(unsigned long long z) {
+    z ^= z >> 30; z *= 0xBF58476D1CE4E5B9ull;
+    z ^= z >> 27; z *= 0x94D049BB133111EBull;
+    z ^= z >> 31;
+    return z;
+}
+
+static unsigned long long seed_once(void) {
+    unsigned long long s = 0;
+    s ^= (unsigned long long)syscall3(SYS_GETPID, 0, 0, 0) * 0x9E3779B97F4A7C15ull;
+    s ^= (unsigned long long)syscall3(SYS_GET_TICKS, 0, 0, 0) * 0xBF58476D1CE4E5B9ull;
+    s ^= ((unsigned long long)(usize)tmpll >> 4) * 0xC2B2AE3D27D4EB4Full;
+    return mix64(s);
+}
+
+static unsigned long long next_name_seed(void) {
+    if (!__atomic_load_n(&seeded, __ATOMIC_ACQUIRE)) {
+        unsigned long long expected = 0;
+        unsigned long long v = seed_once();
+        if (__atomic_compare_exchange_n(&base_seed, &expected, v, 0,
+                                        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            __atomic_store_n(&seeded, 1, __ATOMIC_RELEASE);
+        else
+            while (!__atomic_load_n(&seeded, __ATOMIC_ACQUIRE)) { /* 等别人播完 */ }
+    }
+
+    unsigned long long n = __atomic_fetch_add(&seq, 1, __ATOMIC_RELAXED);
+    unsigned long long state = __atomic_load_n(&base_seed, __ATOMIC_ACQUIRE)
+                             + (n + 1) * 0x9E3779B97F4A7C15ull;
+    return mix64(state);
+}
+
+/* 内部实现：把模板末尾 6 个 X 换成随机字符并**原子创建**。
+ * is_dir=0 → 建文件(返回 fd)；is_dir=1 → 建目录(返回 0)。失败返回 -1。 */
+static inline int _mkstemp_create(char *tmpl, int is_dir) {
+    usize n = strlen(tmpl);
+    if (n < 6) {
+        return -1;                       /* 模板太短，放不下 6 个 X */
+    }
+    for (usize i = n - 6; i < n; ++i) {
+        if (tmpl[i] != 'X') {
+            return -1;                   /* 必须以 X 结尾（POSIX 要求） */
+        }
+    }
+
+    tmpll =(unsigned long long)tmpl;
+    unsigned long long s = next_name_seed();
+
+    const char *alpha = _mkstemp_alphabet();
+    const usize nchars = strlen(alpha);
+
+    /* 名字撞了就换一个重试。轮数有限：100 次在 62^6 ≈ 5.7e10 的空间里
+     * 连续撞车只可能是目录被塞满了或没有写权限。 */
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        unsigned long long r = s + (unsigned long long)attempt * 0x94D049BB133111EBull;
+        for (int i = 5; i >= 0; --i) {
+            tmpl[n - 6 + (usize)i] = alpha[r % nchars];
+            r /= nchars;
+        }
+
+        if (is_dir) {
+            if (mkdirat(AT_FDCWD, tmpl, 0700) == 0) {
+                return 0;
+            }
+        } else {
+            int fd = (int)open(tmpl, O_CREAT | O_EXCL | O_RDWR, 0600);
+            if (fd >= 0) {
+                return fd;
+            }
+        }
+    }
+    return -1;
+}
+
+/* mkstemp: 原子创建唯一临时文件，返回**已打开的可读写 fd**（用完记得 close）。
+ * 模板形如 "/tmp/fooXXXXXX"，末尾 6 个 X 会被替换成实际名字（就地修改）。
+ * 失败返回 -1，此时模板内容未定义（POSIX 同样不保证）。 */
+static inline int mkstemp(char *tmpl) {
+    return _mkstemp_create(tmpl, 0);
+}
+
+/* mkdtemp: 同上但建目录（mode 0700）。成功返回 tmpl，失败返回 NULL。 */
+static inline char *mkdtemp(char *tmpl) {
+    return _mkstemp_create(tmpl, 1) == 0 ? tmpl : (char *)0;
 }
 
 static inline isize unlink2(const char *path, usize len) {
