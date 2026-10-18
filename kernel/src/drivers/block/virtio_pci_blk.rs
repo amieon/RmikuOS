@@ -629,10 +629,18 @@ impl VirtioPciBlkDevice {
 
             let status = read_volatile(status_va as *const u8);
 
-            log::info!(
-                "[virtio-pci-blk] write done sector={}, used.id={}, used.len={}, status={}",
-                sector, used.id, used.len, status,
-            );
+            /* 成功写盘是常态，不是事件
+             * 只留首次一条作为"驱动确实在动"的证据；失败路径下面已有 error。 */
+            {
+                use core::sync::atomic::{AtomicBool, Ordering};
+                static FIRST_WRITE_LOG: AtomicBool = AtomicBool::new(false);
+                if !FIRST_WRITE_LOG.swap(true, Ordering::Relaxed) {
+                    log::info!(
+                        "[virtio-pci-blk] write ok (sector={}, 首次; 后续成功不再逐条记录)",
+                        sector
+                    );
+                }
+            }
 
             if used.id != 0 {
                 log::error!("[virtio-pci-blk] unexpected used id={}", used.id);
