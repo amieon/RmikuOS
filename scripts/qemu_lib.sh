@@ -32,6 +32,16 @@ qemu_init() {
   LOGIN_USER="${LOGIN_USER:-root}"
   LOGIN_PASS="${LOGIN_PASS:-root}"
   SHELL_PROMPT="${SHELL_PROMPT:-/home/root}"
+
+  # 内核 ELF 路径也收在这里, 免得"启动命令"和"存在性检查"各写一份、以后改漏一处
+  case "${arch}" in
+    riscv64)     KERNEL_TARGET="riscv64gc-unknown-none-elf" ;;
+    loongarch64) KERNEL_TARGET="loongarch64-unknown-none" ;;
+    *) echo "[qemu] 未知架构: ${arch}(只支持 riscv64 / loongarch64)" >&2; return 1 ;;
+  esac
+  KERNEL_PROFILE="${KERNEL_PROFILE:-debug}"
+  KERNEL_ELF="${REPO_ROOT}/target/${KERNEL_TARGET}/${KERNEL_PROFILE}/RmikuOS"
+
   QEMU_PID=""
   DEADLINE=$(( $(date +%s) + TIMEOUT_SEC ))
 }
@@ -43,7 +53,7 @@ qemu_make_cmd() {
   if [ "$arch" = "riscv64" ]; then
     QEMU_CMD="qemu-system-riscv64 -machine virt -cpu rv64 -accel tcg,thread=multi \
       -smp 8,cores=8,threads=1,sockets=1 -m 1G -nographic \
-      -kernel ${REPO_ROOT}/target/riscv64gc-unknown-none-elf/debug/RmikuOS \
+      -kernel ${KERNEL_ELF} \
       -drive file=${ROOTFS_IMG},format=raw,if=none,id=blk0 -device virtio-blk-device,drive=blk0 \
       -drive file=${FAT_IMG},format=raw,if=none,id=blk1 -device virtio-blk-device,drive=blk1 \
       -drive file=${data_img},format=raw,if=none,id=blk2 -device virtio-blk-device,drive=blk2 \
@@ -53,7 +63,7 @@ qemu_make_cmd() {
   else
     QEMU_CMD="qemu-system-loongarch64 -machine virt -cpu la464 -m 2G \
       -accel tcg,thread=multi -smp 8,cores=8,threads=1,sockets=1 -nographic \
-      -kernel ${REPO_ROOT}/target/loongarch64-unknown-none/debug/RmikuOS \
+      -kernel ${KERNEL_ELF} \
       -drive file=${ROOTFS_IMG},format=raw,if=none,id=blk0 -device virtio-blk-pci,drive=blk0,disable-legacy=on \
       -drive file=${FAT_IMG},format=raw,if=none,id=blk1 -device virtio-blk-pci,drive=blk1,disable-legacy=on \
       -drive file=${data_img},format=raw,if=none,id=blk2 -device virtio-blk-device,drive=blk2 \
@@ -63,7 +73,52 @@ qemu_make_cmd() {
   fi
 }
 
+# 确保可写数据盘存在。空白镜像就够 —— 内核首次挂载时会自己 mkfs
+# (README 里的"首次开机内核内 mkfs 自举")。
+#
+# 为什么放在这里而不是各测试脚本里: 这个文件就是为了消灭"加一块盘要改三处"。
+# 之前 smoke_test.sh 漏建这块盘, CI 里 QEMU 直接
+#   Could not open '/tmp/rmiku_test_data_riscv64.img': No such file or directory
+# 然后只报一句"QEMU 提前退出(未等到: 登录提示)", 很难联想到是缺盘。
+#
+# 只在**缺失时**创建: 崩溃一致性测试需要跨多次 qemu_start 复用同一块盘
+# (第二次启动必须看到第一次留下的数据), 所以不能每次重建。
+# 想每次从零开始(冒烟这种), 置 DATA_IMG_FRESH=1。
+qemu_ensure_data_img() {
+  if [ "${DATA_IMG_FRESH:-0}" = "1" ] && [ -f "${DATA_IMG}" ]; then
+    rm -f "${DATA_IMG}"
+  fi
+  [ -f "${DATA_IMG}" ] && return 0
+  local mb="${DATA_SIZE_MB:-64}"
+  mkdir -p "$(dirname "${DATA_IMG}")"
+  truncate -s "${mb}M" "${DATA_IMG}"
+  echo "[qemu] 创建空白数据盘 ${DATA_IMG} (${mb}M, 内核首挂时自举 mkfs)"
+}
+
+# 启动前检查必需镜像, 把"缺文件"变成可操作的报错, 而不是让 QEMU 吐原始错误
+qemu_check_required_images() {
+  local missing=0 img
+  for img in "${ROOTFS_IMG}" "${FAT_IMG}"; do
+    if [ ! -f "${img}" ]; then
+      echo "[qemu] ✗ 缺少镜像: ${img}" >&2
+      missing=1
+    fi
+  done
+  if [ "${missing}" -ne 0 ]; then
+    echo "[qemu]   先构建镜像: FS_SIZE_MB=96 bash user/mkfs_ext4.sh ${ARCH}" >&2
+    return 1
+  fi
+  if [ ! -f "${KERNEL_ELF}" ]; then
+    echo "[qemu] ✗ 缺少内核 ELF: ${KERNEL_ELF}" >&2
+    echo "[qemu]   先构建内核: cargo build --target ${KERNEL_TARGET}" >&2
+    return 1
+  fi
+  return 0
+}
+
 qemu_start() {
+  qemu_check_required_images || return 1
+  qemu_ensure_data_img
   rm -f "${IN_FIFO}" "${LOG}"
   mkfifo "${IN_FIFO}"
   qemu_make_cmd "${ARCH}" "${DATA_IMG}"
