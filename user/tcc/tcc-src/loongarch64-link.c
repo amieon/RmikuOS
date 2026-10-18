@@ -219,6 +219,8 @@ ST_FUNC int code_reloc (int reloc_type)
 
     case R_LARCH_PCALA_HI20:
     case R_LARCH_PCALA_LO12:
+    case R_LARCH_PCREL64_LO12:  /* 110: 可松弛 PCALA 对(medium code model) */
+    case R_LARCH_PCREL64_HI20:  /* 111: 静态链接语义同 PCALA_HI20/LO12 */
     case R_LARCH_PCALA64_LO12:  /* 112: 同 PCALA_LO12 */
     case R_LARCH_PCALA64_HI20:  /* 113: 同 PCALA_HI20 */
     case R_LARCH_ABS_HI20:
@@ -295,6 +297,9 @@ ST_FUNC int gotplt_entry_type (int reloc_type)
     case R_LARCH_B26:
     case R_LARCH_PCALA_HI20:
     case R_LARCH_PCALA_LO12:
+    case R_LARCH_PCREL64_LO12:   /* 110: 与 112 同组, 否则 build_got_entries()
+                                    会报 "Unknown relocation type for got: 110" */
+    case R_LARCH_PCREL64_HI20:   /* 111 */
     case R_LARCH_PCALA64_LO12:
     case R_LARCH_PCALA64_HI20:
     case R_LARCH_ABS_HI20:
@@ -515,6 +520,10 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         write32le(ptr, insn);
         return;
     }
+    case R_LARCH_PCREL64_LO12: /* 110: ABI v2.30 可松弛 PCALA 对, 同 PCALA_LO12 */
+        goto pcala_lo12;
+    case R_LARCH_PCREL64_HI20: /* 111: 同 PCALA_HI20 */
+        goto pcala_hi20;
     case R_LARCH_PCALA64_LO12: /* 112: ABI v2.30 可松弛形式, 语义同 PCALA_LO12 */
         goto pcala_lo12;
     case R_LARCH_PCALA64_HI20: /* 113: 同 PCALA_HI20 */
