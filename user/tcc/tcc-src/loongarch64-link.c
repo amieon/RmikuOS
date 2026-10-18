@@ -90,12 +90,13 @@
 #define R_LARCH_ADD_ULEB128 107
 #define R_LARCH_SUB_ULEB128 108
 #define R_LARCH_64_PCREL    109
-/* ABI v2.30 (binutils>=2.42): 可松弛的 PCALA 对(medium code model),
-   静态链接语义与 PCALA_HI20/LO12 完全相同 */
-#define R_LARCH_PCREL64_LO12 110
-#define R_LARCH_PCREL64_HI20 111
-#define R_LARCH_PCALA64_LO12 112
-#define R_LARCH_PCALA64_HI20 113
+/* ABI v2.30 (binutils>=2.42)。此前此处是**虚构的名字**: ABI 里不存在
+   PCREL64_LO12/PCALA64_LO12 —— 真实编号(glibc elf.h):
+     110 CALL36 (pcaddu18i+jirl 36位调用, glibc crt1.o 的 medium code model)
+     111+ TLS_DESC 系列(本项目不涉及, 出现则走 default 明确报错)
+   曾把 CALL36 当 PCALA 对处理: relocate 按 12 位域改写 jirl 指令,
+   运行时 ADEF/SIGSEGV —— tcc_test 全线崩溃即此。 */
+#define R_LARCH_CALL36 110
 #endif
 
 #define R_DATA_32  R_LARCH_32
@@ -194,11 +195,8 @@
 #define R_LARCH_ADD_ULEB128 107
 #define R_LARCH_SUB_ULEB128 108
 #define R_LARCH_64_PCREL    109
-/* ABI v2.30: 可松弛 PCALA 对, 语义同 PCALA_HI20/LO12 */
-#define R_LARCH_PCREL64_LO12 110
-#define R_LARCH_PCREL64_HI20 111
-#define R_LARCH_PCALA64_LO12 112
-#define R_LARCH_PCALA64_HI20 113
+/* ABI v2.30: 110 = CALL36, 见上; 111+ = TLS_DESC(不涉及) */
+#define R_LARCH_CALL36 110
 #endif
 
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
@@ -217,12 +215,9 @@ ST_FUNC int code_reloc (int reloc_type)
     case R_LARCH_PCREL20_S2:  /* pcaddi(松弛候选), 按代码重定位处理 */
         return 1;
 
+    case R_LARCH_CALL36:       /* 110: pcaddu18i+jirl 36 位调用, 代码重定位 */
     case R_LARCH_PCALA_HI20:
     case R_LARCH_PCALA_LO12:
-    case R_LARCH_PCREL64_LO12:  /* 110: 可松弛 PCALA 对(medium code model) */
-    case R_LARCH_PCREL64_HI20:  /* 111: 静态链接语义同 PCALA_HI20/LO12 */
-    case R_LARCH_PCALA64_LO12:  /* 112: 同 PCALA_LO12 */
-    case R_LARCH_PCALA64_HI20:  /* 113: 同 PCALA_HI20 */
     case R_LARCH_ABS_HI20:
     case R_LARCH_ABS_LO12:
     case R_LARCH_ABS64_LO20:
@@ -295,13 +290,10 @@ ST_FUNC int gotplt_entry_type (int reloc_type)
     case R_LARCH_B16:
     case R_LARCH_B21:
     case R_LARCH_B26:
+    case R_LARCH_CALL36:         /* 110: 调用也要 GOT/PLT 兜底, 与 PCALA 同组
+                                    (glibc crt1.o 靠它链接 __libc_start_main) */
     case R_LARCH_PCALA_HI20:
     case R_LARCH_PCALA_LO12:
-    case R_LARCH_PCREL64_LO12:   /* 110: 与 112 同组, 否则 build_got_entries()
-                                    会报 "Unknown relocation type for got: 110" */
-    case R_LARCH_PCREL64_HI20:   /* 111 */
-    case R_LARCH_PCALA64_LO12:
-    case R_LARCH_PCALA64_HI20:
     case R_LARCH_ABS_HI20:
     case R_LARCH_ABS_LO12:
     case R_LARCH_ABS64_LO20:
@@ -520,14 +512,15 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         write32le(ptr, insn);
         return;
     }
-    case R_LARCH_PCREL64_LO12: /* 110: ABI v2.30 可松弛 PCALA 对, 同 PCALA_LO12 */
-        goto pcala_lo12;
-    case R_LARCH_PCREL64_HI20: /* 111: 同 PCALA_HI20 */
-        goto pcala_hi20;
-    case R_LARCH_PCALA64_LO12: /* 112: ABI v2.30 可松弛形式, 语义同 PCALA_LO12 */
-        goto pcala_lo12;
-    case R_LARCH_PCALA64_HI20: /* 113: 同 PCALA_HI20 */
-        goto pcala_hi20;
+    case R_LARCH_CALL36: {
+        int64_t off = (int64_t)val - (int64_t)addr, hi = (off + 0x20000) >> 18;
+        if ((off + ((int64_t)1 << 37)) & ~(((int64_t)1 << 38) - 4))
+            tcc_error_noabort("R_LARCH_CALL36 relocation failed");
+        write32le(ptr, (read32le(ptr) & 0xfe00001fu) | ((hi & 0xfffff) << 5));
+        write32le(ptr + 4, (read32le(ptr + 4) & 0xfc0003ffu)
+                           | ((((off - (hi << 18)) >> 2) & 0xffff) << 10));
+        return;
+    }
     case R_LARCH_ABS_HI20: {
         /* lu12i.w+addi.w 配对: imm20 = ((S+A+0x800) >> 12) & 0xfffff
            (原实现缺 +0x800, 低 12 位 >= 0x800 的绝对地址全错 4KB) */
