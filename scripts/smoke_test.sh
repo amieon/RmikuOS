@@ -40,6 +40,10 @@ if [ -z "${failed_count}" ] || [ "${failed_count}" != "0" ]; then
 fi
 echo "[smoke] ${ARCH}: 回归测试全部通过 ✓"
 
+# "0 failed" 还不够 —— 如果某个测试压根没进 /tests，它连 FAIL 都不会有。
+# 这里逐个核对：每个已编译测试都必须在 PASS 列表里出现。
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify_runall.sh" "${ARCH}" "${LOG}"
+
 # 让系统正常关机,顺带验证关机路径
 echo "[smoke] ${ARCH}: 发送 shutdown,等待系统关机..."
 send "shutdown"
