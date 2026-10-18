@@ -101,7 +101,9 @@ jobs:
           #   2) 制作 ext4 rootfs + FAT16 镜像;CI 里 rootfs 较大,FS_SIZE_MB=96 覆盖默认 32M
           FS_SIZE_MB=96 ./user/mkfs_ext4.sh riscv64
           #   3) 编译内核(debug,与 run.sh 默认一致)
-          cargo build --target riscv64gc-unknown-none-elf
+          # LOG=info 是编译期(option_env!)读的: 内核默认 Warn, 不设就会把
+          # log::info! 全部过滤掉, crash_consistency_test.sh 的日志断言必然失败。
+          LOG=info cargo build --target riscv64gc-unknown-none-elf
 
       - name: 测试覆盖门禁(源码 riscv64)
         run: |
@@ -200,7 +202,9 @@ jobs:
           python3 user/build.py loongarch64
           # CI 里 rootfs 较大,FS_SIZE_MB=96 覆盖默认 32M(32M 会爆盘)
           FS_SIZE_MB=96 ./user/mkfs_ext4.sh loongarch64
-          cargo build --target loongarch64-unknown-none
+          # LOG=info 是编译期(option_env!)读的: 内核默认 Warn, 不设就会把
+          # log::info! 全部过滤掉, crash_consistency_test.sh 的日志断言必然失败。
+          LOG=info cargo build --target loongarch64-unknown-none
 
       - name: 测试覆盖门禁(源码 loongarch64)
         run: |

@@ -9,7 +9,7 @@
 #   1) 用 /tmp 下一块全新的临时数据盘启动(不碰开发用的 target/data-*.img)
 #   2) 首次开机:内核发现空盘 → 内核内 mkfs(写卷标 RMikuOS-DATA)→ 挂 /data
 #      → ensure_layout 建出 home/ 与 var/etc/ → bind 到 /home 和 /var
-#   3) 写 marker.txt,并等到日志出现 writeback ok(确认已落盘)
+#   3) 写 marker.txt,并等**这之后**新出现一条 writeback ok(确认已落盘)
 #   4) 跑 bigwrite,写到一半时 kill -9(模拟掉电,不是优雅关机)
 #   5) 用同一块盘重启,断言:
 #        a. /data 挂载成功 → journal 自动回放、元数据一致
@@ -54,12 +54,25 @@ qemu_login
 ok "首次启动进入 shell"
 
 # bind mount 日志是"盘已正确识别并暴露"的直接证据
-if grep -aqF "/home ← /data/home (bind)" "${LOG}"; then ok "/home 由 /data/home 绑定而来"; else bad "未见到 /home 绑定日志"; fi
-if grep -aqF "/var ← /data/var (bind)" "${LOG}";  then ok "/var 由 /data/var 绑定而来";  else bad "未见到 /var 绑定日志"; fi
+BIND_SEEN=0
+if grep -aqF "/home ← /data/home (bind)" "${LOG}"; then ok "/home 由 /data/home 绑定而来"; BIND_SEEN=1; else bad "未见到 /home 绑定日志"; fi
+if grep -aqF "/var ← /data/var (bind)" "${LOG}";  then ok "/var 由 /data/var 绑定而来";  BIND_SEEN=$((BIND_SEEN + 1)); else bad "未见到 /var 绑定日志"; fi
+if [ "${BIND_SEEN}" -eq 0 ]; then
+  # 这两行是 log::info!, 而内核默认 LevelFilter::Warn —— 没设 LOG=info 构建就全被过滤,
+  # 断言会"看起来像挂载失败", 其实只是日志没打。这里直接点出来。
+  echo "[crash]   提示: 这两行是 log::info!, 内核若未用 LOG=info 构建会被过滤掉。"
+  echo "[crash]         本地: LOG=info ./run.sh; CI: cargo build 前已设 LOG=info。"
+fi
 
 echo "[crash] ${ARCH}: 写 marker.txt,等待 writeback 落盘..."
+# 记下当前日志长度: 只认**这条命令之后**新出现的 writeback ok。
+# 否则启动阶段那条会被全文件 grep 命中, "等待"变成瞬间返回 —— 这个断言
+# 之前一直是假通过的(以前 loongarch 每秒刷一条, 更是必然秒中)。
+MARK_BYTES="$(wc -c < "${LOG}" 2>/dev/null || echo 0)"
 qemu_send "echo persisted > /home/root/marker.txt"
-qemu_wait_for "writeback ok" "writeback 周期落盘"
+# 给单独的超时: 这行日志若被改/被注释, 应该在 3 分钟内明确失败,
+# 而不是像以前那样卡满全局 1800s(就是这次 riscv 超时的直接原因)。
+qemu_wait_for_after "${MARK_BYTES}" "writeback ok" "marker.txt 之后的新一轮 writeback" 180
 sleep 3
 ok "marker.txt 已随 writeback 落盘"
 

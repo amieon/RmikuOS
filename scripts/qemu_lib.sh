@@ -139,8 +139,51 @@ qemu_start() {
 qemu_send() { printf '%s\n' "$1" >&9; sleep 1; }
 
 # 在日志里等关键字(二进制安全: -a);超时或 QEMU 提前退出则失败
+# 用法: qemu_wait_for <关键字> <描述> [最多等几秒]
+# 第三个参数用于"这条日志可能永远不出现"的场景（例如内核某行日志被注释掉）：
+# 不给就退回到全局 DEADLINE（默认 1800s），给了就能在 2 分钟内明确失败，
+# 而不是让整轮 CI 卡满半小时。
+# 用法: qemu_wait_for_after <日志字节偏移> <关键字> <描述> [最多等几秒]
+#
+# 只匹配偏移之后**新追加**的内容。和 qemu_wait_for 的分工:
+#   - qemu_wait_for        "启动到现在出现过某行"(全文件 grep)
+#   - qemu_wait_for_after  "我做了某个动作之后**又**出现了某行"
+#
+# 为什么必须区分: crash 测试要求"写完 marker.txt 之后再刷一次盘", 但 qemu_wait_for
+# 是全文件 grep, 会被启动阶段那条更早的 writeback ok 立刻命中 —— 于是它从来没
+# 真正等过, 一直在假通过。loongarch 上 even worse(几乎每秒一条, 必然立即命中)。
+qemu_wait_for_after() {
+  local from="$1" kw="$2" label="$3" max_wait="${4:-}"
+  local deadline="${DEADLINE}"
+  if [ -n "${max_wait}" ]; then
+    deadline=$(( $(date +%s) + max_wait ))
+  fi
+  while :; do
+    # tail -c +N 是 1-based: 从第 N 字节开始, 所以要 +1
+    if tail -c +$((from + 1)) "${LOG}" 2>/dev/null | grep -aqF "${kw}"; then
+      echo "[test]   ✓ ${label}"
+      return 0
+    fi
+    if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
+      echo "[test] ✗ QEMU 提前退出(未等到: ${label})"
+      tail -40 "${LOG}"
+      exit 1
+    fi
+    if [ "$(date +%s)" -ge "${deadline}" ]; then
+      echo "[test] ✗ 超时 ${max_wait:-${TIMEOUT_SEC}}s 未等到: ${label}"
+      tail -40 "${LOG}"
+      exit 1
+    fi
+    sleep 1
+  done
+}
+
 qemu_wait_for() {
-  local kw="$1" label="$2"
+  local kw="$1" label="$2" max_wait="${3:-}"
+  local deadline="${DEADLINE}"
+  if [ -n "${max_wait}" ]; then
+    deadline=$(( $(date +%s) + max_wait ))
+  fi
   while :; do
     if grep -aqF "${kw}" "${LOG}" 2>/dev/null; then
       echo "[test]   ✓ ${label}"
@@ -151,8 +194,8 @@ qemu_wait_for() {
       tail -40 "${LOG}"
       exit 1
     fi
-    if [ "$(date +%s)" -ge "${DEADLINE}" ]; then
-      echo "[test] ✗ 超时 ${TIMEOUT_SEC}s 未等到: ${label}"
+    if [ "$(date +%s)" -ge "${deadline}" ]; then
+      echo "[test] ✗ 超时 ${max_wait:-${TIMEOUT_SEC}}s 未等到: ${label}"
       tail -40 "${LOG}"
       exit 1
     fi

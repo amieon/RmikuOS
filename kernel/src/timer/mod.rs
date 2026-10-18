@@ -13,8 +13,18 @@ pub use ticks;
 
 use core::sync::atomic::{AtomicIsize, AtomicU64, AtomicUsize, Ordering};
 
-/// 硬件时间寄存器频率(Hz)。QEMU virt 默认 timebase-frequency = 10MHz。
+/// 硬件时间寄存器频率(Hz)——**必须按架构区分**。
+///
+/// - riscv64: QEMU virt 的 timebase-frequency = 10MHz（time CSR 的计数速率）
+/// - loongarch64: LA464 的 CPUCFG4/crystal frequency = 100MHz（rdtime.d 的计数速率）
+///
+/// 这两个数完全不同，共用一个值会让其中一个架构的时间**快或慢 10 倍**。
+/// 之前写死 10MHz，于是龙芯上 monotonic_us / now_secs / DNS TTL / uptime
+/// 全部走快 10 倍——只是没人拿秒表量过，所以一直没暴露。
+#[cfg(target_arch = "riscv64")]
 pub const TIME_FREQ: usize = 10_000_000;
+#[cfg(target_arch = "loongarch64")]
+pub const TIME_FREQ: usize = 100_000_000;
 
 static TIME_OFFSET: [AtomicIsize; crate::arch::MAX_HARTS] =
     [const { AtomicIsize::new(0) }; crate::arch::MAX_HARTS];

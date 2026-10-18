@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::drivers::block::BlockDevice;
 use crate::fs::flag::{O_ACCMODE, O_APPEND, O_RDONLY, O_WRONLY};
 use crate::sync::spin::Mutex;
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use super::dirent::{DirEntry, FILE_TYPE_DIR, FILE_TYPE_FILE, FILE_TYPE_SYMLINK};
 use super::file::{File, FileRef};
@@ -172,31 +172,69 @@ pub struct Ext4RwFs {
 
 static DATA_FS: Mutex<Option<Arc<Ext4RwFs>>> = Mutex::new(None);
 
+/// writeback 间隔：按单调秒表达，不按 tick 数。
+const WRITEBACK_INTERVAL_SECS: u64 = 5;
+
+/// "还活着"类日志的最小间隔（秒）。见 try_sync 里的日志策略。
+const SYNC_LOG_INTERVAL_SECS: u64 = 60;
+
+#[inline]
+fn monotonic_secs() -> u64 {
+    crate::timer::monotonic_us() / 1_000_000
+}
+
+/// 里程碑日志的时间闸门：距上次打日志不足 N 秒就返回 false。
+/// 用 CAS 而不是 load+store，避免多 hart 同时判定"该打了"而重复输出。
+fn log_gate(last: &AtomicU64, interval_secs: u64) -> bool {
+    let now = monotonic_secs();
+    let prev = last.load(Ordering::Relaxed);
+    if now < prev + interval_secs {
+        return false;
+    }
+    last.compare_exchange(prev, now, Ordering::Relaxed, Ordering::Relaxed)
+        .is_ok()
+}
+
 pub fn on_timer_tick() {
-    #[cfg(target_arch = "riscv64")]
-    const WRITEBACK_EVERY_TICKS: usize = 5000;
-    #[cfg(target_arch = "loongarch64")]
-    const WRITEBACK_EVERY_TICKS: usize = 10;
-    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static LAST_SYNC_SECS: AtomicU64 = AtomicU64::new(0);
 
     static FIRST_CALL: AtomicBool = AtomicBool::new(false);
     if !FIRST_CALL.swap(true, Ordering::Relaxed) {
-        log::info!("[ext4-rw] timer 钩子首次触发（此后每周期一条 writeback ok）");
+        log::info!(
+            "[ext4-rw] timer 钩子已启动（每 {}s 一次 writeback）",
+            WRITEBACK_INTERVAL_SECS
+        );
     }
 
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-    if n % WRITEBACK_EVERY_TICKS != 0 {
+    let now = monotonic_secs();
+    let prev = LAST_SYNC_SECS.load(Ordering::Relaxed);
+    if now < prev + WRITEBACK_INTERVAL_SECS {
         return;
     }
-    if let Some(holder) = DATA_FS.try_lock() {
-        if let Some(fs) = holder.as_ref() {
-            fs.try_sync();
-        }
+    // 先拿锁、再推进时间戳：锁冲突（有 syscall 正在写）不该吃掉整个周期，
+    // 下个 tick 接着试就行——try_lock 不阻塞，代价只是几条指令。
+    let holder = match DATA_FS.try_lock() {
+        Some(h) => h,
+        None => return,
+    };
+    if LAST_SYNC_SECS
+        .compare_exchange(prev, now, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return; // 另一个 hart 刚抢到本轮
+    }
+    if let Some(fs) = holder.as_ref() {
+        fs.try_sync();
     }
 }
 
 // unsafe impl Send for Ext4RwFs {}
 // unsafe impl Sync for Ext4RwFs {}
+
+/// 累计成功次数（只用于日志，不参与逻辑）
+static SYNC_OK_COUNT: AtomicUsize = AtomicUsize::new(0);
+/// 上一轮是否失败过：用来把"恢复"识别成一个事件
+static SYNC_WAS_FAILING: AtomicBool = AtomicBool::new(false);
 
 impl Ext4RwFs {
     /// 挂载；失败则 mkfs 后重挂（数据盘首次使用流程）。
@@ -288,16 +326,47 @@ impl Ext4RwFs {
     }
 
     /// 非阻塞版本：timer 中断上下文用。锁被占用就跳过本轮，绝不自旋等待。
-    /// 成功时打 info 日志——writeback 是否真的在跑，LOG=info 下一目了然。
+    ///
+    ///
+    /// 周期性的"我成功了"属于状*，不是事件；每周期打一条必然刷屏
+    /// 所以只在这三种情况下打 info：
+    ///   1. 第 1 次成功 —— 证明机制真的起来了，测试和人都靠它；
+    ///   2. 从失败恢复 —— 状态转移，属于事件；
+    ///   3. 每 60s 一条里程碑（带累计计数）—— 想确认"还活着"时看这个。
+    /// 失败打 warn，同样只在首次失败与每 60s 一条，避免磁盘坏掉时刷穿日志。
     pub fn try_sync(&self) -> bool {
         match self.ext4.try_lock() {
             Some(mut fs) => match fs.sync() {
                 Ok(()) => {
-                    //log::info!("[ext4-rw] writeback ok");
+                    let n = SYNC_OK_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+                    let recovered = SYNC_WAS_FAILING.swap(false, Ordering::Relaxed);
+
+                    static LAST_OK_LOG_SECS: AtomicU64 = AtomicU64::new(0);
+
+                    if recovered {
+                        log::info!("[ext4-rw] writeback 恢复正常（累计 {} 次）", n);
+                        log_gate(&LAST_OK_LOG_SECS, SYNC_LOG_INTERVAL_SECS);
+                    } else if n == 1 {
+                        log::info!(
+                            "[ext4-rw] writeback ok (#1)：周期刷盘已启动，每 {}s 一次",
+                            WRITEBACK_INTERVAL_SECS
+                        );
+                        log_gate(&LAST_OK_LOG_SECS, SYNC_LOG_INTERVAL_SECS);
+                    } else if log_gate(&LAST_OK_LOG_SECS, SYNC_LOG_INTERVAL_SECS) {
+                        log::info!("[ext4-rw] writeback ok (#{})", n);
+                    }
                     true
                 }
                 Err(e) => {
-                    log::warn!("[ext4-rw] try_sync 失败: {:?}", e);
+                    let first_fail = !SYNC_WAS_FAILING.swap(true, Ordering::Relaxed);
+                    static LAST_FAIL_LOG_SECS: AtomicU64 = AtomicU64::new(0);
+                    if first_fail || log_gate(&LAST_FAIL_LOG_SECS, SYNC_LOG_INTERVAL_SECS) {
+                        log::warn!(
+                            "[ext4-rw] try_sync 失败（已成功 {} 次）: {:?}",
+                            SYNC_OK_COUNT.load(Ordering::Relaxed),
+                            e
+                        );
+                    }
                     false
                 }
             },
@@ -664,7 +733,7 @@ impl File for Ext4RwFile {
         }
     }
 
-    
+    /// pread：从任意偏移读，不碰 self.offset（与并发 read 无竞态）。
     fn read_at(&self, buf: &mut [u8], offset: usize) -> isize {
         let mut fs = self.fs.ext4.lock();
         match fs.read_inode(self.number, offset as u64, buf) {
@@ -690,6 +759,8 @@ impl File for Ext4RwFile {
         }
     }
 
+    /// pwrite：从任意偏移写，不碰 self.offset。
+    /// O_APPEND 时按 Linux 语义忽略 offset、写到末尾。
     fn write_at(&self, buf: &[u8], offset: usize) -> isize {
         let mut off = offset as u64;
         if self.flags & O_APPEND != 0 {
