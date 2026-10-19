@@ -77,12 +77,7 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
         }
-        // 进度提示: kill -9 就在滚动时下手
-        puts("[bigwrite] 已写 ");
-        printf("%d", mb + 1);
-        puts(" / ");
-        printf("%d", total_mb);
-        puts(" MB\n");
+        printf("[bigwrite] 已写 %d / %d MB\n", mb + 1, total_mb);
 
         if (do_sync) {
             if (fsync(fd) == 0) {
@@ -94,7 +89,7 @@ int main(int argc, char *argv[]) {
     }
 
     close(fd);
-    puts("[bigwrite] 完成\n");
+    printf("[bigwrite] 完成: %d MB\n", total_mb);
     exit(0);
     return 0;
 }
