@@ -182,6 +182,53 @@ resolver 命中 symlink 时读出目标、拼接剩余路径段后递归重解�
 
 用户态 `ls` 相应升级：目录遍历改用 `lstat`（看到链接本身而非目标），长格式下 symlink 显示为 `name -> target`，类型字符 `l`。
 
+### Path-based syscalls（at 家族与 dirfd）
+
+系统调用号 **87–97**：`openat` / `fstatat` / `unlinkat` / `mkdirat` / `faccessat` / `fchmodat` / `renameat` / `linkat`，以及 `fchown` / `fchdir` / `umask`。`AT_FDCWD`（-100）/ `AT_EACCESS`（0x200）/ `AT_REMOVEDIR`（0x200）/ `AT_SYMLINK_NOFOLLOW`（0x100）齐备——后两个数值相同是 POSIX 故意的，分属不同 syscall。
+
+**dirfd 在本 VFS 里不能按 Linux 的做法实现。** Linux 的 dirfd 是 `file → dentry`，解析时从 dentry 逐段 `lookup`；而 RmikuOS 的 VFS 全部按**路径字符串**解析（`mount::resolve_mount` 按前缀选文件系统，symlink 也按路径重新解析）。若从目录 inode 往下走，一遇挂载点就断：`dirfd=/` 加 `"fat/x"` 会落进 rootfs 里那个空的 `fat` 目录，而不是 FAT 盘。而 `Inode → 路径` 是单向的（只有 `Inode::open`），目录 fd 又是 `ReadOnlyDirFile`（目录项快照），根本不知道自己是哪个目录。
+
+所以改成「**打开时把绝对路径交给它**」：
+
+```text
+Inode::open(flags) → open(flags, abs_path)     调用点只有 3 处，4 个 FS 实现改签名
+ReadOnlyDirFile 增 path: String                + File::abs_path() -> Option<String>
+resolve_at(dirfd, path)                        拿到绝对路径后完全复用非 at 的实现
+```
+
+非目录 fd 的 `abs_path()` 返回 `None`，于是 pipe / 终端 / 普通文件当 dirfd 自然失败，不必写特例。at 与非 at 共用 `fs::open / stat / unlink_file / remove_dir / make_dir / access_path_as / chmod_path`，**天然行为一致，不用维护两份逻辑**。
+
+`resolve_at` 的三条 POSIX 规则：
+
+1. 绝对路径**忽略** dirfd（哪怕 dirfd 是 -1）
+2. `AT_FDCWD` 用进程 cwd
+3. 否则要求 dirfd 是目录，并取它的 `abs_path()`
+
+**几个「一个顶两个」**：`fstatat` + `AT_SYMLINK_NOFOLLOW` 即 `lstat`；`unlinkat` + `AT_REMOVEDIR` 即 `rmdir`（所以标准里没有 `rmdirat`）；`faccessat` + `AT_EACCESS` 按 euid 而非 ruid 判权限——这是全系统唯一能切换「按哪个身份查权限」的入口，`access_path` 因此拆出 `access_path_as(path, req, uid, gid)`。
+
+**未实现的 flag 一律明确返回 -1**（`fstatat` 的未知位、`fchmodat`/`faccessat` 的 `AT_SYMLINK_NOFOLLOW`、`linkat` 的 `AT_SYMLINK_FOLLOW`）。静默忽略 flag 会让调用方以为语义生效了。
+
+**6 个参数寄存器的硬预算**：本项目路径**显式带长度**（内核要校验用户指针边界），一条路径占 2 个参数。`renameat(dirfd1, p1, len1, dirfd2, p2, len2)` 与 `linkat` 同形，双路径 + 双 dirfd **恰好用满 6 个**，`flags` 没有位置——`renameat2` 的 flags、`linkat` 的 `AT_SYMLINK_FOLLOW` 因此放不下。真正会逼出 ABI 变更的是「显式 len」这条约定，不是「路径条数」：Linux 的路径以 NUL 结尾，`linkat` 只要 5 个参数。再扩展时应传 struct 指针（`openat2` 的 `open_how` 就是这个思路），而不是加第 7 个参数——RISC-V trap ABI 的 `a0..a5` 已用满，第 7 个参数只能从栈/用户内存读，那本质上就是 struct 传参。
+
+**已知取舍**：目录被 `rename` 之后，旧 dirfd 仍指向旧路径（Linux 用 inode 就不会）。要根治得把 VFS 改成 dentry/inode 式解析，属于另一个量级的重构。
+
+### 创建语义：O_EXCL / umask / 临时文件
+
+三个东西合起来才让「锁文件」和「安全临时文件」成立。
+
+**`O_EXCL`（0x80，号段外，是 `open` 的 flag 位）**：与 `O_CREAT` 连用，目标以任何形式存在（普通文件、目录、**哪怕是悬空 symlink**）就失败。实现落在 `fs::open` / `fs::open_at` 的「命中已存在 inode」分支：`flags & O_CREAT && flags & O_EXCL → None`。`O_EXCL` 单独出现时按 Linux 的宽松处理忽略（POSIX 未定义该组合）。这一个是 git 全部写操作的基础——锁文件就是 `open(".git/index.lock", O_WRONLY|O_CREAT|O_EXCL)`；缺它则「抢锁」静默成功，陈旧锁被吞掉，并发写索引即静默损坏仓库。
+
+**`umask`（号段 97）**：进程字段 `umask: u16`（默认 `0o022`），fork 继承、exec 不变；`fs::mode_with_umask(mode)` 统一算 `mode & 0o777 & !umask`，`open(O_CREAT)` 与 `mkdirat` 都走它。显式 `chmod`/`fchmod` **不套** umask（umask 只管「创建」）。此前 `open(..., 0666)` 直接落成 `0666`，工作区文件世界可写——git checkout 依赖内核按 umask 收窄权限（`entry.c` 注释原话：*including umask, which is nasty to emulate by hand*）。
+
+**`mkstemp` / `mkdtemp`**：纯 libc 实现（`include/fs.h`），**没有新增 syscall**，完全建立在 `O_EXCL` 之上。三个要点：
+
+* **原子性才是安全边界**：`open(O_CREAT|O_EXCL)` 把「判断」和「创建」合进一个操作。「先 stat 再 open」中间有窗口，那就是 TOCTOU（CWE-377 符号链接占位攻击）
+* **随机名只降低撞车概率**，不承担安全职责。种子用 `pid ^ SYS_GET_TICKS ^ 调用序号 ^ 模板地址`，刻意不碰 `rand()/srand()`——否则程序里一句 `srand(1)` 就能让临时名可预测
+* **返回已打开的 fd，不是名字**。按名字再 `fopen` 就把竞态装回去了；权限固定 `0600`/`0700` 且**绕过 umask**（`umask(0)` 下也必须是 0600）
+* 刻意**不提供 `mktemp()`**——它只返回名字不创建，正是这个攻击的样板 API
+
+`unlink_file` 走 `split_parent` + `parent.unlink(name)`，**不跟随最终 symlink**，所以清理临时文件不会误删目标。
+
 ---
 
 ## Virtio Block Device

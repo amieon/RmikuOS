@@ -34,12 +34,12 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join` | 进程级 fd table,线程共享地址空间                             |
 | 信号         | 通用 `sig_pending` 位图 + 延迟投递                           | 用户态 SIGILL/SIGFPE 不炸内核,shell Ctrl+C                   |
 | 虚拟内存     | buddy 帧分配器、多级页表、ELF 加载、mmap                     |                                                              |
-| 文件系统     | VFS 多挂载:ext4 rootfs(只读) / 可写 ext4(rsext4 + JBD2 日志) / tmpfs / FAT32 | `lseek` / `ftruncate` / `fsync` / `rename`;数据盘 LABEL 身份识别 + 周期 writeback |
+| 文件系统     | VFS 多挂载:ext4 rootfs(只读) / 可写 ext4(rsext4 + JBD2 日志) / tmpfs / FAT32 | `openat` 家族 + `O_EXCL` + `umask` + `mkstemp`;数据盘 LABEL 身份识别 + 周期 writeback |
 | 用户与组     | `useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`(身份类仅 root) | 账户库 defaults + overrides:可写 `/var/etc/{passwd,group}` 覆盖只读出厂 `/etc/{passwd,group}` |
 | 调度器       | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应             | 内置调度实验框架(exp00–exp06,见 docs)                        |
 | 网络         | 自研 TCP/IP:Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP | TCP 11 态 + Jacobson/Karn RTO + 用户态 httpd + 域名解析(TTL 缓存) |
 | 用户程序     | C / C++ / Rust / Java(JVM + 装载期 AOT)/ Lua 5.4 / Scheme    | syscall ABI 语言无关                                         |
-| 系统内工具链 | TCC 0.9.28(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器 | 编辑-编译-运行闭环                                           |
+| 系统内工具链 | TCC 0.9.28(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、zlib 1.3.1(完整移植,`libz.a`:宿主 `-lz` / 系统内 `tcc -lz`)、kilo 编辑器 | 编辑-编译-运行闭环                                           |
 | 应用验证     | VeryEasyGCN(78.3% 准确率)、RmikuRay(定点光线追踪)、GCN/GAT   |                                                              |
 
 ---
@@ -51,7 +51,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 文档                                           | 内容                                                         |
 | ---------------------------------------------- | ------------------------------------------------------------ |
 | [docs/shell.md](docs/shell.md)                 | Shell 词法 / 管道 / 重定向 / 环境变量 / `$?` 展开,TCC 自托管工具链,kilo 编辑器 |
-| [docs/filesystem.md](docs/filesystem.md)       | VFS 与 fd table,ext4 / tmpfs / FAT32,文件系统调用,virtio 块设备 |
+| [docs/filesystem.md](docs/filesystem.md)       | VFS 与 fd table,ext4 / tmpfs / FAT32,文件系统调用,virtio 块设备;`openat` 家族与 dirfd 的路径字符串取舍,`O_EXCL` / umask / `mkstemp` 的创建语义 |
 | [docs/network.md](docs/network.md)             | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / DNS / ICMP / NTP),socket 100–117 + `poll()` ,UDP connect,DHCP T1/T2,listen backlog,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
 | [docs/user-programs.md](docs/user-programs.md) | C 分层库 / C++ `stdcompat.h` 桥接 / Rust `ulib` / 自研 JVM / Lua 5.4 / Scheme,堆分配器与裸运行时数学库 |
 | [docs/scheduler.md](docs/scheduler.md)         | stride 与 alpha-scaled 调度机制,调度统计接口,SMP 与计时注意事项 |
@@ -65,14 +65,14 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 每次提交后,GitHub Actions 自动验证双架构(手动触发,可选架构):
 
 ```text
-双架构交叉编译 -> rootfs 制作 -> QEMU 启动 -> 自动登录 -> 36 项回归测试 -> 检查汇总 -> shutdown 关机
+双架构交叉编译 -> rootfs 制作 -> QEMU 启动 -> 自动登录 -> 48 项回归测试 -> 检查汇总 -> shutdown 关机
                                             \-> 可写 ext4 崩溃一致性测试(kill -9 + journal 回放 + e2fsck)
 ```
 
 * 流水线文件:`.github/workflows/ci.yml`;冒烟脚本 `scripts/smoke_test.sh`,崩溃一致性脚本 `scripts/crash_consistency_test.sh`
 * 触发方式:仓库 **Actions** 页 → 左侧 **CI/CD** → 右侧 **Run workflow**,选择 `riscv64` / `loongarch64` / `both`
 * 构建产物(内核 ELF + rootfs + FAT 镜像)自动缓存,二次运行大幅提速
-* 回归测试:进系统后 `run_all` 一键执行 36 个测试(断言库 `user/include/test.h`,覆盖进程/线程/内存/文件系统/管道/syscall/SQLite 落盘/数学库/printf/setjmp/C++ 容器/语言运行时),任一失败即流水线红
+* 回归测试:进系统后 `run_all` 一键执行 48 个测试(断言库 `user/include/test.h`,覆盖进程/线程/内存/文件系统/管道/syscall/at 家族/权限与 umask/临时文件/SQLite 落盘/zlib 压缩回环/数学库/printf/setjmp/C++ 容器/语言运行时),任一失败即流水线红;`run_all` 只扫 `/tests`,未编译出的测试不会静默少跑——构建期 `scripts/check_test_coverage.sh` 逐个核对"源码 → ELF",运行期 `scripts/verify_runall.sh` 逐个核对"ELF → PASS/SKIP"
 * 崩溃一致性测试:`bigwrite` 写大文件到一半时 `kill -9` QEMU 模拟掉电,再用同一块数据盘重启,断言 journal 自动回放、`/home` 重新绑定成功、已 sync 数据仍在,最后用宿主机 `e2fsck -fn` 校验磁盘结构干净——把"JBD2 真的在工作"从一次性手工实验变成每次提交都验证的事实(测试用 `/tmp` 下的临时数据盘,不碰 `target/data-*.img`)
 * 打 `v` 开头的标签(如 `v1.0`)时,自动构建双架构 release 产物并上传 GitHub Release
 
@@ -210,12 +210,16 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 * **内核基础**:双架构启动 / trap / syscall / 进程线程 / 信号投递与用户态隔离 / buddy 帧分配器 / SMP 多核(per-hart timer、IPI reschedule、TLB shootdown)
 * **调度器**:stride scheduling + alpha-scaled(连续 alpha `[0,100]`,纯整数幂)+ AIMD / SPSA-AdamW 自适应策略,完整调度实验框架与 7 篇实验报告(见 [docs/experiments/](docs/experiments/))
 * **文件系统**:VFS 多挂载 / ext4 rootfs / 可写 tmpfs / 可落盘 FAT16(跨重启持久化)/ 可写 ext4 数据盘(rsext4 0.9.2 + JBD2,挂 `/home`:超级块卷标 LABEL 式盘身份识别、周期 writeback + `fsync`、首次开机内核内 mkfs 自举)/ 管道与重定向 / 环境变量(`$VAR` / `${VAR}` / `$?` 展开)/ 文件定位裁剪刷盘改名(号段 64–68)/ 硬链接与符号链接 / `pread`/`pwrite` 带偏移读写(不推进文件偏移,`File` trait 的 `read_at`/`write_at`,并发下无需 lseek 加锁)/ `access` 真实身份鉴权(按 ruid/rgid 检查而 open 按 euid/egid,含 root 特权、owner/group/other 与附加组判定)/ `fchmod` 经 `File::inode()` 反查复用各文件系统的 `Inode::chmod`;`dup` 取最低空闲 fd 并与 `free_fds` 空闲栈同步;`dup3` 的 `oldfd==newfd` 返回 -1、flags 仅支持 0/ `fdatasync`(libc alias 到 `fsync`)
+  * **POSIX 完整性补强**:`openat` / `fstatat` / `unlinkat` / `mkdirat` / `faccessat` / `fchmodat` / `renameat` / `linkat`,以及 `fchown` / `fchdir` / `umask`。`AT_FDCWD` / `AT_EACCESS` / `AT_REMOVEDIR` / `AT_SYMLINK_NOFOLLOW` 齐备;`fstatat` 一个顶 `stat`+`lstat`、`unlinkat` 一个顶 `unlink`+`rmdir`、`faccessat` 的 `AT_EACCESS` 是唯一能切换"按 ruid 还是按 euid"判权限的入口;未实现的 flag 一律明确返回 -1,不静默按别的语义执行
+    * **dirfd 的实现取舍**:本 VFS 全部按**路径字符串**解析(`mount::resolve_mount` 按前缀选文件系统),若像 Linux 那样从目录 inode 逐段 lookup,一遇挂载点就断(`dirfd=/` 加 `"fat/x"` 会落进 rootfs 里那个空目录)。所以改成"打开时把绝对路径交给 `Inode::open`,`ReadOnlyDirFile` 记住它",`resolve_at()` 拿回绝对路径后完全复用非 at 的实现——at 与非 at 天然一致,不必维护两份。代价是目录被 `rename` 后旧 dirfd 仍指向旧路径(Linux 因持有 inode 不会),教学系统接受
+    * **6 个参数寄存器的硬预算**:本项目路径**显式带长度**,一条路径占 2 个参数,`renameat`/`linkat` 的双路径 + 双 dirfd 恰好用满 6 个,`flags` 没有位置(`linkat` 的 `AT_SYMLINK_FOLLOW` 因此对 `flags != 0` 明确拒绝)。真正会逼出 ABI 变更的是"显式 len"这条约定,不是"路径条数"——再扩展应传 struct 指针(`openat2` 的 `open_how`),而不是加第 7 个参数
+  * **锁文件与临时文件**:`O_EXCL` 独占创建(与 `O_CREAT` 连用,目标以任何形式存在——含悬空 symlink——即失败)是 git 锁文件机制的基础,缺它会让"抢锁"静默成功、并发写索引;`umask`(号段 97,默认 `022`,fork 继承)让 `open(O_CREAT)` / `mkdirat` 按 `mode & ~umask` 收窄权限(此前 `0666` 直接落成世界可写),显式 `chmod`/`fchmod` 不套 umask;`mkstemp`/`mkdtemp` 建在 `O_EXCL` 之上,返回**已打开的 fd** 而不是名字,权限固定 `0600`/`0700` 且绕过 umask——真正的安全边界是"判断与创建在同一个原子操作里",随机文件名只负责降低撞车概率(CWE-377 符号链接占位攻击)
   * **崩溃一致性实测**:16MB 大文件写入至 6MB 时 `kill -9` QEMU → 重启后 journal 自动回放,`/home` 干净挂载、已 sync 数据完好;镜像经宿主机 `e2fsck 1.47.2 -fn` 五遍检查零错误——内核内 rsext4 产生的 ext4 结构通过 e2fsprogs 参考实现认证
   * **存储布局 / bind mount**:一块可写数据盘(rsext4 + JBD2,经超级块卷标 `RMikuOS-DATA` 识别)挂载在 `/data`,`/home`(用户目录)与 `/var`(系统运行时状态)是它的 **bind mount**——Linux `mount --bind` / 容器卷的同款机制。VFS 挂载表存的是 inode 引用而非文件系统,因此一份盘可服务多个路径;盘上由内核首次挂载时自动建出 `home/`、`var/etc/`
   * **多用户与可写系统状态**:`useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`;账户库采用 **defaults + overrides**(可写 `/var/etc/{passwd,group}` 优先,回退只读出厂 `/etc/{passwd,group}`,写入即 fsync)。身份类命令仅 root 可执   ,`passwd` 是唯一例外:非 root 只能改自己的,且必须先验证旧口令
 * **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP)、socket 100–117、通用 `poll()`(支持 socket / 管道 / 普通文件)、UDP `connect()` 与统一临时端口分配器(49152–65535)、DHCP T1/T2 租约续期、TCP listen backlog、用户态 httpd(宿主机浏览器访问)、DNS 客户端(压缩指针解析 + TTL 缓存,nslookup)、TFTP / NTP / wget(wget/ping/ntpdate 支持域名参数)、shell 命令替换 `$()` / 反引号、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×)
-* **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、kilo 编辑器
-* **验证**:36 项 CI 回归测试 + 可写 ext4 崩溃一致性 CI 项(kill -9 → journal 回放 → `e2fsck -fn` 零错误)、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
+* **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、zlib 1.3.1(完整移植:deflate/inflate + `gzFile`,打包为 `libz.a`,宿主 `-lz` 与系统内 `tcc -lz` 都可用,是本地 git 的前置)、kilo 编辑器
+* **验证**:48 项 CI 回归测试 + 可写 ext4 崩溃一致性 CI 项(kill -9 → journal 回放 → `e2fsck -fn` 零错误)、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
 
 ---
 
@@ -234,6 +238,7 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp)
 * 可写 ext4 精修:virtio-blk 真 flush(`VIRTIO_BLK_T_FLUSH`,当前 capabilities 已声明但驱动为空实现)、per-file fsync(当前退化为挂载点全量 sync)、根命令行 `root=`/设备树别名式盘识别(当前 LABEL 优先 + 顺序兜底)
 * **overlayfs**:只读 rootfs(ext4-view)+ 可写层(rsext4)+ whiteout——整个 `/` 可写、删错可恢复(Docker rootfs 模式)
 * 文件系统并发访问的细粒度锁(当前 rsext4 / fatfs 均为单核 + 全局锁)
+* **本地 git 前置的剩余缺口**:file-backed `mmap`(当前只有匿名映射,先以 `NO_MMAP=1` 规避)、目录 fd 的 `fsync`(返回 -1,git 可接受)、`F_GETFD`/`F_SETFD` 与 `FD_CLOEXEC` 的 exec 语义(现在 `fcntl` 只实现 GETFL/SETFL)、`utimensat`(checkout 不需要,`touch` 需要)、`getpwuid`(缺它必须显式 `git config user.name/email`)
 
 ### Scheduler
 
