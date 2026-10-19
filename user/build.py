@@ -292,6 +292,7 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
         "-nostartfiles",
         "-static",
         "-I", str(INCLUDE_DIR),
+        "-I", str(USER_DIR / "zlib"),
     ]
     run([
         cfg["gcc"],
@@ -360,6 +361,7 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
         *cfg["ldflags"],
         "-T", str(cfg["linker"]),
         *link_objects,
+        *zlib_libs(arch),   # 静态库按需抽取: 不引用 zlib 符号则一个字节都不增加
         "-o",
         str(elf),
     ]
@@ -724,6 +726,165 @@ def build_sqlite3(arch: str):
     arch_cache = get_arch_cache(arch)
     arch_cache["sqlite3"] = files_hash
     put_arch_cache(arch, arch_cache)
+
+
+
+def build_zlib(arch: str):
+    """
+    构建 zlib 1.3.1 —— 本地 git 的硬前置。
+
+    git 的 object 存储(loose object / packfile / index 扩展)全部走 zlib 的
+    deflate/inflate, 没有它编译时会出现成片的 "zlib.h: No such file"。
+
+    编全部 15 个 .c: 核心 11 个(deflate/inflate 算法 + 校验和) +
+    gz* 4 个(gzFile 文件级 API, 读写 .gz 文件)。git 本身只用裸流, 但保留 gz
+    是为了这个系统里的 zlib 是**完整的** —— 以后写 gzip/gunzip 命令、
+    给 httpd 加 gzip 编码都能直接用, 不会出现"以为有其实没有"的坑。
+
+    关键宏 -D__STDC_NO_ATOMICS__:
+      crc32.c 的 DYNAMIC_CRC_TABLE 用 C11 <stdatomic.h> 保护 once(),
+      而 RmikuOS 的 include 里没有 stdatomic.h(atomic_* 最终落到 __atomic_*
+      内建, TCC 也不支持)。定义后 zlib 走非原子实现 —— 单线程 git 下等价。
+
+    产物: build/<arch>/zlib/zlib_test.elf  ->  mkfs 拷到 /tests/zlib_test
+    """
+    cfg = ARCH_CONFIG[arch]
+    src_dir = USER_DIR / "zlib"
+    if not src_dir.exists():
+        print(f"[user] no zlib dir at {src_dir}, skip")
+        return
+
+    out_dir = BUILD_DIR / arch / "zlib"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    zlib_cflags = ["-D__STDC_NO_ATOMICS__", "-Os"]
+    common_flags = [
+        "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
+        "-fno-pic", "-fno-pie", "-nostdlib", "-nostartfiles", "-static",
+        "-I", str(INCLUDE_DIR),
+        "-I", str(src_dir),
+    ]
+
+    core = ["adler32", "compress", "crc32", "deflate", "infback", "inffast",
+            "inflate", "inftrees", "trees", "uncompr", "zutil",
+            "gzclose", "gzlib", "gzread", "gzwrite"]
+
+    arch_cache = get_arch_cache(arch)
+    cache = arch_cache.get("zlib", {})
+    files_hash = {n: file_sha256(src_dir / f"{n}.c")
+                  for n in core if (src_dir / f"{n}.c").exists()}
+    test_src = src_dir / "zlib_test.c"
+    has_test = test_src.exists()
+    if has_test:
+        files_hash["__test__"] = file_sha256(test_src)
+    else:
+        print("[user] zlib: 警告: 缺少 zlib_test.c(本项目自带测试, 上游包里没有)")
+        print("[user] zlib:       本次只编库(.o), 不产出 /tests/zlib_test")
+    files_hash["__shared_deps__"] = shared_deps_hash(arch)
+    files_hash["__cflags__"] = repr(zlib_cflags)
+
+    elf = out_dir / "zlib_test.elf"
+    stamp = elf if has_test else (out_dir / "zutil.o")
+    if cache == files_hash and stamp.exists():
+        print("[user] cache hit zlib")
+        deploy_libz(arch, out_dir / "libz.a")   # 缓存命中也要保证 tcc 那边同步
+        return
+
+    crt0_obj = out_dir / "_crt0.o"
+    runtime_obj = out_dir / "_syscall.o"
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["crt0"]), "-o", str(crt0_obj)])
+    run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+         str(cfg["runtime"]), "-o", str(runtime_obj)])
+
+    lib_objs = []
+    for name in core:
+        src = src_dir / f"{name}.c"
+        if not src.exists():
+            continue
+        obj = out_dir / f"{name}.o"
+        run([cfg["gcc"], *cfg["cflags"], *zlib_cflags, *common_flags, "-c",
+             str(src), "-o", str(obj)])
+        lib_objs.append(str(obj))
+
+    libz = out_dir / "libz.a"
+    if libz.exists():
+        libz.unlink()
+    run([cfg["ar"], "rcs", str(libz), *lib_objs])
+    print(f"[user] zlib: libz.a ({len(lib_objs)} 个对象)")
+
+    link_objs = [str(crt0_obj)]
+
+    if has_test:
+        test_obj = out_dir / "zlib_test.o"
+        run([cfg["gcc"], *cfg["cflags"], *zlib_cflags, *common_flags, "-c",
+             str(test_src), "-o", str(test_obj)])
+        link_objs.append(str(test_obj))
+        # 注意用 libz.a 而不是散装 .o —— 测试的链接方式就是用户以后的使用方式，
+    # 顺带验证静态库能被正常解析符号
+
+    string_src = LIB_DIR / "string.c"
+    if string_src.exists():
+        string_obj = out_dir / "_string.o"
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(string_src), "-o", str(string_obj)])
+        link_objs.append(str(string_obj))
+
+    link_objs.append(str(runtime_obj))
+    link_objs.append(str(libz))      # 库放最后：静态库的符号解析是顺序的
+
+    if has_test:
+        run([cfg["gcc"], *cfg["cflags"],
+             "-nostdlib", "-nostartfiles", "-static", "-no-pie",
+             "-Wl,--build-id=none", *cfg["ldflags"],
+             "-T", str(cfg["linker"]),
+             *link_objs,
+             "-lgcc",   # 编译器内建(如 __clzdi2), nostdlib 下需手动链
+             "-o", str(elf)])
+        if not elf.exists() or elf.stat().st_size == 0:
+            raise RuntimeError("zlib_test.elf produced empty ELF")
+        print(f"[user] zlib: zlib_test.elf {elf.stat().st_size} bytes (ELF)")
+    else:
+        print(f"[user] zlib: 已生成 {len([o for o in link_objs if o.endswith('.o')])} 个 .o(供 git 链接用)")
+
+    deploy_libz(arch, libz)
+
+    arch_cache["zlib"] = files_hash
+    put_arch_cache(arch, arch_cache)
+
+
+def deploy_libz(arch: str, libz: Path):
+    """把 libz.a 放进 tcc 的库搜索目录 —— 系统内 `tcc foo.c -lz` 就能直接用。
+
+    这一层才是"自举"的关键：库躺在系统里，而不是只存在宿主机的 build 目录。
+    tcc 链接库时不需要 ranlib 索引（它自己扫 ar），所以 rcs 的 s 已经够了。
+    """
+    tcc_lib = BUILD_DIR / arch / "tcc-sys" / "usr" / "lib" / "tcc"
+    if not tcc_lib.is_dir():
+        return                      # tcc 没构建时跳过
+    shutil.copy2(libz, tcc_lib / "libz.a")
+    # 光有库不够: 系统内 `tcc foo.c -lz` 还要能 #include <zlib.h>。
+    # tcc 的头搜索路径是 /usr/lib/tcc/include（build_tcc_sys_files 从 user/include 同步）
+    inc = tcc_lib / "include"
+    copied = []
+    if inc.is_dir():
+        for h in ("zlib.h", "zconf.h"):
+            src = USER_DIR / "zlib" / h
+            if src.exists():
+                shutil.copy2(src, inc / h)
+                copied.append(h)
+    print("[user] zlib: libz.a -> /usr/lib/tcc/libz.a (系统内 `tcc -lz` 可用)"
+          + (f", 头: {', '.join(copied)}" if copied else ""))
+
+
+def zlib_libs(arch: str):
+    """给别的构建函数用：在链接命令里展开 `*zlib_libs(arch)` 即可引入 zlib。
+
+    返回 list 而不是单个路径，是为了 zlib 不存在时能安静地展开成空
+    （比如别人只想编个不带 zlib 的程序，不该因为这个函数直接炸）。
+    """
+    libz = BUILD_DIR / arch / "zlib" / "libz.a"
+    return [str(libz)] if libz.exists() else []
 
 
 # ==================== TCC 构建(从 user/tcc/build_tcc.py 融合) ====================
@@ -1160,6 +1321,9 @@ def main():
         print(f"no .rs, .S or .c files found in {SRC_DIR}", file=sys.stderr)
         sys.exit(1)
 
+    # zlib 必须先构建: build_one 链接时会 *zlib_libs(arch)
+    build_zlib(args.arch)
+
     apps = []
     for app_id, (source, category) in enumerate(sources):
         app = build_one(args.arch, source, app_id, category)
@@ -1169,6 +1333,11 @@ def main():
     build_cpp_projects(args.arch)
     build_c_projects(args.arch)
     build_tcc(args.arch)
+    # tcc 的库目录刚建好, 这时才能把 libz.a 部署进去（系统内 `tcc foo.c -lz`）。
+    # build_zlib 跑在最前面, 那时 tcc-sys 还不存在, deploy_libz 会直接返回。
+    _libz = BUILD_DIR / args.arch / "zlib" / "libz.a"
+    if _libz.exists():
+        deploy_libz(args.arch, _libz)
     build_sqlite3(args.arch)
     build_gcn(args.arch)
     build_java_projects(args.arch)

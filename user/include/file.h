@@ -259,6 +259,19 @@ static inline int fseek(FILE* fp, long offset, int whence) {
     return 0;
 }
 
+/* POSIX 大文件定位接口。
+ * 签名用 long 而不是 off_t: LP64 下两者同宽, 但 off_t 在 sys/types.h 里,
+ * 而那个头又重复定义 size_t(与 types.h 打架) —— 为了不在 libc 内部引入
+ * 循环/冲突依赖, 这里直接用底层类型。调用方传 off_t 会隐式转换, 语义一致。
+ * 缺这两个会让 zlib 的 gz* 系列(gzseek/gztell)编不过, git 部分代码也会用。 */
+static inline int fseeko(FILE* fp, long offset, int whence) {
+    return fseek(fp, offset, whence);
+}
+
+static inline long ftello(FILE* fp) {
+    return ftell(fp);
+}
+
 static inline void rewind(FILE* fp) {
     if (!fp) return;
     fseek(fp, 0L, SEEK_SET);

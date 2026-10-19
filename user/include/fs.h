@@ -507,7 +507,22 @@ static inline isize remove_recursive(const char *path) {
     return remove_recursive2(path, strlen(path));
 }
 
-static inline int fcntl(int fd, int cmd, int arg) {
+/* fcntl 必须是变参
+ * 只有查询类命令才跳过 va_arg。目前内核只实现 F_GETFL / F_SETFL，
+ * 以后新增 F_GETFD 之类时记得同步这个 switch，否则会读到栈上的垃圾当 arg。
+ * （变参函数编译器不检查实参个数，传错只能靠这里的白名单兜。） */
+static inline int fcntl(int fd, int cmd, ...) {
+    va_list ap;
+    int arg = 0;
+    switch (cmd) {
+    case F_GETFL:
+        break;                   
+    default:
+        va_start(ap, cmd);
+        arg = va_arg(ap, int);
+        va_end(ap);
+        break;
+    }
     return (int)syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg);
 }
 

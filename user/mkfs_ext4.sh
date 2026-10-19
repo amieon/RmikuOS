@@ -148,6 +148,18 @@ if [ -d "user/build/${ARCH}/sqlite3" ]; then
   done
 fi
 
+# zlib（专门构建目录 user/build/<arch>/zlib/）
+# zlib_test 是移植正确性回归 -> /tests/。zlib 本体不单独出可执行文件,
+# 它的 .o 会被 git 链接时复用(build_zlib 的输出目录里还留着 .o)。
+if [ -d "user/build/${ARCH}/zlib" ]; then
+  for f in user/build/${ARCH}/zlib/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/tests/$base"
+    echo "  [zlib] $base -> /tests/$base"
+  done
+fi
+
 # Java 字节码（JVM 项目）
 for proj_dir in user/java/*; do
   [ -d "$proj_dir" ] || continue
