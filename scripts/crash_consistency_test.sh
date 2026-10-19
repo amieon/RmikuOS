@@ -77,7 +77,9 @@ sleep 3
 ok "marker.txt 已随 writeback 落盘"
 
 echo "[crash] ${ARCH}: 启动 bigwrite(${BIGWRITE_MB}MB),写到 ${KILL_AT_MB}MB 时 kill -9..."
-qemu_send "bigwrite /home/root/big.bin ${BIGWRITE_MB}"
+qemu_send "ls /samples"
+qemu_wait_for "bigwrite" "bigwrite 已构建进 /samples" 20
+qemu_send "/samples/bigwrite /home/root/big.bin ${BIGWRITE_MB}"
 qemu_wait_for "已写 ${KILL_AT_MB} /" "bigwrite 进度 ${KILL_AT_MB}MB"
 qemu_kill_hard
 ok "已在写入中途 kill -9(模拟掉电)"
