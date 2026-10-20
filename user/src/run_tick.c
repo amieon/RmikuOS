@@ -39,7 +39,8 @@ int main(int argc, char **argv) {
     printf(" = ");
     printf("%d", (long)(t1 - t0));
     printf(" ticks, exit=");
-    printf("%d", status);
+    /* status 是 POSIX wait status：退出码在高 8 位，被信号杀死时低 7 位是信号号 */
+    printf("%d", WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status));
     printf("\n");
     return 0;
 }

@@ -157,13 +157,20 @@ int main(void) {
     CHECK_EQ(MIN(3, 7), 3, "MIN 宏");
     CHECK_EQ(howmany(10, 4), 3, "howmany 向上取整");
 
-    /* ---------- 9. sys/wait.h: 本内核的 128+sig 编码 ---------- */
-    CHECK(WIFEXITED(0 << 8), "exit(0) 判为正常退出");
-    CHECK(WIFEXITED(1 << 8), "exit(1) 判为正常退出");
-    CHECK(!WIFEXITED(139 << 8), "139 判为信号死亡");
-    CHECK(WIFSIGNALED(139 << 8), "139 是 WIFSIGNALED");
-    CHECK_EQ(WTERMSIG(139 << 8), 11, "139 -> SIGSEGV(11)");
+    /* ---------- 9. sys/wait.h: POSIX 的 16 位 wait status ---------- */
+    CHECK(WIFEXITED(0), "status 0 = 正常退出 0");
+    CHECK(WIFEXITED(1 << 8), "exit(1) 编码为 0x0100");
     CHECK_EQ(WEXITSTATUS(42 << 8), 42, "WEXITSTATUS 取回 42");
+    CHECK(!WIFEXITED(11), "低 7 位非 0 时不判为正常退出");
+    CHECK(WIFSIGNALED(11), "11 = 被信号 11 杀死");
+    CHECK_EQ(WTERMSIG(0x8b), 11, "0x8b -> 信号 11");
+    CHECK(WCOREDUMP(0x8b), "bit 7 = core dump 标记");
+    CHECK(WIFSTOPPED(0x137f), "0x137f = 被信号 19 暂停");
+    CHECK_EQ(WSTOPSIG(0x137f), 19, "暂停信号取高 8 位");
+    CHECK(!WIFSIGNALED(0x7f), "0x7f 是暂停标签,不算信号死亡");
+    /* 回归锁：一旦写成 128+sig，exit(139) 与 SIGSEGV 就无法区分了 */
+    CHECK(WIFEXITED(139 << 8) && WEXITSTATUS(139 << 8) == 139,
+          "exit(139) 仍是正常退出,不与 SIGSEGV 混淆");
 
     /* ---------- 10. 网络结构体布局 ---------- */
     CHECK_EQ(sizeof(struct sockaddr), 16, "sizeof(struct sockaddr) = 16");
@@ -260,7 +267,21 @@ int main(void) {
     if (pid > 0) {
         int st2 = 0;
         waitpid(pid, &st2, 0);
-        CHECK_EQ(WEXITSTATUS(st2), 0, "execvp(\"echo\") 真的执行成功");
+        CHECK(WIFEXITED(st2) && WEXITSTATUS(st2) == 0, "execvp(\"echo\") 真的执行成功");
+    }
+
+    /* 子进程被信号杀死：内核内部存 128+15，转换后低 7 位应是 15 */
+    fflush(stdout);
+    pid = fork();
+    if (pid == 0) {
+        kill(getpid(), SIGTERM);
+        _exit(0);                      /* 信号没生效才会走到这里 */
+    }
+    if (pid > 0) {
+        int st3 = 0;
+        waitpid(pid, &st3, 0);
+        CHECK(WIFSIGNALED(st3), "SIGTERM 致死 -> WIFSIGNALED 成立");
+        CHECK_EQ(WTERMSIG(st3), SIGTERM, "WTERMSIG 取回信号号 15");
     }
 
     TEST_END();

@@ -848,8 +848,14 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
                 .map(|child| child.exit_code)
                 .unwrap_or(0);
 
+            let status: i32 = if code >= 128 {
+                (code - 128) & 0x7f
+            } else {
+                (code & 0xff) << 8
+            };
+
             if self
-                .write_user_i32(current_pid, exit_code_ptr, code)
+                .write_user_i32(current_pid, exit_code_ptr, status)
                 .is_none()
             {
                 return WaitPidAction::Return(-1);

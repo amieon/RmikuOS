@@ -1307,7 +1307,7 @@ static int run_external(int argc, char *argv[], int background) {
         int status = 0;
         while (waitpid(pid, &status, 0) < 0) yield();
         set_echo(0);   /* 回 shell 提示符, 关回显 */
-        return WEXITSTATUS(status);
+        return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
     } else {
         set_echo(0);
         fputs("fork failed\n", stdout);
@@ -1530,7 +1530,9 @@ static int run_pipeline(char *line) {
         int status;
         waitpid(pids[i], &status, 0);
         if (i == npid - 1) {
-            last_status = WEXITSTATUS(status);
+            /* 同上一处：$? = 退出码，或 128 + 信号号 */
+            last_status = WIFEXITED(status) ? WEXITSTATUS(status)
+                                            : 128 + WTERMSIG(status);
         }
     }
     return last_status;
