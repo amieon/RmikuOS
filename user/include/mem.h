@@ -7,9 +7,26 @@ extern "C" {
 #include "lock.h"
 
 /* ---- 内存保护标志(唯一定义点) ---- */
+#define PROT_NONE  0
 #define PROT_READ  1
 #define PROT_WRITE 2
 #define PROT_EXEC  4
+
+/* ---- 映射标志 ----
+ * 内核只做匿名映射（没有 file-backed mmap），MAP_* 对内核本身没意义，
+ * 但必须在这里定义，理由有点绕：
+ *   1. 可移植代码（git 的 compat/mmap.c，NO_MMAP 路径）要拿 flags 跟
+ *      MAP_PRIVATE 比一下才肯继续；
+ *   2. 我们值钱的地方是"只要 PROT_* 可见，MAP_* 就该同样可见"，而 PROT_*
+ *      就在这个头里；可 git 在 NO_MMAP 下**不会** include <sys/mman.h>
+ *      （它以为平台会从别处给），于是只能落在这里。
+ * 数值照 Linux，方便对照。 */
+#define MAP_SHARED    0x01
+#define MAP_PRIVATE   0x02
+#define MAP_FIXED     0x10
+#define MAP_ANONYMOUS 0x20
+#define MAP_ANON      MAP_ANONYMOUS
+#define MAP_FAILED    ((void *)-1)
 
 /* ---- mmap / munmap ---- */
 static inline void *mmap(usize len, usize prot) {
