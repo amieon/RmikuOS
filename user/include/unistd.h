@@ -13,6 +13,7 @@
 #include "time.h"        /* usleep/time */
 #include "sys/types.h"
 #include "errno.h"
+#include "ipc.h"
 
 #ifdef __cplusplus
 extern "C" {

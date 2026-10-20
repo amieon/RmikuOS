@@ -429,16 +429,22 @@ static inline unsigned long long _mkstemp_next_seed(const void *tmpl) {
     return _mkstemp_mix64(_mkstemp_base + (++_mkstemp_seq) * 0x9E3779B97F4A7C15ull);
 }
 
-/* 内部实现：把模板末尾 6 个 X 换成随机字符并**原子创建**。
- * is_dir=0 → 建文件(返回 fd)；is_dir=1 → 建目录(返回 0)。失败返回 -1。 */
-static inline int _mkstemp_create(char *tmpl, int is_dir) {
+/* 内部实现：把模板里那 6 个 X 换成随机字符并**原子创建**。
+ * is_dir=0 → 建文件(返回 fd)；is_dir=1 → 建目录(返回 0)。失败返回 -1。
+ * suffixlen 是尾部要保留的后缀长度（mkstemps 用，例如 "fooXXXXXX.pack"）。 */
+static inline int _mkstemp_create_sfx(char *tmpl, int is_dir, int suffixlen) {
     usize n = strlen(tmpl);
-    if (n < 6) {
-        return -1;                       /* 模板太短，放不下 6 个 X */
+    if (suffixlen < 0) {
+        return -1;
     }
-    for (usize i = n - 6; i < n; ++i) {
+    usize need = (usize)suffixlen + 6;
+    if (n < need) {
+        return -1;                       /* 模板太短，放不下 6 个 X + 后缀 */
+    }
+    usize xs = n - need;                 /* 6 个 X 的起始位置 */
+    for (usize i = xs; i < xs + 6; ++i) {
         if (tmpl[i] != 'X') {
-            return -1;                   /* 必须以 X 结尾（POSIX 要求） */
+            return -1;                   /* 必须是 6 个连续的 X（POSIX 要求） */
         }
     }
 
@@ -455,7 +461,7 @@ static inline int _mkstemp_create(char *tmpl, int is_dir) {
     for (int attempt = 0; attempt < 100; ++attempt) {
         unsigned long long r = s + (unsigned long long)attempt * 0x94D049BB133111EBull;
         for (int i = 5; i >= 0; --i) {
-            tmpl[n - 6 + (usize)i] = alpha[r % nchars];
+            tmpl[xs + (usize)i] = alpha[r % nchars];
             r /= nchars;
         }
 
@@ -477,12 +483,21 @@ static inline int _mkstemp_create(char *tmpl, int is_dir) {
  * 模板形如 "/tmp/fooXXXXXX"，末尾 6 个 X 会被替换成实际名字（就地修改）。
  * 失败返回 -1，此时模板内容未定义（POSIX 同样不保证）。 */
 static inline int mkstemp(char *tmpl) {
-    return _mkstemp_create(tmpl, 0);
+    return _mkstemp_create_sfx(tmpl, 0, 0);
 }
 
 /* mkdtemp: 同上但建目录（mode 0700）。成功返回 tmpl，失败返回 NULL。 */
 static inline char *mkdtemp(char *tmpl) {
-    return _mkstemp_create(tmpl, 1) == 0 ? tmpl : (char *)0;
+    return _mkstemp_create_sfx(tmpl, 1, 0) == 0 ? tmpl : (char *)0;
+}
+
+/* mkstemps: 6 个 X **后面还带固定后缀**的版本。glibc/BSD 扩展，POSIX 没有，
+ * 但 git 的 tempfile.c 用它（"XXXXXX.pack"/"XXXXXX.lock" 这种命名）。
+ * 例："obj/tmp_objXXXXXX.pack" + suffixlen=5 → X 在前面被替换，".pack" 保留。
+ * 语义与 mkstemp 完全一样（O_EXCL 原子性底线的理由见上面那段），
+ * 只是"X 的结束位置"从 len 变成 len-suffixlen。 */
+static inline int mkstemps(char *tmpl, int suffixlen) {
+    return _mkstemp_create_sfx(tmpl, 0, suffixlen);
 }
 
 static inline isize unlink2(const char *path, usize len) {

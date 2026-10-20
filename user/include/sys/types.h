@@ -6,6 +6,9 @@
 
 #include "types.h"    /* usize/isize/size_t */
 
+/* 字节序宏。glibc 的 <sys/types.h> 也是从这里间接给出 __BYTE_ORDER 的 */
+#include "../endian.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

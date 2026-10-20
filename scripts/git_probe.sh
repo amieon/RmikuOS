@@ -63,16 +63,39 @@ for v in "${NOVARS[@]}"; do
   NOMAKE+=("$v=1")
 done
 
+# -DNO_REGEX 只关掉"用系统 regex"，<regex.h> 这个 include 还是无条件的。
+# make 里由下面两行补上真正的实现：
+#     ifdef NO_REGEX
+#         COMPAT_CFLAGS += -Icompat/regex
+#         COMPAT_OBJS   += compat/regex/regex.o
+# probe 不经过 make，必须自己镜像这个 -I，否则会在 <regex.h> 上假失败
+# （make 阶段能过去 —— 之前就是这个差异把人误导了一次）。
+COMPAT_INC=(
+  -I"$SRC/compat/regex"
+)
+
+if [ ! -f "$SRC/compat/regex/regex.h" ]; then
+  echo "[git] ✗ 找不到 $SRC/compat/regex/regex.h"
+  echo "      这个目录是 git 自带的 GNU regex；源码树不完整就必然报 regex.h not found。"
+  echo "      确认版本是 v2.33.1，且 clone 时没加 --filter=blob:none 之类的省流量选项。"
+  exit 1
+fi
+
 CFLAGS=(
   "${ARCHFLAGS[@]}"
   -Os -ffreestanding -fno-builtin
   -I"$ROOT/user/include"
   -I"$ROOT/user/zlib"
   -I"$SRC"
+  "${COMPAT_INC[@]}"
   "${NOFLAGS[@]}"
 )
 
 mkdir -p "$OUT"
+
+# 每次把搜索路径打出来：probe / lib 两个阶段的差异一旦出现，第一眼就能看见，
+# 不用去猜"我到底跑的是不是改过的脚本"。
+echo "[git] -I: $ROOT/user/include | $ROOT/user/zlib | $SRC | $SRC/compat/regex"
 
 case "$STAGE" in
   probe)
@@ -93,9 +116,13 @@ case "$STAGE" in
 
   lib)
     echo "[git] make libgit.a（$ARCH，-j$(nproc 2>/dev/null || echo 4)）"
+    # NEEDS_LIBRT：config.mak.uname 的 Linux 分支会设它，Makefile 于是往 EXTLIBS 里加
+    # `-lrt`。交叉工具链没有 librt → 最后链接才炸，而且报错信息离原因很远。
+    # 我们的 clock_gettime 在头里，根本不需要它，直接置空覆盖掉。
     make -C "$SRC" -j"$(nproc 2>/dev/null || echo 4)" \
       CC="$CC" AR="$AR" \
       CFLAGS="${CFLAGS[*]}" \
+      NEEDS_LIBRT= \
       "${NOMAKE[@]}" \
       libgit.a 2>&1 | tee "$OUT/make_libgit.log" | tail -30
 
