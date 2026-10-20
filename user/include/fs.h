@@ -41,10 +41,21 @@ extern "C" {
 #define AT_EACCESS          0x200   /* faccessat: 用有效身份(euid)而非真实身份(ruid) */
 #define AT_SYMLINK_FOLLOW   0x400   /* linkat: 跟随源 symlink（未实现，返回 -1） */
 
+/*
+ * 内核 getdents 的字节布局：64 字节/条，必须与 kernel/src/fs/dirent.rs 一致。
+ *
+ * 关于 d_type：POSIX 要求 dirent 有 d_type，但这块 ABI 没留空位，
+ * 于是借 reserved[0]（内核只写 file_type/name_len/name，reserved 是
+ * don't care，从不回读；偏移和总长都没变）。两者语义不同：
+ *   file_type = 内核枚举（1=文件 2=目录 3=符号链接）
+ *   d_type    = POSIX DT_* 常量（4=目录 8=普通文件 10=符号链接 …）
+ * readdir() 在拷进 POSIX 视图时把前者翻译成后者。
+ */
 struct dirent {
     unsigned char file_type;   /* 1=文件 2=目录（内核值） */
     unsigned char name_len;    /* 名字长度, name 不带 NUL */
-    unsigned char reserved[6];
+    unsigned char d_type;      /* @2: DT_*（POSIX 值, 只有 readdir 填） */
+    unsigned char reserved[5];
     union {
         char name[56];         /* 内核字段名 */
         char d_name[56];       /* POSIX 别名（布局相同） */
@@ -507,16 +518,20 @@ static inline isize remove_recursive(const char *path) {
     return remove_recursive2(path, strlen(path));
 }
 
-/* fcntl 必须是变参
+/* fcntl 必须是**变参**：POSIX 里 F_GETFL / F_GETFD 这类"查询"命令只传两个参数，
+ * 而 F_SETFL / F_SETFD / F_DUPFD 带第三个。固定三参版本会让
+ *     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+ * 这种写法直接编不过（内层只给了两个实参）—— zlib 的 gzlib.c 就是这么写的。
+ *
  * 只有查询类命令才跳过 va_arg。目前内核只实现 F_GETFL / F_SETFL，
- * 以后新增 F_GETFD 之类时记得同步这个 switch，否则会读到栈上的垃圾当 arg。
+ * **以后新增 F_GETFD 之类时记得同步这个 switch**，否则会读到栈上的垃圾当 arg。
  * （变参函数编译器不检查实参个数，传错只能靠这里的白名单兜。） */
 static inline int fcntl(int fd, int cmd, ...) {
     va_list ap;
     int arg = 0;
     switch (cmd) {
     case F_GETFL:
-        break;                   
+        break;                     /* 查询类：没有第三个实参 */
     default:
         va_start(ap, cmd);
         arg = va_arg(ap, int);

@@ -44,4 +44,28 @@ extern int errno;
 #define EOPNOTSUPP      95
 #define EAFNOSUPPORT    97   /* 地址家族不支持(inet_pton 对非 AF_INET 的返回) */
 #define EWOULDBLOCK     EAGAIN
+
+/* ---- 下面这批本内核永远不会产生，纯属"移植代码会写进 switch/case" ----
+ * 例：git 的 connect.c 在函数体里直接比较 ECONNREFUSED；缺定义就是编译错误，
+ * 而这块代码在本地 git 里根本不会被调用，所以给值即可，不承诺语义。 */
+#define ETXTBSY         26
+#define EOVERFLOW       75
+#define EILSEQ          84
+#define ENOTSOCK        88
+#define EMSGSIZE        90
+#define EPROTONOSUPPORT 93
+#define EADDRINUSE      98
+#define EADDRNOTAVAIL   99
+#define ENETDOWN       100
+#define ENETUNREACH    101
+#define ECONNABORTED   103
+#define ECONNRESET     104
+#define ENOBUFS        105
+#define EISCONN        106
+#define ENOTCONN       107
+#define ETIMEDOUT      110
+#define ECONNREFUSED   111
+#define EHOSTUNREACH   113
+#define EALREADY       114
+#define EINPROGRESS    115
 #endif

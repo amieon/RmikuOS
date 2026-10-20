@@ -21,6 +21,29 @@ extern "C" {
 
 typedef struct __rk_DIR DIR;
 
+/* POSIX 的 d_type 常量（值与 Linux 一致，可移植代码会直接比较它们）。
+ * 注意跟 fs.h 的 FILE_TYPE_*（内核枚举）不是一回事，readdir 负责翻译。 */
+#ifndef DT_UNKNOWN
+#define DT_UNKNOWN  0
+#define DT_FIFO     1
+#define DT_CHR      2
+#define DT_DIR      4
+#define DT_BLK      6
+#define DT_REG      8
+#define DT_LNK     10
+#define DT_SOCK    12
+#endif
+
+/* 内核 file_type -> POSIX d_type */
+static inline unsigned char rk_dtype_of(unsigned char file_type) {
+    switch (file_type) {
+    case FILE_TYPE_FILE:    return DT_REG;
+    case FILE_TYPE_DIR:     return DT_DIR;
+    case FILE_TYPE_SYMLINK: return DT_LNK;
+    default:                return DT_UNKNOWN;
+    }
+}
+
 struct __rk_DIR {
     int fd;
     char kbuf[1024];          /* 内核格式条目缓冲 */
@@ -61,6 +84,10 @@ static inline struct dirent *readdir(DIR *dirp) {
         if (n > 255) n = 255;
         memcpy(d->cur.d_name, ke->name, (usize)n);
         d->cur.d_name[n] = '\0';
+        /* 以前这两个字段根本没填（cur 是未初始化的栈/堆内存），
+         * 有代码读 file_type 时会拿到垃圾；顺手补上。 */
+        d->cur.file_type = ke->file_type;
+        d->cur.d_type    = rk_dtype_of(ke->file_type);
         return &d->cur;
     }
 }

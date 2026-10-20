@@ -10,21 +10,30 @@ extern "C" {
 #define WNOHANG 1
 #define WUNTRACED 0
 
-/* wait status 编码：内核给的是 exit_code << 8（shell 的 $? 就是 exit_code）。
+/* wait status 是 **POSIX 的 16 位编码**（内核在 manager.rs 的 try_waitpid 里
+ * 从内部 exit_code 转换后写回，见那里的注释）：
  *
- * 与 Linux 的差别：Linux 把"被信号杀死"写在低 7 位（0x000b = SIGSEGV），
- * 而本内核直接把信号死亡**折算成退出码 128+sig**（139 = SIGSEGV）。
- * 所以判定只能用退出码大小，不能照抄 Linux 的位掩码：
- *   exit_code <  128 → 正常退出
- *   exit_code >= 128 → 被信号 (exit_code - 128) 杀死
- * 代价：程序自己 exit(200) 也会被判成"被信号 72 杀死"。教学系统接受，
- * 真正要区分就得让内核改 wait status 编码（另一次 ABI 变更）。 */
-#define RK_WAIT_EXIT_CODE(status) (((status) >> 8) & 0xFF)
-#define WEXITSTATUS(status)  RK_WAIT_EXIT_CODE(status)
-#define WIFEXITED(status)    (RK_WAIT_EXIT_CODE(status) < 128)
-#define WIFSIGNALED(status)  (RK_WAIT_EXIT_CODE(status) >= 128)
-#define WTERMSIG(status)     (RK_WAIT_EXIT_CODE(status) - 128)
-#define WCOREDUMP(status)    (0)   /* 内核不产生 core，恒 0 */
+ *   bits 15..8   退出码（正常退出）/ 暂停信号（WIFSTOPPED）
+ *   bit  7       core dump 标记
+ *   bits 6..0    终止信号号；0 表示正常退出
+ *
+ * 三种结局互斥可辨：
+ *   WIFEXITED   低 7 位 == 0
+ *   WIFSIGNALED 低 7 位非 0，且不是 0x7f
+ *   WIFSTOPPED  低 8 位 == 0x7f   ← 0x7f 是留给"暂停"的标签
+ *
+ * 为什么不能图省事写成 `128 + sig`：那样 `exit(139)` 和"被 SIGSEGV 杀死"
+ * 是同一个数，父进程无从区分；core dump 位与暂停态也无处安放。
+ * 而且一旦压平成 0..255，信息就永久丢了 —— 所以编码必须在 syscall 边界做。
+ *
+ * 顺带解释 exit 码为什么只有 0..255：不是语言限制，是这 8 位位宽决定的。 */
+#define WIFEXITED(status)   (((status) & 0x7f) == 0)
+#define WEXITSTATUS(status) (((status) >> 8) & 0xff)
+#define WIFSIGNALED(status) (((status) & 0x7f) != 0 && ((status) & 0x7f) != 0x7f)
+#define WTERMSIG(status)    ((status) & 0x7f)
+#define WCOREDUMP(status)   (((status) & 0x80) != 0)
+#define WIFSTOPPED(status)  (((status) & 0xff) == 0x7f)
+#define WSTOPSIG(status)    (((status) >> 8) & 0xff)
 
 static inline isize yield(void) {
     return syscall3(SYS_YIELD, 0, 0, 0);

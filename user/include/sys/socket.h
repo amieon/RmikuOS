@@ -16,10 +16,17 @@
 extern "C" {
 #endif
 
+/* 地址族类型。POSIX 要求它存在，且 struct sockaddr 的第一个字段就是它。
+ * 这里用 unsigned short（16 位），与内核回传的 family 宽度一致。 */
+#ifndef RK_SA_FAMILY_T
+#define RK_SA_FAMILY_T
+typedef unsigned short sa_family_t;
+#endif
+
 /* 通用地址头：具体协议的结构都以它为前缀（POSIX 的要求） */
 struct sockaddr {
-    unsigned short sa_family;
-    char           sa_data[14];
+    sa_family_t sa_family;
+    char        sa_data[14];
 };
 
 #ifndef AF_UNSPEC
