@@ -13,6 +13,7 @@
 #include "time.h"        /* usleep/time */
 #include "sys/types.h"
 #include "errno.h"
+#include "syscall.h"     /* SYS_GETPAGESIZE */
 #include "ipc.h"
 
 #ifdef __cplusplus
@@ -51,9 +52,33 @@ static inline int gethostname(char *name, unsigned long len) {
     return 0;
 }
 
+/* ---- getpagesize / sysconf ----
+ * getpagesize() 是 BSD 名字，POSIX 的正规写法是 sysconf(_SC_PAGESIZE)。
+ *
+ * **页大小只在内核定义一次**（kernel/src/mm/config.rs 的 PAGE_SIZE），
+ * 用户态通过 98 号系统调用问出来：这样以后换页大小只改内核一处，
+ * 不会出现"内核改了、libc 还写死 4096"这种没有编译错误、只会在运行时
+ * 表现成 mmap 未对齐的怪 bug。
+ *
+ * 缓存放文件作用域 —— 函数内可变 static 会让 TCC 生成原子守卫，这是本项目
+ * 已知雷区（见 fs.h 里 mkstemp 那段注释）。
+ *
+ * 兜底 4096：只有"跑的是还没有 98 号的老内核"时才走到。那种内核的页大小
+ * 本来就是 4KiB，所以这不是猜，而是对老内核的正确描述。
+ */
+static usize __rk_pagesize_cache = 0;
+
+static inline int getpagesize(void) {
+    if (__rk_pagesize_cache == 0) {
+        isize r = syscall3(SYS_GETPAGESIZE, 0, 0, 0);
+        __rk_pagesize_cache = (r > 0) ? (usize)r : 4096;
+    }
+    return (int)__rk_pagesize_cache;
+}
+
 /* ---- sysconf ----
  * 只实现真正有意义的三个（编号与 glibc 一致，方便对照）：
- *   _SC_PAGESIZE         内核用 4KiB 页
+ *   _SC_PAGESIZE         内核页大小（问 98 号，不写死）
  *   _SC_OPEN_MAX         进程 fd 上限（kernel/src/task/manager_wrapper.rs: MAX_FD_PER_PROCESS）
  *   _SC_NPROCESSORS_ONLN 内核没有暴露"在线 hart 数"的接口，保守返回 1
  *                       （调用方会据此少开线程，不会因此算错）
@@ -64,7 +89,7 @@ static inline int gethostname(char *name, unsigned long len) {
 
 static inline long sysconf(int name) {
     switch (name) {
-    case _SC_PAGESIZE:         return 4096;
+    case _SC_PAGESIZE:         return (long)getpagesize();
     case _SC_OPEN_MAX:         return 1024;
     case _SC_NPROCESSORS_ONLN: return 1;
     default: errno = EINVAL;   return -1;

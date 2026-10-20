@@ -41,6 +41,10 @@ pub fn sys_munmap(addr: usize, len: usize) -> isize {
     crate::task::munmap_current(addr, len)
 }
 
+pub fn sys_getpagesize() -> isize {
+    crate::mm::config::PAGE_SIZE as isize
+}
+
 pub fn sys_set_process_tickets(tid : usize, tickets: usize) -> isize {
     crate::task::set_process_tickets_current(tid, tickets)
 }
@@ -117,7 +121,6 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     crate::task::set_fcntl(fd, cmd, arg)
 }
 
-// ===== 环境变量子系统 syscall handlers =====
 
 /// getenv(key_ptr, key_len, buf_ptr, buf_len)
 /// 返回值长度（不含 NUL），不存在返回 -1；buf=0 时仅探测长度。
@@ -230,8 +233,6 @@ pub fn sys_listenv(buf_ptr: usize, buf_len: usize) -> isize {
     total as isize
 }
 
-// ===== 进程凭证 / 权限系统 syscall handlers =====
-//
 // 凭证模型(简化版,不实现 saved-uid/saved-gid):
 //   - 特权判定: euid == 0 即为超级用户(root)。
 //   - setuid/seteuid/setgid/setegid 以及 setreuid/setregid 遵循以下规则:

@@ -104,6 +104,7 @@ extern "C" {
 #define SYS_RENAMEAT                 95
 #define SYS_LINKAT                   96
 #define SYS_UMASK                    97
+#define SYS_GETPAGESIZE              98   
 
 
 

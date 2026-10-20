@@ -52,6 +52,9 @@ void *memcpy(void *dst, const void *src, unsigned long n);
 
 /* ---- 用户态堆分配器 ---- */
 #define MALLOC_ALIGNMENT 16
+/* 这是分配粒度，不是"内核页大小"的声明。
+ * 内核的 alloc_mmap_range 会自己按真实 PAGE_SIZE 圆整，所以这里就算跟页大小
+ * 不一致，也只会浪费一点内存，不会算错地址。真要问页大小请用 getpagesize()。 */
 #define MALLOC_PAGE_SIZE 4096
 #define MALLOC_CHUNK_SIZE (64 * 1024)
 

@@ -103,6 +103,7 @@ pub const SYSCALL_FCHDIR: usize = 94;
 pub const SYSCALL_RENAMEAT: usize = 95;
 pub const SYSCALL_LINKAT: usize = 96;
 pub const SYSCALL_UMASK: usize = 97;
+pub const SYSCALL_GETPAGESIZE: usize = 98;
 
 
 
@@ -241,6 +242,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_RENAMEAT => fs::sys_renameat(args[0], args[1], args[2], args[3], args[4], args[5]),
         SYSCALL_LINKAT => fs::sys_linkat(args[0], args[1], args[2], args[3], args[4], args[5]),
         SYSCALL_UMASK => process::sys_umask(args[0]),
+        SYSCALL_GETPAGESIZE => process::sys_getpagesize(),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),
