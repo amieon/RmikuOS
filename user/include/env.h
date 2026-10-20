@@ -6,6 +6,7 @@ extern "C" {
 #include "syscall.h"
 #include "types.h"
 #include "string.h"
+#include "errno.h"    /* putenv 失败要置 EINVAL */
 
 /* 取环境变量到调用方提供的缓冲。
  * 返回变量值长度（不含结尾 NUL），不存在返回 -1。
@@ -52,6 +53,30 @@ static inline isize clearenv(void) {
  * buf=0 时返回所需大小。 */
 static inline isize listenv(char *buf, usize buf_len) {
     return syscall3(SYS_LISTENV, (usize)buf, buf_len, 0);
+}
+
+/* ---- putenv ---- 
+ * POSIX 的 putenv 收"NAME=VALUE"这种一整串，语义上"这串本身成为环境的一部分"。
+ *
+ * 和我们内核的 (key, key_len, val, val_len) 通道有两处不匹配，必须说清楚：
+ *   1. 名字要以 '=' 切分。不改调用方的字符串（glibc 也不改），只把名字拷到
+ *      栈上再调用；值部分的指针直接指进原串（原串本来就以 NUL 结尾）。
+ *   2. "成为环境的一部分"（即后续修改这块内存会影响环境）我们做不到 —— 环境
+ *      存在内核里。所以这里是**拷贝语义**：调用方之后改那个 buffer 不影响环境。
+ *      git 的 compat/setenv.c 就是拼一个临时串丢进来，用完就扔，正好符合。
+ *
+ * 没有 '=' 的情况 POSIX 未定义（glibc 当删除处理），这里明确拒绝 EINVAL，
+ * 不猜。 */
+static inline int putenv(char *s) {
+    if (!s) { errno = EINVAL; return -1; }
+    const char *eq = strchr(s, '=');
+    if (!eq || eq == s) { errno = EINVAL; return -1; }
+    usize nlen = (usize)(eq - s);
+    char name[128];
+    if (nlen >= sizeof(name)) { errno = EINVAL; return -1; }   /* 变量名过长 */
+    memcpy(name, s, nlen);
+    name[nlen] = '\0';
+    return (int)setenv(name, nlen, eq + 1, strlen(eq + 1), 1);
 }
 
 #ifdef __cplusplus

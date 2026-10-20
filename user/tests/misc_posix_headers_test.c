@@ -335,5 +335,17 @@ int main(void) {
     char bad3[] = "abXXXXXc";        /* 5 个 X 不合法 */
     CHECK_EQ(mkstemps(bad3, 1), -1, "mkstemps 中间不是连续 6 个 X -> -1");
 
+    /* ---------- 19. putenv ----------
+     * git 在没有 putenv 的平台上会编 compat/setenv.c，那里就是拼
+     * "name=value" 整串丢给 putenv。我们的环境在内核里，所以是**拷贝语义**
+     * （之后改那个 buffer 不影响环境）——这点与 glibc 不同，但调用方无感。 */
+    char penv[] = "RK_PUTENV=hi";
+    CHECK_EQ(putenv(penv), 0, "putenv 按 '=' 切分后设置成功");
+    char *pv = getenv("RK_PUTENV");
+    CHECK(pv && strcmp(pv, "hi") == 0, "putenv 之后 getenv 读回 hi");
+    char pbad[] = "NOEQUALS";
+    CHECK_EQ(putenv(pbad), -1, "没有 '=' 的字符串 -> EINVAL（POSIX 未定义，不猜）");
+    unsetenv_s("RK_PUTENV");         /* 清理，不计断言 */
+
     TEST_END();
 }
