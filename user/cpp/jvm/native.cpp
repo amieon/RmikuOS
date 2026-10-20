@@ -324,11 +324,11 @@ void register_natives(VM& vm) {
     };
     vm.natives["Rmiku$Net.bind(II)I"] = [](VM& vm, std::vector<Value>& args)->Value {
         struct sockaddr_in a = addr_of(0, (unsigned short)args[1].asInt());
-        return Value::fromInt(bind(args[0].asInt(), &a, sizeof(a)));
+        return Value::fromInt(bind(args[0].asInt(), (struct sockaddr *)&a, sizeof(a)));
     };
     vm.natives["Rmiku$Net.connect(III)I"] = [](VM& vm, std::vector<Value>& args)->Value {
         struct sockaddr_in a = addr_of((unsigned int)args[1].asInt(), (unsigned short)args[2].asInt());
-        return Value::fromInt(connect(args[0].asInt(), &a, sizeof(a)));
+        return Value::fromInt(connect(args[0].asInt(), (struct sockaddr *)&a, sizeof(a)));
     };
     vm.natives["Rmiku$Net.send(ILjava/lang/String;)I"] = [](VM& vm, std::vector<Value>& args)->Value {
         if (!args[1].obj) return Value::fromInt(-1);
@@ -339,7 +339,7 @@ void register_natives(VM& vm) {
         if (!args[1].obj) return Value::fromInt(-1);
         const std::string& s = args[1].obj->hack_str;
         struct sockaddr_in a = addr_of((unsigned int)args[2].asInt(), (unsigned short)args[3].asInt());
-        return Value::fromInt(sendto(args[0].asInt(), s.c_str(), (int)s.size(), 0, &a, sizeof(a)));
+        return Value::fromInt(sendto(args[0].asInt(), s.c_str(), (int)s.size(), 0, (struct sockaddr *)&a, sizeof(a)));
     };
     vm.natives["Rmiku$Net.recv(I[B)I"] = [](VM& vm, std::vector<Value>& args)->Value {
         Object* arr = args[1].obj;

@@ -49,7 +49,7 @@ int main(void) {
 
     /* [2] connect 到 10.0.2.3:53 */
     struct sockaddr_in srv = addr_of(DNS_SERVER_IP, DNS_PORT);
-    CHECK(connect(fd, &srv, sizeof srv) == 0, "udp connect");
+    CHECK(connect(fd, (struct sockaddr *)&srv, sizeof srv) == 0, "udp connect");
 
     /* [3] getsockname:autobind 的端口落在 49152+ 临时端口段 */
     struct sockaddr_in mine;
@@ -83,7 +83,7 @@ int main(void) {
     /* [6] connect(0.0.0.0:0) 断连,send 恢复失败 */
     {
         struct sockaddr_in none_ = addr_of(0, 0);
-        CHECK(connect(fd, &none_, sizeof none_) == 0, "disconnect via connect(0.0.0.0:0)");
+        CHECK(connect(fd, (struct sockaddr *)&none_, sizeof none_) == 0, "disconnect via connect(0.0.0.0:0)");
         CHECK(send(fd, &one, 1, 0) < 0, "send after disconnect fails");
     }
 

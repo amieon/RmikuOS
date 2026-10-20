@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
 
     /* addr_of 内部已 htons(port) —— 不要再套 htons, 否则双重转换变回主机序 */
     struct sockaddr_in srv = addr_of(host_ip, (unsigned short)port);
-    if (connect(fd, &srv, sizeof srv) < 0) {
+    if (connect(fd, (struct sockaddr *)&srv, sizeof srv) < 0) {
         printf("wget: connect %s:%d failed\n", ip, port);
         return 1;
     }

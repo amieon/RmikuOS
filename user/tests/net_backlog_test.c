@@ -41,7 +41,7 @@ int main(void) {
 
     net_setsockopt(lfd, SO_REUSEADDR, 1);
     struct sockaddr_in local = addr_of(0, BACKLOG_PORT);
-    CHECK(bind(lfd, &local, sizeof local) == 0, "bind 8080");
+    CHECK(bind(lfd, (struct sockaddr *)&local, sizeof local) == 0, "bind 8080");
     CHECK(listen(lfd, 1) == 0, "listen backlog=1");
 
     printf("[INFO] READY: run on host now:\n");
@@ -74,7 +74,7 @@ int main(void) {
     CHECK((p.revents & POLLIN) != 0, "first connection POLLIN");
 
     struct sockaddr_in peer1;
-    int c1 = accept(lfd, &peer1, 0);
+    int c1 = accept(lfd, (struct sockaddr *)&peer1, 0);
     CHECK(c1 >= 0, "accept first connection");
     if (c1 >= 0) {
         printf("[INFO] accepted first, backlog slot freed\n");
@@ -87,7 +87,7 @@ int main(void) {
     CHECK((p.revents & POLLIN) != 0, "second connection POLLIN");
 
     struct sockaddr_in peer2;
-    int c2 = accept(lfd, &peer2, 0);
+    int c2 = accept(lfd, (struct sockaddr *)&peer2, 0);
     CHECK(c2 >= 0, "accept second connection after retry");
     if (c2 >= 0) {
         net_close(c2);

@@ -22,7 +22,7 @@ int main(int argc, char **argv)
     net_setsockopt(lfd, SO_REUSEADDR, 1);
 
     struct sockaddr_in local = addr_of(0, HTTPD_PORT);
-    if (bind(lfd, &local, sizeof local) < 0) { printf("[httpd] bind failed\n"); return 1; }
+    if (bind(lfd, (struct sockaddr *)&local, sizeof local) < 0) { printf("[httpd] bind failed\n"); return 1; }
     if (listen(lfd, 4) < 0) { printf("[httpd] listen failed\n"); return 1; }
     printf("[httpd] RmikuOS httpd listening on 10.0.2.15:%d\n", HTTPD_PORT);
 
@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 
     for (;;) {
         struct sockaddr_in from = {0};
-        int cfd = accept(lfd, &from, 0);
+        int cfd = accept(lfd, (struct sockaddr *)&from, 0);
         if (cfd < 0) {
             continue;                 // accept 周期性超时是正常的
         }

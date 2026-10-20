@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) { fputs("ntpdate: socket failed\n", stdout); return 1; }
     struct sockaddr_in local = addr_of(0, 0);
-    if (bind(fd, &local, sizeof local) < 0) {
+    if (bind(fd, (struct sockaddr *)&local, sizeof local) < 0) {
         fputs("ntpdate: bind failed\n", stdout); return 1;
     }
     struct sockaddr_in srv = addr_of(server_ip, port);
@@ -89,14 +89,14 @@ int main(int argc, char *argv[]) {
         pkt[0] = 0x1B; /* LI=0 VN=4 Mode=3(client) */
         unsigned long t1 = local_ntp64();
         put_u64(pkt + 24, t1); /* Origin timestamp */
-        if (sendto(fd, pkt, NTP_PKT_LEN, 0, &srv, sizeof srv) < 0) continue;
+        if (sendto(fd, pkt, NTP_PKT_LEN, 0, (struct sockaddr *)&srv, sizeof srv) < 0) continue;
 
         unsigned long t2 = 0, t3 = 0;
         int ok = 0;
         for (int r = 0; r < RECV_RETRY; r++) {
             unsigned char buf[512];
             struct sockaddr_in from = {0};
-            int n = recvfrom(fd, buf, sizeof buf, 0, &from, 0);
+            int n = recvfrom(fd, buf, sizeof buf, 0, (struct sockaddr *)&from, 0);
             if (n >= NTP_PKT_LEN) {
                 t2 = get_u64(buf + 32); /* Receive timestamp */
                 t3 = get_u64(buf + 40); /* Transmit timestamp */

@@ -45,7 +45,7 @@ int main(int argc, char **argv)
         h->cksum = cksum(pkt, 64);
 
         unsigned long t0 = get_ticks();
-        if (sendto(fd, pkt, 64, 0, &gw, sizeof gw) < 0) {
+        if (sendto(fd, pkt, 64, 0, (struct sockaddr *)&gw, sizeof gw) < 0) {
             printf("sendto failed\n"); return 1;
         }
         sent++;
@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         for (;;) {
             unsigned char buf[256];
             struct sockaddr_in from = {0};
-            int n = recvfrom(fd, buf, sizeof buf, 0, &from, 0);
+            int n = recvfrom(fd, buf, sizeof buf, 0, (struct sockaddr *)&from, 0);
             if (n >= 8) {
                 struct icmp_hdr *r = (void *)buf;
                 if (r->type == 0 && r->id == htons(PING_ID) && r->seq == htons(seq)) {

@@ -6,7 +6,7 @@ int main(void) {
 
     struct sockaddr_in host = addr_of(0x0A000202, 9999);
     printf("[user] connecting to 10.0.2.2:9999...\n");
-    if (connect(fd, &host, sizeof host) < 0) {
+    if (connect(fd, (struct sockaddr *)&host, sizeof host) < 0) {
         printf("[user] connect failed\n"); return 1;
     }
     printf("[user] connected!\n");

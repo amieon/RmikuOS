@@ -102,7 +102,7 @@ int main(void) {
     CHECK(fd >= 0, "socket udp");
     if (fd >= 0) {
         struct sockaddr_in local = addr_of(0, 0);
-        CHECK(bind(fd, &local, sizeof local) == 0, "udp bind port 0");
+        CHECK(bind(fd, (struct sockaddr *)&local, sizeof local) == 0, "udp bind port 0");
 
         struct pollfd u = { fd, POLLIN | POLLOUT, 0 };
         CHECK(poll(&u, 1, 0) == 1, "udp socket writable immediately");
@@ -110,7 +110,7 @@ int main(void) {
         CHECK((u.revents & POLLIN) == 0, "idle udp not readable");
 
         struct sockaddr_in srv = addr_of(DNS_SERVER_IP, DNS_PORT);
-        CHECK(connect(fd, &srv, sizeof srv) == 0, "udp connect dns");
+        CHECK(connect(fd, (struct sockaddr *)&srv, sizeof srv) == 0, "udp connect dns");
         unsigned char q[64];
         int qlen = build_dns_query(q);
         CHECK(send(fd, q, qlen, 0) == qlen, "send dns query");

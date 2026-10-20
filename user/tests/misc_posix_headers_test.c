@@ -17,6 +17,8 @@
 #include <stdlib.h>        /* bsearch */
 #include <pwd.h>           /* getpwnam */
 #include <signal.h>        /* sigaction */
+#include <libgen.h>        /* basename / dirname */
+#include <sys/resource.h>  /* getrlimit */
 #include <syslog.h>
 #include <grp.h>
 #include <alloca.h>
@@ -30,6 +32,11 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <dirent.h>        /* DT_* / d_type */
+#include <sys/un.h>        /* sockaddr_un */
+#include <sys/sysinfo.h>   /* struct sysinfo */
+#include <endian.h>        /* __BYTE_ORDER */
+#include <stddef.h>        /* offsetof */
 
 static int cmp_int(const void *a, const void *b) {
     int x = *(const int *)a, y = *(const int *)b;
@@ -283,6 +290,50 @@ int main(void) {
         CHECK(WIFSIGNALED(st3), "SIGTERM 致死 -> WIFSIGNALED 成立");
         CHECK_EQ(WTERMSIG(st3), SIGTERM, "WTERMSIG 取回信号号 15");
     }
+
+    /* ---------- 17. libgen.h / getrlimit ---------- */
+    char lp1[] = "/usr/lib/git";
+    CHECK_STREQ(basename(lp1), "git", "basename(/usr/lib/git)");
+    char lp2[] = "/usr/lib/git";
+    CHECK_STREQ(dirname(lp2), "/usr/lib", "dirname(/usr/lib/git)");
+    char lp3[] = "usr";
+    CHECK_STREQ(dirname(lp3), ".", "dirname(usr) = .");
+    char lp4[] = "/usr";
+    CHECK_STREQ(dirname(lp4), "/", "dirname(/usr) = /");
+    char lp5[] = "/";
+    CHECK_STREQ(basename(lp5), "/", "basename(/) = /");
+    char lp6[] = "a/b/";
+    CHECK_STREQ(basename(lp6), "b", "basename 会去掉尾斜杠");
+
+    struct rlimit rl;
+    CHECK_EQ(getrlimit(RLIMIT_NOFILE, &rl), 0, "getrlimit(RLIMIT_NOFILE) 成功");
+    CHECK_EQ(rl.rlim_cur, 1024, "NOFILE soft limit = 1024");
+    CHECK_EQ(getrlimit(RLIMIT_STACK, &rl), 0, "getrlimit(RLIMIT_STACK) 成功");
+    CHECK(rl.rlim_cur > 0, "STACK soft limit > 0");
+    CHECK_EQ(getrlimit(-1, (struct rlimit *)0), -1, "getrlimit 空指针返回 -1");
+
+    /* ---------- 18. 字节序 / dirent.d_type / mkstemps ----------
+     * 这三样都是"为了让 git 编过"才补的，但补的方式各有约束：
+     *   - 字节序必须由编译器内建宏决定，不能写死（换大端目标不用改代码）
+     *   - dirent 不能加字段（64 字节是内核 ABI），d_type 是借 reserved[0] 的
+     *   - mkstemps 的"X 的结束位置"是 len-suffixlen，不是 len
+     */
+    CHECK(__BYTE_ORDER == __LITTLE_ENDIAN, "两个目标架构都是小端");
+    CHECK_EQ((int)sizeof(struct dirent), 64, "struct dirent 仍是 64 字节（内核 ABI 未变）");
+    CHECK_EQ((int)offsetof(struct dirent, d_name), 8, "d_name 仍在偏移 8");
+    CHECK_EQ((int)offsetof(struct dirent, d_type), 2, "d_type 借用的是 reserved[0] 的位置");
+    CHECK_EQ(rk_dtype_of(FILE_TYPE_FILE), DT_REG, "内核 1(文件) -> DT_REG(8)");
+    CHECK_EQ(rk_dtype_of(FILE_TYPE_DIR), DT_DIR, "内核 2(目录) -> DT_DIR(4)");
+    CHECK_EQ(rk_dtype_of(FILE_TYPE_SYMLINK), DT_LNK, "内核 3(symlink) -> DT_LNK(10)");
+    CHECK_EQ(rk_dtype_of(99), DT_UNKNOWN, "不认识的内核类型 -> DT_UNKNOWN");
+
+    /* 模板不合法时必须在碰文件系统之前就失败（这里没有可写目录，正好只测算术） */
+    char bad1[] = "abc";
+    CHECK_EQ(mkstemps(bad1, 0), -1, "mkstemps 模板不足 6 个字符 -> -1");
+    char bad2[] = "abcdef";
+    CHECK_EQ(mkstemps(bad2, 2), -1, "mkstemps 后缀太长、放不下 6 个 X -> -1");
+    char bad3[] = "abXXXXXc";        /* 5 个 X 不合法 */
+    CHECK_EQ(mkstemps(bad3, 1), -1, "mkstemps 中间不是连续 6 个 X -> -1");
 
     TEST_END();
 }

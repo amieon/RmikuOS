@@ -13,6 +13,7 @@ extern "C" {
 #endif
 
 #include "syscall.h"
+#include "errno.h"    /* bind/connect 要把"非 AF_INET"报成 EAFNOSUPPORT */
 
 /* ---- 常量(POSIX 对齐) ---- */
 #define AF_INET      2
@@ -33,10 +34,20 @@ static inline unsigned int  htonl(unsigned int x) {
 static inline unsigned int  ntohl(unsigned int x) { return htonl(x); }
 
 /* ---- 地址结构 ---- */
-typedef unsigned int socklen_t;
+typedef unsigned int   socklen_t;
+typedef unsigned short sa_family_t;
+
+/* 通用地址头：POSIX 规定所有具体地址结构都以它为前缀。
+ * 定义放在 net.h（而不是 sys/socket.h）是因为后面的 bind/connect 要按
+ * sa_family 分派 —— 写成 sys/socket.h 会变成"socket.h 包含 net.h，
+ * net.h 又需要 socket.h"，循环包含。sys/socket.h 只保留地址族宏与 shutdown。 */
+struct sockaddr {
+    sa_family_t sa_family;
+    char        sa_data[14];
+};
 
 struct sockaddr_in {
-    unsigned short sin_family;   /* AF_INET */
+    sa_family_t    sin_family;   /* AF_INET */
     unsigned short sin_port;     /* 网络字节序 */
     unsigned int   sin_addr;     /* 网络字节序 */
     char           sin_zero[8];
@@ -49,6 +60,15 @@ static inline struct sockaddr_in addr_of(unsigned int ip, unsigned short port) {
     a.sin_port   = htons(port);
     a.sin_addr   = htonl(ip);
     return a;
+}
+
+/* 
+ * 内核只有 IPv4 的 (ip, port) 通道，所以非 AF_INET 一律诚实失败 EAFNOSUPPORT，
+ * 而不是拿 sockaddr_in 的布局去读 AF_UNIX 的路径。 */
+static inline const struct sockaddr_in *rk_sockaddr_in(const struct sockaddr *addr) {
+    if (!addr)                        { errno = EINVAL;         return (const struct sockaddr_in *)0; }
+    if (addr->sa_family != AF_INET)   { errno = EAFNOSUPPORT;   return (const struct sockaddr_in *)0; }
+    return (const struct sockaddr_in *)addr;
 }
 
 /* ---- 与内核 info 缓冲一致的临时结构(accept/recvfrom 回传用) ----
@@ -65,19 +85,24 @@ static inline int socket_tcp(void)         { return socket(AF_INET, SOCK_STREAM,
 static inline int socket_udp(void)         { return socket(AF_INET, SOCK_DGRAM, 0); }
 static inline int socket_raw(int protocol) { return socket(AF_INET, SOCK_RAW, protocol); }
 
-/* ---- bind / listen / accept / connect ---- */
-static inline int bind(int fd, const struct sockaddr_in *addr, socklen_t len) {
+/* ---- bind / listen / accept / connect ----
+ * 参数一律是 POSIX 的 `const struct sockaddr *`，内部收窄成 sockaddr_in。 */
+static inline int bind(int fd, const struct sockaddr *addr, socklen_t len) {
     (void)len;
-    return syscall3(SYS_NET_BIND, fd, ntohs(addr->sin_port), 0);
+    const struct sockaddr_in *in = rk_sockaddr_in(addr);
+    if (!in) return -1;
+    return syscall3(SYS_NET_BIND, fd, ntohs(in->sin_port), 0);
 }
 static inline int listen(int fd, int backlog) {
     return syscall3(SYS_NET_LISTEN, fd, backlog, 0);
 }
-static inline int connect(int fd, const struct sockaddr_in *addr, socklen_t len) {
+static inline int connect(int fd, const struct sockaddr *addr, socklen_t len) {
     (void)len;
-    return syscall3(SYS_NET_CONNECT, fd, ntohl(addr->sin_addr), ntohs(addr->sin_port));
+    const struct sockaddr_in *in = rk_sockaddr_in(addr);
+    if (!in) return -1;
+    return syscall3(SYS_NET_CONNECT, fd, ntohl(in->sin_addr), ntohs(in->sin_port));
 }
-static inline int accept(int fd, struct sockaddr_in *addr, socklen_t *len) {
+static inline int accept(int fd, struct sockaddr *addr, socklen_t *len) {
     struct net_peer p;
     (void)len;
     int ret = syscall3(SYS_NET_ACCEPT, fd, (long)&p, 0);
@@ -89,9 +114,10 @@ static inline int accept(int fd, struct sockaddr_in *addr, socklen_t *len) {
                         | ((unsigned)p.raw[3] << 24);
         unsigned short port = (unsigned short)((unsigned)p.raw[4]
                         | ((unsigned)p.raw[5] << 8));
-        addr->sin_family = AF_INET;
-        addr->sin_addr   = htonl(ip);
-        addr->sin_port   = htons(port);
+        struct sockaddr_in *in = (struct sockaddr_in *)addr;
+        in->sin_family = AF_INET;
+        in->sin_addr   = htonl(ip);
+        in->sin_port   = htons(port);
     }
     return ret;
 }
@@ -106,13 +132,15 @@ static inline int recv(int fd, void *buf, int len, int flags) {
     return syscall3(SYS_NET_RECV, fd, (long)buf, len);
 }
 static inline int sendto(int fd, const void *buf, int len, int flags,
-                         const struct sockaddr_in *dst, socklen_t dlen) {
+                         const struct sockaddr *dst, socklen_t dlen) {
     (void)flags; (void)dlen;
+    const struct sockaddr_in *in = rk_sockaddr_in(dst);
+    if (!in) return -1;
     return syscall6(SYS_NET_SENDTO0, fd, (long)buf, len,
-                    ntohl(dst->sin_addr), ntohs(dst->sin_port), 0);
+                    ntohl(in->sin_addr), ntohs(in->sin_port), 0);
 }
 static inline int recvfrom(int fd, void *buf, int len, int flags,
-                           struct sockaddr_in *src, socklen_t *slen) {
+                           struct sockaddr *src, socklen_t *slen) {
     struct net_peer p;
     (void)flags; (void)slen;
     int ret = syscall6(SYS_NET_RECVFROM, fd, (long)buf, len, (long)&p, 0, 0);
@@ -124,9 +152,10 @@ static inline int recvfrom(int fd, void *buf, int len, int flags,
                         | ((unsigned)p.raw[3] << 24);
         unsigned short port = (unsigned short)((unsigned)p.raw[4]
                         | ((unsigned)p.raw[5] << 8));
-        src->sin_family = AF_INET;
-        src->sin_addr   = htonl(ip);
-        src->sin_port   = htons(port);
+        struct sockaddr_in *in = (struct sockaddr_in *)src;
+        in->sin_family = AF_INET;
+        in->sin_addr   = htonl(ip);
+        in->sin_port   = htons(port);
     }
     return ret;
 }
@@ -207,8 +236,29 @@ static inline int net_getpeername(int fd, struct sockaddr_in *addr) {
     unsigned int ip = (unsigned)p.raw[0] | ((unsigned)p.raw[1] << 8)
                 | ((unsigned)p.raw[2] << 16) | ((unsigned)p.raw[3] << 24);
     unsigned short port = (unsigned short)((unsigned)p.raw[4] | ((unsigned)p.raw[5] << 8));
+    addr->sin_family = AF_INET;       
     addr->sin_addr   = htonl(ip);
     addr->sin_port   = htons(port);
+    return 0;
+}
+
+/* POSIX 名字的 getsockname / getpeername
+ * 传的是通用 sockaddr，回填时按 sockaddr_in 布局写（内核只有 IPv4）。 */
+static inline int getsockname(int fd, struct sockaddr *addr, socklen_t *len) {
+    struct sockaddr_in in;
+    if (!addr) { errno = EINVAL; return -1; }
+    if (net_getsockname(fd, &in) < 0) return -1;
+    *(struct sockaddr_in *)addr = in;
+    if (len) *len = sizeof(in);
+    return 0;
+}
+
+static inline int getpeername(int fd, struct sockaddr *addr, socklen_t *len) {
+    struct sockaddr_in in;
+    if (!addr) { errno = EINVAL; return -1; }
+    if (net_getpeername(fd, &in) < 0) return -1;
+    *(struct sockaddr_in *)addr = in;
+    if (len) *len = sizeof(in);
     return 0;
 }
 

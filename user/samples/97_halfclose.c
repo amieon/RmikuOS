@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
     if (fd < 0) { printf("[1] socket failed\n"); return 1; }
 
     struct sockaddr_in srv = addr_of(ip, port);
-    if (connect(fd, &srv, sizeof srv) < 0) {
+    if (connect(fd, (struct sockaddr *)&srv, sizeof srv) < 0) {
         printf("halfclose: connect %d.%d.%d.%d:%d failed (server up?)\n",
                (ip>>24)&0xff, (ip>>16)&0xff, (ip>>8)&0xff, ip&0xff, port);
         net_close(fd);

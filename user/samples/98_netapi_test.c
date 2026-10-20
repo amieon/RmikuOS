@@ -42,7 +42,7 @@ int main(void) {
 
     /* [2] connect 后查对端 */
     struct sockaddr_in srv = addr_of(0x0A000202, 9999);   /* 10.0.2.2:9999 */
-    if (connect(fd, &srv, sizeof srv) < 0) {
+    if (connect(fd, (struct sockaddr *)&srv, sizeof srv) < 0) {
         printf("[FAIL] connect 10.0.2.2:9999 (halfclose_server.py 起了吗?)\n");
         net_close(fd);
         return 1;
@@ -66,7 +66,7 @@ int main(void) {
     /* [4] UDP bind(0) 自动分配端口 */
     int ufd = socket_udp();
     struct sockaddr_in any = addr_of(0, 0);
-    if (bind(ufd, &any, sizeof any) < 0) {
+    if (bind(ufd, (struct sockaddr *)&any, sizeof any) < 0) {
         printf("[FAIL] [4] udp bind(0) failed\n"); fail++;
     } else if (net_getsockname(ufd, &a) == 0 && ntohs(a.sin_port) >= 20000) {
         print_addr("       [4] udp auto port =", &a);
@@ -80,7 +80,7 @@ int main(void) {
 
     int lfd = socket_tcp();
     struct sockaddr_in laddr = addr_of(0, 8080);
-    if (bind(lfd, &laddr, sizeof laddr) < 0 || listen(lfd, 4) < 0) {
+    if (bind(lfd, (struct sockaddr *)&laddr, sizeof laddr) < 0 || listen(lfd, 4) < 0) {
         printf("[FAIL] part2 listen setup (8080 被占了?等 10s 再跑)\n");
         net_close(lfd);
         return 1;
@@ -103,7 +103,7 @@ int main(void) {
 
     /* [5] 不设 REUSEADDR:bind 必须失败(尸体占端口) */
     int f2 = socket_tcp();
-    if (bind(f2, &laddr, sizeof laddr) < 0) {
+    if (bind(f2, (struct sockaddr *)&laddr, sizeof laddr) < 0) {
         printf("[PASS] [5] bind without REUSEADDR blocked by TIME_WAIT corpse\n"); pass++;
     } else {
         printf("[FAIL] [5] bind succeeded without REUSEADDR (尸体没拦住?)\n"); fail++;
@@ -113,7 +113,7 @@ int main(void) {
     /* [6] 设 REUSEADDR:bind 同端口必须成功 */
     int f3 = socket_tcp();
     net_setsockopt(f3, SO_REUSEADDR, 1);
-    if (bind(f3, &laddr, sizeof laddr) == 0) {
+    if (bind(f3, (struct sockaddr *)&laddr, sizeof laddr) == 0) {
         printf("[PASS] [6] bind with SO_REUSEADDR succeeds over TIME_WAIT\n"); pass++;
     } else {
         printf("[FAIL] [6] bind with SO_REUSEADDR still failed\n"); fail++;

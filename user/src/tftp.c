@@ -49,7 +49,7 @@ int main(int argc, char **argv)
     for (const char *p = "octet"; *p; ) req[n++] = (unsigned char)*p++;
     req[n++] = 0;
     struct sockaddr_in local_ = addr_of(0, 0);   /* 端口 0:内核自动分配(>=20000) */
-    if (bind(fd, &local_, sizeof(local_)) < 0) {
+    if (bind(fd, (struct sockaddr *)&local_, sizeof(local_)) < 0) {
         printf("tftp: bind failed\n");
         return 1;
     }
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
             printf("tftp: local port %u\n", ntohs(mine.sin_port));
     }
     struct sockaddr_in srv = addr_of(TFTP_SERVER, TFTP_PORT);
-    sendto(fd, req, n, 0, &srv, sizeof(srv));
+    sendto(fd, req, n, 0, (struct sockaddr *)&srv, sizeof(srv));
 
     static unsigned char file_buf[MAX_FILE]; /* 放 bss,别放栈 */
     unsigned int file_len = 0;
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
         struct sockaddr_in from;
         /* 阻塞等包。v1 没有超时重传:slirp 到宿主机的 UDP 实际不丢包。
            若以后要有损环境,给 recvfrom 加超时后在此重发 RRQ/ACK。 */
-        int r = recvfrom(fd, pkt, sizeof(pkt), 0, &from, 0);
+        int r = recvfrom(fd, pkt, sizeof(pkt), 0, (struct sockaddr *)&from, 0);
         if (r < 4)
             continue;
 
@@ -89,7 +89,7 @@ int main(int argc, char **argv)
             unsigned short prev = (unsigned short)(expect - 1);
             unsigned char ack[4] = { 0, 4,
                 (unsigned char)(prev >> 8), (unsigned char)(prev & 0xFF) };
-            sendto(fd, ack, 4, 0, &from, sizeof(from));
+            sendto(fd, ack, 4, 0, (struct sockaddr *)&from, sizeof(from));
             continue;
         }
 
@@ -103,7 +103,7 @@ int main(int argc, char **argv)
         /* ACK 回 recvfrom 给出的地址——TFTP 服务器会从新端口(TID)回包,
            后续 ACK 必须发到 TID 而不是 69,用 from 就天然正确。 */
         unsigned char ack[4] = { 0, 4, pkt[2], pkt[3] };
-        sendto(fd, ack, 4, 0, &from, sizeof(from));
+        sendto(fd, ack, 4, 0, (struct sockaddr *)&from, sizeof(from));
         expect++;
 
         if (dlen < BLKSIZE) /* 短包 = 最后一块 */
