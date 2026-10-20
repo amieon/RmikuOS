@@ -1,6 +1,7 @@
 user/c/lua/** linguist-vendored
 user/sqlite3/** linguist-vendored
 user/tcc/** linguist-vendored
+user/zlib/** linguist-vendored
 user/samples/**  linguist-detectable=false
 
 Windows 上 core.autocrlf=true 会让检出的脚本带 CRLF，一旦不小心提交，

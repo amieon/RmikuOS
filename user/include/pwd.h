@@ -22,6 +22,14 @@ struct passwd {
 
 extern struct passwd *getpwuid(uid_t uid);
 
+/* getpwnam：按名字查。与 getpwuid 保持一致——账户库还没有接到 libc 这一层，
+ * 所以同样返回 NULL（而不是编一个"看起来像"的条目）。
+ * 调用方（git 的 path.c `~user` 展开）对 NULL 有兜底，会退化成不展开。 */
+static inline struct passwd *getpwnam(const char *name) {
+    (void)name;
+    return (struct passwd *)0;
+}
+
 #ifdef __cplusplus
 }
 #endif

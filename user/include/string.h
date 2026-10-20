@@ -173,6 +173,38 @@ static inline char *strerror(int err) {
     }
 }
 
+/* ---- POSIX <strings.h> 归口 ----
+ * 名字属于 strings.h，但实现只有一份，放在这里；strings.h 只做转发。
+ * 比较按 unsigned char 提升（"字节语义"），与 glibc 一致：
+ * 若用 char 直接相减，高位字节在默认 signed char 下会排到 ASCII 前面。 */
+static inline int rk_ascii_lower(int c) {
+    return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
+}
+
+static inline int strcasecmp(const char *s1, const char *s2) {
+    const unsigned char *p1 = (const unsigned char *)s1;
+    const unsigned char *p2 = (const unsigned char *)s2;
+    for (;;) {
+        int c1 = rk_ascii_lower(*p1);
+        int c2 = rk_ascii_lower(*p2);
+        if (c1 != c2) return c1 - c2;
+        if (c1 == 0) return 0;
+        p1++; p2++;
+    }
+}
+
+static inline int strncasecmp(const char *s1, const char *s2, usize n) {
+    const unsigned char *p1 = (const unsigned char *)s1;
+    const unsigned char *p2 = (const unsigned char *)s2;
+    for (usize i = 0; i < n; i++) {
+        int c1 = rk_ascii_lower(p1[i]);
+        int c2 = rk_ascii_lower(p2[i]);
+        if (c1 != c2) return c1 - c2;
+        if (c1 == 0) return 0;
+    }
+    return 0;
+}
+
 /* strdup: 由 rmiku_shims.c 提供实现（需要 malloc, 不便 inline 进 string.h） */
 extern char *strdup(const char *s);
 

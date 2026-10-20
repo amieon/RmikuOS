@@ -42,5 +42,6 @@ extern int errno;
 #define ELOOP           40
 #define ENOTSUP         95
 #define EOPNOTSUPP      95
+#define EAFNOSUPPORT    97   /* 地址家族不支持(inet_pton 对非 AF_INET 的返回) */
 #define EWOULDBLOCK     EAGAIN
 #endif

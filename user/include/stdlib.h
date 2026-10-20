@@ -154,6 +154,23 @@ static inline void *realloc(void *p, size_t s) {
 
 
 
+/* bsearch：标准二分查找。要求 base 已按 compar 排好序。
+ * 返回值指向**数组内部**的元素（调用方不该 free 它）。
+ * 用 lo + (hi - lo) / 2 而不是 (lo + hi) / 2：后者在 nmemb 接近 SIZE_MAX 时溢出。 */
+static inline void *bsearch(const void *key, const void *base, size_t nmemb, size_t size,
+                            int (*compar)(const void *, const void *)) {
+    size_t lo = 0, hi = nmemb;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        const void *p = (const char *)base + mid * size;
+        int c = compar(key, p);
+        if (c == 0) return (void *)p;
+        if (c < 0) hi = mid;
+        else       lo = mid + 1;
+    }
+    return (void *)0;
+}
+
 static inline void _qswap(char *a, char *b, size_t s) {
     while(s--){char t=*a;*a++=*b;*b++=t;}
 }

@@ -1,15 +1,13 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <process.h>
 
 inline void jvm_panic(const char* msg) {
     printf("JVM panic: %s\n", msg);
     io::exit(1);
 }
 
-inline void _exit(int code) {
-    io::exit(code);
-}
 
 template<typename T>
 inline T jvm_max(T a, T b) { return a > b ? a : b; }

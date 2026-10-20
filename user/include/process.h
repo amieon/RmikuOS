@@ -6,10 +6,25 @@ extern "C" {
 
 #include "io.h"
 #include "file.h"   /* fflush(stdout/stderr): exit 前必须冲刷缓冲! */
+#include "env.h"    /* getenv: execvp 需要 PATH */
 #define WNOHANG 1
 #define WUNTRACED 0
 
-#define WEXITSTATUS(status)  (((status) >> 8) & 0xFF)
+/* wait status 编码：内核给的是 exit_code << 8（shell 的 $? 就是 exit_code）。
+ *
+ * 与 Linux 的差别：Linux 把"被信号杀死"写在低 7 位（0x000b = SIGSEGV），
+ * 而本内核直接把信号死亡**折算成退出码 128+sig**（139 = SIGSEGV）。
+ * 所以判定只能用退出码大小，不能照抄 Linux 的位掩码：
+ *   exit_code <  128 → 正常退出
+ *   exit_code >= 128 → 被信号 (exit_code - 128) 杀死
+ * 代价：程序自己 exit(200) 也会被判成"被信号 72 杀死"。教学系统接受，
+ * 真正要区分就得让内核改 wait status 编码（另一次 ABI 变更）。 */
+#define RK_WAIT_EXIT_CODE(status) (((status) >> 8) & 0xFF)
+#define WEXITSTATUS(status)  RK_WAIT_EXIT_CODE(status)
+#define WIFEXITED(status)    (RK_WAIT_EXIT_CODE(status) < 128)
+#define WIFSIGNALED(status)  (RK_WAIT_EXIT_CODE(status) >= 128)
+#define WTERMSIG(status)     (RK_WAIT_EXIT_CODE(status) - 128)
+#define WCOREDUMP(status)    (0)   /* 内核不产生 core，恒 0 */
 
 static inline isize yield(void) {
     return syscall3(SYS_YIELD, 0, 0, 0);
@@ -102,6 +117,86 @@ static inline isize exec(const char *path) {
     }
 
     return exec_with_args(path, &args);
+}
+
+/* ---- POSIX exec 家族 ----
+ * 内核的 SYS_EXEC 只接收 (path, struct exec_args*)，argv 上限 EXEC_MAX_ARGS=8。
+ * 所以 execv/execvp 在用户态把 char *const argv[] 转成 exec_args。
+ *
+ * 三个必须知道的边界：
+ *   1. 超过 8 个参数 → E2BIG（不是截断！截断会让子进程收到错的参数）
+ *   2. execve 的 envp 没有传递通道 → 明确 ENOSYS，不假装设置环境
+ *   3. exec* 成功不返回；返回就一定是失败 */
+static inline int execv(const char *path, char *const argv[]) {
+    if (!path) { errno = ENOENT; return -1; }
+
+    struct exec_args args;
+    usize n = 0;
+    if (argv) {
+        while (argv[n]) n++;
+    }
+    if (n > EXEC_MAX_ARGS) { errno = E2BIG; return -1; }
+
+    args.argc = n;
+    for (usize i = 0; i < n; i++) {
+        args.argv[i].ptr = argv[i];
+        args.argv[i].len = strlen(argv[i]);
+    }
+    for (usize i = n; i < EXEC_MAX_ARGS; i++) {
+        args.argv[i].ptr = 0;
+        args.argv[i].len = 0;
+    }
+
+    (void)exec_with_args(path, &args);
+    return -1;                      /* 返回到这里 = 执行失败 */
+}
+
+/* execvp：名字不含 '/' 时按 PATH 逐个目录试。
+ * 注意"每个候选都失败"才返回，所以 errno 取最后一次尝试的值——POSIX 允许
+ * （Linux 也是这个行为），但对"文件不存在"应统一报 ENOENT。 */
+static inline int execvp(const char *file, char *const argv[]) {
+    if (!file || !*file) { errno = ENOENT; return -1; }
+    if (strchr(file, '/')) return execv(file, argv);
+
+    const char *path = getenv("PATH");
+    if (!path || !*path) path = "/bin:/tests:/programs";
+
+    char buf[256];
+    const usize flen = strlen(file);
+
+    while (1) {
+        const char *end = strchr(path, ':');
+        usize dlen = end ? (usize)(end - path) : strlen(path);
+
+        if (dlen + 1 + flen + 1 <= sizeof buf) {
+            for (usize i = 0; i < dlen; i++) buf[i] = path[i];
+            buf[dlen] = '/';
+            for (usize i = 0; i <= flen; i++) buf[dlen + 1 + i] = file[i];
+            execv(buf, argv);       /* 成功不返回；失败继续下一个目录 */
+        }
+
+        if (!end) break;
+        path = end + 1;
+    }
+
+    errno = ENOENT;
+    return -1;
+}
+
+static inline int execve(const char *path, char *const argv[], char *const envp[]) {
+    (void)path; (void)argv; (void)envp;
+    /* 内核的 exec ABI 没有 envp：环境由 shell/crt0 的 environ 继承。
+     * POSIX 语义要求 execve 用 envp **替换**环境，这里做不到，
+     * 所以明确失败而不是静默忽略参数。 */
+    errno = ENOSYS;
+    return -1;
+}
+
+/* _exit：不跑 atexit、不冲刷 stdio（与 exit 的关键区别）。
+ * fork 出来的子进程在 exec 失败后应该用它，避免把父进程的缓冲区复制一份再刷出去。 */
+static inline void _exit(int code) {
+    syscall3(SYS_EXIT, (usize)code, 0, 0);
+    for (;;) {}
 }
 
 static inline isize getuid(void)  { return syscall3(SYS_GETUID, 0, 0, 0); }
