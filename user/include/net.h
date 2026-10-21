@@ -62,7 +62,8 @@ static inline struct sockaddr_in addr_of(unsigned int ip, unsigned short port) {
     return a;
 }
 
-/* 
+/* 把通用 sockaddr 收窄成 sockaddr_in（公共入口统一走这里）。
+ *
  * 内核只有 IPv4 的 (ip, port) 通道，所以非 AF_INET 一律诚实失败 EAFNOSUPPORT，
  * 而不是拿 sockaddr_in 的布局去读 AF_UNIX 的路径。 */
 static inline const struct sockaddr_in *rk_sockaddr_in(const struct sockaddr *addr) {
@@ -216,7 +217,14 @@ static inline int net_shutdown(int fd, int how) {
     return syscall3(SYS_NET_SHUTDOWN, fd, how,0);   // 按你的 syscall 封装宏调整
 }
 
-#define SO_REUSEADDR 1
+/* ---- socket 层选项 ----
+ * SOL_SOCKET 表示"这个选项属于 socket 层"（与 Linux 一致，都是 1）。
+ * SO_* 的数值和内核 drivers/net/socket.rs 用的是同一套：
+ *   注意 SO_REUSEADDR 这里是 1，而 Linux 是 2 —— 想对齐 Linux 必须**同时**
+ *   改内核那个常量，只改一边会让 net_setsockopt 静默失败。 */
+#define SOL_SOCKET    1
+#define SO_REUSEADDR  1
+#define SO_KEEPALIVE  9    /* 只为让可移植代码编过；内核没有 TCP keepalive */
 
 static inline int net_getsockname(int fd, struct sockaddr_in *addr) {
     struct net_peer p;
@@ -236,13 +244,13 @@ static inline int net_getpeername(int fd, struct sockaddr_in *addr) {
     unsigned int ip = (unsigned)p.raw[0] | ((unsigned)p.raw[1] << 8)
                 | ((unsigned)p.raw[2] << 16) | ((unsigned)p.raw[3] << 24);
     unsigned short port = (unsigned short)((unsigned)p.raw[4] | ((unsigned)p.raw[5] << 8));
-    addr->sin_family = AF_INET;       
+    addr->sin_family = AF_INET;          /* 原来漏了这行，读 family 的代码会拿到垃圾 */
     addr->sin_addr   = htonl(ip);
     addr->sin_port   = htons(port);
     return 0;
 }
 
-/* POSIX 名字的 getsockname / getpeername
+/* ---- POSIX 名字的 getsockname / getpeername ----
  * 传的是通用 sockaddr，回填时按 sockaddr_in 布局写（内核只有 IPv4）。 */
 static inline int getsockname(int fd, struct sockaddr *addr, socklen_t *len) {
     struct sockaddr_in in;
@@ -264,6 +272,26 @@ static inline int getpeername(int fd, struct sockaddr *addr, socklen_t *len) {
 
 static inline int net_setsockopt(int fd, int optname, int optval) {
     return syscall3(SYS_NET_SETSOCKOPT, fd, optname, optval);
+}
+
+/* POSIX 名字的 setsockopt：多一个 level 和一个 (optval, optlen)。
+ *   - level 只认 SOL_SOCKET（内核没有 IPPROTO_IP 那一层选项）
+ *   - 只实现 SO_REUSEADDR；其余（比如 SO_KEEPALIVE）**明确返回 ENOPROTOOPT**，
+ *     不假装成功 —— git 的 enable_keepalive 只在失败时打一条 error 日志，
+ *     不会因此中断连接，所以诚实拒绝是安全的。
+ * optlen 小于 sizeof(int) 时按 0 处理（调用方没给值就别猜）。 */
+static inline int setsockopt(int fd, int level, int optname,
+                            const void *optval, socklen_t optlen) {
+    if (level != SOL_SOCKET) {
+        errno = ENOPROTOOPT;
+        return -1;
+    }
+    int on = (optval && optlen >= (socklen_t)sizeof(int)) ? *(const int *)optval : 0;
+    if (optname == SO_REUSEADDR) {
+        return net_setsockopt(fd, SO_REUSEADDR, on);
+    }
+    errno = ENOPROTOOPT;
+    return -1;
 }
 
 

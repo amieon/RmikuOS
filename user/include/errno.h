@@ -53,6 +53,7 @@ extern int errno;
 #define EILSEQ          84
 #define ENOTSOCK        88
 #define EMSGSIZE        90
+#define ENOPROTOOPT     92  
 #define EPROTONOSUPPORT 93
 #define EADDRINUSE      98
 #define EADDRNOTAVAIL   99

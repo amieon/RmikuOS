@@ -1,8 +1,9 @@
 /*
  * netinet/tcp.h —— TCP 层选项
  *
- * 只为编译兼容：内核的 socket 实现不接受 setsockopt，
- * 所以这些宏目前没有实际作用（set/netsockopt 不存在）。
+ * 只为编译兼容：内核的 setsockopt 只认 SOL_SOCKET 层的 SO_REUSEADDR
+ * （见 net.h），IPPROTO_TCP 这一层的选项一律返回 ENOPROTOOPT。
+ * 所以下面这些宏目前只有"能编过"的作用，没有实际行为。
  */
 #ifndef RK_NETINET_TCP_H
 #define RK_NETINET_TCP_H

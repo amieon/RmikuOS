@@ -46,6 +46,16 @@ struct addrinfo {
 #define EAI_MEMORY    (-10)
 #define EAI_SYSTEM    (-11)
 
+/* getnameinfo 的 flags（值与 glibc 一致） */
+#define NI_NUMERICHOST  0x01
+#define NI_NUMERICSERV  0x02
+#define NI_NOFQDN       0x04
+#define NI_NAMEREQD     0x08
+#define NI_DGRAM        0x10
+
+#define NI_MAXHOST      1025
+#define NI_MAXSERV      32
+
 struct hostent {
     char  *h_name;
     char **h_aliases;
@@ -84,6 +94,45 @@ static inline const char *gai_strerror(int err) {
 static inline struct hostent *gethostbyname(const char *name) {
     (void)name;
     return (struct hostent *)0;
+}
+
+/* 老 gethostbyname 那套的错误码。没有真解析器，值永远是 0；
+ * 声明成 static 是为了不产生"未定义符号"（每个翻译单元一份，反正是假值）。 */
+static int h_errno = 0;
+
+static inline const char *hstrerror(int err) {
+    (void)err;
+    return "no resolver";
+}
+
+/* 服务名（/etc/services）。我们没有这张表，明确返回 NULL，
+ * 调用方（git 的 connect.c）会 die 出一条清楚的消息，而不是连错端口。 */
+struct servent {
+    char  *s_name;
+    char **s_aliases;
+    int    s_port;       /* 网络字节序 */
+    char  *s_proto;
+};
+
+static inline struct servent *getservbyname(const char *name, const char *proto) {
+    (void)name; (void)proto;
+    return (struct servent *)0;
+}
+
+static inline struct servent *getservbyport(int port, const char *proto) {
+    (void)port; (void)proto;
+    return (struct servent *)0;
+}
+
+/* getnameinfo：sockaddr -> "主机:端口" 字符串。
+ * 只有在 getaddrinfo 成功之后才有意义，而我们的 getaddrinfo 永远失败，
+ * 所以这里明确返回 EAI_FAIL —— 不伪造 "(unknown)"。 */
+static inline int getnameinfo(const struct sockaddr *sa, socklen_t salen,
+                              char *host, socklen_t hostlen,
+                              char *serv, socklen_t servlen, int flags) {
+    (void)sa; (void)salen; (void)host; (void)hostlen;
+    (void)serv; (void)servlen; (void)flags;
+    return EAI_FAIL;
 }
 
 #ifdef __cplusplus

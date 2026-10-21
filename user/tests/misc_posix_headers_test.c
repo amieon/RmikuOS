@@ -195,8 +195,13 @@ int main(void) {
     CHECK((int *)bsearch(&k4, sorted, 5, sizeof(int), cmp_int) == 0,
           "bsearch 未命中返回 NULL");
 
-    /* ---------- 12. sysconf / alarm ---------- */
-    CHECK_EQ(sysconf(_SC_PAGESIZE), 4096, "sysconf(_SC_PAGESIZE) = 4096");
+    /* ---------- 12. sysconf / alarm ----------
+     * 页大小**不写死 4096**：它由 98 号系统调用从 kernel/src/mm/config.rs 取走，
+     * 测试只断言"两条路径一致 + 值合法"。内核哪天换页大小这里仍然过；
+     * 反过来，若某个实现偷偷又写死一份自己的常量，这条就会红。 */
+    int pg = getpagesize();
+    CHECK(pg >= 512 && (pg & (pg - 1)) == 0, "getpagesize() 是 2 的幂且 >= 512");
+    CHECK_EQ(sysconf(_SC_PAGESIZE), (long)pg, "sysconf(_SC_PAGESIZE) 与 getpagesize 同源");
     CHECK_EQ(sysconf(_SC_OPEN_MAX), 1024, "sysconf(_SC_OPEN_MAX) = 1024");
     CHECK_GE(sysconf(_SC_NPROCESSORS_ONLN), 1, "sysconf(_SC_NPROCESSORS_ONLN) >= 1");
 
@@ -346,6 +351,20 @@ int main(void) {
     char pbad[] = "NOEQUALS";
     CHECK_EQ(putenv(pbad), -1, "没有 '=' 的字符串 -> EINVAL（POSIX 未定义，不猜）");
     unsetenv_s("RK_PUTENV");         /* 清理，不计断言 */
+
+    /* ---------- 20. POSIX setsockopt ----------
+     * 关键是"不支持就明确失败"：git 的 enable_keepalive 只把失败打成一条
+     * error 日志、不中断连接，所以返回 ENOPROTOOPT 比假装成功安全得多。 */
+    int sk = socket(AF_INET, SOCK_STREAM, 0);
+    CHECK(sk >= 0, "socket(AF_INET, SOCK_STREAM) 成功");
+    int one = 1;
+    CHECK_EQ(setsockopt(sk, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one), 0,
+             "setsockopt(SOL_SOCKET, SO_REUSEADDR) 成功");
+    errno = 0;
+    CHECK_EQ(setsockopt(sk, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof one), -1,
+             "SO_KEEPALIVE 内核没实现 -> -1");
+    CHECK_EQ(errno, ENOPROTOOPT, "不支持的 socket 选项置 ENOPROTOOPT");
+    if (sk >= 0) close(sk);
 
     TEST_END();
 }
