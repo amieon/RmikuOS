@@ -110,7 +110,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
             if cx.is_from_user() {
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
                 crate::task::do_signal();
-                panic!("SIGILL not fatal");
+                crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
             } else {
                 trap_println!(
                     "[trap] fatal exception: ecode={:#x}, esubcode={:#x}, era={:#x}, badv={:#x}, estat={:#x}",

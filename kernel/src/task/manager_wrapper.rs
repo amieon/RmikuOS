@@ -17,6 +17,7 @@ use crate::trap::TrapContext;
 use super::context::TaskContext;
 use super::process::{Pid, ProcessControlBlock};
 use super::processor;
+use super::signal::{DefAction, SigAction};
 use super::switch::__switch;
 use super::thread::{BlockReason, ThreadControlBlock, ThreadStatus, Tid};
 
@@ -726,6 +727,14 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         let (old_space, closed_files) = {
             let process = manager.process_mut(current_pid);
             let closed = process.close_non_standard_fds_on_exec();
+
+            for a in process.sig_actions.iter_mut() {
+                if let SigAction::Handler(_) = a {
+                    *a = SigAction::Default;
+                }
+            }
+            process.sig_pending = 0;
+
             let old = core::mem::replace(&mut process.user_space, new_user_space);
             (old, closed)
         }; 
@@ -1917,10 +1926,14 @@ pub fn pgid_of(pid: isize) -> isize {
     }
 }
 
-///只能改自己，或自己的直接子进程（否则 -1）
-///pid = 0 表示自己；pgid = 0 表示"用 target 的 pid 当组号"，
-///除此之外，目标组必须已经存在
-/// 没有 session，所以 POSIX 的同一 session 内session leader 不能改
+/// 把 target 放进组 pgid（POSIX setpgid 的一个诚实子集）：
+///
+///   - 只能改**自己**，或自己的**直接子进程**（否则 -1）
+///   - pid = 0 表示"我自己"；pgid = 0 表示"用 target 的 pid 当组号"，
+///     也就是"自成一组、自己当组长"，这个总是允许（因为它必然是个空组号）
+///   - 除此之外，目标组**必须已经存在**（本模型不创建空组，组是派生视图）
+///
+/// 没有 session，所以 POSIX 的"同一 session 内""session leader 不能改"两条
 /// 无法适用，这里明确省略而不是假装检查。
 pub fn set_pgid(pid: isize, pgid: isize) -> isize {
     let mut manager = lock_detect!(TASK_MANAGER);
@@ -1934,12 +1947,12 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
         pid as usize
     };
 
-    // 目标进程必须存在
+    // 1) 目标进程必须存在
     if manager.try_process(target).is_none() {
         return -1;
     }
 
-    // 只能改自己或直接子进程
+    // 2) 只能改自己或直接子进程
     if target != self_pid {
         let is_child = manager
             .try_process(self_pid)
@@ -1950,7 +1963,7 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
         }
     }
 
-    // 组号：0 → 自己当组长；负数非法
+    // 3) 组号：0 → 自己当组长；负数非法
     let new_pgid = if pgid == 0 {
         target
     } else if pgid < 0 {
@@ -1959,7 +1972,7 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
         pgid as usize
     };
 
-    // 除了"自成一组"，目标组必须已存在
+    // 4) 除了"自成一组"，目标组必须已存在
     if new_pgid != target && !manager.group_exists(new_pgid) {
         return -1;
     }
@@ -1968,22 +1981,36 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
     0
 }
 
-/// signal(sig, action): 设置信号处置。action: 0=SIG_DFL, 1=SIG_IGN,
-/// 其他(自定义 handler)不支持返回 -1。SIGKILL 不可忽略。返回旧处置(0/1)或 -1。
+/// signal(sig, action): 设置信号处置。
+///
+///   action = 0 → SIG_DFL（跟内核默认动作）
+///   action = 1 → SIG_IGN
+///   action ≥ 2 → 用户态 handler 入口地址。**现在拒绝**：投递链路（sigframe +
+///   trampoline + SIGRETURN）还没做，装了也永远不会跑 —— 那比"装不上"更难查。
+///   等 do_signal 能改 TrapContext 时，把这里那条 `return -1` 换成
+///   `SigAction::Handler(action)` 即可，其余代码不用动。
+///
+/// SIGKILL / SIGSTOP 不可改。返回旧处置（0 / 1），失败 -1。
 pub fn sig_set(sig: usize, action: usize) -> isize {
-    if sig >= 64 || sig == super::SIGKILL {
+    if sig >= 64 || super::unblockable(sig) {
         return -1;
     }
     let pid = current_pid();
     let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(pid);
-    let old = if (process.sig_ignored >> sig) & 1 == 1 { 1 } else { 0 };
-    match action {
-        0 => process.sig_ignored &= !(1u64 << sig),
-        1 => process.sig_ignored |= 1u64 << sig,
-        _ => return -1,
+
+    let old = process.sig_actions[sig];
+    process.sig_actions[sig] = match action {
+        0 => SigAction::Default,
+        1 => SigAction::Ignore,
+        _ => return -1,          // 自定义 handler：见上面的说明
+    };
+
+    match old {
+        SigAction::Default => 0,
+        SigAction::Ignore => 1,
+        SigAction::Handler(entry) => entry as isize,
     }
-    old
 }
 
 pub fn kill(pid: usize, sig: usize) -> isize {
@@ -2018,6 +2045,7 @@ pub fn kill(pid: usize, sig: usize) -> isize {
     0
 }
 
+
 pub fn do_signal() {
     let current_pid = current_pid();
     let mut manager = lock_detect!(TASK_MANAGER);
@@ -2025,16 +2053,29 @@ pub fn do_signal() {
     let pending = process.sig_pending;
     if pending == 0 { return; }
 
-    /* 致命信号默认终止; 被进程忽略的(SIG_IGN)不终止, 只清 pending */
-    let fatal_bits = pending & super::FATAL_SIG_MASK;
-    let effective = fatal_bits & !process.sig_ignored;
-    if effective != 0 {
-        let sig = effective.trailing_zeros() as usize;
-        process.sig_pending = 0;
-        drop(manager);
-        crate::task::exit_current_and_run_next(128 + sig as i32);
+     let sig = pending.trailing_zeros() as usize;
+    process.sig_pending &= !(1u64 << sig);      // 先清位再投递，防 handler 期间重入
+    let action = process.sig_actions[sig];
+    drop(manager);
+
+    match action {
+        SigAction::Ignore => {}
+        SigAction::Handler(_entry) => apply_default_action(sig),
+        SigAction::Default => apply_default_action(sig),
     }
-    process.sig_pending = 0;
+}
+
+/// 执行某个信号的默认动作。
+fn apply_default_action(sig: usize) {
+    match super::default_action(sig) {
+        DefAction::Term => crate::task::exit_current_and_run_next(128 + sig as i32),
+        /* 和 Term 一样要退出，区别只在于 `waitpid` 的状态里要置 core dump 位
+         * （`WCOREDUMP` = 状态 bit7）。这个标记还没做，先留出分支。 */
+        DefAction::Core => crate::task::exit_current_and_run_next(128 + sig as i32),
+        DefAction::Ign => {}
+        DefAction::Stop => {}
+        DefAction::Cont => {}
+    }
 }
 
 pub fn set_current_sig_pending(sig : usize){

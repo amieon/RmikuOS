@@ -1,14 +1,56 @@
-pub const SIGINT:  usize = 2;
-pub const SIGILL:  usize = 4;
-pub const SIGABRT: usize = 6;
-pub const SIGFPE:  usize = 8;
-pub const SIGKILL: usize = 9;
-pub const SIGSEGV: usize = 11;
-pub const SIGTERM: usize = 15;
-pub const SIGCHLD: usize = 17;
+pub const SIGHUP:   usize = 1;
+pub const SIGINT:   usize = 2;
+pub const SIGQUIT:  usize = 3;
+pub const SIGILL:   usize = 4;
+pub const SIGTRAP:  usize = 5;
+pub const SIGABRT:  usize = 6;
+pub const SIGBUS:   usize = 7;
+pub const SIGFPE:   usize = 8;
+pub const SIGKILL:  usize = 9;
+pub const SIGUSR1:  usize = 10;
+pub const SIGSEGV:  usize = 11;
+pub const SIGUSR2:  usize = 12;
+pub const SIGPIPE:  usize = 13;
+pub const SIGALRM:  usize = 14;
+pub const SIGTERM:  usize = 15;
+pub const SIGCHLD:  usize = 17;
+pub const SIGCONT:  usize = 18;
+pub const SIGSTOP:  usize = 19;
+pub const SIGTSTP:  usize = 20;
+pub const SIGTTIN:  usize = 21;
+pub const SIGTTOU:  usize = 22;
+pub const SIGURG:   usize = 23;
+pub const SIGWINCH: usize = 28;
+pub const SIGSYS:   usize = 31;
 
-/// 默认动作=终止进程的信号。SIGCHLD 不在其中: 它默认被忽略(通知类)。
-pub const FATAL_SIG_MASK: u64 = 
-    (1u64 << SIGINT) | (1u64 << SIGILL) | (1u64 << SIGABRT) | 
-    (1u64 << SIGFPE) | (1u64 << SIGKILL) | (1u64 << SIGSEGV) | 
-    (1u64 << SIGTERM);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SigAction {
+    Default,
+    Ignore,
+    Handler(usize),
+}
+
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DefAction {
+    Term,
+    Core,
+    Ign,
+    Stop,
+    Cont,
+}
+
+pub fn default_action(sig: usize) -> DefAction {
+    match sig {
+        SIGCHLD | SIGURG | SIGWINCH | SIGCONT => DefAction::Ign,
+        SIGSTOP | SIGTSTP | SIGTTIN | SIGTTOU => DefAction::Stop,
+        SIGQUIT | SIGILL | SIGABRT | SIGFPE | SIGSEGV | SIGBUS => DefAction::Core,
+        _ => DefAction::Term,
+    }
+}
+
+/// 不可被捕获/忽略/停止的信号,否则进程可以变成杀不掉、停不下
+pub fn unblockable(sig: usize) -> bool {
+    sig == SIGKILL || sig == SIGSTOP
+}

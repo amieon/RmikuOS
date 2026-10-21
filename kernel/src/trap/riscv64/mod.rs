@@ -149,7 +149,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
                 crate::task::do_signal();   // SIGILL 致命 -> 终止进程(exit 132)
-                panic!("SIGILL not fatal");  // 不应该到达
+                crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
             } else {
                 trap_println!(
                     "[trap] fatal exception: code={}, sepc={:#x}, stval={:#x}, scause={:#x}",

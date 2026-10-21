@@ -5,6 +5,7 @@ use crate::fs::FileRef;
 use crate::mm::{MemorySet, PhysPageNum};
 
 use super::thread::Tid;
+use super::SigAction;
 
 pub type Pid = usize;
 
@@ -54,10 +55,7 @@ pub struct ProcessControlBlock {
     pub mmap_next: usize,
 
     pub sig_pending: u64,
-
-    /// 被忽略的信号位图(SIG_IGN)。注: fork 时不继承(教学简化),
-    /// 保证 shell 忽略 SIGINT 后, fork 出的交互子进程仍可被 Ctrl+C 终止。
-    pub sig_ignored: u64,
+    pub sig_actions: [SigAction; 64],
 
     /// 进程凭证(POSIX uid/euid/gid/egid)。0 = root / 超级用户。
     pub uid: usize,
@@ -118,7 +116,7 @@ impl ProcessControlBlock {
             mmap_next: USER_MMAP_BASE,
 
             sig_pending: 0,
-            sig_ignored: 0,
+            sig_actions: [SigAction::Default; 64],
 
             // 默认 root（uid/euid/gid/egid = 0）。init 进程即以此身份启动。
             uid: 0,
@@ -198,9 +196,7 @@ impl ProcessControlBlock {
             mmap_next,
 
             sig_pending: 0,
-            /* fork 不继承 sig_ignored: 子进程默认处置(可被 Ctrl+C 终止)。
-             * 与 POSIX(忽略信号跨 fork/exec 保持)不同, 教学简化。 */
-            sig_ignored: 0,
+            sig_actions: [SigAction::Default; 64],
 
             uid,
             euid,
