@@ -117,6 +117,14 @@ pub fn sys_set_front(pid: usize) -> isize {
     0
 }
 
+pub fn sys_getpgid(pid: usize) -> isize {
+    crate::task::pgid_of(pid as isize)
+}
+
+pub fn sys_setpgid(pid: usize, pgid: usize) -> isize {
+    crate::task::set_pgid(pid as isize, pgid as isize)
+}
+
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     crate::task::set_fcntl(fd, cmd, arg)
 }

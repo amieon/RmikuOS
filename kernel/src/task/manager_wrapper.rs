@@ -442,6 +442,7 @@ pub fn fork_current() -> isize {
             manager.process(parent_pid).groups,
             manager.process(parent_pid).ngroups,
             manager.process(parent_pid).umask,
+            manager.process(parent_pid).pgid,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
@@ -1898,6 +1899,73 @@ pub fn kill_front_sigint() {
     if pid != 0 {
         let _ = kill(pid, super::SIGINT);
     }
+}
+
+/// 查询进程组号。pid=0 表示当前进程；返回 -1 表示没有这个进程。
+pub fn pgid_of(pid: isize) -> isize {
+    let manager = lock_detect!(TASK_MANAGER);
+    let target = if pid == 0 {
+        manager.current_pid()
+    } else if pid < 0 {
+        return -1;
+    } else {
+        pid as usize
+    };
+    match manager.try_process(target) {
+        Some(p) => p.pgid as isize,
+        None => -1,
+    }
+}
+
+///只能改自己，或自己的直接子进程（否则 -1）
+///pid = 0 表示自己；pgid = 0 表示"用 target 的 pid 当组号"，
+///除此之外，目标组必须已经存在
+/// 没有 session，所以 POSIX 的同一 session 内session leader 不能改
+/// 无法适用，这里明确省略而不是假装检查。
+pub fn set_pgid(pid: isize, pgid: isize) -> isize {
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let self_pid = manager.current_pid();
+
+    let target = if pid == 0 {
+        self_pid
+    } else if pid < 0 {
+        return -1;
+    } else {
+        pid as usize
+    };
+
+    // 目标进程必须存在
+    if manager.try_process(target).is_none() {
+        return -1;
+    }
+
+    // 只能改自己或直接子进程
+    if target != self_pid {
+        let is_child = manager
+            .try_process(self_pid)
+            .map(|p| p.children.contains(&target))
+            .unwrap_or(false);
+        if !is_child {
+            return -1;
+        }
+    }
+
+    // 组号：0 → 自己当组长；负数非法
+    let new_pgid = if pgid == 0 {
+        target
+    } else if pgid < 0 {
+        return -1;
+    } else {
+        pgid as usize
+    };
+
+    // 除了"自成一组"，目标组必须已存在
+    if new_pgid != target && !manager.group_exists(new_pgid) {
+        return -1;
+    }
+
+    manager.process_mut(target).pgid = new_pgid;
+    0
 }
 
 /// signal(sig, action): 设置信号处置。action: 0=SIG_DFL, 1=SIG_IGN,

@@ -140,6 +140,15 @@ impl TaskManager {
         self.processes.get(pid)?.as_ref()
     }
 
+    /// 组 `pgid` 是否存在 —— 组是派生视图：存在某个进程的 `pgid == 该值`
+    /// 就说明组还在。进程全部退出后组自然消失，不需要显式回收。
+    pub fn group_exists(&self, pgid: usize) -> bool {
+        self.processes
+            .iter()
+            .flatten()
+            .any(|p| p.pgid == pgid)
+    }
+
     pub fn try_thread(&self, tid: Tid) -> Option<&ThreadControlBlock> {
         self.threads.get(tid)?.as_ref()
     }
@@ -848,6 +857,18 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
                 .map(|child| child.exit_code)
                 .unwrap_or(0);
 
+            /* 写给用户态的是 **POSIX wait status**，不是原始退出码。
+             *
+             * 内核内部仍保存 `exit_code`（信号死亡时 = 128 + sig，见
+             * manager_wrapper.rs 的 exit_current_and_run_next），只在这一个
+             * 边界上做编码 —— 这样日志、shell 的 $?、内部判断都不用跟着改：
+             *
+             *   正常退出 → (code & 0xff) << 8    低 7 位 = 0（标签：已退出）
+             *   信号死亡 → (code - 128) & 0x7f   低 7 位 = 信号号
+             *
+             * 为什么不能直接写 code：那样 `exit(139)` 和 "被 SIGSEGV 杀死"
+             * 变成同一个数，父进程无法区分；core dump 位与暂停态也没有位置。
+             * 移位而不是加法，正是为了留出低 7 位当"结局标签"。 */
             let status: i32 = if code >= 128 {
                 (code - 128) & 0x7f
             } else {

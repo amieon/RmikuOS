@@ -74,6 +74,9 @@ pub struct ProcessControlBlock {
     /// 由 fork 继承、exec 保持不变（与 POSIX 一致）。默认 022。
     pub umask: u16,
 
+    /// 进程组号
+    pub pgid: usize,
+
     pub exit_code: i32,
 }
 
@@ -130,6 +133,9 @@ impl ProcessControlBlock {
             // 默认 022：新建文件 0666→0644、目录 0777→0755，与常规发行版一致。
             umask: 0o022,
 
+            // 新进程自成一组：组号就是自己的 pid。
+            pgid: pid,
+
             exit_code: 0,
         }
     }
@@ -155,6 +161,7 @@ impl ProcessControlBlock {
         groups: [usize; NGROUPS_MAX],
         ngroups: usize,
         umask: u16,
+        pgid: usize,
     ) -> Self {
         let tickets = parent_tickets.max(1);
         let stride = BIG_STRIDE / tickets;
@@ -203,6 +210,7 @@ impl ProcessControlBlock {
             groups,
             ngroups,
             umask,
+            pgid,
 
             exit_code: 0,
         }

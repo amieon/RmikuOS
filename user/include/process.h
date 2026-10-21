@@ -47,6 +47,18 @@ static inline isize getppid(void) {
     return syscall3(SYS_GETPPID, 0, 0, 0);
 }
 
+static inline isize getpgid(isize pid) {
+    return syscall3(SYS_GETPGID, (usize)pid, 0, 0);
+}
+
+static inline isize getpgrp(void) {
+    return getpgid(0);
+}
+
+static inline int setpgid(isize pid, isize pgid) {
+    return (int)syscall3(SYS_SETPGID, (usize)pid, (usize)pgid, 0);
+}
+
 /* 把 pid 设为前台进程(Ctrl+C 投递目标)。shell 启动后台任务后用它夺回前台。 */
 static inline isize set_front(isize pid) {
     return syscall3(SYS_SET_FRONT, (usize)pid, 0, 0);

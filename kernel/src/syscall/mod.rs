@@ -125,6 +125,8 @@ pub const SYSCALL_NET_SHUTDOWN: usize = 114;
 pub const SYSCALL_NET_GETSOCKNAME: usize = 115;
 pub const SYSCALL_NET_GETPEERNAME: usize = 116;
 pub const SYSCALL_NET_SETSOCKOPT: usize = 117;
+pub const SYSCALL_GETPGID: usize = 118;
+pub const SYSCALL_SETPGID: usize = 119;
 
 
 
@@ -243,6 +245,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_LINKAT => fs::sys_linkat(args[0], args[1], args[2], args[3], args[4], args[5]),
         SYSCALL_UMASK => process::sys_umask(args[0]),
         SYSCALL_GETPAGESIZE => process::sys_getpagesize(),
+        SYSCALL_GETPGID => process::sys_getpgid(args[0]),
+        SYSCALL_SETPGID => process::sys_setpgid(args[0], args[1]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

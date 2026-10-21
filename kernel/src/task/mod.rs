@@ -87,6 +87,8 @@ pub use manager_wrapper::{
     set_front,
     front_pid,
     kill_front_sigint,
+    pgid_of,
+    set_pgid,
 
     env_get_current_value,
     env_unset_current_value,

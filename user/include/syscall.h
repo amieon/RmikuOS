@@ -127,6 +127,9 @@ extern "C" {
 #define SYS_NET_GETSOCKNAME          115
 #define SYS_NET_GETPEERNAME          116
 #define SYS_NET_SETSOCKOPT           117
+#define SYS_GETPGID                  118
+#define SYS_SETPGID                  119
+
 
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 

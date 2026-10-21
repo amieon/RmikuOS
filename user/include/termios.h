@@ -55,6 +55,8 @@ struct winsize {
 };
 
 #include "io.h"   /* set_echo */
+#include "sys/types.h"   /* pid_t（tcgetpgrp 的返回类型） */
+#include "errno.h"       /* ENOTTY */
 
 static inline int tcgetattr(int fd, struct termios *t) {
     (void)fd;
@@ -73,6 +75,27 @@ static inline int tcsetattr(int fd, int opt, const struct termios *t) {
         set_echo((t->c_lflag & ECHO) ? 1 : 0);   /* raw 模式 = 关回显 */
     }
     return 0;
+}
+
+/* ---- 作业控制 ----
+ * 内核没有控制终端，也没有"前台进程组"（只有 SYS_SET_FRONT 记录 Ctrl+C
+ * 投递给谁）。所以这两个函数统一返回 -1 + ENOTTY。
+ *
+ * 这不是凑数：git 的 is_foreground_fd() 写的是
+ *     return tpgrp < 0 || tpgrp == getpgid(0);
+ * 失败正好落到"当作前台"，进度条照常显示 —— 退化方向是对的（假前台只会
+ * 多打几个进度条，假后台会让进度信息整个消失）。
+ */
+static inline pid_t tcgetpgrp(int fd) {
+    (void)fd;
+    errno = ENOTTY;
+    return (pid_t)-1;
+}
+
+static inline int tcsetpgrp(int fd, pid_t pgrp) {
+    (void)fd; (void)pgrp;
+    errno = ENOTTY;
+    return -1;
 }
 
 #endif /* RMIKU_TERMIOS_H */
