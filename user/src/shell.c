@@ -1307,6 +1307,9 @@ static int run_external(int argc, char *argv[], int background) {
         int status = 0;
         while (waitpid(pid, &status, 0) < 0) yield();
         set_echo(0);   /* 回 shell 提示符, 关回显 */
+        /* $? 的约定（与 bash 一致）：正常退出取退出码，被信号杀死取 128+sig。
+         * 内核给的是 POSIX wait status，"压平"这一步只发生在 shell 这里 ——
+         * 不能把压平后的值当成 waitpid 的返回值去理解。 */
         return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
     } else {
         set_echo(0);
@@ -1605,7 +1608,7 @@ static int run_node(char *cmd, int background) {
         }
         return builtin_source(exp_argv[1]);
     }
-    if (streq(exp_argv[0], "shutdown")) { fputs("bye bye~\n", stdout); shutdown(); return 0; }
+    if (streq(exp_argv[0], "shutdown")) { fputs("bye bye~\n", stdout); rk_shutdown(); return 0; }
 
     return run_external(exp_argc, exp_argv, background);
 }

@@ -188,7 +188,7 @@ static uint64_t worker(uint64_t iters, uint64_t seed) {
 }
 
 static void wait_until(long target) {
-    while (get_time() < target) {
+    while (rk_get_time() < target) {
         // busy wait
     }
 }
@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
 
     if (workers <= 0) workers = 1;
 
-    long base = get_time();
+    long base = rk_get_time();
     long start_at = base + delay;
 
     printf("[smp_probe] workers=%d iters=%llu start_at=%ld\n",
@@ -224,12 +224,12 @@ int main(int argc, char **argv) {
             wait_until(start_at);
 
             long h0 = hartid();
-            long t0 = get_time();
+            long t0 = rk_get_time();
 
             uint64_t result = worker(iters, (uint64_t)(i + 1));
             sink = result;
 
-            long t1 = get_time();
+            long t1 = rk_get_time();
             long h1 =  hartid();
 
             printf("[child] idx=%d h0=%ld h1=%ld elapsed=%ld result=%llu\n",
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
         status_sum += status;
     }
 
-    long end = get_time();
+    long end = rk_get_time();
 
     printf("[smp_probe] done workers=%d forked=%d reaped=%d wait_fail=%d status_sum=%d elapsed=%ld\n",
         workers, forked, reaped, wait_fail, status_sum, end - start_at);

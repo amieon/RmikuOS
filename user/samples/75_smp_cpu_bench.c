@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
     printf("[smp_cpu_quiet] workers=%d iters_per_worker=%llu\n",
            workers, (unsigned long long)iters);
 
-    long start = get_time();
+    long start = rk_get_time();
 
     int forked = 0;
 
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
         status_sum += status;
     }
 
-    long end = get_time();
+    long end = rk_get_time();
 
     printf("[smp_cpu_quiet] done workers=%d forked=%d reaped=%d wait_fail=%d status_sum=%d elapsed_ticks=%ld\n",
            workers, forked, reaped, wait_fail, status_sum, end - start);

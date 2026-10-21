@@ -94,11 +94,11 @@ static void phase1(int reps)
 
         for (int r = 0; r < reps; r++) {
             unsigned long t0  = get_ticks();
-            unsigned long us0 = get_time();
+            unsigned long us0 = rk_get_time();
             while (get_ticks() - t0 < span)
                 ;                       /* 忙等, 纯测时钟 */
             unsigned long dt  = get_ticks() - t0;
-            unsigned long dus = get_time() - us0;
+            unsigned long dus = rk_get_time() - us0;
             buf[r] = dus;
             printf("L,%lu,%d,%lu\n", span, r, dus);
         }
@@ -213,14 +213,14 @@ static void phase3(void)
     printf("# === Phase 3: Drift Check ===\n");
 
     unsigned long t0  = get_ticks();
-    unsigned long us0 = get_time();
+    unsigned long us0 = rk_get_time();
     while (get_ticks() - t0 < 2000) ;
-    unsigned long pre = (get_time() - us0) * 1000 / (get_ticks() - t0);
+    unsigned long pre = (rk_get_time() - us0) * 1000 / (get_ticks() - t0);
 
     t0  = get_ticks();
-    us0 = get_time();
+    us0 = rk_get_time();
     while (get_ticks() - t0 < 4000) ;
-    unsigned long post = (get_time() - us0) * 1000 / (get_ticks() - t0);
+    unsigned long post = (rk_get_time() - us0) * 1000 / (get_ticks() - t0);
 
     unsigned long diff = pre > post ? pre - post : post - pre;
     unsigned long pct  = diff * 100 / pre;

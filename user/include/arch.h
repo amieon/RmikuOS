@@ -5,14 +5,16 @@ extern "C" {
 
 #include "syscall.h"
 
-static inline void shutdown(){
-    syscall3(SYS_SHUTDOWN,0,0,0);
+/* 关机（本内核自己的语义，不是 POSIX 的 socket shutdown） */
+static inline void rk_shutdown(void) {
+    syscall3(SYS_SHUTDOWN, 0, 0, 0);
 }
 
-
-static inline isize get_time(){
-    return syscall3(SYS_GET_TIME,0,0,0);
+/* 单调秒（自启动起，不随 ntpdate 校准跳变）。要墙钟请用 get_epoch()。 */
+static inline isize rk_get_time(void) {
+    return syscall3(SYS_GET_TIME, 0, 0, 0);
 }
+
 /* ---- 时钟节拍 ---- */
 
 static inline usize get_ticks(void) {

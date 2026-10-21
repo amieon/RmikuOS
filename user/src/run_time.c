@@ -6,7 +6,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    long t0 = get_time();
+    long t0 = rk_get_time();
     int pid = fork();
     if (pid == 0) {
         struct exec_args args;
@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
                 args.argv[i].len = 0;
             }
         }
-        t0 = get_time();
+        t0 = rk_get_time();
         exec_with_args(argv[1], &args);
         printf("[tick] exec failed\n");
         exit(127);
@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
 
     int status = 0;
     waitpid(pid, &status, WUNTRACED);    
-    long t1 = get_time();
+    long t1 = rk_get_time();
 
     printf("[time] ");
     printf(argv[1]);

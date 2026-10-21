@@ -58,6 +58,16 @@ typedef struct timezone {
 
 typedef int clockid_t;
 
+/* clock_gettime 的时钟源。值跟 Linux 对齐（可移植代码会直接写死 1 = MONOTONIC）。
+ * 本内核只有一个 tick 计数器，下面几个 id 在实现里都落到同一处：
+ * REALTIME 走 get_epoch()（校准前恒 0），其余走 rk_get_time()（单调）。 */
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME            0
+#define CLOCK_MONOTONIC           1
+#define CLOCK_PROCESS_CPUTIME_ID  2
+#define CLOCK_THREAD_CPUTIME_ID   3
+#endif
+
 
 static inline time_t time(time_t *t) {
     /* 墙钟秒(epoch): 校准(ntpdate)后为真值, 否则 0 */
@@ -69,7 +79,7 @@ static inline time_t time(time_t *t) {
 /* 进程已用 CPU 时间。本 OS 无 per-process 计时，用单调时钟计数作熵源，
  * 满足 lua 等把 clock() 当随机种子的用途。 */
 static inline clock_t clock(void) {
-    return (clock_t)get_time();
+    return (clock_t)rk_get_time();
 }
 
 static inline int gettimeofday(struct timeval *tv, struct timezone *tz) {
@@ -80,22 +90,22 @@ static inline int gettimeofday(struct timeval *tv, struct timezone *tz) {
 }
 
 static inline int clock_gettime(clockid_t clk, struct timespec *ts) {
-    (void)clk;
-    time_t now = (time_t)get_time();
+    /* REALTIME 要墙钟（校准前恒 0）；MONOTONIC 要 tick 计数，不能混。 */
+    time_t now = (clk == CLOCK_REALTIME) ? (time_t)get_epoch() : (time_t)rk_get_time();
     if (ts) { ts->tv_sec = now; ts->tv_nsec = 0; }
     return 0;
 }
 
 static inline int nanosleep(const struct timespec *req, struct timespec *rem) {
     if (!req) return 0;
-    long end = (long)get_time() + (long)req->tv_sec;
-    while ((long)get_time() < end) { /* busy spin */ }
+    long end = (long)rk_get_time() + (long)req->tv_sec;
+    while ((long)rk_get_time() < end) { /* busy spin */ }
     return 0;
 }
 
 static inline int usleep(useconds_t us) {
-    long end = (long)get_time() + (long)(us / 1000000UL);
-    while ((long)get_time() < end) { /* busy spin */ }
+    long end = (long)rk_get_time() + (long)(us / 1000000UL);
+    while ((long)rk_get_time() < end) { /* busy spin */ }
     return 0;
 }
 
