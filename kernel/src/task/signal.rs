@@ -23,18 +23,26 @@ pub const SIGURG:   usize = 23;
 pub const SIGWINCH: usize = 28;
 pub const SIGSYS:   usize = 31;
 
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SigAction {
     Default,
     Ignore,
-    Handler(usize),
+    Handler { entry: usize, restorer: usize },
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SigFrame {
+    /// 被打断那一刻的完整现场：32 个通用寄存器 + 32 个浮点 + CSR。
+    pub cx: crate::trap::TrapContext,
+    /// 触发本次投递的信号号（handler 的入参）
+    pub signo: usize,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DefAction {
     Term,
+    /// 终止并留下 core dump（`WIFSIGNALED` 状态里的 bit7）
     Core,
     Ign,
     Stop,
@@ -50,7 +58,7 @@ pub fn default_action(sig: usize) -> DefAction {
     }
 }
 
-/// 不可被捕获/忽略/停止的信号,否则进程可以变成杀不掉、停不下
+/// 不可被捕获/忽略/停止的信号否则进程可以变成杀不掉、停不下
 pub fn unblockable(sig: usize) -> bool {
     sig == SIGKILL || sig == SIGSTOP
 }

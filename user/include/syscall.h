@@ -109,6 +109,7 @@ extern "C" {
 
 
 
+
 #define SYS_NET_SOCKET0              100
 #define SYS_NET_BIND                 101
 #define SYS_NET_SENDTO0              102
@@ -129,8 +130,7 @@ extern "C" {
 #define SYS_NET_SETSOCKOPT           117
 #define SYS_GETPGID                  118
 #define SYS_SETPGID                  119
-
-
+#define SYS_SIGRETURN                120  
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);

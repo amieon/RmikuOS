@@ -36,7 +36,16 @@
 #include <sys/un.h>        /* sockaddr_un */
 #include <sys/sysinfo.h>   /* struct sysinfo */
 #include <endian.h>        /* __BYTE_ORDER */
+#include <termios.h>       /* tcgetpgrp */
 #include <stddef.h>        /* offsetof */
+
+/* 信号 handler：必须是普通 C 函数（内核投递时把 pc 指到它的入口，
+ * ra 指到 rk_sigreturn_trampoline）。放在文件作用域是 C 的要求。 */
+static volatile int g_sigusr1_hits = 0;
+static void on_sigusr1(int sig) {
+    (void)sig;
+    g_sigusr1_hits++;
+}
 
 static int cmp_int(const void *a, const void *b) {
     int x = *(const int *)a, y = *(const int *)b;
@@ -221,11 +230,13 @@ int main(void) {
     CHECK_EQ(sigaction(SIGPIPE, &sa, &old), 0, "sigaction(SIGPIPE, SIG_IGN) 成功");
     CHECK(old.sa_handler == SIG_DFL, "查询到的旧处置是 SIG_DFL");
 
-    /* 自定义 handler 内核装不上：必须明确失败，不能假装成功 */
-    sa.sa_handler = (sighandler_t)cmp_int;
-    errno = 0;
-    CHECK_EQ(sigaction(SIGTERM, &sa, 0), -1, "自定义 handler 明确失败");
-    CHECK_EQ(errno, ENOSYS, "自定义 handler 置 ENOSYS");
+    /* 自定义 handler 现在**真的能装**了（sigframe + trampoline + SIGRETURN 已落地）。
+     * 这里只验证"装得上 + 返回旧处置"，handler 真正跑起来在第 23 节。
+     * （这两条以前断言的是 -1/ENOSYS —— 那是 handler 还不支持时的行为，已过期。） */
+    sa.sa_handler = on_sigusr1;
+    CHECK_EQ(sigaction(SIGUSR2, &sa, &old), 0, "自定义 handler 可以装");
+    CHECK(old.sa_handler == SIG_DFL, "装 handler 之前的旧处置是 SIG_DFL");
+    signal(SIGUSR2, SIG_DFL);        /* 还原，别给后面的用例留状态 */
 
     sigset_t ss;
     sigemptyset(&ss);
@@ -365,6 +376,58 @@ int main(void) {
              "SO_KEEPALIVE 内核没实现 -> -1");
     CHECK_EQ(errno, ENOPROTOOPT, "不支持的 socket 选项置 ENOPROTOOPT");
     if (sk >= 0) close(sk);
+
+    /* ---------- 21. 进程组（118/119 号 syscall） ----------
+     * 组是派生视图：fork **继承**父进程的组，想自成一组要显式 setpgid(0,0)。
+     * 所以这里不能断言 getpgrp()==getpid() —— 测试进程是 shell fork 出来的，
+     * 组号是 shell 的 pid。只断言"两条路径一致"和"子进程能自成一组"。 */
+    CHECK_EQ(getpgid(getpid()), getpgid(0), "getpgid(pid) 与 getpgid(0) 一致");
+    CHECK_EQ(getpgrp(), getpgid(0), "getpgrp() 就是 getpgid(0)");
+
+    pid_t pchild = fork();
+    if (pchild == 0) {
+        if (setpgid(0, 0) != 0) _exit(1);              /* 自成一组 */
+        _exit(getpgid(0) == getpid() ? 0 : 2);         /* 组号应为自己的 pid */
+    }
+    if (pchild > 0) {
+        int pst = 0;
+        waitpid(pchild, &pst, 0);
+        CHECK(WIFEXITED(pst) && WEXITSTATUS(pst) == 0,
+              "子进程 setpgid(0,0) 后组号 == 自己的 pid");
+    }
+
+    errno = 0;
+    CHECK_EQ(tcgetpgrp(0), (pid_t)-1, "没有控制终端 -> tcgetpgrp 返回 -1");
+    CHECK_EQ(errno, ENOTTY, "tcgetpgrp 置 ENOTTY");
+
+    /* ---------- 22. 信号处置表（每个进程一张表） ----------
+     * 关键是"忽略要真的生效"：处置表取代了原来 FATAL_SIG_MASK 的硬编码，
+     * 如果表没查对，SIG_IGN 会被当成"没设置"，进程照样被杀。 */
+    pid_t sg = fork();
+    if (sg == 0) {
+        signal(SIGTERM, SIG_IGN);
+        kill(getpid(), SIGTERM);      /* 投递发生在本次 syscall 返回用户态时 */
+        _exit(0);                     /* 真的忽略了才会走到这里 */
+    }
+    if (sg > 0) {
+        int sst = 0;
+        waitpid(sg, &sst, 0);
+        CHECK(WIFEXITED(sst) && WEXITSTATUS(sst) == 0,
+              "SIG_IGN 生效：SIGTERM 不再终止子进程");
+    }
+    CHECK_EQ(signal(SIGKILL, SIG_IGN), SIG_ERR, "SIGKILL 不可被忽略");
+    CHECK_EQ(signal(SIGSTOP, SIG_IGN), SIG_ERR, "SIGSTOP 不可被忽略");
+
+    /* ---------- 23. handler 真的跑起来（整条投递链路） ----------
+     * 一次 raise 依次经过：pending 置位 → 出口改写现场 → 用户态 handler →
+     * ret 落到 trampoline → SYS_SIGRETURN 恢复现场 → 回到 raise 之后。
+     * 任何一环断了这里都会挂或死循环。 */
+    CHECK(signal(SIGUSR1, on_sigusr1) != SIG_ERR, "signal(SIGUSR1, handler) 成功");
+    raise(SIGUSR1);
+    CHECK_EQ(g_sigusr1_hits, 1, "handler 跑了一次（sigframe + trampoline 链路通）");
+    raise(SIGUSR1);
+    CHECK_EQ(g_sigusr1_hits, 2, "handler 可反复进入（现场能正确恢复）");
+    signal(SIGUSR1, SIG_DFL);
 
     TEST_END();
 }

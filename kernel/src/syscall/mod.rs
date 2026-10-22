@@ -127,6 +127,7 @@ pub const SYSCALL_NET_GETPEERNAME: usize = 116;
 pub const SYSCALL_NET_SETSOCKOPT: usize = 117;
 pub const SYSCALL_GETPGID: usize = 118;
 pub const SYSCALL_SETPGID: usize = 119;
+pub const SYSCALL_SIGRETURN: usize = 120;
 
 
 
@@ -216,7 +217,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_LSEEK => fs::sys_lseek(args[0], args[1] as isize, args[2]),
         SYSCALL_RENAME => fs::sys_rename(args[0], args[1], args[2], args[3]),
         SYSCALL_SET_ECHO => fs::sys_set_echo(args[0]),
-        SYSCALL_SIGNAL => process::sys_signal(args[0], args[1]),
+        SYSCALL_SIGNAL => process::sys_signal(args[0], args[1], args[2]),
         SYSCALL_SET_FRONT => process::sys_set_front(args[0]),
         SYSCALL_GET_TIME_US => process::sys_get_time_us(),
         SYSCALL_SET_WALL_CLOCK => process::sys_set_wall_clock(args[0]),

@@ -51,6 +51,14 @@ impl TrapContext {
         self.era = pc;
     }
 
+    pub fn set_user_ra(&mut self, ra: usize) {
+        self.r[REG_RA] = ra;
+    }
+
+    pub fn set_user_a0(&mut self, a0: usize) {
+        self.r[REG_A0] = a0;
+    }
+
     pub fn app_init_context(entry: usize, sp: usize) -> Self {
         const PRMD_PPLV_USER: usize = 3;
         const PRMD_PIE: usize = 1 << 2;
@@ -97,6 +105,7 @@ impl TrapContext {
     }
 }
 
+const REG_RA: usize = 1;
 const REG_SP: usize = 3;
 const REG_A0: usize = 4;
 const REG_A1: usize = 5;

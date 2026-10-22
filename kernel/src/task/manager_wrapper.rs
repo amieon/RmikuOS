@@ -17,7 +17,7 @@ use crate::trap::TrapContext;
 use super::context::TaskContext;
 use super::process::{Pid, ProcessControlBlock};
 use super::processor;
-use super::signal::{DefAction, SigAction};
+use super::signal::{DefAction, SigAction, SigFrame};
 use super::switch::__switch;
 use super::thread::{BlockReason, ThreadControlBlock, ThreadStatus, Tid};
 
@@ -729,7 +729,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
             let closed = process.close_non_standard_fds_on_exec();
 
             for a in process.sig_actions.iter_mut() {
-                if let SigAction::Handler(_) = a {
+                if let SigAction::Handler { .. } = a {
                     *a = SigAction::Default;
                 }
             }
@@ -1985,13 +1985,12 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
 ///
 ///   action = 0 → SIG_DFL（跟内核默认动作）
 ///   action = 1 → SIG_IGN
-///   action ≥ 2 → 用户态 handler 入口地址。**现在拒绝**：投递链路（sigframe +
-///   trampoline + SIGRETURN）还没做，装了也永远不会跑 —— 那比"装不上"更难查。
-///   等 do_signal 能改 TrapContext 时，把这里那条 `return -1` 换成
-///   `SigAction::Handler(action)` 即可，其余代码不用动。
+///   action ≥ 2 → 用户态 handler 入口地址；`restorer` 必须是 sigreturn
+///                trampoline 的地址（为 0 就拒绝：没有 trampoline 的 handler
+///                进得去出不来，比装不上更难查）
 ///
-/// SIGKILL / SIGSTOP 不可改。返回旧处置（0 / 1），失败 -1。
-pub fn sig_set(sig: usize, action: usize) -> isize {
+/// SIGKILL / SIGSTOP 不可改。返回旧处置（0 / 1 / handler 地址），失败 -1。
+pub fn sig_set(sig: usize, action: usize, restorer: usize) -> isize {
     if sig >= 64 || super::unblockable(sig) {
         return -1;
     }
@@ -2003,13 +2002,18 @@ pub fn sig_set(sig: usize, action: usize) -> isize {
     process.sig_actions[sig] = match action {
         0 => SigAction::Default,
         1 => SigAction::Ignore,
-        _ => return -1,          // 自定义 handler：见上面的说明
+        entry => {
+            if restorer == 0 {
+                return -1;
+            }
+            SigAction::Handler { entry, restorer }
+        }
     };
 
     match old {
         SigAction::Default => 0,
         SigAction::Ignore => 1,
-        SigAction::Handler(entry) => entry as isize,
+        SigAction::Handler { entry, .. } => entry as isize,
     }
 }
 
@@ -2045,24 +2049,76 @@ pub fn kill(pid: usize, sig: usize) -> isize {
     0
 }
 
-
-pub fn do_signal() {
+/// 信号投递：在"返回用户态之前"调用（trap 出口），所以能拿到 `cx` 并改写它。
+///
+/// 三种处置：忽略（清位即可）、默认动作（杀/停/继续）、用户 handler
+/// （把现场搬到用户栈，再把返回现场换成 handler 入口）。
+pub fn do_signal(cx: &mut TrapContext) {
     let current_pid = current_pid();
     let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(current_pid);
     let pending = process.sig_pending;
     if pending == 0 { return; }
 
-     let sig = pending.trailing_zeros() as usize;
+    /* 一次投递一个：取编号最小的（Linux 也是这样；POSIX 未规定顺序）。
+     * 标准信号不排队，同类信号只会把同一位再置一次 —— 位图语义正好。 */
+    let sig = pending.trailing_zeros() as usize;
     process.sig_pending &= !(1u64 << sig);      // 先清位再投递，防 handler 期间重入
     let action = process.sig_actions[sig];
     drop(manager);
 
     match action {
         SigAction::Ignore => {}
-        SigAction::Handler(_entry) => apply_default_action(sig),
+        SigAction::Handler { entry, restorer } => deliver_handler(cx, sig, entry, restorer),
         SigAction::Default => apply_default_action(sig),
     }
+}
+
+
+fn deliver_handler(cx: &mut TrapContext, sig: usize, entry: usize, restorer: usize) {
+    let frame_size = core::mem::size_of::<SigFrame>();
+
+     let frame_addr = match cx.user_sp().checked_sub(frame_size) {
+        Some(v) => v & !15usize,
+        None => crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32),
+    };
+
+    let frame = SigFrame { cx: *cx, signo: sig };
+    let bytes = unsafe {
+        core::slice::from_raw_parts(&frame as *const SigFrame as *const u8, frame_size)
+    };
+
+    if write_current_user_bytes(frame_addr, bytes).is_none() {
+        /* 用户栈到底了，或者那段压根没映射。按栈溢出处理：SIGSEGV 终止。 */
+        crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32);
+    }
+
+    cx.set_sp(frame_addr);
+    cx.set_user_pc(entry);
+    cx.set_user_ra(restorer);
+    cx.set_user_a0(sig);
+}
+
+/// SIGRETURN：handler 里 `ret` 落到 trampoline，trampoline 发这个 syscall。
+/// 从用户栈上那份 SigFrame 把整个现场恢复回来 —— 于是"回到被打断的地方"。
+pub fn sigreturn_current(cx: &mut TrapContext) {
+    let frame_size = core::mem::size_of::<SigFrame>();
+    let sp = cx.user_sp();
+
+    let bytes = match crate::task::read_current_user_bytes(sp, frame_size) {
+        Some(b) => b,
+        None => crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32),
+    };
+
+    let mut frame = SigFrame { cx: *cx, signo: 0 };
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            bytes.as_ptr(),
+            &mut frame as *mut SigFrame as *mut u8,
+            frame_size,
+        );
+    }
+    *cx = frame.cx;
 }
 
 /// 执行某个信号的默认动作。

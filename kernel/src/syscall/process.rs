@@ -106,9 +106,11 @@ pub fn sys_kill(pid: usize, sig : usize) -> isize {
     crate::task::kill(pid, sig)
 }
 
-/// signal(sig, action): 设置信号处置(0=SIG_DFL 1=SIG_IGN), 返回旧处置或 -1。
-pub fn sys_signal(sig: usize, action: usize) -> isize {
-    crate::task::sig_set(sig, action)
+/// signal(sig, action, restorer): 设置信号处置，返回旧处置或 -1。
+///   action: 0=SIG_DFL, 1=SIG_IGN, 其它=用户态 handler 入口地址
+///   restorer: sigreturn trampoline 地址（装 handler 时必需，由 libc 提供）
+pub fn sys_signal(sig: usize, action: usize, restorer: usize) -> isize {
+    crate::task::sig_set(sig, action, restorer)
 }
 
 /// set_front(pid): 把 pid 设为前台进程(Ctrl+C 投递目标)。

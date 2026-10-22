@@ -37,10 +37,22 @@ static inline void kill(isize pid, usize sig){
     syscall3(SYS_KILL, pid, sig, 0);
 }
 
-/* 真实 signal(): 内核支持 SIG_DFL(0)/SIG_IGN(1) 两种处置;
- * 自定义 handler 不支持, 返回 SIG_ERR。返回旧处置(SIG_DFL/SIG_IGN)。 */
+/* handler 返回时要去的地方 —— 由 lib/syscall_*.S 里的裸汇编提供：
+ * 把 SYS_SIGRETURN 放进 a7 然后 ecall，两三条指令，不改 sp。
+ *
+ * 为什么必须要它：内核投递 handler 时把 ra 指向这里。handler 是个普通 C
+ * 函数，它的 `ret` 会跳到 ra —— 如果 ra 是调用者的返回地址，恢复现场就
+ * 无从谈起；如果 ra 是 0，直接就崩。所以这个"假返回地址"是整套机制的地基。 */
+extern void rk_sigreturn_trampoline(void);
+
+/* signal(): SIG_DFL / SIG_IGN / 自定义 handler 三种都能装。
+ *   返回旧处置（SIG_DFL / SIG_IGN / 旧 handler 地址），失败 SIG_ERR。
+ *
+ * 装 handler 时把 trampoline 一起传给内核（第三个参数），因为内核在投递时
+ * 需要知道"handler 返回后去哪"——用户态地址只有用户态知道。 */
 static inline sighandler_t signal(int sig, sighandler_t handler) {
-    isize old = syscall3(SYS_SIGNAL, (usize)sig, (usize)handler, 0);
+    isize old = syscall3(SYS_SIGNAL, (usize)sig, (usize)handler,
+                         (usize)&rk_sigreturn_trampoline);
     if (old < 0) return SIG_ERR;
     return (sighandler_t)old;
 }
@@ -51,14 +63,13 @@ static inline int raise(int sig) {
 }
 
 /* ---- sigaction / sigprocmask（POSIX）----
- * 内核的信号模型比 POSIX 简单：只有 SIG_DFL / SIG_IGN 两种处置，
- * 没有信号屏蔽字，也没有 sigreturn 通道。于是：
- *   - SIG_DFL / SIG_IGN 真正能装（走 SYS_SIGNAL）；
- *   - 自定义 handler 返回 -1 + ENOSYS，**不假装成功**（否则调用方以为 Ctrl-C
- *     会走自己的清理逻辑，实际不会）；
- *   - sa_mask / sigprocmask 被接受但无效果，返回 0 —— 返回 -1 会让 git 的
- *     start_command() 直接 die_errno，而"屏蔽不了 SIGPIPE"不影响本地仓库操作；
- *   - 查询旧处置只能报 SIG_DFL（内核不回报历史值）。
+ * 处置（SIG_DFL / SIG_IGN / 自定义 handler）三种都能装，handler 也能真的跑起来
+ * （内核把现场压到用户栈，返回时经 trampoline 走 SYS_SIGRETURN 恢复）。
+ * 仍然没有的两样：
+ *   - 信号屏蔽字（sigprocmask 接受但无效果，返回 0 —— 返回 -1 会让 git 的
+ *     start_command() 直接 die_errno，而"屏蔽不了 SIGPIPE"不影响本地仓库操作）；
+ *   - handler 执行期间不会自动屏蔽自身信号，`sa_flags` 一律忽略。
+ * 查询旧处置只能报 SIG_DFL（内核没有"只查不改"的入口）。
  * 结构体里**没有** sa_sigaction：SA_SIGINFO 风格回调在这个内核里没有意义，
  * git 也不用。少一个匿名 union，TCC 那边更稳。 */
 #define RK_NSIG 32
@@ -111,18 +122,15 @@ static inline int sigismember(const sigset_t *set, int sig) {
 
 static inline int sigaction(int sig, const struct sigaction *act, struct sigaction *old) {
     if (old) {
-        old->sa_handler = SIG_DFL;      /* 内核不回报历史处置 */
+        old->sa_handler = SIG_DFL;      /* 内核没有"只查不改"的入口 */
         sigemptyset(&old->sa_mask);
         old->sa_flags = 0;
         old->sa_restorer = (void (*)(void))0;
     }
     if (!act) return 0;
 
-    if (act->sa_handler == SIG_DFL || act->sa_handler == SIG_IGN) {
-        return (signal(sig, act->sa_handler) == SIG_ERR) ? -1 : 0;
-    }
-    errno = ENOSYS;                     /* 自定义 handler 装不上 */
-    return -1;
+    /* 三种处置都走 signal()：它会把 sa_handler 和 trampoline 一起交给内核 */
+    return (signal(sig, act->sa_handler) == SIG_ERR) ? -1 : 0;
 }
 
 /* 无信号屏蔽字：接受并忽略，返回 0（否则 git 的 start_command 会 die） */

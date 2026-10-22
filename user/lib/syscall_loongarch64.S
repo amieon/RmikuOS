@@ -141,3 +141,13 @@ longjmp:
     add.d   $a0, $a0, $a1         /* 合成: val==0 -> 1, 否则 -> val */
     jirl    $zero, $r1, 0
     .size longjmp, .-longjmp
+
+
+    .section .text
+    .global rk_sigreturn_trampoline
+    .type rk_sigreturn_trampoline, @function
+rk_sigreturn_trampoline:
+    li.d    $r11, 120
+    syscall 0
+    break   0                       /* 走到这里说明 SIGRETURN 没换掉现场 */
+    .size rk_sigreturn_trampoline, .-rk_sigreturn_trampoline

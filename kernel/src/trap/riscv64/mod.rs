@@ -70,7 +70,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
 
                 if cx.is_from_user() {
 
-                    crate::task::do_signal();
+                    crate::task::do_signal(cx);
 
                     if should_schedule {
                         if crate::task::can_preempt() {
@@ -122,11 +122,18 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     }
     match code {
         CAUSE_U_ECALL => {
-            cx.sepc += 4;
             let syscall_id = cx.x[17];
-            let args = [cx.x[10], cx.x[11], cx.x[12],cx.x[13], cx.x[14], cx.x[15]];
-            cx.x[10] = handle_syscall(syscall_id, args) as usize;
-            crate::task::do_signal();
+            if syscall_id == crate::syscall::SYSCALL_SIGRETURN {
+                /* sigreturn 不写 a0，而是把整份现场换掉（此时 sp 指向用户栈上的
+                 * SigFrame）。恢复失败时内部已按 SIGSEGV 终止进程。
+                 * 注意**不能**先 sepc += 4 —— 恢复后的 sepc 由 frame 决定。 */
+                crate::task::sigreturn_current(cx);
+            } else {
+                cx.sepc += 4;
+                let args = [cx.x[10], cx.x[11], cx.x[12],cx.x[13], cx.x[14], cx.x[15]];
+                cx.x[10] = handle_syscall(syscall_id, args) as usize;
+            }
+            crate::task::do_signal(cx);
             crate::drivers::net::maybe_poll();
         }
 
@@ -148,7 +155,14 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                     cx.sepc, cx.stval, crate::arch::current_hart_id()
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
-                crate::task::do_signal();   // SIGILL 致命 -> 终止进程(exit 132)
+                crate::task::do_signal(cx);   // SIGILL 致命 -> 终止进程(exit 132)
+                /* 走到这里说明 SIGILL 被 SIG_IGN 掉了。
+                 * 以前这里是 panic!("SIGILL not fatal") —— 但用户态只要
+                 * signal(SIGILL, SIG_IGN) 再执行一条非法指令，就能把**内核**
+                 * panic 掉，正是"用户态不该炸内核"的反例。
+                 * 同步异常也无法"忽略后继续"：那条指令还在原地，返回用户态
+                 * 只会无限重触发（还会刷爆 115200 的串口）。所以按"无法继续"
+                 * 终止进程，而不是 panic。 */
                 crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
             } else {
                 trap_println!(
@@ -175,7 +189,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                     cx.sepc, cx.stval, crate::arch::current_hart_id()
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGSEGV);
-                crate::task::do_signal();
+                crate::task::do_signal(cx);
                 panic!("SIGSEGV not fatal");  // 不应该到达
             } else {
                 trap_println!(

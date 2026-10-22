@@ -63,3 +63,12 @@ syscall6:
     mv      a5, a6
     ecall
     ret
+
+    .section .text
+    .global rk_sigreturn_trampoline
+    .type rk_sigreturn_trampoline, @function
+rk_sigreturn_trampoline:
+    li      a7, 120
+    ecall
+    ebreak                          /* 走到这里说明 SIGRETURN 没换掉现场 */
+    .size rk_sigreturn_trampoline, .-rk_sigreturn_trampoline

@@ -82,6 +82,7 @@ pub use manager_wrapper::{
 
     kill,
     do_signal,
+    sigreturn_current,
     set_current_sig_pending,
     sig_set,
     set_front,

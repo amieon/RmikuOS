@@ -95,11 +95,17 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
     match cx.ecode() {
         ECODE_INT => handle_interrupt(cx),
         ECODE_SYS => {
-            cx.era += 4;
             let syscall_id = cx.r[11]; // a7
-            let args = [cx.r[4], cx.r[5], cx.r[6], cx.r[7], cx.r[8], cx.r[9]]; // a0, a1, a2
-            cx.r[4] = handle_syscall(syscall_id, args) as usize; // return in a0
-            crate::task::do_signal();
+            if syscall_id == crate::syscall::SYSCALL_SIGRETURN {
+                /* sigreturn 不写 a0，而是换掉整份现场（sp 指向用户栈上的 SigFrame）。
+                 * 不能先 era += 4：恢复后的 pc 由 frame 决定。详见 riscv64 同名分支。 */
+                crate::task::sigreturn_current(cx);
+            } else {
+                cx.era += 4;
+                let args = [cx.r[4], cx.r[5], cx.r[6], cx.r[7], cx.r[8], cx.r[9]]; // a0..a5
+                cx.r[4] = handle_syscall(syscall_id, args) as usize; // return in a0
+            }
+            crate::task::do_signal(cx);
             crate::drivers::net::maybe_poll();
         }
         ECODE_BRK => {
@@ -109,7 +115,10 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
         ECODE_INE | ECODE_IPE => {
             if cx.is_from_user() {
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
-                crate::task::do_signal();
+                crate::task::do_signal(cx);
+                /* SIGILL 被 SIG_IGN 掉了 —— 用户态不该因此把内核 panic 掉
+                 * （signal(SIGILL, SIG_IGN) + 一条非法指令就能触发）。
+                 * 同步异常也没法"忽略后继续"，只能终止进程。详见 riscv64 的同名分支。 */
                 crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
             } else {
                 trap_println!(
@@ -147,7 +156,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
                 );
                 /* 用户态非法内存访问 -> SIGSEGV, 只杀该进程(exit 139) */
                 crate::task::set_current_sig_pending(crate::task::SIGSEGV);
-                crate::task::do_signal();
+                crate::task::do_signal(cx);
                 panic!("SIGSEGV not fatal");
             } else {
                 trap_println!(
@@ -210,7 +219,7 @@ fn handle_interrupt(cx: &mut TrapContext) {
 
         if from_user {
             
-            crate::task::do_signal();
+            crate::task::do_signal(cx);
 
             if should_schedule {
                 if crate::task::can_preempt() {
