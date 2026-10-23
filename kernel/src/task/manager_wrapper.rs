@@ -738,6 +738,8 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
             let old = core::mem::replace(&mut process.user_space, new_user_space);
             (old, closed)
         }; 
+       
+        manager.thread_mut(current_tid).sig_pending = 0;
 
 
         for file in &closed_files {
@@ -2053,28 +2055,41 @@ pub fn kill(pid: usize, sig: usize) -> isize {
 ///
 /// 三种处置：忽略（清位即可）、默认动作（杀/停/继续）、用户 handler
 /// （把现场搬到用户栈，再把返回现场换成 handler 入口）。
-pub fn do_signal(cx: &mut TrapContext) {
+/// 返回值：`true` 表示现场已被改写成 handler 入口（调用方**不要**再按"没处理"处理）；
+/// `false` 表示信号被忽略或走了默认动作里"什么都不做"那一支。
+/// 同步异常的调用点（SIGSEGV/SIGILL）必须看这个返回值：有 handler 时要放它去跑，
+/// 否则就会把"该进 handler 的"当成"没人管"。
+pub fn do_signal(cx: &mut TrapContext) -> bool {
     let current_pid = current_pid();
     let current_tid = processor::current_tid();
     let mut manager = lock_detect!(TASK_MANAGER);
-    /* 屏蔽字是**线程级**的，pending 是**进程级**的 —— 受理与否看本线程。 */
+
     let blocked = manager.thread(current_tid).sig_blocked;
-    let process = manager.process_mut(current_pid);
-    /* 屏蔽中的信号不清位、不丢：解除屏蔽后下一次 trap 出口会补投。 */
-    let pending = process.sig_pending & !blocked;
-    if pending == 0 { return; }
+    let tpend = manager.thread(current_tid).sig_pending;
+    let ppend = manager.process(current_pid).sig_pending;
+    let pending = (tpend | ppend) & !blocked;
+    if pending == 0 { return false; }
 
     let sig = pending.trailing_zeros() as usize;
-    process.sig_pending &= !(1u64 << sig);
-    let action = process.sig_actions[sig];
+    let bit = 1u64 << sig;
+    /* 从产生它的那一级清位。两级都有同一位时先处理线程级（同步异常优先），
+     * 进程级那一次会在下一个 trap 出口补投。 */
+    if tpend & bit != 0 {
+        manager.thread_mut(current_tid).sig_pending &= !bit;
+    } else {
+        manager.process_mut(current_pid).sig_pending &= !bit;
+    }
+    let action = manager.process(current_pid).sig_actions[sig];
     let old_blocked = blocked;
     drop(manager);
 
     match action {
-        SigAction::Ignore => {}
-        SigAction::Handler { entry, restorer } =>
-            deliver_handler(cx, sig, entry, restorer, old_blocked),
-        SigAction::Default => apply_default_action(sig),
+        SigAction::Ignore => false,
+        SigAction::Handler { entry, restorer } => {
+            deliver_handler(cx, sig, entry, restorer, old_blocked);
+            true
+        }
+        SigAction::Default => { apply_default_action(sig); false }
     }
 }
 
@@ -2204,12 +2219,12 @@ fn apply_default_action(sig: usize) {
     }
 }
 
-pub fn set_current_sig_pending(sig : usize){
-    let pid = current_pid();
+pub fn set_current_sig_pending(sig: usize) {
     if sig >= super::NSIG { return; }
+    let tid = processor::current_tid();
     let mut manager = lock_detect!(TASK_MANAGER);
-    if let Some(process) = manager.try_process_mut(pid) {
-        process.sig_pending |= 1u64 << sig;
+    if let Some(t) = manager.try_thread_mut(tid) {
+        t.sig_pending |= 1u64 << sig;
     }
 }
 

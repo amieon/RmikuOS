@@ -115,8 +115,9 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
         ECODE_INE | ECODE_IPE => {
             if cx.is_from_user() {
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
-                crate::task::do_signal(cx);
-                crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
+                if !crate::task::do_signal(cx) {
+                    crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
+                }
             } else {
                 trap_println!(
                     "[trap] fatal exception: ecode={:#x}, esubcode={:#x}, era={:#x}, badv={:#x}, estat={:#x}",
@@ -153,8 +154,9 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
                 );
                 /* 用户态非法内存访问 -> SIGSEGV, 只杀该进程(exit 139) */
                 crate::task::set_current_sig_pending(crate::task::SIGSEGV);
-                crate::task::do_signal(cx);
-                panic!("SIGSEGV not fatal");
+                if !crate::task::do_signal(cx) {
+                    crate::task::exit_current_and_run_next(128 + crate::task::SIGSEGV as i32);
+                }
             } else {
                 trap_println!(
                     "[trap] fatal exception: ecode={:#x}, esubcode={:#x}, era={:#x}, badv={:#x}, estat={:#x}",

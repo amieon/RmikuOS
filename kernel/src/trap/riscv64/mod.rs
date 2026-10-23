@@ -155,8 +155,9 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                     cx.sepc, cx.stval, crate::arch::current_hart_id()
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
-                crate::task::do_signal(cx);   // SIGILL 致命 -> 终止进程(exit 132)
-                crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
+                if !crate::task::do_signal(cx) {
+                    crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
+                }
             } else {
                 trap_println!(
                     "[trap] fatal exception: code={}, sepc={:#x}, stval={:#x}, scause={:#x}",
@@ -182,8 +183,12 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                     cx.sepc, cx.stval, crate::arch::current_hart_id()
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGSEGV);
-                crate::task::do_signal(cx);
-                panic!("SIGSEGV not fatal");  // 不应该到达
+                /* 装了 handler 就交给它（现场已被改写）；没人接手则终止进程。
+                 * 这里以前是 panic!("SIGSEGV not fatal") —— 用户态 signal(SIGSEGV, h)
+                 * 之后一个空指针就能把内核 panic 掉。 */
+                if !crate::task::do_signal(cx) {
+                    crate::task::exit_current_and_run_next(128 + crate::task::SIGSEGV as i32);
+                }
             } else {
                 trap_println!(
                     "[trap] fatal exception: code={}, sepc={:#x}, stval={:#x}, scause={:#x}",
