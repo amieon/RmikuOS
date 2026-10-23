@@ -131,6 +131,11 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     crate::task::set_fcntl(fd, cmd, arg)
 }
 
+/// sigprocmask(how, set_ptr, old_ptr)：屏蔽字读写。set_ptr=0 表示只查询。
+pub fn sys_sigprocmask(how: usize, set_ptr: usize, old_ptr: usize) -> isize {
+    crate::task::sigprocmask(how, set_ptr, old_ptr)
+}
+
 
 /// getenv(key_ptr, key_len, buf_ptr, buf_len)
 /// 返回值长度（不含 NUL），不存在返回 -1；buf=0 时仅探测长度。

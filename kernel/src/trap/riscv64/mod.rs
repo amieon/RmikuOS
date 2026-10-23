@@ -156,13 +156,6 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
                 crate::task::do_signal(cx);   // SIGILL 致命 -> 终止进程(exit 132)
-                /* 走到这里说明 SIGILL 被 SIG_IGN 掉了。
-                 * 以前这里是 panic!("SIGILL not fatal") —— 但用户态只要
-                 * signal(SIGILL, SIG_IGN) 再执行一条非法指令，就能把**内核**
-                 * panic 掉，正是"用户态不该炸内核"的反例。
-                 * 同步异常也无法"忽略后继续"：那条指令还在原地，返回用户态
-                 * 只会无限重触发（还会刷爆 115200 的串口）。所以按"无法继续"
-                 * 终止进程，而不是 panic。 */
                 crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
             } else {
                 trap_println!(

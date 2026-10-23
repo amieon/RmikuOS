@@ -1991,7 +1991,7 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
 ///
 /// SIGKILL / SIGSTOP 不可改。返回旧处置（0 / 1 / handler 地址），失败 -1。
 pub fn sig_set(sig: usize, action: usize, restorer: usize) -> isize {
-    if sig >= 64 || super::unblockable(sig) {
+    if sig >= super::NSIG || super::unblockable(sig) {
         return -1;
     }
     let pid = current_pid();
@@ -2018,7 +2018,7 @@ pub fn sig_set(sig: usize, action: usize, restorer: usize) -> isize {
 }
 
 pub fn kill(pid: usize, sig: usize) -> isize {
-    if sig >= 64 {
+    if sig >= super::NSIG {
         return -1;
     }
 
@@ -2055,27 +2055,82 @@ pub fn kill(pid: usize, sig: usize) -> isize {
 /// （把现场搬到用户栈，再把返回现场换成 handler 入口）。
 pub fn do_signal(cx: &mut TrapContext) {
     let current_pid = current_pid();
+    let current_tid = processor::current_tid();
     let mut manager = lock_detect!(TASK_MANAGER);
+    /* 屏蔽字是**线程级**的，pending 是**进程级**的 —— 受理与否看本线程。 */
+    let blocked = manager.thread(current_tid).sig_blocked;
     let process = manager.process_mut(current_pid);
-    let pending = process.sig_pending;
+    /* 屏蔽中的信号不清位、不丢：解除屏蔽后下一次 trap 出口会补投。 */
+    let pending = process.sig_pending & !blocked;
     if pending == 0 { return; }
 
-    /* 一次投递一个：取编号最小的（Linux 也是这样；POSIX 未规定顺序）。
-     * 标准信号不排队，同类信号只会把同一位再置一次 —— 位图语义正好。 */
     let sig = pending.trailing_zeros() as usize;
-    process.sig_pending &= !(1u64 << sig);      // 先清位再投递，防 handler 期间重入
+    process.sig_pending &= !(1u64 << sig);
     let action = process.sig_actions[sig];
+    let old_blocked = blocked;
     drop(manager);
 
     match action {
         SigAction::Ignore => {}
-        SigAction::Handler { entry, restorer } => deliver_handler(cx, sig, entry, restorer),
+        SigAction::Handler { entry, restorer } =>
+            deliver_handler(cx, sig, entry, restorer, old_blocked),
         SigAction::Default => apply_default_action(sig),
     }
 }
 
+/// sigprocmask(how, set_ptr, old_ptr)：how 0=BLOCK 1=UNBLOCK 2=SETMASK（与 libc 的
+/// SIG_BLOCK/SIG_UNBLOCK/SIG_SETMASK 一致）。set_ptr 为 0 表示只查询。
+/// 作用于**当前线程**（POSIX：屏蔽字是线程级的；多线程程序里应叫 `pthread_sigmask`）。
+/// 用户态的 `sigset_t` 就是 8 字节（RK_NSIG=32），所以按 u64 小端读写。
+pub fn sigprocmask(how: usize, set_ptr: usize, old_ptr: usize) -> isize {
+    let tid = processor::current_tid();
+    let old = {
+        let manager = lock_detect!(TASK_MANAGER);
+        match manager.try_thread(tid) {
+            Some(t) => t.sig_blocked,
+            None => return -1,
+        }
+    };
 
-fn deliver_handler(cx: &mut TrapContext, sig: usize, entry: usize, restorer: usize) {
+    /* 用户态 sigset_t 用 glibc 那套布局：**bit(sig-1) 对应信号 sig**；
+     * 内核内部位图是 bit(sig)（和 sig_pending 一致）。所以两个方向的边界都要平移一位。
+     * 忘掉这个平移的后果很难查：屏蔽了却照旧投递，看起来像"内核不认屏蔽字"。 */
+    if old_ptr != 0 {
+        let word = old >> 1;
+        let mut buf = [0u8; 8];
+        for i in 0..8 { buf[i] = ((word >> (i * 8)) & 0xff) as u8; }
+        if write_current_user_bytes(old_ptr, &buf).is_none() { return -1; }
+    }
+
+    if set_ptr == 0 { return 0; }          /* 只查询 */
+
+    let raw = match read_current_user_bytes(set_ptr, 8) {
+        Some(b) => b,
+        None => return -1,
+    };
+    let mut mask = 0u64;
+    for i in 0..8 { mask |= (raw[i] as u64) << (i * 8); }
+    mask = (mask << 1) & (u64::MAX << 1);   /* user bit(sig-1) -> kernel bit(sig) */
+    /* SIGKILL / SIGSTOP 不可屏蔽：静默剔掉，不报错（POSIX 也没让报） */
+    mask &= !((1u64 << super::SIGKILL) | (1u64 << super::SIGSTOP));
+
+    let newmask = match how {
+        0 => old | mask,        /* SIG_BLOCK */
+        1 => old & !mask,       /* SIG_UNBLOCK */
+        2 => mask,              /* SIG_SETMASK */
+        _ => return -1,
+    };
+
+    let mut manager = lock_detect!(TASK_MANAGER);
+    match manager.try_thread_mut(tid) {
+        Some(t) => { t.sig_blocked = newmask; 0 }
+        None => -1,
+    }
+}
+
+
+fn deliver_handler(cx: &mut TrapContext, sig: usize, entry: usize, restorer: usize,
+                   old_blocked: u64) {
     let frame_size = core::mem::size_of::<SigFrame>();
 
      let frame_addr = match cx.user_sp().checked_sub(frame_size) {
@@ -2083,7 +2138,7 @@ fn deliver_handler(cx: &mut TrapContext, sig: usize, entry: usize, restorer: usi
         None => crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32),
     };
 
-    let frame = SigFrame { cx: *cx, signo: sig };
+    let frame = SigFrame { cx: *cx, signo: sig, blocked: old_blocked };
     let bytes = unsafe {
         core::slice::from_raw_parts(&frame as *const SigFrame as *const u8, frame_size)
     };
@@ -2097,6 +2152,14 @@ fn deliver_handler(cx: &mut TrapContext, sig: usize, entry: usize, restorer: usi
     cx.set_user_pc(entry);
     cx.set_user_ra(restorer);
     cx.set_user_a0(sig);
+
+    /* handler 期间屏蔽自身（POSIX 默认；SA_NODEFER 未实现）。
+     * 这一步是防递归爆栈的关键：handler 里再 raise 同一个信号时，
+     * 它只会挂到 pending，等 sigreturn 恢复屏蔽字后才补投。 */
+    let mut manager = lock_detect!(TASK_MANAGER);
+    if let Some(t) = manager.try_thread_mut(processor::current_tid()) {
+        t.sig_blocked = old_blocked | (1u64 << sig);
+    }
 }
 
 /// SIGRETURN：handler 里 `ret` 落到 trampoline，trampoline 发这个 syscall。
@@ -2110,7 +2173,7 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
         None => crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32),
     };
 
-    let mut frame = SigFrame { cx: *cx, signo: 0 };
+    let mut frame = SigFrame { cx: *cx, signo: 0, blocked: 0 };
     unsafe {
         core::ptr::copy_nonoverlapping(
             bytes.as_ptr(),
@@ -2119,6 +2182,13 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
         );
     }
     *cx = frame.cx;
+
+    /* 恢复 handler 之前的屏蔽字。若 handler 里 raise 过自己，那个信号此刻
+     * 已不再屏蔽 —— 本次 trap 出口的 do_signal 会立刻补投。 */
+    let mut manager = lock_detect!(TASK_MANAGER);
+    if let Some(t) = manager.try_thread_mut(processor::current_tid()) {
+        t.sig_blocked = frame.blocked;
+    }
 }
 
 /// 执行某个信号的默认动作。
@@ -2136,7 +2206,7 @@ fn apply_default_action(sig: usize) {
 
 pub fn set_current_sig_pending(sig : usize){
     let pid = current_pid();
-    if sig >= 64 { return; }
+    if sig >= super::NSIG { return; }
     let mut manager = lock_detect!(TASK_MANAGER);
     if let Some(process) = manager.try_process_mut(pid) {
         process.sig_pending |= 1u64 << sig;

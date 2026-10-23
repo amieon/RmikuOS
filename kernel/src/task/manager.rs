@@ -1008,6 +1008,7 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
         );
         let init_pass = self.min_thread_pass_in_process(pid);
         thread.pass = init_pass;
+        thread.sig_blocked = self.thread(current_tid).sig_blocked;
 
         self.insert_thread(thread);
 

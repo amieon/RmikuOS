@@ -55,7 +55,7 @@ pub struct ProcessControlBlock {
     pub mmap_next: usize,
 
     pub sig_pending: u64,
-    pub sig_actions: [SigAction; 64],
+    pub sig_actions: [SigAction; super::NSIG],
 
     /// 进程凭证(POSIX uid/euid/gid/egid)。0 = root / 超级用户。
     pub uid: usize,
@@ -116,7 +116,7 @@ impl ProcessControlBlock {
             mmap_next: USER_MMAP_BASE,
 
             sig_pending: 0,
-            sig_actions: [SigAction::Default; 64],
+            sig_actions: [SigAction::Default; super::NSIG],
 
             // 默认 root（uid/euid/gid/egid = 0）。init 进程即以此身份启动。
             uid: 0,
@@ -196,7 +196,10 @@ impl ProcessControlBlock {
             mmap_next,
 
             sig_pending: 0,
-            sig_actions: [SigAction::Default; 64],
+            /* 处置表与屏蔽字都**不继承**：POSIX 是继承的，但 shell 自己
+             * signal(SIGINT, SIG_IGN)，继承会让子进程也忽略 Ctrl+C。
+             * 前提条件见 sig_actions 字段的注释。 */
+            sig_actions: [SigAction::Default; super::NSIG],
 
             uid,
             euid,

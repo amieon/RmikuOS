@@ -55,6 +55,8 @@ pub struct ThreadControlBlock {
 
     pub run_ticks: usize,
 
+    pub sig_blocked: u64,
+
     pub exit_code: i32,
 }
 
@@ -88,6 +90,8 @@ impl ThreadControlBlock {
             pass: 0,
 
             run_ticks: 0,
+
+            sig_blocked: 0,
 
             exit_code: 0,
         }
@@ -131,6 +135,8 @@ impl ThreadControlBlock {
             block_reason: BlockReason::None,
 
             run_ticks: 0,
+
+            sig_blocked: 0,
 
             exit_code: 0,
         }

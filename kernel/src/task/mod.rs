@@ -85,6 +85,7 @@ pub use manager_wrapper::{
     sigreturn_current,
     set_current_sig_pending,
     sig_set,
+    sigprocmask,
     set_front,
     front_pid,
     kill_front_sigint,

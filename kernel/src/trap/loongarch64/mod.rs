@@ -116,9 +116,6 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
             if cx.is_from_user() {
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
                 crate::task::do_signal(cx);
-                /* SIGILL 被 SIG_IGN 掉了 —— 用户态不该因此把内核 panic 掉
-                 * （signal(SIGILL, SIG_IGN) + 一条非法指令就能触发）。
-                 * 同步异常也没法"忽略后继续"，只能终止进程。详见 riscv64 的同名分支。 */
                 crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
             } else {
                 trap_println!(

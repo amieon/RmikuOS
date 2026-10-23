@@ -128,6 +128,7 @@ pub const SYSCALL_NET_SETSOCKOPT: usize = 117;
 pub const SYSCALL_GETPGID: usize = 118;
 pub const SYSCALL_SETPGID: usize = 119;
 pub const SYSCALL_SIGRETURN: usize = 120;
+pub const SYSCALL_SIGPROCMASK: usize = 121;
 
 
 
@@ -248,6 +249,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETPAGESIZE => process::sys_getpagesize(),
         SYSCALL_GETPGID => process::sys_getpgid(args[0]),
         SYSCALL_SETPGID => process::sys_setpgid(args[0], args[1]),
+        SYSCALL_SIGPROCMASK => process::sys_sigprocmask(args[0], args[1], args[2]),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

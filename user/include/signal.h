@@ -6,26 +6,43 @@ extern "C" {
 #include "syscall.h"
 #include "process.h"
 
-#define SIGHUP  1
-#define SIGINT  2
-#define SIGQUIT 3
-#define SIGILL  4
-#define SIGABRT 6
-#define SIGFPE  8
-#define SIGKILL 9
-#define SIGUSR1 10
-#define SIGSEGV 11
-#define SIGUSR2 12
-#define SIGPIPE 13
-#define SIGALRM 14
-#define SIGTERM 15
-#define SIGCHLD 17
-#define SIGCONT 18
-#define SIGSTOP 19
-/* SIGWINCH: 窗口变化信号——RmikuOS 内核不产生(终端固定 80x24)。
- * 定义仅为编译兼容(kilo 等); signal(SIGWINCH, ...) 会返回 SIG_ERR,
- * 调用方不检查则等价于"不装 handler", 因信号永不触发而无害。 */
-#define SIGWINCH 28
+/* 信号编号与 Linux 一致：
+ *   1..31   标准信号（Linux 上这 31 个号**已经排满**，新信号不会往这里插）
+ *   32..64  实时信号段（Linux 里 32/33 归 glibc，实际可用 34..64）。
+ *           本内核未实现（不排队、无 sigqueue），但位图按 64 位留好了位置。
+ * 常量必须和 kernel/src/task/signal.rs 保持同一套，否则同一个号在内核和 libc
+ * 眼里是两种语义 —— 那类 bug 极难查。 */
+#define SIGHUP     1
+#define SIGINT     2
+#define SIGQUIT    3
+#define SIGILL     4
+#define SIGTRAP    5
+#define SIGABRT    6
+#define SIGBUS     7
+#define SIGFPE     8
+#define SIGKILL    9
+#define SIGUSR1   10
+#define SIGSEGV   11
+#define SIGUSR2   12
+#define SIGPIPE   13
+#define SIGALRM   14
+#define SIGTERM   15
+#define SIGSTKFLT 16
+#define SIGCHLD   17
+#define SIGCONT   18
+#define SIGSTOP   19
+#define SIGTSTP   20
+#define SIGTTIN   21
+#define SIGTTOU   22
+#define SIGURG    23
+#define SIGXCPU   24
+#define SIGXFSZ   25
+#define SIGVTALRM 26
+#define SIGPROF   27
+#define SIGWINCH  28   /* 终端是固定 80x24，内核不产生它；能装 handler，只是永不触发 */
+#define SIGIO     29
+#define SIGPWR    30
+#define SIGSYS    31
 
 typedef void (*sighandler_t)(int);
 
@@ -65,13 +82,16 @@ static inline int raise(int sig) {
 /* ---- sigaction / sigprocmask（POSIX）----
  * 处置（SIG_DFL / SIG_IGN / 自定义 handler）三种都能装，handler 也能真的跑起来
  * （内核把现场压到用户栈，返回时经 trampoline 走 SYS_SIGRETURN 恢复）。
- * 仍然没有的两样：
- *   - 信号屏蔽字（sigprocmask 接受但无效果，返回 0 —— 返回 -1 会让 git 的
- *     start_command() 直接 die_errno，而"屏蔽不了 SIGPIPE"不影响本地仓库操作）；
- *   - handler 执行期间不会自动屏蔽自身信号，`sa_flags` 一律忽略。
+ * 屏蔽字（sigprocmask）是真的：`pending & !blocked` 才投递，挂起的信号不丢，
+ * 解除屏蔽后补投；进入 handler 时自动屏蔽自身信号（POSIX 默认行为），
+ * sigreturn 时恢复。仍然没有的：`sa_flags` 一律忽略（含 SA_NODEFER/SA_RESTART）。
  * 查询旧处置只能报 SIG_DFL（内核没有"只查不改"的入口）。
  * 结构体里**没有** sa_sigaction：SA_SIGINFO 风格回调在这个内核里没有意义，
  * git 也不用。少一个匿名 union，TCC 那边更稳。 */
+/* 用户态能命名的信号号上限（1..32）。注意 sigset_t 仍是 8 字节：
+ * 本头里的位布局是 **bit(sig-1) 对应信号 sig**（与 glibc/Linux uapi 一致），
+ * 而内核内部位图是 bit(sig)。SYS_SIGPROCMASK 的两个方向各平移一位，
+ * 改这里或改内核表示时两边都要对一下。 */
 #define RK_NSIG 32
 
 typedef struct {
@@ -134,10 +154,17 @@ static inline int sigaction(int sig, const struct sigaction *act, struct sigacti
 }
 
 /* 无信号屏蔽字：接受并忽略，返回 0（否则 git 的 start_command 会 die） */
+/* sigprocmask: how = SIG_BLOCK/SIG_UNBLOCK/SIG_SETMASK，set 为 0 表示只查询。
+ * **作用于当前线程**（POSIX 里屏蔽字是线程级的）；sigset_t 正好 8 字节，内核按 u64 读写。 */
 static inline int sigprocmask(int how, const sigset_t *set, sigset_t *old) {
-    (void)how; (void)set;
-    if (old) sigemptyset(old);
-    return 0;
+    isize r = syscall3(SYS_SIGPROCMASK, (usize)how, (usize)set, (usize)old);
+    return (r < 0) ? -1 : 0;
+}
+
+/* POSIX: 多线程程序里 sigprocmask 是未定义行为，应改用这个 ——
+ * 语义完全一样（都作用于调用线程），只是名字说明了作用范围。 */
+static inline int pthread_sigmask(int how, const sigset_t *set, sigset_t *old) {
+    return sigprocmask(how, set, old);
 }
 
 
