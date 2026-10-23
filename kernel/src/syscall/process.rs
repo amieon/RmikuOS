@@ -136,6 +136,14 @@ pub fn sys_sigprocmask(how: usize, set_ptr: usize, old_ptr: usize) -> isize {
     crate::task::sigprocmask(how, set_ptr, old_ptr)
 }
 
+pub fn sys_tgkill(pid: usize, tid: usize, sig: usize) -> isize {
+    crate::task::tgkill(pid, tid, sig)
+}
+
+pub fn sys_gettid() -> isize {
+    crate::task::current_tid() as isize
+}
+
 
 /// getenv(key_ptr, key_len, buf_ptr, buf_len)
 /// 返回值长度（不含 NUL），不存在返回 -1；buf=0 时仅探测长度。

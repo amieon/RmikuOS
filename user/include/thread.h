@@ -122,6 +122,10 @@ static inline int thread_stack_record_take(
     return -1;
 }
 
+static inline int gettid(void) {
+    return (int)syscall3(SYS_GETTID, 0, 0, 0);
+}
+
 static inline int thread_create(void (*func)(void *), void *arg) {
     void *stack_base = mmap(
         THREAD_STACK_SIZE,

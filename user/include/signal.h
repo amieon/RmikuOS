@@ -10,8 +10,7 @@ extern "C" {
  *   1..31   标准信号（Linux 上这 31 个号**已经排满**，新信号不会往这里插）
  *   32..64  实时信号段（Linux 里 32/33 归 glibc，实际可用 34..64）。
  *           本内核未实现（不排队、无 sigqueue），但位图按 64 位留好了位置。
- * 常量必须和 kernel/src/task/signal.rs 保持同一套，否则同一个号在内核和 libc
- * 眼里是两种语义 —— 那类 bug 极难查。 */
+ * 常量和 kernel/src/task/signal.rs 保持同一套 */
 #define SIGHUP     1
 #define SIGINT     2
 #define SIGQUIT    3
@@ -74,24 +73,17 @@ static inline sighandler_t signal(int sig, sighandler_t handler) {
     return (sighandler_t)old;
 }
 
+static inline int pthread_kill(int tid, int sig) {
+    isize r = syscall3(SYS_TGKILL, (usize)getpid(), (usize)tid, (usize)sig);
+    return (r < 0) ? -1 : 0;
+}
+
 static inline int raise(int sig) {
     kill(getpid(), sig);
     return 0;
 }
 
-/* ---- sigaction / sigprocmask（POSIX）----
- * 处置（SIG_DFL / SIG_IGN / 自定义 handler）三种都能装，handler 也能真的跑起来
- * （内核把现场压到用户栈，返回时经 trampoline 走 SYS_SIGRETURN 恢复）。
- * 屏蔽字（sigprocmask）是真的：`pending & !blocked` 才投递，挂起的信号不丢，
- * 解除屏蔽后补投；进入 handler 时自动屏蔽自身信号（POSIX 默认行为），
- * sigreturn 时恢复。仍然没有的：`sa_flags` 一律忽略（含 SA_NODEFER/SA_RESTART）。
- * 查询旧处置只能报 SIG_DFL（内核没有"只查不改"的入口）。
- * 结构体里**没有** sa_sigaction：SA_SIGINFO 风格回调在这个内核里没有意义，
- * git 也不用。少一个匿名 union，TCC 那边更稳。 */
-/* 用户态能命名的信号号上限（1..32）。注意 sigset_t 仍是 8 字节：
- * 本头里的位布局是 **bit(sig-1) 对应信号 sig**（与 glibc/Linux uapi 一致），
- * 而内核内部位图是 bit(sig)。SYS_SIGPROCMASK 的两个方向各平移一位，
- * 改这里或改内核表示时两边都要对一下。 */
+
 #define RK_NSIG 32
 
 typedef struct {

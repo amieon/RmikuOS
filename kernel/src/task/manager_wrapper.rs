@@ -2051,6 +2051,33 @@ pub fn kill(pid: usize, sig: usize) -> isize {
     0
 }
 
+
+/// 和 `kill` 的区别只有一点：kill 挂在进程上，任意一个未屏蔽它的线程都可能接；
+/// 这个只挂在该线程的 `sig_pending` 上，别人不会替它处理。
+pub fn tgkill(pid: usize, tid: usize, sig: usize) -> isize {
+    if sig >= super::NSIG {
+        return -1;
+    }
+    let mut need_ipi = false;
+    {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        match manager.try_thread(tid) {
+            Some(t) if t.pid == pid => {}
+            _ => return -1,
+        }
+        if let Some(t) = manager.try_thread_mut(tid) {
+            t.sig_pending |= 1u64 << sig;
+        }
+        if manager.mark_thread_ready(tid) {
+            need_ipi = true;
+        }
+    }
+    if need_ipi {
+        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    }
+    0
+}
+
 /// 信号投递：在"返回用户态之前"调用（trap 出口），所以能拿到 `cx` 并改写它。
 ///
 /// 三种处置：忽略（清位即可）、默认动作（杀/停/继续）、用户 handler

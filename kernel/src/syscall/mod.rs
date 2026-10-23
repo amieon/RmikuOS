@@ -104,6 +104,9 @@ pub const SYSCALL_RENAMEAT: usize = 95;
 pub const SYSCALL_LINKAT: usize = 96;
 pub const SYSCALL_UMASK: usize = 97;
 pub const SYSCALL_GETPAGESIZE: usize = 98;
+/// 99 原本是刻意留白的"下一个单个小调用"位，现在归 `gettid()`：
+/// 无参数、无歧义、不属于任何语义组 —— 正是这个空位想等的调用。
+pub const SYSCALL_GETTID: usize = 99;
 
 
 
@@ -128,7 +131,10 @@ pub const SYSCALL_NET_SETSOCKOPT: usize = 117;
 pub const SYSCALL_GETPGID: usize = 118;
 pub const SYSCALL_SETPGID: usize = 119;
 pub const SYSCALL_SIGRETURN: usize = 120;
+/// 121：sigprocmask(how, set_ptr, old_ptr)。
 pub const SYSCALL_SIGPROCMASK: usize = 121;
+/// 122：tgkill(pid, tid, sig) —— 线程定向投递。
+pub const SYSCALL_TGKILL: usize = 122;
 
 
 
@@ -250,6 +256,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETPGID => process::sys_getpgid(args[0]),
         SYSCALL_SETPGID => process::sys_setpgid(args[0], args[1]),
         SYSCALL_SIGPROCMASK => process::sys_sigprocmask(args[0], args[1], args[2]),
+        SYSCALL_TGKILL => process::sys_tgkill(args[0], args[1], args[2]),
+        SYSCALL_GETTID => process::sys_gettid(),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),

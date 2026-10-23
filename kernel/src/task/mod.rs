@@ -81,6 +81,7 @@ pub use manager_wrapper::{
     dup,
 
     kill,
+    tgkill,
     do_signal,
     sigreturn_current,
     set_current_sig_pending,
