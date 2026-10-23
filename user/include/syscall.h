@@ -105,7 +105,7 @@ extern "C" {
 #define SYS_LINKAT                   96
 #define SYS_UMASK                    97
 #define SYS_GETPAGESIZE              98   
-#define SYS_GETTID                   99  
+#define SYS_GETTID                   99   /* 当前线程 id(填的是 99 那个空位) */
 
 
 
@@ -132,9 +132,9 @@ extern "C" {
 #define SYS_GETPGID                  118
 #define SYS_SETPGID                  119
 #define SYS_SIGRETURN                120  
-#define SYS_SIGPROCMASK              121 
-#define SYS_TGKILL                   122 
-
+#define SYS_SIGPROCMASK             121   /* sigprocmask(how, set*, old*) */
+#define SYS_TGKILL                  122   /* tgkill(pid, tid, sig) */
+#define SYS_SIGPENDING              123   /* sigpending(set*) */
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);

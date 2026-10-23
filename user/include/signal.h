@@ -10,7 +10,7 @@ extern "C" {
  *   1..31   标准信号（Linux 上这 31 个号**已经排满**，新信号不会往这里插）
  *   32..64  实时信号段（Linux 里 32/33 归 glibc，实际可用 34..64）。
  *           本内核未实现（不排队、无 sigqueue），但位图按 64 位留好了位置。
- * 常量和 kernel/src/task/signal.rs 保持同一套 */
+ */
 #define SIGHUP     1
 #define SIGINT     2
 #define SIGQUIT    3
@@ -150,6 +150,11 @@ static inline int sigaction(int sig, const struct sigaction *act, struct sigacti
  * **作用于当前线程**（POSIX 里屏蔽字是线程级的）；sigset_t 正好 8 字节，内核按 u64 读写。 */
 static inline int sigprocmask(int how, const sigset_t *set, sigset_t *old) {
     isize r = syscall3(SYS_SIGPROCMASK, (usize)how, (usize)set, (usize)old);
+    return (r < 0) ? -1 : 0;
+}
+
+static inline int sigpending(sigset_t *set) {
+    isize r = syscall3(SYS_SIGPENDING, (usize)set, 0, 0);
     return (r < 0) ? -1 : 0;
 }
 

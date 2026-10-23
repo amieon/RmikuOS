@@ -131,10 +131,9 @@ pub const SYSCALL_NET_SETSOCKOPT: usize = 117;
 pub const SYSCALL_GETPGID: usize = 118;
 pub const SYSCALL_SETPGID: usize = 119;
 pub const SYSCALL_SIGRETURN: usize = 120;
-/// 121：sigprocmask(how, set_ptr, old_ptr)。
 pub const SYSCALL_SIGPROCMASK: usize = 121;
-/// 122：tgkill(pid, tid, sig) —— 线程定向投递。
 pub const SYSCALL_TGKILL: usize = 122;
+pub const SYSCALL_SIGPENDING: usize = 123;
 
 
 
@@ -253,10 +252,6 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_LINKAT => fs::sys_linkat(args[0], args[1], args[2], args[3], args[4], args[5]),
         SYSCALL_UMASK => process::sys_umask(args[0]),
         SYSCALL_GETPAGESIZE => process::sys_getpagesize(),
-        SYSCALL_GETPGID => process::sys_getpgid(args[0]),
-        SYSCALL_SETPGID => process::sys_setpgid(args[0], args[1]),
-        SYSCALL_SIGPROCMASK => process::sys_sigprocmask(args[0], args[1], args[2]),
-        SYSCALL_TGKILL => process::sys_tgkill(args[0], args[1], args[2]),
         SYSCALL_GETTID => process::sys_gettid(),
 
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
@@ -277,7 +272,12 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_NET_GETSOCKNAME => net::sys_net_getsockname(args[0], args[1]),
         SYSCALL_NET_GETPEERNAME => net::sys_net_getpeername(args[0], args[1]),
         SYSCALL_NET_SETSOCKOPT  => net::sys_net_setsockopt(args[0], args[1], args[2]),
-
+        SYSCALL_GETPGID => process::sys_getpgid(args[0]),
+        SYSCALL_SETPGID => process::sys_setpgid(args[0], args[1]),
+        SYSCALL_SIGPROCMASK => process::sys_sigprocmask(args[0], args[1], args[2]),
+        SYSCALL_TGKILL => process::sys_tgkill(args[0], args[1], args[2]),
+        SYSCALL_SIGPENDING => process::sys_sigpending(args[0]),
+        
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

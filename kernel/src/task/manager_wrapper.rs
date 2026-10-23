@@ -738,7 +738,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
             let old = core::mem::replace(&mut process.user_space, new_user_space);
             (old, closed)
         }; 
-       
+
         manager.thread_mut(current_tid).sig_pending = 0;
 
 
@@ -2052,6 +2052,30 @@ pub fn kill(pid: usize, sig: usize) -> isize {
 }
 
 
+pub fn sigpending(set_ptr: usize) -> isize {
+    if set_ptr == 0 { return -1; }
+    let tid = processor::current_tid();
+    let pid = current_pid();
+
+    let mask = {
+        let manager = lock_detect!(TASK_MANAGER);
+        let t = match manager.try_thread(tid) { Some(t) => t, None => return -1 };
+        let p = match manager.try_process(pid) { Some(p) => p, None => return -1 };
+        (t.sig_pending | p.sig_pending) & t.sig_blocked
+    };
+
+    /* 内核内部 bit(sig) -> 用户布局 bit(sig-1)，与 sigprocmask 同一套换算 */
+    let word = mask >> 1;
+    let mut buf = [0u8; 8];
+    for i in 0..8 { buf[i] = ((word >> (i * 8)) & 0xff) as u8; }
+    match write_current_user_bytes(set_ptr, &buf) {
+        Some(_) => 0,
+        None => -1,
+    }
+}
+
+/// tgkill(pid, tid, sig)：把信号投给**指定线程**（thread-directed）。
+///
 /// 和 `kill` 的区别只有一点：kill 挂在进程上，任意一个未屏蔽它的线程都可能接；
 /// 这个只挂在该线程的 `sig_pending` 上，别人不会替它处理。
 pub fn tgkill(pid: usize, tid: usize, sig: usize) -> isize {
