@@ -738,7 +738,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
             let old = core::mem::replace(&mut process.user_space, new_user_space);
             (old, closed)
         }; 
-
+        
         manager.thread_mut(current_tid).sig_pending = 0;
 
 
@@ -2102,6 +2102,20 @@ pub fn tgkill(pid: usize, tid: usize, sig: usize) -> isize {
     0
 }
 
+/// 当前线程此刻是否有"可投递"的信号（未被本线程屏蔽的 pending）。
+///
+/// 阻塞型 syscall 靠它判断"我刚才是被信号唤醒的吗"—— 是就返回 EINTR，
+/// 让用户态决定重试还是借机退出（POSIX 的默认行为；没实现 SA_RESTART）。
+pub fn signal_pending_now() -> bool {
+    let pid = current_pid();
+    let tid = processor::current_tid();
+    let manager = lock_detect!(TASK_MANAGER);
+    match (manager.try_thread(tid), manager.try_process(pid)) {
+        (Some(t), Some(p)) => ((t.sig_pending | p.sig_pending) & !t.sig_blocked) != 0,
+        _ => false,
+    }
+}
+
 /// 信号投递：在"返回用户态之前"调用（trap 出口），所以能拿到 `cx` 并改写它。
 ///
 /// 三种处置：忽略（清位即可）、默认动作（杀/停/继续）、用户 handler
@@ -2114,7 +2128,7 @@ pub fn do_signal(cx: &mut TrapContext) -> bool {
     let current_pid = current_pid();
     let current_tid = processor::current_tid();
     let mut manager = lock_detect!(TASK_MANAGER);
-
+    
     let blocked = manager.thread(current_tid).sig_blocked;
     let tpend = manager.thread(current_tid).sig_pending;
     let ppend = manager.process(current_pid).sig_pending;

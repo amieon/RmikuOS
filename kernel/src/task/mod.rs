@@ -85,6 +85,7 @@ pub use manager_wrapper::{
     do_signal,
     sigreturn_current,
     set_current_sig_pending,
+    signal_pending_now,
     sig_set,
     sigprocmask,
     sigpending,

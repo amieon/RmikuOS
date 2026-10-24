@@ -161,7 +161,7 @@ impl File for PipeWriteEnd {
                 return count as isize;
             }
             if pipe.reader_count == 0 {
-                return super::EPIPE;
+                return crate::syscall::errno::EPIPE;
             }
             drop(pipe);              
             block_current_on_pipe_write();
