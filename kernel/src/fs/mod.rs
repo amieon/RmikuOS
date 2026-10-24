@@ -22,7 +22,6 @@ use crate::fs::inode::{check_access, R_OK, W_OK, X_OK};
 pub use stdio::{stdin, stdout};
 pub use flag::*;
 pub const EOF : isize = 0;
-pub const EPIPE : isize = -1;
 
 pub const F_GETFL: usize = 3;
 pub const F_SETFL: usize = 4;

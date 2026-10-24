@@ -89,7 +89,10 @@ impl File for PipeReadEnd {
             if pipe.writer_count <= 0 {
                 return super::EOF;
             }
-            drop(pipe);              
+            drop(pipe);
+            if crate::task::signal_pending_now() {
+                return -crate::syscall::errno::EINTR;
+            }
             block_current_on_pipe_read();
         }
     }

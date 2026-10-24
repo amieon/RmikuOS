@@ -93,11 +93,11 @@ pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
 
     let file = match crate::task::current_file(fd) {
         Some(file) => file,
-        None => return -1,
+        None => return -super::errno::EBADF,
     };
 
     if !file.readable() {
-        return -1;
+        return -super::errno::EBADF;   /* 打开方式不对，Linux 也是 EBADF */
     }
 
 
@@ -120,7 +120,7 @@ pub fn sys_read(fd: usize, user_buf: usize, len: usize) -> isize {
     let n = n as usize;
 
     if crate::task::write_current_user_bytes(user_buf, &kbuf[..n]).is_none() {
-        return -1;
+        return -super::errno::EFAULT;   /* 用户缓冲区不可写 */
     }
 
     n as isize
@@ -191,11 +191,11 @@ pub fn sys_write(fd: usize, user_buf: usize, len: usize) -> isize {
 
     let file = match crate::task::current_file(fd) {
         Some(file) => file,
-        None => return -1,
+        None => return -super::errno::EBADF,
     };
 
     if !file.writable() {
-        return -1;
+        return -super::errno::EBADF;
     }
 
     let kbuf = match crate::task::read_current_user_bytes(user_buf, len) {
@@ -210,12 +210,12 @@ pub fn sys_write(fd: usize, user_buf: usize, len: usize) -> isize {
 pub fn sys_open(path_ptr: usize, len: usize, flags: usize, mode: usize) -> isize {
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
         Some(bytes) => bytes,
-        None => return -1,
+        None => return -super::errno::EFAULT,
     };
 
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s.trim_matches('\0').trim(),
-        Err(_) => return -1,
+        Err(_) => return -super::errno::EINVAL,
     };
 
     let cwd = crate::task::current_cwd();

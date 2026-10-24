@@ -4,6 +4,7 @@ mod process;
 mod thread;
 mod arch;
 mod net;
+pub mod errno;
 
 pub const SYSCALL_EXIT: usize = 0;
 pub const SYSCALL_YIELD: usize = 1;
@@ -104,12 +105,7 @@ pub const SYSCALL_RENAMEAT: usize = 95;
 pub const SYSCALL_LINKAT: usize = 96;
 pub const SYSCALL_UMASK: usize = 97;
 pub const SYSCALL_GETPAGESIZE: usize = 98;
-/// 99 原本是刻意留白的"下一个单个小调用"位，现在归 `gettid()`：
-/// 无参数、无歧义、不属于任何语义组 —— 正是这个空位想等的调用。
 pub const SYSCALL_GETTID: usize = 99;
-
-
-
 pub const SYSCALL_NET_SOCKET: usize = 100; 
 pub const SYSCALL_NET_BIND: usize = 101;
 pub const SYSCALL_NET_SENDTO: usize = 102;

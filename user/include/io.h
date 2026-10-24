@@ -7,14 +7,22 @@ extern "C" {
 #include "syscall.h"
 #include "flag.h"
 #include "strutil.h"
+#include "errno.h"
 #include <stdarg.h>   /* open() 变参取 mode */
 
+
+static inline isize rk_sys_ret(isize r) {
+    if (r == -1) { errno = EIO; return -1; }
+    if (r < 0 && r >= -4095) { errno = (int)(-r); return -1; }
+    return r;
+}
+
 static inline isize write(int fd, const char *buf, usize len) {
-    return syscall3(SYS_WRITE, (usize)fd, (usize)buf, len);
+    return rk_sys_ret(syscall3(SYS_WRITE, (usize)fd, (usize)buf, len));
 }
 
 static inline isize read(int fd, char *buf, usize len) {
-    return syscall3(SYS_READ, (usize)fd, (usize)buf, len);
+    return rk_sys_ret(syscall3(SYS_READ, (usize)fd, (usize)buf, len));
 }
 
 static inline isize pread(int fd, char *buf, usize count, usize offset) {
@@ -41,7 +49,7 @@ static inline isize create(const char *path) {
 static inline isize open2(const char *path, usize len, usize flags) {
     /* 内核 SYS_OPEN 现在 4 参(path,len,flags,mode); 必须 syscall6 传 mode=0,
      * 否则 a3 寄存器残留垃圾会被当 mode。 */
-    return syscall6(SYS_OPEN, (usize)path, len, flags, 0, 0, 0);
+    return rk_sys_ret(syscall6(SYS_OPEN, (usize)path, len, flags, 0, 0, 0));
 }
 
 /* open 变参: POSIX 的 mode 只在 O_CREAT 时有效; 调用方 O_CREAT 时必须传 mode。 */
@@ -53,7 +61,7 @@ static inline isize open(const char *path, usize flags, ...) {
         mode = va_arg(ap, usize);
         va_end(ap);
     }
-    return syscall6(SYS_OPEN, (usize)path, (usize)strlen(path), flags, mode, 0, 0);
+    return rk_sys_ret(syscall6(SYS_OPEN, (usize)path, (usize)strlen(path), flags, mode, 0, 0));
 }
 
 static inline isize open_create(const char *path, usize flags) {
@@ -79,13 +87,13 @@ static inline isize openat(int dirfd, const char *path, usize flags, ...) {
         mode = va_arg(ap, usize);
         va_end(ap);
     }
-    return syscall6(SYS_OPENAT, (usize)(isize)dirfd, (usize)path,
-                    (usize)strlen(path), flags, mode, 0);
+    return rk_sys_ret(syscall6(SYS_OPENAT, (usize)(isize)dirfd, (usize)path,
+                               (usize)strlen(path), flags, mode, 0));
 }
 
 
 static inline isize close(int fd) {
-    return syscall3(SYS_CLOSE, (usize)fd, 0, 0);
+    return rk_sys_ret(syscall3(SYS_CLOSE, (usize)fd, 0, 0));
 }
 
 /* 终端回显开关(内核 line discipline): 1=开 0=关。

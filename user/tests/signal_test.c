@@ -27,6 +27,17 @@ static volatile int last_signo = -1;
 static volatile int syscall_in_handler_ok = 0;
 
 /* handler 是普通 C 函数：内核把 pc 指到它的入口，ra 指到 trampoline */
+/* 用来验证"handler 期间自动屏蔽自身"：在 handler 里再 raise 一次自己 */
+static volatile int self_entries = 0, self_depth = 0, self_max = 0, self_once = 0;
+
+static void on_self(int sig) {
+    self_entries++;
+    self_depth++;
+    if (self_depth > self_max) self_max = self_depth;
+    if (!self_once) { self_once = 1; raise(sig); }   /* 只试探一次 */
+    self_depth--;
+}
+
 static void on_usr(int sig) {
     last_signo = sig;
     if (sig == SIGUSR1) usr1_hits++;
@@ -59,6 +70,56 @@ static double fp_survive(double x) {
     double y = x * 1.5 + 0.25;
     raise(SIGUSR1);
     return y - 0.25;
+}
+
+/* [14] 屏蔽字是线程级的：worker 继承、且解除后不影响 main */
+static volatile int worker_inherited = 0, worker_got = 0, worker_done = 0;
+
+static void mask_worker(void *arg) {
+    (void)arg;
+    sigset_t cur;
+    sigprocmask(SIG_BLOCK, 0, &cur);              /* 查询本线程 */
+    worker_inherited = sigismember(&cur, SIGUSR1);
+
+    sigset_t b;
+    sigemptyset(&b);
+    sigaddset(&b, SIGUSR1);
+    sigprocmask(SIG_UNBLOCK, &b, 0);              /* 只解除本线程 */
+    usr1_hits = 0;
+    raise(SIGUSR1);
+    worker_got = (usr1_hits == 1);
+    worker_done = 1;
+}
+
+/* [15] 同步异常走线程级 pending：worker 里空指针，handler 必须在该线程跑起来 */
+static void on_segv(int sig) {
+    (void)sig;
+    /* 同步异常 handler 不能 return —— 回去就会重跑那条出错指令，无限循环。
+     * 这里直接退出进程，让父进程用退出码判断"handler 确实跑了"。 */
+    _exit(0);
+}
+
+static void segv_worker(void *arg) {
+    (void)arg;
+    *(volatile int *)0 = 1;      /* 空指针写：触发 SIGSEGV（同步异常） */
+    _exit(2);                    /* 不该到这里 */
+}
+
+/* [16] 线程定向投递：pthread_kill 只打到指定线程 */
+static volatile int tk_tid = -1, tk_ready = 0, tk_stop = 0;
+static volatile int tk_handler_tid = -1, tk_hits = 0;
+
+static void on_usr2_tid(int sig) {
+    (void)sig;
+    tk_handler_tid = gettid();        /* 记下"我是在哪个线程上跑的" */
+    tk_hits++;
+}
+
+static void tk_worker(void *arg) {
+    (void)arg;
+    tk_tid = gettid();
+    tk_ready = 1;
+    while (!tk_stop) { }              /* 一直跑着，等信号在 trap 出口投递 */
 }
 
 int main(void) {
@@ -131,6 +192,112 @@ int main(void) {
         CHECK(WIFSIGNALED(st) && WTERMSIG(st) == SIGTERM,
               "默认动作：SIGTERM 终止子进程（WIFSIGNALED / WTERMSIG）");
     }
+
+    /* ---------- [12] 屏蔽字（sigprocmask） ---------- */
+    sigset_t blk, prev, cur;
+    sigemptyset(&blk);
+    sigaddset(&blk, SIGUSR1);
+
+    CHECK_EQ(sigprocmask(SIG_BLOCK, &blk, &prev), 0, "sigprocmask(SIG_BLOCK) 成功");
+    CHECK(sigismember(&prev, SIGUSR1) == 0, "屏蔽前 SIGUSR1 不在屏蔽字里");
+
+    usr1_hits = 0;
+    raise(SIGUSR1);
+    CHECK_EQ(usr1_hits, 0, "屏蔽期间不投递（信号挂在 pending 上）");
+
+    CHECK_EQ(sigprocmask(SIG_UNBLOCK, &blk, &cur), 0, "sigprocmask(SIG_UNBLOCK) 成功");
+    CHECK(sigismember(&cur, SIGUSR1) == 1, "解除前屏蔽字里确实有 SIGUSR1");
+    CHECK_EQ(usr1_hits, 1, "解除屏蔽后补投——屏蔽期间那个信号没丢");
+
+    /* SIGKILL 不可屏蔽：置不上也不报错 */
+    sigset_t kb;
+    sigemptyset(&kb);
+    sigaddset(&kb, SIGKILL);
+    sigprocmask(SIG_BLOCK, &kb, 0);
+    sigprocmask(SIG_BLOCK, 0, &cur);
+    CHECK(sigismember(&cur, SIGKILL) == 0, "SIGKILL 无法被屏蔽");
+
+    /* ---------- [13] handler 期间自动屏蔽自身 ----------
+     * handler 里 raise 自己：若没有自动屏蔽，会立刻递归（self_max 变成 2+）。
+     * 正确行为是挂到 pending，等 sigreturn 恢复屏蔽字后补投一次。 */
+    signal(SIGUSR2, on_self);
+    self_entries = self_depth = self_max = self_once = 0;
+    raise(SIGUSR2);
+    CHECK_EQ(self_max, 1, "handler 里 raise 自己不会递归（期间已屏蔽自身）");
+    CHECK_EQ(self_entries, 2, "挂起的那次在 sigreturn 后补投（总共进入 2 次）");
+
+    /* ---------- [14] 屏蔽字是线程级的 ---------- */
+    sigset_t mb;
+    sigemptyset(&mb);
+    sigaddset(&mb, SIGUSR1);
+    sigprocmask(SIG_BLOCK, &mb, 0);               /* main 先屏蔽，worker 会继承 */
+
+    int wtid = thread_create(mask_worker, 0);
+    CHECK(wtid >= 0, "thread_create 成功（用于验证线程级屏蔽字）");
+    if (wtid >= 0) {
+        /* 自己转着等，不直接 join：kill 会把同进程的线程都唤成 Ready，
+         * 正在 join 里阻塞的 main 可能被提前唤醒，导致断言读到半成品状态。
+         * 有界自旋 —— worker 卡住时报失败而不是把测试挂死。 */
+        for (long spin = 0; spin < 50000000L && !worker_done; spin++) { }
+        CHECK_EQ(worker_done, 1, "worker 跑完了（有界自旋）");
+        int wcode = 0;
+        thread_join(wtid, &wcode);
+        CHECK_EQ(worker_inherited, 1, "新线程继承了创建者的屏蔽字");
+        CHECK_EQ(worker_got, 1, "worker 解除屏蔽后自己收到了信号");
+        sigset_t after;
+        sigprocmask(SIG_BLOCK, 0, &after);
+        CHECK(sigismember(&after, SIGUSR1) == 1, "worker 的解除不影响 main（屏蔽字确实是线程级）");
+    }
+    sigprocmask(SIG_UNBLOCK, &mb, 0);             /* 收尾 */
+
+    /* ---------- [15] 同步异常（线程级 pending） ----------
+     * 在**子进程的 worker 线程**里故意空指针：SIGSEGV 必须立刻在该线程投递，
+     * handler 里 _exit(0)。若投递错到主线程、或根本没投递，进程会以 139 退出。 */
+    isize sp = fork();
+    if (sp == 0) {
+        signal(SIGSEGV, on_segv);
+        if (thread_create(segv_worker, 0) < 0) _exit(3);
+        for (;;) { }                  /* 主线程空转，让 worker 去触发 */
+    }
+    if (sp > 0) {
+        int sst2 = 0;
+        waitpid(sp, &sst2, 0);
+        CHECK(WIFEXITED(sst2) && WEXITSTATUS(sst2) == 0,
+              "SIGSEGV handler 在出错线程上跑起来了（同步信号走线程级 pending）");
+    }
+
+    /* ---------- [16] 线程定向投递（pthread_kill / tgkill） ---------- */
+    signal(SIGUSR2, on_usr2_tid);
+    int ktid = thread_create(tk_worker, 0);
+    CHECK(ktid >= 0, "thread_create 成功（pthread_kill 测试）");
+    if (ktid >= 0) {
+        for (long s = 0; s < 50000000L && !tk_ready; s++) { }
+        CHECK_EQ(tk_tid, ktid, "worker 自报的 tid 与 thread_create 返回值一致");
+
+        CHECK_EQ(pthread_kill(ktid, SIGUSR2), 0, "pthread_kill(worker, SIGUSR2) 成功");
+        for (long s = 0; s < 200000000L && tk_hits == 0; s++) { }
+        CHECK_EQ(tk_hits, 1, "信号确实被投递了");
+        CHECK_EQ(tk_handler_tid, ktid, "handler 在指定线程上跑（main 没有代收）");
+
+        tk_stop = 1;
+        int kcode = 0;
+        thread_join(ktid, &kcode);
+    }
+
+    /* ---------- [17] sigpending：只报"被屏蔽且挂着"的 ---------- */
+    sigset_t pb, pend;
+    sigemptyset(&pb);
+    sigaddset(&pb, SIGUSR1);
+    sigprocmask(SIG_BLOCK, &pb, 0);
+    usr1_hits = 0;
+    raise(SIGUSR1);
+
+    CHECK_EQ(sigpending(&pend), 0, "sigpending 成功");
+    CHECK(sigismember(&pend, SIGUSR1) == 1, "被屏蔽且挂起的 SIGUSR1 报出来了");
+    CHECK(sigismember(&pend, SIGTERM) == 0, "没挂起的信号不在里面");
+
+    sigprocmask(SIG_UNBLOCK, &pb, 0);
+    CHECK_EQ(usr1_hits, 1, "解除屏蔽后那个信号补投了（和 sigpending 看到的一致）");
 
     signal(SIGUSR1, SIG_DFL);
     signal(SIGUSR2, SIG_DFL);
