@@ -349,7 +349,7 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
             let mut manager = lock_detect!(TASK_MANAGER);
             let current_pid = manager.pid_of_tid(current_tid);
 
-            match manager.try_waitpid(current_pid, pid, exit_code_ptr) {
+            match manager.try_waitpid(current_pid, pid, exit_code_ptr, options) {
                 WaitPidAction::Return(ret) => {
                     return ret;
                 }
@@ -738,7 +738,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
             let old = core::mem::replace(&mut process.user_space, new_user_space);
             (old, closed)
         }; 
-        
+        /* 线程级 pending 也要清（exec 要求单线程，所以只有当前这一个）。 */
         manager.thread_mut(current_tid).sig_pending = 0;
 
 
@@ -1912,6 +1912,14 @@ pub fn kill_front_sigint() {
     }
 }
 
+/// Ctrl+Z 投递: 向前台进程发 SIGTSTP（默认动作 = 停止，由 shell 的 `fg`/`bg` 继续）。
+pub fn kill_front_tstp() {
+    let pid = front_pid();
+    if pid != 0 {
+        let _ = kill(pid, super::SIGTSTP);
+    }
+}
+
 /// 查询进程组号。pid=0 表示当前进程；返回 -1 表示没有这个进程。
 pub fn pgid_of(pid: isize) -> isize {
     let manager = lock_detect!(TASK_MANAGER);
@@ -1930,10 +1938,10 @@ pub fn pgid_of(pid: isize) -> isize {
 
 /// 把 target 放进组 pgid（POSIX setpgid 的一个诚实子集）：
 ///
-///   - 只能改**自己**，或自己的**直接子进程**（否则 -1）
+///   - 只能改自己，或自己的直接子进程（否则 -1）
 ///   - pid = 0 表示"我自己"；pgid = 0 表示"用 target 的 pid 当组号"，
 ///     也就是"自成一组、自己当组长"，这个总是允许（因为它必然是个空组号）
-///   - 除此之外，目标组**必须已经存在**（本模型不创建空组，组是派生视图）
+///   - 除此之外，目标组必须已经存在（本模型不创建空组，组是派生视图）
 ///
 /// 没有 session，所以 POSIX 的"同一 session 内""session leader 不能改"两条
 /// 无法适用，这里明确省略而不是假装检查。
@@ -2050,11 +2058,58 @@ pub fn kill(pid: usize, sig: usize) -> isize {
             return -1;
         }
 
+        /* 被停住的进程走不到 trap 出口，pending 里的信号永远没人处理。
+         * POSIX 只给两个信号开了豁免： */
+        let stopped = manager.process_is_stopped(pid);
+
+        if stopped && sig == super::SIGKILL {
+            /* 先试"就地结束"：停住的进程没有线程在跑，所以能做完整退出簿记。
+             * 做不了（有线程还在 hart 上）就退回普通路径，让它自己处理。 */
+            if manager.force_exit_stopped(pid, 128 + sig as i32, false) {
+                if let Some(parent) = manager.process(pid).parent {
+                    if let Some(p) = manager.try_process_mut(parent) {
+                        p.sig_pending |= 1u64 << super::SIGCHLD;
+                    }
+                    if manager.wake_parent_waiting_for(pid) {
+                        need_ipi = true;
+                    }
+                }
+                if FRONT_PID.load(Ordering::Relaxed) == pid {
+                    if let Some(parent) = manager.process(pid).parent {
+                        FRONT_PID.store(parent, Ordering::Relaxed);
+                    }
+                }
+                drop(manager);
+                if need_ipi {
+                    ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+                }
+                return 0;
+            }
+        }
+
         manager.process_mut(pid).sig_pending |= 1u64 << sig;
+
+        /* SIGCONT 是唯一能把停止态拉回来的信号：立刻继续，别等它自己跑
+         * （它跑不了 —— 停止态没有线程在调度队列里）。 */
+        if stopped && sig == super::SIGCONT {
+            if manager.continue_process(pid) {
+                need_ipi = true;
+            }
+        }
 
         let tids = manager.process(pid).threads.clone();
 
         for tid in tids {
+            /* SIGCONT 只是"解除暂停"：不要把阻塞中的线程也拽起来 ——
+             * 那会让一次 pipe read / stdin read 收到假的 EINTR
+             * （POSIX 里 SIGCONT 不打断慢系统调用）。已知缺口：给 SIGCONT
+             * 装了 handler 的程序，在阻塞中不会被告知 —— 需要"逐线程判断
+             * 该信号是否可忽略"才能做对，教学规模下不值得。 */
+            if sig == super::SIGCONT
+                && manager.thread(tid).status == ThreadStatus::Blocking
+            {
+                continue;
+            }
             if manager.mark_thread_ready(tid) {
                 need_ipi = true;
             }
@@ -2068,7 +2123,11 @@ pub fn kill(pid: usize, sig: usize) -> isize {
     0
 }
 
-
+/// sigpending(set_ptr)：把"被本线程屏蔽、且正挂着"的信号写回用户态 set。
+///
+/// 注意不是"所有 pending"：没被屏蔽的那些下一刻就会投递，告诉调用方也没用。
+/// POSIX 的定义就是 `pending & blocked` —— 它回答的是"我该解除哪些屏蔽"。
+/// 两级 pending 都要算上（同步异常挂在线程级，kill 挂在进程级）。
 pub fn sigpending(set_ptr: usize) -> isize {
     if set_ptr == 0 { return -1; }
     let tid = processor::current_tid();
@@ -2091,10 +2150,11 @@ pub fn sigpending(set_ptr: usize) -> isize {
     }
 }
 
-/// tgkill(pid, tid, sig)：把信号投给**指定线程**（thread-directed）。
+/// tgkill(pid, tid, sig)：把信号投给指定线程（thread-directed）。
 ///
 /// 和 `kill` 的区别只有一点：kill 挂在进程上，任意一个未屏蔽它的线程都可能接；
 /// 这个只挂在该线程的 `sig_pending` 上，别人不会替它处理。
+/// 要求 `pid` 与目标线程的 pid 一致（防止 tid 复用后打错进程，Linux 也这么要求）。
 pub fn tgkill(pid: usize, tid: usize, sig: usize) -> isize {
     if sig >= super::NSIG {
         return -1;
@@ -2127,17 +2187,38 @@ pub fn signal_pending_now() -> bool {
     let pid = current_pid();
     let tid = processor::current_tid();
     let manager = lock_detect!(TASK_MANAGER);
-    match (manager.try_thread(tid), manager.try_process(pid)) {
-        (Some(t), Some(p)) => ((t.sig_pending | p.sig_pending) & !t.sig_blocked) != 0,
-        _ => false,
+
+    let (t, p) = match (manager.try_thread(tid), manager.try_process(pid)) {
+        (Some(t), Some(p)) => (t, p),
+        _ => return false,
+    };
+
+    let mut pending = (t.sig_pending | p.sig_pending) & !t.sig_blocked;
+
+    /* 只认"真的会做事"的信号：被忽略的、以及默认动作就是忽略的
+     * （SIGCHLD / SIGWINCH / SIGURG）不该打断阻塞的 read ——
+     * 否则子进程一退出，正在敲的那行输入就被 EINTR 打断了。 */
+    while pending != 0 {
+        let sig = pending.trailing_zeros() as usize;
+        pending &= !(1u64 << sig);
+
+        let noop = match p.sig_actions[sig] {
+            SigAction::Ignore => true,
+            SigAction::Handler { .. } => false,
+            SigAction::Default => super::default_action(sig) == DefAction::Ign,
+        };
+        if !noop {
+            return true;
+        }
     }
+    false
 }
 
 /// 信号投递：在"返回用户态之前"调用（trap 出口），所以能拿到 `cx` 并改写它。
 ///
 /// 三种处置：忽略（清位即可）、默认动作（杀/停/继续）、用户 handler
 /// （把现场搬到用户栈，再把返回现场换成 handler 入口）。
-/// 返回值：`true` 表示现场已被改写成 handler 入口（调用方**不要**再按"没处理"处理）；
+/// 返回值：`true` 表示现场已被改写成 handler 入口（调用方不要再按"没处理"处理）；
 /// `false` 表示信号被忽略或走了默认动作里"什么都不做"那一支。
 /// 同步异常的调用点（SIGSEGV/SIGILL）必须看这个返回值：有 handler 时要放它去跑，
 /// 否则就会把"该进 handler 的"当成"没人管"。
@@ -2145,7 +2226,9 @@ pub fn do_signal(cx: &mut TrapContext) -> bool {
     let current_pid = current_pid();
     let current_tid = processor::current_tid();
     let mut manager = lock_detect!(TASK_MANAGER);
-    
+
+    /* 三样东西各归其位：pending 两级合并、屏蔽字看本线程。
+     * 屏蔽中的信号不清位、不丢 —— 解除屏蔽后下一次 trap 出口会补投。 */
     let blocked = manager.thread(current_tid).sig_blocked;
     let tpend = manager.thread(current_tid).sig_pending;
     let ppend = manager.process(current_pid).sig_pending;
@@ -2177,7 +2260,7 @@ pub fn do_signal(cx: &mut TrapContext) -> bool {
 
 /// sigprocmask(how, set_ptr, old_ptr)：how 0=BLOCK 1=UNBLOCK 2=SETMASK（与 libc 的
 /// SIG_BLOCK/SIG_UNBLOCK/SIG_SETMASK 一致）。set_ptr 为 0 表示只查询。
-/// 作用于**当前线程**（POSIX：屏蔽字是线程级的；多线程程序里应叫 `pthread_sigmask`）。
+/// 作用于当前线程（POSIX：屏蔽字是线程级的；多线程程序里应叫 `pthread_sigmask`）。
 /// 用户态的 `sigset_t` 就是 8 字节（RK_NSIG=32），所以按 u64 小端读写。
 pub fn sigprocmask(how: usize, set_ptr: usize, old_ptr: usize) -> isize {
     let tid = processor::current_tid();
@@ -2189,7 +2272,7 @@ pub fn sigprocmask(how: usize, set_ptr: usize, old_ptr: usize) -> isize {
         }
     };
 
-    /* 用户态 sigset_t 用 glibc 那套布局：**bit(sig-1) 对应信号 sig**；
+    /* 用户态 sigset_t 用 glibc 那套布局：bit(sig-1) 对应信号 sig；
      * 内核内部位图是 bit(sig)（和 sig_pending 一致）。所以两个方向的边界都要平移一位。
      * 忘掉这个平移的后果很难查：屏蔽了却照旧投递，看起来像"内核不认屏蔽字"。 */
     if old_ptr != 0 {
@@ -2288,7 +2371,12 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
     }
 }
 
-
+/// 按信号死亡退出，并（可选）标记 core dump。
+///
+/// `core` 只影响 `waitpid` 报出的 wait status bit7（`WCOREDUMP`）——
+/// 内核不写 core 文件（没有文件系统布局约定，也没有调试器来读它），
+/// 但这个位必须真的置上：否则 `WIFSIGNALED` 有了、`WCOREDUMP` 永远 0，
+/// 诊断工具会得出"段错误没有 core"的错误结论。
 pub fn exit_with_signal(sig: usize, core: bool) -> ! {
     if core {
         let pid = current_pid();
@@ -2302,6 +2390,52 @@ pub fn exit_with_signal(sig: usize, core: bool) -> ! {
     crate::task::exit_current_and_run_next(128 + sig as i32)
 }
 
+/// 离开 CPU 但不改变自己"不可运行"的身份。
+///
+/// 和 `suspend_current_and_run_next()` 的唯一区别：不登记
+/// `pending_ready_tid`。那一步的意思正是"我随时可以再跑"（让 run_tasks
+/// 把我重新入队），而停止态要的正好相反 —— 只有 SIGCONT 能让我回来。
+fn switch_away_stopped() {
+    let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    crate::arch::disable_interrupt();
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+    /* SIGCONT 之后从这里回来：状态已被 continue_process 改成 Ready/Running，
+     * 继续往回走到 trap 出口即可（现场还是被停住那一刻的，一字未动）。 */
+}
+
+/// 停住当前进程（默认动作 Stop 的实现）。
+fn stop_current_process(sig: usize) {
+    let pid = current_pid();
+    let mut need_ipi = false;
+
+    {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        if manager.stop_process(pid, sig) {
+            /* 父进程正阻塞在 waitpid(WUNTRACED) 上等这个孩子 —— 不叫醒它，
+             * Ctrl+Z 看起来就是整台机器卡住。 */
+            if manager.wake_parent_waiting_for(pid) {
+                need_ipi = true;
+            }
+        }
+    }
+
+    if need_ipi {
+        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    }
+
+    switch_away_stopped();
+}
+
 /// 执行某个信号的默认动作。
 fn apply_default_action(sig: usize) {
     match super::default_action(sig) {
@@ -2309,11 +2443,15 @@ fn apply_default_action(sig: usize) {
         /* Core 与 Term 的唯一区别就是这个 bit7。 */
         DefAction::Core => exit_with_signal(sig, true),
         DefAction::Ign => {}
-        DefAction::Stop => {}
+        DefAction::Stop => stop_current_process(sig),
+        /* 继续的动作已经在 `kill()` 里做完了（停止态的进程根本跑不到这里）。
+         * 走到这一支只说明"进程正在跑，又收到一个 SIGCONT" —— 本来就该无事发生。 */
         DefAction::Cont => {}
     }
 }
 
+/// 置线程级 pending。只给同步异常用（SIGSEGV/SIGILL 一类）：
+/// 这类信号必须由出错的那个线程自己处理，否则 handler 会跑在别人的栈上。
 pub fn set_current_sig_pending(sig: usize) {
     if sig >= super::NSIG { return; }
     let tid = processor::current_tid();

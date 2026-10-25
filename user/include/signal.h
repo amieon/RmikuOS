@@ -8,10 +8,11 @@ extern "C" {
 #include "errno.h"
 
 /* 信号编号与 Linux 一致：
- *   1..31   标准信号（Linux 上这 31 个号**已经排满**，新信号不会往这里插）
+ *   1..31   标准信号（Linux 上这 31 个号已经排满，新信号不会往这里插）
  *   32..64  实时信号段（Linux 里 32/33 归 glibc，实际可用 34..64）。
  *           本内核未实现（不排队、无 sigqueue），但位图按 64 位留好了位置。
- */
+ * 常量必须和 kernel/src/task/signal.rs 保持同一套，否则同一个号在内核和 libc
+ * 眼里是两种语义 —— 那类 bug 极难查。 */
 #define SIGHUP     1
 #define SIGINT     2
 #define SIGQUIT    3
@@ -50,8 +51,9 @@ typedef void (*sighandler_t)(int);
 #define SIG_IGN   ((sighandler_t)1)
 #define SIG_ERR   ((sighandler_t)-1)
 
-static inline void kill(isize pid, usize sig){
-    syscall3(SYS_KILL, pid, sig, 0);
+static inline int kill(isize pid, usize sig){
+    isize r = syscall3(SYS_KILL, (usize)pid, sig, 0);
+    return (r < 0) ? -1 : 0;
 }
 
 /* handler 返回时要去的地方 —— 由 lib/syscall_*.S 里的裸汇编提供：
@@ -167,7 +169,7 @@ static inline int sigaction(int sig, const struct sigaction *act, struct sigacti
 
 /* 无信号屏蔽字：接受并忽略，返回 0（否则 git 的 start_command 会 die） */
 /* sigprocmask: how = SIG_BLOCK/SIG_UNBLOCK/SIG_SETMASK，set 为 0 表示只查询。
- * **作用于当前线程**（POSIX 里屏蔽字是线程级的）；sigset_t 正好 8 字节，内核按 u64 读写。 */
+ * 作用于当前线程（POSIX 里屏蔽字是线程级的）；sigset_t 正好 8 字节，内核按 u64 读写。 */
 static inline int sigprocmask(int how, const sigset_t *set, sigset_t *old) {
     isize r = syscall3(SYS_SIGPROCMASK, (usize)how, (usize)set, (usize)old);
     return (r < 0) ? -1 : 0;

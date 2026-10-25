@@ -7,10 +7,14 @@ extern "C" {
 #include "io.h"
 #include "file.h"   /* fflush(stdout/stderr): exit 前必须冲刷缓冲! */
 #include "env.h"    /* getenv: execvp 需要 PATH */
-#define WNOHANG 1
-#define WUNTRACED 0
+#define WNOHANG    1
+/* 也报告"被停止"的子进程。2 是 POSIX 的值，以前这里写成 0 —— 那等于
+ * 把 WUNTRACED 悄悄变成"不报告"，Ctrl+Z 之后 shell 永远收不到消息。 */
+#define WUNTRACED  2
+/* 也报告"被 SIGCONT 继续"的子进程。 */
+#define WCONTINUED 8
 
-/* wait status 是 **POSIX 的 16 位编码**（内核在 manager.rs 的 try_waitpid 里
+/* wait status 是 POSIX 的 16 位编码（内核在 manager.rs 的 try_waitpid 里
  * 从内部 exit_code 转换后写回，见那里的注释）：
  *
  *   bits 15..8   退出码（正常退出）/ 暂停信号（WIFSTOPPED）
@@ -34,6 +38,9 @@ extern "C" {
 #define WCOREDUMP(status)   (((status) & 0x80) != 0)
 #define WIFSTOPPED(status)  (((status) & 0xff) == 0x7f)
 #define WSTOPSIG(status)    (((status) >> 8) & 0xff)
+/* 继续事件的编码是 0xffff（Linux 也是这个值），和"停止"（低 8 位 0x7f）
+ * 靠低字节区分：0xff != 0x7f。 */
+#define WIFCONTINUED(status) ((status) == 0xffff)
 
 static inline isize yield(void) {
     return syscall3(SYS_YIELD, 0, 0, 0);
@@ -74,7 +81,7 @@ static inline isize waitpid(isize pid, int *exit_code, usize option) {
 }
 
 static inline isize wait(int *exit_code) {
-    return syscall3(SYS_WAITPID, -1, (usize)exit_code, WUNTRACED);
+    return syscall3(SYS_WAITPID, -1, (usize)exit_code, 0);
 }
 
 static inline isize sleep(usize ticks) {
@@ -207,7 +214,7 @@ static inline int execvp(const char *file, char *const argv[]) {
 static inline int execve(const char *path, char *const argv[], char *const envp[]) {
     (void)path; (void)argv; (void)envp;
     /* 内核的 exec ABI 没有 envp：环境由 shell/crt0 的 environ 继承。
-     * POSIX 语义要求 execve 用 envp **替换**环境，这里做不到，
+     * POSIX 语义要求 execve 用 envp 替换环境，这里做不到，
      * 所以明确失败而不是静默忽略参数。 */
     errno = ENOSYS;
     return -1;

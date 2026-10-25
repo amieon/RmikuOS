@@ -24,6 +24,7 @@
  *   [20] SIGSEGV + siglongjmp（JIT trap）
  *   [21] WCOREDUMP：Core 类置 bit7、Term 类不置
  *   [22] sigaction 查询（act == NULL）
+ *   [23] 停止/继续：WUNTRACED / WCONTINUED / 打死停止态进程
  *
  * 为什么值得单独一个测试文件：这条链路跨了内核态（置 pending、压 sigframe、
  * 改写 TrapContext）、trap 出口、用户态汇编（trampoline）和 SIGRETURN 四段，
@@ -450,6 +451,53 @@ int main(void) {
     /* 查询 SIGKILL 的处置是合法的（POSIX 允许），只是改不了 */
     CHECK_EQ(sigaction(SIGKILL, 0, &qo), 0, "查询 SIGKILL 的处置允许（改不了但能看）");
     CHECK(qo.sa_handler == SIG_DFL, "SIGKILL 的处置恒为 SIG_DFL");
+
+    /* ---------- [23] 停止 / 继续（作业控制的内核侧） ----------
+     * 链路：kill(SIGSTOP) -> 目标在 trap 出口停下并切走 CPU
+     *      -> 父进程 waitpid(WUNTRACED) 拿到 WIFSTOPPED
+     *      -> kill(SIGCONT) 重新入队 -> waitpid(WCONTINUED) 拿到继续事件。
+     * 没有任何一环时，Ctrl+Z/fg/bg 都不可能成立。 */
+    isize zp = fork();
+    if (zp == 0) {
+        for (;;) { }                 /* 空转：只在定时器中断的出口检查信号 */
+    }
+    if (zp > 0) {
+        for (volatile long i = 0; i < 2000000L; i++) { }   /* 让子进程先跑起来 */
+
+        CHECK_EQ(kill(zp, SIGSTOP), 0, "SIGSTOP 投递成功");
+        int sst = 0;
+        CHECK_EQ(waitpid(zp, &sst, WUNTRACED), zp, "waitpid(WUNTRACED) 报出被停住的孩子");
+        CHECK(WIFSTOPPED(sst), "WIFSTOPPED 成立");
+        CHECK_EQ(WSTOPSIG(sst), SIGSTOP, "WSTOPSIG == SIGSTOP");
+
+        /* 同一次停止只报一次：否则 shell 每轮 reap_jobs 都会打印一行 */
+        int sst2 = 0;
+        CHECK_EQ(waitpid(zp, &sst2, WUNTRACED | WNOHANG), 0, "同一次停止不重复上报");
+
+        /* 不带 WUNTRACED 时不该看到停止事件（这是 waitpid 的语义边界） */
+        int sst3 = 0;
+        CHECK_EQ(waitpid(zp, &sst3, WNOHANG), 0, "不带 WUNTRACED 时 waitpid 不报停止");
+
+        CHECK_EQ(kill(zp, SIGCONT), 0, "SIGCONT 投递成功");
+        int cst = 0;
+        CHECK_EQ(waitpid(zp, &cst, WCONTINUED), zp, "waitpid(WCONTINUED) 报出继续事件");
+        CHECK(WIFCONTINUED(cst), "WIFCONTINUED 成立");
+
+        int alive = 0;
+        CHECK_EQ(waitpid(zp, &alive, WNOHANG | WUNTRACED), 0,
+                 "继续之后既没退出、也没再停（真的在跑）");
+
+        /* 再停一次，然后直接 SIGKILL —— 走"打死停止态进程"那条特殊路径
+         * （普通 kill 只置 pending，而停止态永远跑不到 trap 出口）。 */
+        kill(zp, SIGSTOP);
+        int st4 = 0;
+        waitpid(zp, &st4, WUNTRACED);
+        kill(zp, SIGKILL);
+        int st5 = 0;
+        CHECK_EQ(waitpid(zp, &st5, 0), zp, "停住的进程能被 SIGKILL 收掉");
+        CHECK(WIFSIGNALED(st5) && WTERMSIG(st5) == SIGKILL, "退出原因是 SIGKILL");
+        CHECK(!WCOREDUMP(st5), "SIGKILL 不置 core 位");
+    }
 
     signal(SIGUSR1, SIG_DFL);
     signal(SIGUSR2, SIG_DFL);

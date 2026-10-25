@@ -11,6 +11,7 @@ pub enum ThreadStatus {
     Ready,
     Running,
     Blocking,
+    Stopped,
     Zombie,
     Dead,
 }

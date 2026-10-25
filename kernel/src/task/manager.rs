@@ -438,6 +438,7 @@ impl TaskManager {
                 }
 
                 ThreadStatus::Ready => false,
+                ThreadStatus::Stopped => false,
                 ThreadStatus::Zombie | ThreadStatus::Dead => false,
             }
         };
@@ -743,6 +744,150 @@ impl TaskManager {
         })
     }
 
+/// 进程是否处于"被停住"状态（整个进程一起停，所以只看挂的停止信号）。
+pub fn process_is_stopped(&self, pid: Pid) -> bool {
+    self.try_process(pid).map_or(false, |p| p.stop_sig != 0)
+}
+
+/// 停住整个进程。
+///
+/// POSIX 里停止是进程级的：一个线程收到 SIGTSTP，整个进程都停。
+/// 实现上把每个 Ready/Running/Blocking 线程改成 Stopped，并且
+/// 不清 block_reason —— 原来在 pipe read 里睡着的线程，继续之后
+/// 还要接着睡，不能让它以为自己是被唤醒的。
+///
+/// 返回是否真的停住了（已经停着就返回 false，避免重复上报）。
+pub fn stop_process(&mut self, pid: Pid, sig: usize) -> bool {
+    let tids = self.process(pid).threads.clone();
+
+    let mut changed = false;
+    let mut runnable_dec = 0usize;
+
+    for tid in tids {
+        let Some(thread) = self.try_thread_mut(tid) else { continue };
+        match thread.status {
+            ThreadStatus::Ready | ThreadStatus::Running | ThreadStatus::Blocking => {
+                if matches!(thread.status, ThreadStatus::Ready | ThreadStatus::Running) {
+                    runnable_dec += 1;
+                }
+                /* running_on 不清：正在别的 hart 上跑的那个线程，等它
+                 * 从 __switch 回来时 run_tasks 会自己清。这里清了反而会让
+                 * prepare_thread 的"重复调度"检查失效。 */
+                thread.status = ThreadStatus::Stopped;
+                changed = true;
+            }
+            _ => {}
+        }
+    }
+
+    if changed {
+        let process = self.process_mut(pid);
+        process.stop_sig = sig;
+        process.stop_reported = false;   // 新的一次停止，要重新上报
+        process.runnable_count = process.runnable_count.saturating_sub(runnable_dec);
+    }
+    changed
+}
+
+/// 继续整个进程（SIGCONT 的默认动作）。
+///
+/// 停之前处于阻塞的线程回到 `Blocking`（继续等它原来等的事件），
+/// 其余回到 `Ready` 并入队 —— 否则继续了也永远不会被调度。
+pub fn continue_process(&mut self, pid: Pid) -> bool {
+    let tids = self.process(pid).threads.clone();
+
+    let mut changed = false;
+    let mut to_ready: Vec<Tid> = Vec::new();
+    let mut runnable_inc = 0usize;
+
+    for tid in tids {
+        let Some(thread) = self.try_thread_mut(tid) else { continue };
+        if thread.status != ThreadStatus::Stopped {
+            continue;
+        }
+        if thread.block_reason != BlockReason::None {
+            thread.status = ThreadStatus::Blocking;
+        } else {
+            thread.status = ThreadStatus::Ready;
+            to_ready.push(tid);
+            runnable_inc += 1;
+        }
+        changed = true;
+    }
+
+    if changed {
+        let process = self.process_mut(pid);
+        process.stop_sig = 0;
+        process.stop_reported = false;
+        process.continued = true;      // waitpid(WCONTINUED) 用
+        process.runnable_count += runnable_inc;
+    }
+
+    for tid in to_ready {
+        self.enqueue_ready_thread(tid);
+    }
+    changed
+}
+
+/// 强制结束一个已经停住、没有任何线程在跑的进程。
+///
+/// 只服务一个场景：SIGKILL 打在被 Ctrl+Z 停住的进程上。这种情况下进程
+/// 永远不会自己去跑 do_signal，所以"置 pending 等它自己处理"是死路；
+/// 而它又确实占了 fd、占着父进程的 children 表，必须真的走完退出簿记。
+///
+/// 前提检查：任何一个线程还在 hart 上跑就直接返回 false（调用方退回
+/// "置 pending"，等它自己退出）—— 不能把一个正在执行的线程标成 Dead，
+/// 那会让它的内核栈在返回途中被回收。
+pub fn force_exit_stopped(&mut self, pid: Pid, code: i32, core: bool) -> bool {
+    if !self.process_is_stopped(pid) {
+        return false;
+    }
+
+    let tids = self.process(pid).threads.clone();
+
+    if tids.iter().any(|&tid| {
+        self.try_thread(tid)
+            .map_or(false, |t| t.running_on.is_some())
+    }) {
+        return false;
+    }
+
+    let mut runnable_dec = 0usize;
+    for tid in tids {
+        if let Some(thread) = self.try_thread_mut(tid) {
+            if matches!(thread.status, ThreadStatus::Ready | ThreadStatus::Running) {
+                runnable_dec += 1;
+            }
+            thread.status = ThreadStatus::Zombie;
+            thread.block_reason = BlockReason::None;
+            thread.exit_code = code;
+        }
+    }
+
+    let files: Vec<crate::fs::file::FileRef> = {
+        let process = self.process_mut(pid);
+        let mut v = Vec::new();
+        for slot in process.fd_table.iter_mut() {
+            if let Some(file) = slot.take() {
+                v.push(file);
+            }
+        }
+        process.runnable_count = process.runnable_count.saturating_sub(runnable_dec);
+        process.exit_code = code;
+        process.stop_sig = 0;        // 不再"停着"，别让 waitpid 再报停止
+        process.stop_reported = false;
+        process.continued = false;
+        process.coredump = core;
+        v
+    };
+
+    for file in &files {
+        self.release_file(file);
+    }
+
+    true
+}
+
 pub fn reap_process(&mut self, pid: Pid) {
     log::info!(
         "[reap] pid={} root_ppn={:?}",
@@ -831,6 +976,7 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
         current_pid: Pid,
         pid: isize,
         exit_code_ptr: usize,
+        options: usize,
     ) -> WaitPidAction {
         if self.process(current_pid).children.is_empty() {
             return WaitPidAction::Return(-1);
@@ -849,6 +995,48 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
             has_matched_child = true;
 
             if !self.process_is_zombie(child_pid) {
+                /* 没退出，但可能"停住"或"刚被继续"——这两类只在调用方
+                 * 明确要了 WUNTRACED / WCONTINUED 时才报，否则 waitpid
+                 * 的语义会变成"任何状态变化都返回"，父进程会莫名醒。 */
+                if options & super::WUNTRACED != 0 && self.process_is_stopped(child_pid) {
+                    let (sig, already) = {
+                        let p = self.process_mut(child_pid);
+                        let already = p.stop_reported;
+                        p.stop_reported = true;
+                        (p.stop_sig, already)
+                    };
+                    if !already {
+                        /* 停止态编码：低 8 位 0x7f（WIFSTOPPED），高 8 位是信号号
+                         * （WSTOPSIG）。与 SIGCONT 的 0xffff（WIFCONTINUED）区分开。 */
+                        let status: i32 = ((sig as i32) << 8) | 0x7f;
+                        if self
+                            .write_user_i32(current_pid, exit_code_ptr, status)
+                            .is_none()
+                        {
+                            return WaitPidAction::Return(-1);
+                        }
+                        return WaitPidAction::Return(child_pid as isize);
+                    }
+                }
+
+                if options & super::WCONTINUED != 0 {
+                    let was_continued = {
+                        let p = self.process_mut(child_pid);
+                        let c = p.continued;
+                        p.continued = false;
+                        c
+                    };
+                    if was_continued {
+                        if self
+                            .write_user_i32(current_pid, exit_code_ptr, 0xffff)
+                            .is_none()
+                        {
+                            return WaitPidAction::Return(-1);
+                        }
+                        return WaitPidAction::Return(child_pid as isize);
+                    }
+                }
+
                 continue;
             }
 
@@ -857,7 +1045,7 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
                 .map(|child| (child.exit_code, child.coredump))
                 .unwrap_or((0, false));
 
-            /* 写给用户态的是 **POSIX wait status**，不是原始退出码。
+            /* 写给用户态的是 POSIX wait status，不是原始退出码。
              *
              * 内核内部仍保存 `exit_code`（信号死亡时 = 128 + sig，见
              * manager_wrapper.rs 的 exit_current_and_run_next），只在这一个
@@ -872,7 +1060,7 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
              *
              * bit7 = core dump（POSIX / glibc 的 `WCOREDUMP`）。内核不写真 core
              * 文件，只在 `apply_default_action` 走 Core 分支时把 `child.coredump`
-             * 置上 —— 这个位是"这个信号**本该**产生 core"，不是"core 文件存在"。 */
+             * 置上 —— 这个位是"这个信号本该产生 core"，不是"core 文件存在"。 */
             let status: i32 = if code >= 128 {
                 ((code - 128) & 0x7f) | if dumped { 0x80 } else { 0 }
             } else {
@@ -1012,7 +1200,7 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
         );
         let init_pass = self.min_thread_pass_in_process(pid);
         thread.pass = init_pass;
-        /* POSIX: 新线程**继承**创建者的屏蔽字（pthread_create 语义）。
+        /* POSIX: 新线程继承创建者的屏蔽字（pthread_create 语义）。
          * 处置表本来就是进程共享的，不用复制。 */
         thread.sig_blocked = self.thread(current_tid).sig_blocked;
 

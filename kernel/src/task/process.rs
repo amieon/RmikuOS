@@ -80,6 +80,15 @@ pub struct ProcessControlBlock {
     /// 是否以"core dump 类"信号死亡（SIGSEGV/SIGABRT/...）。`waitpid` 的
     /// wait status bit7（`WCOREDUMP`）就取自这里。内核本身不写 core 文件。
     pub coredump: bool,
+
+    /// 让本进程停住的信号号（0 = 未停止）。`waitpid(WUNTRACED)` 用它填
+    /// `WSTOPSIG`。停止是进程级的（POSIX：一个线程被停，整个进程停）。
+    pub stop_sig: usize,
+    /// 这次停止事件是否已报给父进程。报过就不再重复报，直到下一次停止 ——
+    /// 否则父进程每轮 waitpid 都会看到"又停了"。
+    pub stop_reported: bool,
+    /// 曾经停止、之后被 SIGCONT 继续过、尚未报给父进程（`WCONTINUED`）。
+    pub continued: bool,
 }
 
 impl ProcessControlBlock {
@@ -140,6 +149,9 @@ impl ProcessControlBlock {
 
             exit_code: 0,
             coredump: false,
+            stop_sig: 0,
+            stop_reported: false,
+            continued: false,
         }
     }
 
@@ -201,7 +213,7 @@ impl ProcessControlBlock {
             mmap_next,
 
             sig_pending: 0,
-            /* 处置表与屏蔽字都**不继承**：POSIX 是继承的，但 shell 自己
+            /* 处置表与屏蔽字都不继承：POSIX 是继承的，但 shell 自己
              * signal(SIGINT, SIG_IGN)，继承会让子进程也忽略 Ctrl+C。
              * 前提条件见 sig_actions 字段的注释。 */
             sig_actions: [SigAction::Default; super::NSIG],
@@ -218,6 +230,9 @@ impl ProcessControlBlock {
 
             exit_code: 0,
             coredump: false,
+            stop_sig: 0,
+            stop_reported: false,
+            continued: false,
         }
     }
 

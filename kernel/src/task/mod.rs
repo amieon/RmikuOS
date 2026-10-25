@@ -15,8 +15,12 @@ pub use thread::{ThreadControlBlock, ThreadStatus};
 pub use processor::*;
 pub use signal::*;
 
-pub const WNOHANG: usize = 1; 
-pub const WUNTRACED: usize = 0;
+pub const WNOHANG: usize = 1;
+/// 也报告"被停止"的子进程（作业控制）。必须是 2 —— 写成 0 会让
+/// `waitpid(pid, &st, WUNTRACED)` 静默退化成普通 waitpid
+pub const WUNTRACED: usize = 2;
+/// 也报告"被 SIGCONT 继续"的子进程。
+pub const WCONTINUED: usize = 8;
 
 pub type Pid = usize;
 pub type Tid = usize;
@@ -85,14 +89,15 @@ pub use manager_wrapper::{
     do_signal,
     sigreturn_current,
     set_current_sig_pending,
-    signal_pending_now,
     sig_set,
     sigprocmask,
     sigpending,
+    signal_pending_now,
     exit_with_signal,
     set_front,
     front_pid,
     kill_front_sigint,
+    kill_front_tstp,
     pgid_of,
     set_pgid,
 
