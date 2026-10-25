@@ -20,6 +20,8 @@
  */
 #include "test.h"
 #include "signal.h"
+#include "errno.h"
+#include "setjmp.h"
 
 static volatile int usr1_hits = 0;
 static volatile int usr2_hits = 0;
@@ -121,6 +123,34 @@ static void tk_worker(void *arg) {
     tk_ready = 1;
     while (!tk_stop) { }              /* 一直跑着，等信号在 trap 出口投递 */
 }
+
+/* [18] EINTR：main 阻塞在管道 read 上，被信号打断应返回 -1 + EINTR */
+static volatile int eintr_main_tid = -1;
+static int eintr_wfd = -1;
+
+static void eintr_killer(void *arg) {
+    (void)arg;
+    for (volatile long i = 0; i < 20000000L; i++) { }   /* 等 main 睡进 read */
+    pthread_kill(eintr_main_tid, SIGUSR1);              /* 定向打给 main */
+    /* 兜底：万一没打断成功，写一个字节让 main 不至于永久阻塞 */
+    for (volatile long i = 0; i < 20000000L; i++) { }
+    if (eintr_wfd >= 0) write(eintr_wfd, "x", 1);
+}
+
+/* [19] siglongjmp：从 handler 里跳出去，且屏蔽字要被恢复 */
+static sigjmp_buf g_jmp;
+static volatile int g_jmp_hits = 0;
+static volatile int g_jmp_should_jump = 1;
+
+static void on_usr1_jump(int sig) {
+    (void)sig;
+    g_jmp_hits++;
+    if (g_jmp_should_jump) siglongjmp(g_jmp, 42);
+}
+
+/* [20] SIGSEGV handler 里 siglongjmp：跳过出错指令继续跑（JIT trap 的基础） */
+static sigjmp_buf g_segv_jmp;
+static void on_segv_jump(int sig) { (void)sig; siglongjmp(g_segv_jmp, 7); }
 
 int main(void) {
     TEST_START("signal");
@@ -299,8 +329,62 @@ int main(void) {
     sigprocmask(SIG_UNBLOCK, &pb, 0);
     CHECK_EQ(usr1_hits, 1, "解除屏蔽后那个信号补投了（和 sigpending 看到的一致）");
 
+    /* ---------- [18] errno 通道 + EINTR ---------- */
+    char ebuf[4];
+    errno = 0;
+    CHECK_EQ(read(-1, ebuf, sizeof ebuf), -1, "read(非法 fd) 返回 -1");
+    CHECK_EQ(errno, EBADF, "errno == EBADF（不再是笼统的 -1）");
+
+    int pf[2];
+    isize pr = pipe(pf);
+    CHECK_EQ(pr, 0, "pipe() 成功（EINTR 测试）");
+    if (pr == 0) {
+        eintr_wfd = pf[1];
+        eintr_main_tid = gettid();
+        signal(SIGUSR1, on_usr);
+        usr1_hits = 0;
+
+        int etid = thread_create(eintr_killer, 0);
+        if (etid >= 0) {
+            errno = 0;
+            isize en = read(pf[0], ebuf, sizeof ebuf);
+            CHECK_EQ(en, -1, "阻塞的 read 被信号打断，返回 -1");
+            CHECK_EQ(errno, EINTR, "errno == EINTR（而不是继续睡到数据到达）");
+            CHECK_EQ(usr1_hits, 1, "打断之后 handler 也跑过了");
+            int ecode = 0;
+            thread_join(etid, &ecode);
+        }
+        close(pf[0]);
+        close(pf[1]);
+    }
+
+    /* ---------- [19] siglongjmp ---------- */
+    signal(SIGUSR1, on_usr1_jump);
+    g_jmp_hits = 0;
+    g_jmp_should_jump = 1;
+    int jv;
+    jv = sigsetjmp(g_jmp, 1);
+    if (jv == 0) {
+        raise(SIGUSR1);            /* 进 handler → 里面 siglongjmp 跳回这里 */
+    }
+    CHECK_EQ(jv, 42, "siglongjmp 把 42 带回了 sigsetjmp 的返回点");
+
+    g_jmp_should_jump = 0;         /* 这一次让 handler 正常返回 */
+    raise(SIGUSR1);
+    CHECK_EQ(g_jmp_hits, 2, "跳出去之后 SIGUSR1 仍能再投递（屏蔽字已被恢复）");
+
+    /* ---------- [20] SIGSEGV + siglongjmp（JIT 的 trap 机制） ---------- */
+    signal(SIGSEGV, on_segv_jump);
+    int sv;
+    sv = sigsetjmp(g_segv_jmp, 1);
+    if (sv == 0) {
+        *(volatile int *)0 = 1;    /* 故意炸；handler 里跳回来就等于"跳过这条指令" */
+    }
+    CHECK_EQ(sv, 7, "SIGSEGV handler 里 siglongjmp 能跳出来");
+
     signal(SIGUSR1, SIG_DFL);
     signal(SIGUSR2, SIG_DFL);
+    signal(SIGSEGV, SIG_DFL);
 
     TEST_END();
 }

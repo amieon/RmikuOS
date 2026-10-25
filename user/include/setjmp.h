@@ -91,4 +91,33 @@ void longjmp(jmp_buf env, int val);
 #  error "setjmp.h: unsupported architecture (need __riscv or __loongarch__)"
 #endif
 
+#include "signal.h"
+
+typedef struct {
+    jmp_buf       env;        /* 复用上面的 jmp_buf 布局（各架构自定） */
+    unsigned long mask;       /* 8 字节，与 sigset_t 同布局 */
+    int           savemask;
+} sigjmp_buf[1];
+
+static inline void rk_sigjmp_save_mask(sigjmp_buf env, int save) {
+    env->savemask = save;
+    if (save) {
+        /* set == NULL 表示只查询当前屏蔽字，不做修改 */
+        sigprocmask(SIG_BLOCK, 0, (sigset_t *)&env->mask);
+    }
+}
+
+/* 参数名故意用 envp 而不是 env：宏参数会把成员名一起替换掉，
+ * 写成 sigsetjmp(env, save) ... (env)->env 会展开成 (g)->g，编译不过。 */
+#define sigsetjmp(envp, save) \
+    (rk_sigjmp_save_mask((envp), (save)), setjmp((envp)->env))
+
+static inline __attribute__((noreturn)) void siglongjmp(sigjmp_buf env, int val) {
+    if (env->savemask) {
+        sigprocmask(SIG_SETMASK, (const sigset_t *)&env->mask, 0);
+    }
+    longjmp(env->env, val);
+    for (;;) { }              /* longjmp 不返回；这句只为满足 noreturn 的语法 */
+}
+
 #endif
