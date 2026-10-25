@@ -17,7 +17,8 @@ pub use signal::*;
 
 pub const WNOHANG: usize = 1;
 /// 也报告"被停止"的子进程（作业控制）。必须是 2 —— 写成 0 会让
-/// `waitpid(pid, &st, WUNTRACED)` 静默退化成普通 waitpid
+/// `waitpid(pid, &st, WUNTRACED)` 静默退化成普通 waitpid，父进程永远
+/// 等不到 Ctrl+Z（这是"编译过、语义错"的典型）。
 pub const WUNTRACED: usize = 2;
 /// 也报告"被 SIGCONT 继续"的子进程。
 pub const WCONTINUED: usize = 8;
@@ -93,6 +94,8 @@ pub use manager_wrapper::{
     sigprocmask,
     sigpending,
     signal_pending_now,
+    take_pending_stop_signal,
+    stop_current_process,
     exit_with_signal,
     set_front,
     front_pid,

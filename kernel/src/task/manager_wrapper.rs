@@ -2413,8 +2413,56 @@ fn switch_away_stopped() {
      * 继续往回走到 trap 出口即可（现场还是被停住那一刻的，一字未动）。 */
 }
 
+/// 若当前线程有一个"有效动作就是停止"的待投递信号，清位并返回它。
+///
+/// 给终端驱动用：进程阻塞在 `read(0)`（等键盘）时，Ctrl+Z 的正确行为是
+/// 就地停住、SIGCONT 之后回到原地继续等键。若改成"返回 EINTR"，
+/// `cat` 这类程序会走 `if (n < 0) { "read failed"; exit(1); }` —— 被 Ctrl+Z
+/// 按成错误退出而不是暂停。交互程序普遍不写 EINTR 重试循环，指望不上。
+///
+/// 只在"默认动作 = Stop"时返回：装了 handler 的（想自己处理）和被 SIG_IGN 的
+/// 都不该在这里被吃掉，它们该走正常的 EINTR → trap 出口 → do_signal 路径。
+pub fn take_pending_stop_signal() -> Option<usize> {
+    let pid = current_pid();
+    let tid = processor::current_tid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+
+    let (blocked, tpend, ppend) = match (manager.try_thread(tid), manager.try_process(pid)) {
+        (Some(t), Some(p)) => (t.sig_blocked, t.sig_pending, p.sig_pending),
+        _ => return None,
+    };
+
+    let mut pending = (tpend | ppend) & !blocked;
+
+    while pending != 0 {
+        let sig = pending.trailing_zeros() as usize;
+        pending &= !(1u64 << sig);
+
+        let is_stop = match manager.process(pid).sig_actions[sig] {
+            SigAction::Ignore => false,
+            SigAction::Handler { .. } => false,
+            SigAction::Default => super::default_action(sig) == DefAction::Stop,
+        };
+        if !is_stop {
+            continue;
+        }
+
+        let bit = 1u64 << sig;
+        if tpend & bit != 0 {
+            manager.thread_mut(tid).sig_pending &= !bit;
+        } else {
+            manager.process_mut(pid).sig_pending &= !bit;
+        }
+        return Some(sig);
+    }
+    None
+}
+
 /// 停住当前进程（默认动作 Stop 的实现）。
-fn stop_current_process(sig: usize) {
+///
+/// 也供终端驱动调用：交互程序阻塞在 `read(0)` 上时，Ctrl+Z 必须就地停住它，
+/// 见 `take_pending_stop_signal` 的注释。
+pub fn stop_current_process(sig: usize) {
     let pid = current_pid();
     let mut need_ipi = false;
 

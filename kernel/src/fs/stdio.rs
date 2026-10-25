@@ -29,22 +29,34 @@ impl File for Stdin {
             /* 阻塞等键，但每轮先看一眼有没有待投递的信号。
              *
              * 为什么不能用 getchar_raw() 一把等下去：那个函数在内核里死等，
-             * 永远回不到 trap 出口，SIGTSTP / SIGTERM 这类"外部发来的"信号
-             * 就永远送不到前台程序手上（表现为 Ctrl+Z 对 cat / sqlite3 无效）。
+             * 永远回不到 trap 出口，"外部发来的"信号就永远送不到前台程序手上。
              *
-             * 一个字节都没读到时返回 -EINTR（POSIX），读到了就返回已读长度 ——
-             * 数据优先，别让信号把已读的字节吞掉。 */
+             * 两类信号两种处理，别混：
+             *   - 停止类（SIGTSTP/SIGSTOP，默认动作 = 停）：就地停住，
+             *     继续之后回到这个循环接着等键，程序完全无感。
+             *     不能返回 EINTR —— `cat` 之类见 -1 就打 "read failed" 退出。
+             *   - 其余（SIGINT/SIGTERM/装了 handler 的）：返回 -EINTR 让用户态
+             *     回 trap 出口去执行对应动作；一个字节都没读到时才报 EINTR，
+             *     读到了就返回已读长度（数据优先，别把已读字节吞掉）。 */
             let mut spins = 0u32;
             let mut ch = loop {
                 if let Some(c) = crate::io::uart::try_getchar_raw() {
                     break c;
                 }
-                if crate::task::signal_pending_now() {
-                    return if count > 0 {
-                        count as isize
-                    } else {
-                        -crate::syscall::errno::EINTR
-                    };
+                /* 这两个判断都要抢全局调度锁，别每轮都做：每 64 轮一次，
+                 * 按键响应延迟仍是微秒级。 */
+                if spins & 0x3f == 0 {
+                    if let Some(stop_sig) = crate::task::take_pending_stop_signal() {
+                        crate::task::stop_current_process(stop_sig);
+                        continue;   /* 被 SIGCONT 唤醒后回到这里继续等键 */
+                    }
+                    if crate::task::signal_pending_now() {
+                        return if count > 0 {
+                            count as isize
+                        } else {
+                            -crate::syscall::errno::EINTR
+                        };
+                    }
                 }
                 spins = spins.wrapping_add(1);
                 if spins & 0xfff == 0 {
