@@ -76,6 +76,10 @@ pub struct ProcessControlBlock {
     pub pgid: usize,
 
     pub exit_code: i32,
+
+    /// 是否以"core dump 类"信号死亡（SIGSEGV/SIGABRT/...）。`waitpid` 的
+    /// wait status bit7（`WCOREDUMP`）就取自这里。内核本身不写 core 文件。
+    pub coredump: bool,
 }
 
 impl ProcessControlBlock {
@@ -135,6 +139,7 @@ impl ProcessControlBlock {
             pgid: pid,
 
             exit_code: 0,
+            coredump: false,
         }
     }
 
@@ -212,6 +217,7 @@ impl ProcessControlBlock {
             pgid,
 
             exit_code: 0,
+            coredump: false,
         }
     }
 

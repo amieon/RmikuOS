@@ -5,6 +5,7 @@ extern "C" {
 #include "types.h"
 #include "syscall.h"
 #include "process.h"
+#include "errno.h"
 
 /* 信号编号与 Linux 一致：
  *   1..31   标准信号（Linux 上这 31 个号**已经排满**，新信号不会往这里插）
@@ -132,17 +133,36 @@ static inline int sigismember(const sigset_t *set, int sig) {
     return (set->bits[(sig - 1) / 64] >> ((sig - 1) % 64)) & 1UL;
 }
 
+#define RK_SIG_QUERY   ((usize)-1)
+
+/* sigaction：act 为 NULL 时只查询旧处置（`sigaction(sig, NULL, &old)`），
+ * 这是 POSIX 里唯一能读到"当前装了什么"的途径 —— 之前老处置一律报 SIG_DFL，
+ * 装了 handler 的程序自己回读会发现"我明明装了"，属于会误导人的错答案。 */
 static inline int sigaction(int sig, const struct sigaction *act, struct sigaction *old) {
-    if (old) {
-        old->sa_handler = SIG_DFL;      /* 内核没有"只查不改"的入口 */
+    if (!act) {
+        if (!old) return 0;                      /* 既不改也不查：合法空操作 */
+        isize prev = syscall3(SYS_SIGNAL, (usize)sig, RK_SIG_QUERY, 0);
+        if (prev < 0) { errno = EINVAL; return -1; }
+        old->sa_handler = (prev == 0) ? SIG_DFL
+                        : (prev == 1) ? SIG_IGN
+                                      : (sighandler_t)prev;
         sigemptyset(&old->sa_mask);
-        old->sa_flags = 0;
-        old->sa_restorer = (void (*)(void))0;
+        old->sa_flags = 0;                       /* sa_flags 内核不接受，恒 0 */
+        old->sa_restorer = (prev > 1) ? (void (*)(void))&rk_sigreturn_trampoline
+                                      : (void (*)(void))0;
+        return 0;
     }
-    if (!act) return 0;
+
+    /* (sighandler_t)-1 恰好等于内核的"只查不改"哨兵，必须挡掉：
+     * SIG_ERR 本来就不是合法 handler，放进去会变成"静默什么都不做"。 */
+    if (act->sa_handler == SIG_ERR) { errno = EINVAL; return -1; }
 
     /* 三种处置都走 signal()：它会把 sa_handler 和 trampoline 一起交给内核 */
-    return (signal(sig, act->sa_handler) == SIG_ERR) ? -1 : 0;
+    if (signal(sig, act->sa_handler) == SIG_ERR) {
+        errno = EINVAL;                          /* 号越界 / SIGKILL / SIGSTOP */
+        return -1;
+    }
+    return 0;
 }
 
 /* 无信号屏蔽字：接受并忽略，返回 0（否则 git 的 start_command 会 die） */

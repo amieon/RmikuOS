@@ -13,6 +13,17 @@
  *   [9]  SIGKILL / SIGSTOP 不可改
  *   [10] SIG_IGN 生效：被忽略的 SIGTERM 不再终止进程
  *   [11] 默认动作生效：未捕获的 SIGTERM 终止子进程（WIFSIGNALED/WTERMSIG）
+ *   [12] 同步异常被忽略时终止进程而不是打死内核
+ *   [13] sigprocmask 屏蔽字（线程级）与 handler 期间自动屏蔽自身
+ *   [14] 屏蔽字是线程级的（新线程继承、worker 解除不影响 main）
+ *   [15] 同步异常走线程级 pending（handler 在出错线程上跑）
+ *   [16] tgkill / pthread_kill 定向投递
+ *   [17] sigpending 只报"被屏蔽且挂着"的
+ *   [18] errno 通道 + EINTR（阻塞 read 被信号打断）
+ *   [19] siglongjmp：从 handler 跳出去且恢复屏蔽字
+ *   [20] SIGSEGV + siglongjmp（JIT trap）
+ *   [21] WCOREDUMP：Core 类置 bit7、Term 类不置
+ *   [22] sigaction 查询（act == NULL）
  *
  * 为什么值得单独一个测试文件：这条链路跨了内核态（置 pending、压 sigframe、
  * 改写 TrapContext）、trap 出口、用户态汇编（trampoline）和 SIGRETURN 四段，
@@ -381,6 +392,64 @@ int main(void) {
         *(volatile int *)0 = 1;    /* 故意炸；handler 里跳回来就等于"跳过这条指令" */
     }
     CHECK_EQ(sv, 7, "SIGSEGV handler 里 siglongjmp 能跳出来");
+
+    /* ---------- [21] WCOREDUMP：Core 类与 Term 类的区别 ----------
+     * 两者都"被信号杀死"，唯一的差别是 wait status 的 bit7。
+     * 这一组必须成对看：只有 SIGSEGV 置位、SIGTERM 不置位，才说明
+     * 这个位是按信号分类算出来的，不是恒置/恒不置。 */
+    isize dp = fork();
+    if (dp == 0) {
+        signal(SIGSEGV, SIG_DFL);
+        *(volatile int *)0 = 1;          /* 默认动作 = Core */
+        _exit(0);
+    }
+    if (dp > 0) {
+        int dst = 0;
+        waitpid(dp, &dst, 0);
+        CHECK(WIFSIGNALED(dst) && WTERMSIG(dst) == SIGSEGV,
+              "未捕获的 SIGSEGV 杀死进程");
+        CHECK(WCOREDUMP(dst), "SIGSEGV 是 Core 类 -> WCOREDUMP 为真");
+    }
+
+    isize tp = fork();
+    if (tp == 0) {
+        signal(SIGTERM, SIG_DFL);
+        raise(SIGTERM);                  /* 默认动作 = Term */
+        _exit(0);
+    }
+    if (tp > 0) {
+        int tst = 0;
+        waitpid(tp, &tst, 0);
+        CHECK(WIFSIGNALED(tst) && WTERMSIG(tst) == SIGTERM,
+              "未捕获的 SIGTERM 杀死进程");
+        CHECK(!WCOREDUMP(tst), "SIGTERM 是 Term 类 -> 没有 core 位");
+    }
+
+    /* ---------- [22] sigaction 查询（act == NULL） ----------
+     * 老实现一律报 SIG_DFL —— 装了 handler 的程序自己回读会发现"没装上"。 */
+    struct sigaction qa, qo;
+    qa.sa_handler = on_usr1_jump;
+    sigemptyset(&qa.sa_mask);
+    qa.sa_flags = 0;
+    qa.sa_restorer = (void (*)(void))0;
+
+    CHECK_EQ(sigaction(SIGUSR2, &qa, 0), 0, "sigaction 装 handler 成功");
+    CHECK_EQ(sigaction(SIGUSR2, 0, &qo), 0, "sigaction(sig, NULL, &old) 查询成功");
+    CHECK(qo.sa_handler == on_usr1_jump, "查询回来的就是装进去的 handler 地址");
+    CHECK(qo.sa_restorer != (void (*)(void))0, "handler 的 sa_restorer 非空（trampoline）");
+
+    signal(SIGUSR2, SIG_IGN);
+    sigaction(SIGUSR2, 0, &qo);
+    CHECK(qo.sa_handler == SIG_IGN, "SIG_IGN 能被查询出来");
+    CHECK(qo.sa_restorer == (void (*)(void))0, "SIG_IGN 没有 restorer");
+
+    signal(SIGUSR2, SIG_DFL);
+    sigaction(SIGUSR2, 0, &qo);
+    CHECK(qo.sa_handler == SIG_DFL, "恢复 SIG_DFL 后查询得到 SIG_DFL");
+
+    /* 查询 SIGKILL 的处置是合法的（POSIX 允许），只是改不了 */
+    CHECK_EQ(sigaction(SIGKILL, 0, &qo), 0, "查询 SIGKILL 的处置允许（改不了但能看）");
+    CHECK(qo.sa_handler == SIG_DFL, "SIGKILL 的处置恒为 SIG_DFL");
 
     signal(SIGUSR1, SIG_DFL);
     signal(SIGUSR2, SIG_DFL);

@@ -852,10 +852,10 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
                 continue;
             }
 
-            let code = self
+            let (code, dumped) = self
                 .try_process(child_pid)
-                .map(|child| child.exit_code)
-                .unwrap_or(0);
+                .map(|child| (child.exit_code, child.coredump))
+                .unwrap_or((0, false));
 
             /* 写给用户态的是 **POSIX wait status**，不是原始退出码。
              *
@@ -868,9 +868,13 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
              *
              * 为什么不能直接写 code：那样 `exit(139)` 和 "被 SIGSEGV 杀死"
              * 变成同一个数，父进程无法区分；core dump 位与暂停态也没有位置。
-             * 移位而不是加法，正是为了留出低 7 位当"结局标签"。 */
+             * 移位而不是加法，正是为了留出低 7 位当"结局标签"。
+             *
+             * bit7 = core dump（POSIX / glibc 的 `WCOREDUMP`）。内核不写真 core
+             * 文件，只在 `apply_default_action` 走 Core 分支时把 `child.coredump`
+             * 置上 —— 这个位是"这个信号**本该**产生 core"，不是"core 文件存在"。 */
             let status: i32 = if code >= 128 {
-                (code - 128) & 0x7f
+                ((code - 128) & 0x7f) | if dumped { 0x80 } else { 0 }
             } else {
                 (code & 0xff) << 8
             };
@@ -1008,6 +1012,8 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
         );
         let init_pass = self.min_thread_pass_in_process(pid);
         thread.pass = init_pass;
+        /* POSIX: 新线程**继承**创建者的屏蔽字（pthread_create 语义）。
+         * 处置表本来就是进程共享的，不用复制。 */
         thread.sig_blocked = self.thread(current_tid).sig_blocked;
 
         self.insert_thread(thread);

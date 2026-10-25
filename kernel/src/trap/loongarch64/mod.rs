@@ -116,7 +116,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
             if cx.is_from_user() {
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
                 if !crate::task::do_signal(cx) {
-                    crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
+                    crate::task::exit_with_signal(crate::task::SIGILL, true);
                 }
             } else {
                 trap_println!(
@@ -155,7 +155,7 @@ pub extern "C" fn loongarch_trap_handler(cx: &mut TrapContext) -> &mut TrapConte
                 /* 用户态非法内存访问 -> SIGSEGV, 只杀该进程(exit 139) */
                 crate::task::set_current_sig_pending(crate::task::SIGSEGV);
                 if !crate::task::do_signal(cx) {
-                    crate::task::exit_current_and_run_next(128 + crate::task::SIGSEGV as i32);
+                    crate::task::exit_with_signal(crate::task::SIGSEGV, true);
                 }
             } else {
                 trap_println!(

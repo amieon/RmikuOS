@@ -1990,15 +1990,32 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
 ///   action ≥ 2 → 用户态 handler 入口地址；`restorer` 必须是 sigreturn
 ///                trampoline 的地址（为 0 就拒绝：没有 trampoline 的 handler
 ///                进得去出不来，比装不上更难查）
+///   action == SIG_QUERY → 只查不改，直接把旧处置返回
+///                （libc 的 `sigaction(sig, NULL, &old)` 走这条）
 ///
-/// SIGKILL / SIGSTOP 不可改。返回旧处置（0 / 1 / handler 地址），失败 -1。
+/// SIGKILL / SIGSTOP 不可改（但可查）。返回旧处置（0 / 1 / handler 地址），失败 -1。
 pub fn sig_set(sig: usize, action: usize, restorer: usize) -> isize {
-    if sig >= super::NSIG || super::unblockable(sig) {
+    if sig >= super::NSIG {
         return -1;
     }
     let pid = current_pid();
     let mut manager = lock_detect!(TASK_MANAGER);
     let process = manager.process_mut(pid);
+
+    /* 只查不改（`sigaction(sig, NULL, &old)`）。放在 unblockable 检查之前：
+     * 查询 SIGKILL / SIGSTOP 的当前处置是合法的（POSIX 允许），只是改不了。
+     * 返回编码与"改"完全一致：0=DFL、1=IGN、其他=handler 入口地址。 */
+    if action == super::SIG_QUERY {
+        return match process.sig_actions[sig] {
+            SigAction::Default => 0,
+            SigAction::Ignore => 1,
+            SigAction::Handler { entry, .. } => entry as isize,
+        };
+    }
+
+    if super::unblockable(sig) {
+        return -1;
+    }
 
     let old = process.sig_actions[sig];
     process.sig_actions[sig] = match action {
@@ -2271,13 +2288,26 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
     }
 }
 
+
+pub fn exit_with_signal(sig: usize, core: bool) -> ! {
+    if core {
+        let pid = current_pid();
+        let mut manager = lock_detect!(TASK_MANAGER);
+        if let Some(p) = manager.try_process_mut(pid) {
+            p.coredump = true;
+        }
+        /* 锁必须在 exit 之前放掉：exit_current_and_run_next 自己会加锁。 */
+        drop(manager);
+    }
+    crate::task::exit_current_and_run_next(128 + sig as i32)
+}
+
 /// 执行某个信号的默认动作。
 fn apply_default_action(sig: usize) {
     match super::default_action(sig) {
-        DefAction::Term => crate::task::exit_current_and_run_next(128 + sig as i32),
-        /* 和 Term 一样要退出，区别只在于 `waitpid` 的状态里要置 core dump 位
-         * （`WCOREDUMP` = 状态 bit7）。这个标记还没做，先留出分支。 */
-        DefAction::Core => crate::task::exit_current_and_run_next(128 + sig as i32),
+        DefAction::Term => exit_with_signal(sig, false),
+        /* Core 与 Term 的唯一区别就是这个 bit7。 */
+        DefAction::Core => exit_with_signal(sig, true),
         DefAction::Ign => {}
         DefAction::Stop => {}
         DefAction::Cont => {}

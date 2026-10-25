@@ -9,6 +9,8 @@
 ///           34..64。**本内核未实现**（不排队、没有 sigqueue），但号段和位图
 ///           都留着位置：将来补只需要"允许 34..64 + 支持排队"，不动结构。
 pub const NSIG: usize = 64;
+pub const SIG_QUERY: usize = usize::MAX;
+
 
 pub const SIGHUP:    usize = 1;
 pub const SIGINT:    usize = 2;

@@ -156,7 +156,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                 );
                 crate::task::set_current_sig_pending(crate::task::SIGILL);
                 if !crate::task::do_signal(cx) {
-                    crate::task::exit_current_and_run_next(128 + crate::task::SIGILL as i32);
+                    crate::task::exit_with_signal(crate::task::SIGILL, true);
                 }
             } else {
                 trap_println!(
@@ -187,7 +187,7 @@ pub extern "C" fn riscv_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                  * 这里以前是 panic!("SIGSEGV not fatal") —— 用户态 signal(SIGSEGV, h)
                  * 之后一个空指针就能把内核 panic 掉。 */
                 if !crate::task::do_signal(cx) {
-                    crate::task::exit_current_and_run_next(128 + crate::task::SIGSEGV as i32);
+                    crate::task::exit_with_signal(crate::task::SIGSEGV, true);
                 }
             } else {
                 trap_println!(
