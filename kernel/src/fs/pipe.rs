@@ -90,6 +90,10 @@ impl File for PipeReadEnd {
                 return super::EOF;
             }
             drop(pipe);
+            /* 到这一步"没数据可读、也没到 EOF"，本来要睡了。
+             * 如果此刻有未屏蔽的信号挂着，就返回 EINTR 而不是继续睡 ——
+             * 否则用户态永远等不到那个 handler 之后的逻辑。
+             */
             if crate::task::signal_pending_now() {
                 return -crate::syscall::errno::EINTR;
             }
@@ -147,6 +151,20 @@ impl File for PipeWriteEnd {
     fn write(&self, buf: &[u8]) -> isize {
         loop{
             let mut pipe = self.inner.lock();
+
+            /* 读者全关：先发 SIGPIPE，再返回 EPIPE。
+             * 检查必须放在"缓冲有空位就写"之前。否则读者已经退出的管道
+             * 照样能写进环形缓冲（对端没人读，写进去就永远丢了），
+             * `yes | head -1` 里 yes 会一直写下去而不是被杀掉。
+             * 信号先于返回值：SIGPIPE 默认动作是终止进程，用户态根本看不到
+             * 这个 -EPIPE；只有它被忽略/捕获时，调用方才拿到 EPIPE。
+             */
+            if pipe.reader_count == 0 {
+                drop(pipe);
+                crate::task::set_current_sig_pending(crate::task::SIGPIPE);
+                return crate::syscall::errno::EPIPE;
+            }
+
             if pipe.len != PIPE_BUF_SIZE {
                 let mut count = 0;
                 while count < buf.len() && pipe.len < PIPE_BUF_SIZE {
@@ -159,9 +177,6 @@ impl File for PipeWriteEnd {
                 drop(pipe);       
                 wake_pipe_readers();
                 return count as isize;
-            }
-            if pipe.reader_count == 0 {
-                return crate::syscall::errno::EPIPE;
             }
             drop(pipe);              
             block_current_on_pipe_write();
