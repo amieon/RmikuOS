@@ -162,7 +162,7 @@ impl File for PipeWriteEnd {
             if pipe.reader_count == 0 {
                 drop(pipe);
                 crate::task::set_current_sig_pending(crate::task::SIGPIPE);
-                return crate::syscall::errno::EPIPE;
+                return -crate::syscall::errno::EPIPE;
             }
 
             if pipe.len != PIPE_BUF_SIZE {
