@@ -102,7 +102,9 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: usize) -> isize {
     crate::task::mprotect_current(addr, len, prot)
 }
 
-pub fn sys_kill(pid: usize, sig : usize) -> isize {
+/// kill(pid, sig)：pid < 0 表示 `|pid|` 号进程组，0 表示自己的组。
+/// 负数必须按 isize 解释 —— 用户态传 `-pgid`，当成 usize 会变成天文数字。
+pub fn sys_kill(pid: isize, sig: usize) -> isize {
     crate::task::kill(pid, sig)
 }
 
@@ -113,9 +115,9 @@ pub fn sys_signal(sig: usize, action: usize, restorer: usize) -> isize {
     crate::task::sig_set(sig, action, restorer)
 }
 
-/// set_front(pid): 把 pid 设为前台进程(Ctrl+C 投递目标)。
-pub fn sys_set_front(pid: usize) -> isize {
-    crate::task::set_front(pid);
+/// set_front(pgid): 把某个进程组设为前台（Ctrl+C / Ctrl+Z 的投递目标）。
+pub fn sys_set_front(pgid: usize) -> isize {
+    crate::task::set_front(pgid);
     0
 }
 
@@ -481,7 +483,7 @@ pub fn sys_setgroups(size: usize, list_ptr: usize) -> isize {
     0
 }
 
-/// umask(mask)：设置文件创建掩码，**返回旧值**。
+/// umask(mask)：设置文件创建掩码，返回旧值。
 ///
 /// 只保留低 9 位（0o777）——POSIX 里 umask 只影响权限位，不影响类型位。
 /// 新建文件/目录时内核按 `mode & !umask` 收窄（见 fs::mode_with_umask）。

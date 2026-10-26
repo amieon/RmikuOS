@@ -25,6 +25,7 @@
  *   [21] WCOREDUMP：Core 类置 bit7、Term 类不置
  *   [22] sigaction 查询（act == NULL）
  *   [23] 停止/继续：WUNTRACED / WCONTINUED / 打死停止态进程
+ *   [24] 组投递：kill(-pgid) 打到整组（管线作业控制的地基）
  *
  * 为什么值得单独一个测试文件：这条链路跨了内核态（置 pending、压 sigframe、
  * 改写 TrapContext）、trap 出口、用户态汇编（trampoline）和 SIGRETURN 四段，
@@ -497,6 +498,28 @@ int main(void) {
         CHECK_EQ(waitpid(zp, &st5, 0), zp, "停住的进程能被 SIGKILL 收掉");
         CHECK(WIFSIGNALED(st5) && WTERMSIG(st5) == SIGKILL, "退出原因是 SIGKILL");
         CHECK(!WCOREDUMP(st5), "SIGKILL 不置 core 位");
+    }
+
+    /* ---------- [24] 组投递：kill(-pgid) ----------
+     * 作业控制的地基。管线 `a | b | c` 按 Ctrl+C 时，内核投的是 -pgid，
+     * 所以这里必须验证"负数 pid 能被解释成组号并且真的打到组内每个进程"。 */
+    isize gp = fork();
+    if (gp == 0) {
+        setpgid(0, 0);               /* 自成一组：pgid == pid */
+        for (;;) { }
+    }
+    if (gp > 0) {
+        setpgid(gp, gp);             /* 父进程侧也设一次，消除竞态 */
+        for (volatile long i = 0; i < 200000L; i++) { }
+
+        CHECK_EQ(getpgid(gp), gp, "子进程已自成一组（pgid == pid）");
+        CHECK_EQ(kill(-gp, SIGTERM), 0, "kill(-pgid) 成功");
+        int gst = 0;
+        CHECK_EQ(waitpid(gp, &gst, 0), gp, "组投递后子进程被收掉");
+        CHECK(WIFSIGNALED(gst) && WTERMSIG(gst) == SIGTERM, "死因是 SIGTERM");
+
+        /* 不存在的组：必须失败，不能"当作成功然后什么都没发生" */
+        CHECK_EQ(kill(-99999, SIGTERM), -1, "投给不存在的组返回 -1");
     }
 
     signal(SIGUSR1, SIG_DFL);

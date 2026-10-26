@@ -189,7 +189,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_RMDIR => fs::sys_rmdir(args[0],args[1]),
         SYSCALL_REMOVE_RECURSIVE => fs::sys_remove_recursive(args[0],args[1]),
         SYSCALL_SHUTDOWN => arch::shutdown(),
-        SYSCALL_KILL => process::sys_kill(args[0],args[1]),
+        SYSCALL_KILL => process::sys_kill(args[0] as isize,args[1]),
         SYSCALL_FCNTL => process::sys_fcntl(args[0], args[1], args[2]),
         SYSCALL_GET_TIME => arch::sys_arch_time(),
         SYSCALL_HARTID => arch::sys_hartid(),

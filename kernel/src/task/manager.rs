@@ -149,6 +149,21 @@ impl TaskManager {
             .any(|p| p.pgid == pgid)
     }
 
+    /// 组里的所有进程（按 pid 升序，保证投递顺序确定）。
+    pub fn pids_in_group(&self, pgid: usize) -> Vec<Pid> {
+        let mut v: Vec<Pid> = self
+            .processes
+            .iter()
+            .enumerate()
+            .filter_map(|(pid, p)| match p {
+                Some(p) if p.pgid == pgid => Some(pid),
+                _ => None,
+            })
+            .collect();
+        v.sort_unstable();
+        v
+    }
+
     pub fn try_thread(&self, tid: Tid) -> Option<&ThreadControlBlock> {
         self.threads.get(tid)?.as_ref()
     }
@@ -986,7 +1001,20 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
         let children_snapshot = self.process(current_pid).children.clone();
 
         for child_pid in children_snapshot {
-            let matched = pid == -1 || pid as usize == child_pid;
+            /*   pid > 0  等这个孩子
+             *   pid == -1 等任意孩子
+             *   pid == 0  等我同组的任意孩子
+             *   pid < -1  等 `|pid|` 组里的任意孩子（fg 等整条管线就靠它）
+             */
+            let matched = if pid == -1 {
+                true
+            } else if pid == 0 {
+                self.process(child_pid).pgid == self.process(current_pid).pgid
+            } else if pid < 0 {
+                self.process(child_pid).pgid == (-pid) as usize
+            } else {
+                pid as usize == child_pid
+            };
 
             if !matched {
                 continue;

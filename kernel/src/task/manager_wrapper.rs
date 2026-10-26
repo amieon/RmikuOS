@@ -1039,10 +1039,21 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
 
         manager.process_mut(current_pid).exit_code = exit_code;
 
-        // 前台进程退出 → 前台交还父进程（Ctrl+C 投递目标回退）
-        if FRONT_PID.load(Ordering::Relaxed) == current_pid {
-            if let Some(parent) = manager.process(current_pid).parent {
-                FRONT_PID.store(parent, Ordering::Relaxed);
+        // 前台进程组退出 → 前台交还父进程所在的组（Ctrl+C 投递目标回退）
+        //
+        // 只有"整组都没人活着"才交还：管线 `a | b` 里 a 先退出时，前台必须
+        // 仍然指着这个组，否则 b 还在跑、Ctrl+C 却打到了 shell 上。
+        let exiting_pgid = manager.process(current_pid).pgid;
+        if FRONT_PGID.load(Ordering::Relaxed) == exiting_pgid {
+            let group_still_alive = manager
+                .pids_in_group(exiting_pgid)
+                .into_iter()
+                .any(|p| p != current_pid && !manager.process_is_zombie(p));
+            if !group_still_alive {
+                if let Some(parent) = manager.process(current_pid).parent {
+                    let parent_pgid = manager.process(parent).pgid;
+                    FRONT_PGID.store(parent_pgid, Ordering::Relaxed);
+                }
             }
         }
 
@@ -1892,31 +1903,38 @@ pub fn dup(old_fd: usize) -> isize {
     new_fd
 }
 
-/// 前台进程 pid（Ctrl+C 的投递目标）。单终端简化模型:
-/// fork 时设为子进程, 子进程退出时回父; shell 可用 SYS_SET_FRONT 夺回。
-static FRONT_PID: AtomicUsize = AtomicUsize::new(1);
+/// 前台进程组号（Ctrl+C / Ctrl+Z 的投递目标）。
+///
+/// 为什么是组而不是 pid：一条管线 `a | b | c` 是三个进程，按 Ctrl+C 时
+/// 必须一起收到信号；只打一个 pid 会让另外两个变成孤儿继续跑（还会写死掉的
+/// 管道）。真实终端设备有 `tcsetpgrp()` 干这件事，我们还没有终端对象，
+/// 所以先用一个全局变量当"终端的前台组"——是一个进程的简化，语义已经对了。
+///
+/// 单命令时 pgid == pid（shell fork 后立刻 setpgid(child, child)），所以
+/// 老代码传 pid 也照样能用。
+static FRONT_PGID: AtomicUsize = AtomicUsize::new(1);
 
-pub fn set_front(pid: usize) {
-    FRONT_PID.store(pid, core::sync::atomic::Ordering::Relaxed);
+pub fn set_front(pgid: usize) {
+    FRONT_PGID.store(pgid, core::sync::atomic::Ordering::Relaxed);
 }
 
-pub fn front_pid() -> usize {
-    FRONT_PID.load(core::sync::atomic::Ordering::Relaxed)
+pub fn front_pgid() -> usize {
+    FRONT_PGID.load(core::sync::atomic::Ordering::Relaxed)
 }
 
-/// Ctrl+C 投递: 向前台进程发 SIGINT（该进程不忽略则默认终止）。
+/// Ctrl+C 投递: 向前台进程组发 SIGINT（组内不忽略的都会终止）。
 pub fn kill_front_sigint() {
-    let pid = front_pid();
-    if pid != 0 {
-        let _ = kill(pid, super::SIGINT);
+    let pgid = front_pgid();
+    if pgid != 0 {
+        let _ = kill(-(pgid as isize), super::SIGINT);
     }
 }
 
-/// Ctrl+Z 投递: 向前台进程发 SIGTSTP（默认动作 = 停止，由 shell 的 `fg`/`bg` 继续）。
+/// Ctrl+Z 投递: 向前台进程组发 SIGTSTP（默认动作 = 停止，由 shell 的 `fg`/`bg` 继续）。
 pub fn kill_front_tstp() {
-    let pid = front_pid();
-    if pid != 0 {
-        let _ = kill(pid, super::SIGTSTP);
+    let pgid = front_pgid();
+    if pgid != 0 {
+        let _ = kill(-(pgid as isize), super::SIGTSTP);
     }
 }
 
@@ -2044,7 +2062,52 @@ pub fn sig_set(sig: usize, action: usize, restorer: usize) -> isize {
     }
 }
 
-pub fn kill(pid: usize, sig: usize) -> isize {
+/// kill(pid, sig)：`pid > 0` 投给那个进程；`pid < 0` 投给 `|pid|` 号进程组；
+/// `pid == 0` 投给调用者自己所在的组。返回 0 / -1。
+///
+/// 组投递是作业控制的地基：`a | b | c` 按 Ctrl+C 要一起收到，只打一个 pid
+/// 会让另外两个继续跑并向死管道写。
+pub fn kill(pid: isize, sig: usize) -> isize {
+    if sig >= super::NSIG {
+        return -1;
+    }
+
+    if pid > 0 {
+        return kill_one(pid as usize, sig);
+    }
+
+    let pgid = if pid == 0 {
+        let manager = lock_detect!(TASK_MANAGER);
+        match manager.try_process(manager.current_pid()) {
+            Some(p) => p.pgid,
+            None => return -1,
+        }
+    } else {
+        (-pid) as usize
+    };
+
+    /* 先把成员收集出来，再锁外逐个投递 —— kill_one 自己会加锁，
+     * 持锁调用就是死锁（lock_detect 会直接 panic）。 */
+    let targets = {
+        let manager = lock_detect!(TASK_MANAGER);
+        manager.pids_in_group(pgid)
+    };
+
+    if targets.is_empty() {
+        return -1;      // 组不存在 = ESRCH
+    }
+
+    let mut ret = 0;
+    for t in targets {
+        if kill_one(t, sig) < 0 {
+            ret = -1;   // 个别失败不影响其余成员收到信号
+        }
+    }
+    ret
+}
+
+/// 投给单个进程（`kill(pid>0)` 与组投递的共同实现）。
+fn kill_one(pid: usize, sig: usize) -> isize {
     if sig >= super::NSIG {
         return -1;
     }
@@ -2074,9 +2137,18 @@ pub fn kill(pid: usize, sig: usize) -> isize {
                         need_ipi = true;
                     }
                 }
-                if FRONT_PID.load(Ordering::Relaxed) == pid {
-                    if let Some(parent) = manager.process(pid).parent {
-                        FRONT_PID.store(parent, Ordering::Relaxed);
+                let killed_pgid = manager.process(pid).pgid;
+                if FRONT_PGID.load(Ordering::Relaxed) == killed_pgid {
+                    /* 和退出路径同样的判断：组里还有活着的成员就别抢回前台 */
+                    let group_still_alive = manager
+                        .pids_in_group(killed_pgid)
+                        .into_iter()
+                        .any(|p| p != pid && !manager.process_is_zombie(p));
+                    if !group_still_alive {
+                        if let Some(parent) = manager.process(pid).parent {
+                            let parent_pgid = manager.process(parent).pgid;
+                            FRONT_PGID.store(parent_pgid, Ordering::Relaxed);
+                        }
                     }
                 }
                 drop(manager);

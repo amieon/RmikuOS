@@ -98,7 +98,7 @@ pub use manager_wrapper::{
     stop_current_process,
     exit_with_signal,
     set_front,
-    front_pid,
+    front_pgid,
     kill_front_sigint,
     kill_front_tstp,
     pgid_of,
