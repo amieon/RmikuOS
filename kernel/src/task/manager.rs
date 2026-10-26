@@ -10,6 +10,7 @@ use crate::trap::TrapContext;
 use super::context::TaskContext;
 use super::process::{Pid, ProcessControlBlock};
 use super::processor;
+use super::signal::{DefAction, SigAction};
 use super::switch::__switch;
 use super::thread::{BlockReason, ThreadControlBlock, ThreadStatus, Tid};
 
@@ -757,6 +758,67 @@ impl TaskManager {
             matches!(thread.status, ThreadStatus::Zombie | ThreadStatus::Dead)
                 && thread.running_on.is_none()
         })
+    }
+
+    /// 当前线程是否有"可投递、且真的会做事"的信号。
+    /// "会做事"的过滤很重要：SIGCHLD / SIGWINCH 默认动作就是忽略，它们不该
+    /// 打断一个正在阻塞的系统调用（否则子进程一退出，父进程的 waitpid 就报
+    /// EINTR，而它其实什么都没错过）。
+    pub fn deliverable_pending(&self, tid: Tid, pid: Pid) -> bool {
+        let (Some(t), Some(p)) = (self.try_thread(tid), self.try_process(pid)) else {
+            return false;
+        };
+
+        let mut pending = (t.sig_pending | p.sig_pending) & !t.sig_blocked;
+        while pending != 0 {
+            let sig = pending.trailing_zeros() as usize;
+            pending &= !(1u64 << sig);
+
+            let noop = match p.sig_actions[sig] {
+                SigAction::Ignore => true,
+                SigAction::Handler { .. } => false,
+                SigAction::Default => super::default_action(sig) == DefAction::Ign,
+            };
+            if !noop {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 若当前线程有"有效动作 = 停止"的待投递信号，清位并返回（锁已持有的版本）。
+    ///
+    /// 与 wrapper 里的 `take_pending_stop_signal()` 是同一件事，区别只在加锁：
+    /// 阻塞路径手里已经有锁了，来不及"锁外再判一次"。
+    pub fn take_pending_stop(&mut self, tid: Tid, pid: Pid) -> Option<usize> {
+        let (blocked, tpend, ppend) = match (self.try_thread(tid), self.try_process(pid)) {
+            (Some(t), Some(p)) => (t.sig_blocked, t.sig_pending, p.sig_pending),
+            _ => return None,
+        };
+
+        let mut pending = (tpend | ppend) & !blocked;
+        while pending != 0 {
+            let sig = pending.trailing_zeros() as usize;
+            pending &= !(1u64 << sig);
+
+            let is_stop = match self.process(pid).sig_actions[sig] {
+                SigAction::Ignore => false,
+                SigAction::Handler { .. } => false,
+                SigAction::Default => super::default_action(sig) == DefAction::Stop,
+            };
+            if !is_stop {
+                continue;
+            }
+
+            let bit = 1u64 << sig;
+            if tpend & bit != 0 {
+                self.thread_mut(tid).sig_pending &= !bit;
+            } else {
+                self.process_mut(pid).sig_pending &= !bit;
+            }
+            return Some(sig);
+        }
+        None
     }
 
 /// 进程是否处于"被停住"状态（整个进程一起停，所以只看挂的停止信号）。

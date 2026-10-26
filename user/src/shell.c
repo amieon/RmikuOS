@@ -33,7 +33,11 @@ static int g_last_exit = 0;
 struct job {
     int used;
     int id;
-    isize pid;
+    /* 存的是**进程组号**，不是 pid：一条管线是多个进程，`fg`/`bg`/Ctrl+C
+     * 都要对整组生效。单命令时 pgid == pid（fork 后立刻 setpgid(child, child)）。 */
+    isize pgid;
+    int stopped;   /* 1 = 被 Ctrl+Z 停住，等 fg/bg 继续 */
+    int why;       /* 停住它的信号号（WSTOPSIG），给 fg 的 $? 用 */
     char cmd[LINE_SIZE];
 };
 static struct job jobs[MAX_JOBS];
@@ -230,7 +234,7 @@ static int complete_command(const char *prefix, char matches[][LINE_SIZE], int m
     const char *builtins[] = {
         "help", "exit", "pwd", "cd", "mkdir", "touch", "rm", "rmdir", "rename", "mv",
         "whoami", "chmod", "chown",
-        "shutdown", "ls", "cat", "clear", "jobs",
+        "shutdown", "ls", "cat", "clear", "jobs", "fg", "bg",
         "export", "env", "unset", "source", NULL
     };
 
@@ -630,26 +634,78 @@ static int expand_variables(int argc, char *argv[], int quoted[],
 }
 
 /* ---- 后台作业 ---- */
-static void add_job(isize pid, const char *cmd) {
+static int add_job(isize pgid, const char *cmd, int stopped) {
     for (int i = 0; i < MAX_JOBS; i++) {
         if (!jobs[i].used) {
             jobs[i].used = 1;
             jobs[i].id = next_job_id++;
-            jobs[i].pid = pid;
+            jobs[i].pgid = pgid;
+            jobs[i].stopped = stopped;
+            jobs[i].why = stopped ? SIGTSTP : 0;
             copy_str(jobs[i].cmd, cmd, LINE_SIZE);
-            return;
+            return jobs[i].id;
         }
     }
+    return 0;
 }
 
+/* 无参数：最近一个停住的作业（按 id 最大挑）——bash 的 fg/bg 也是这样。
+ * 有参数：%N 或 N 当作业号，否则当进程组号。 */
+static struct job *find_job(const char *arg) {
+    if (!arg) {
+        struct job *best = 0;
+        for (int i = 0; i < MAX_JOBS; i++) {
+            if (!jobs[i].used || !jobs[i].stopped) continue;
+            if (!best || jobs[i].id > best->id) best = &jobs[i];
+        }
+        if (best) return best;
+        for (int i = 0; i < MAX_JOBS; i++) {
+            if (!jobs[i].used) continue;
+            if (!best || jobs[i].id > best->id) best = &jobs[i];
+        }
+        return best;
+    }
+    if (arg[0] == '%') arg++;
+    int want = atoi(arg);
+    for (int i = 0; i < MAX_JOBS; i++)
+        if (jobs[i].used && jobs[i].id == want) return &jobs[i];
+    for (int i = 0; i < MAX_JOBS; i++)
+        if (jobs[i].used && jobs[i].pgid == (isize)want) return &jobs[i];
+    return 0;
+}
+
+/* 一个作业可能是整条管线，所以按**组**回收：循环到没有新状态为止。
+ * 循环结束的 r：> 0 表示还有成员没报完、0 表示暂时没变化、< 0 表示组里
+ * 已经没有子进程了 —— 只有最后一种才算"整个作业结束"。 */
 static void reap_jobs(void) {
     for (int i = 0; i < MAX_JOBS; i++) {
-        if (jobs[i].used) {
-            int status;
-            if (waitpid(jobs[i].pid, &status, WNOHANG) == jobs[i].pid) {
-                printf("[%d] done %s\n", jobs[i].id, jobs[i].cmd);
-                jobs[i].used = 0;
+        if (!jobs[i].used) continue;
+
+        int status = 0, stopped = -1, stop_sig = 0, exited = 0;
+        isize r;
+        for (;;) {
+            r = waitpid(-jobs[i].pgid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+            if (r <= 0) break;
+            if (WIFSTOPPED(status)) {
+                stopped = 1;
+                stop_sig = WSTOPSIG(status);
+            } else if (WIFCONTINUED(status)) {
+                stopped = 0;
+            } else {
+                exited++;
             }
+        }
+
+        if (stopped == 1) {
+            jobs[i].stopped = 1;
+            jobs[i].why = stop_sig;
+            printf("\n[%d]+  Stopped  %s\n", jobs[i].id, jobs[i].cmd);
+        } else if (stopped == 0) {
+            jobs[i].stopped = 0;
+            printf("\n[%d]+  Continued  %s\n", jobs[i].id, jobs[i].cmd);
+        } else if (exited > 0 && r < 0) {
+            printf("[%d] done %s\n", jobs[i].id, jobs[i].cmd);
+            jobs[i].used = 0;
         }
     }
 }
@@ -657,7 +713,8 @@ static void reap_jobs(void) {
 static void print_jobs(void) {
     for (int i = 0; i < MAX_JOBS; i++) {
         if (jobs[i].used) {
-            printf("[%d] running %s\n", jobs[i].id, jobs[i].cmd);
+            printf("[%d] %s %s\n", jobs[i].id,
+                   jobs[i].stopped ? "Stopped" : "Running", jobs[i].cmd);
         }
     }
 }
@@ -920,7 +977,9 @@ static void print_help(void) {
     fputs("  chmod <mode> <path> (mode is octal, e.g. 755 / 0644)\n", stdout);
     fputs("  chown <uid> <gid> <path>  (root only)\n", stdout);
     fputs("  rename <old> <new> (mv <old> <new> also works; ...)\n",stdout);
-    fputs("  jobs\n", stdout);
+    fputs("  jobs                (list background / stopped jobs)\n", stdout);
+    fputs("  fg [%n]             (bring job to foreground, continue if stopped)\n", stdout);
+    fputs("  bg [%n]             (continue a stopped job in background)\n", stdout);
     fputs("  clear\n", stdout);
     fputs("  export NAME=VALUE   (set env var; $VAR / ${VAR} / $? expands in commands)\n", stdout);
     fputs("  env                 (print all env vars)\n", stdout);
@@ -1117,6 +1176,63 @@ static int builtin_rename(int argc, char *argv[]) {
     return 0;
 }
 
+/* ---- 作业控制 ---- */
+static int builtin_fg(int argc, char *argv[]) {
+    struct job *j = find_job(argc > 1 ? argv[1] : 0);
+    if (!j) { fputs("fg: no such job\n", stdout); return 1; }
+
+    printf("%s\n", j->cmd);
+    j->stopped = 0;
+    set_front(j->pgid);              /* 交还前台：Ctrl+C / Ctrl+Z 重新打到整组 */
+    kill(-j->pgid, SIGCONT);
+
+    /* 等整组：管线里的成员会陆续退出，只有"组里再没有子进程"才算结束；
+     * 任何一个成员被停住就整体算停住（POSIX 的作业停止就是这个语义）。 */
+    int status = 0, stop_sig = 0, stopped = 0;
+    isize r;
+    for (;;) {
+        r = waitpid(-j->pgid, &status, WUNTRACED);
+        if (r < 0) {
+            /* EINTR（被信号打断）= 什么都没发生，重试；其余负数才是"没孩子了" */
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (WIFSTOPPED(status)) {
+            stopped = 1;
+            stop_sig = WSTOPSIG(status);
+            break;
+        }
+    }
+
+    set_front(getpgrp());            /* 前台收回 shell 自己所在的组 */
+    set_echo(0);
+
+    if (stopped) {                   /* 又按了一次 Ctrl+Z */
+        j->stopped = 1;
+        j->why = stop_sig;
+        printf("\n[%d]+  Stopped  %s\n", j->id, j->cmd);
+        return 128 + stop_sig;
+    }
+
+    printf("[%d] done %s\n", j->id, j->cmd);
+    j->used = 0;
+    /* 循环退出时 status 是最后一个成员的状态（正常退出/被信号杀） */
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+}
+
+static int builtin_bg(int argc, char *argv[]) {
+    struct job *j = find_job(argc > 1 ? argv[1] : 0);
+    if (!j) { fputs("bg: no such job\n", stdout); return 1; }
+
+    j->stopped = 0;
+    kill(-j->pgid, SIGCONT);
+    printf("[%d]+ %s &\n", j->id, j->cmd);
+
+    /* 后台作业不占前台（和 `cmd &` 的处理一致） */
+    set_front(getpgrp());
+    return 0;
+}
+
 static void builtin_clear(void) {
     fputs("\x1b[2J\x1b[H", stdout);
     fflush(stdout);
@@ -1282,6 +1398,10 @@ static int run_external(int argc, char *argv[], int background) {
     set_echo(1);
     isize pid = fork();
     if (pid == 0) {
+        /* 自成进程组：这样 Ctrl+C / Ctrl+Z 按**组**投递时只打到作业本身，
+         * 不会连 shell 一起打（shell 和前台作业必须在不同的组）。
+         * 父子两边都调一次是 bash 的做法：谁先跑到都不会漏。 */
+        setpgid(0, 0);
         /* Child stdin must stay BLOCKING. The old code set O_NONBLOCK on
         ** fd 0 before fork for Ctrl+C polling, and fd_flags get cloned
         ** into the child, so interactive programs (sqlite3 shell, cat,
@@ -1292,11 +1412,12 @@ static int run_external(int argc, char *argv[], int background) {
         run_exec(argc, argv);
         exit(1);
     } else if (pid > 0) {
+        setpgid(pid, pid);        /* 与子进程那侧配对，消除竞态 */
         if (background) {
-            add_job(pid, argv[0]);
+            add_job(pid, argv[0], 0);
             printf("[%d] %d\n", next_job_id - 1, pid);
-            set_echo(0);          /* 回 shell 提示符, 关回显 */
-            set_front(getpid());  /* 后台任务不占前台: Ctrl+C 回 shell */
+            set_echo(0);            /* 回 shell 提示符, 关回显 */
+            set_front(getpgrp());   /* 后台任务不占前台: Ctrl+C 回 shell */
             return 0;
         }
         /* Foreground: block until the child exits. We no longer poll
@@ -1304,9 +1425,28 @@ static int run_external(int argc, char *argv[], int background) {
         ** child from the shared terminal. Kernel signal delivery is
         ** incomplete; Ctrl+C interrupt can come back with a kernel
         ** Ctrl+C -> SIGINT implementation later. */
+        /* 把前台交给子进程：Ctrl+C / Ctrl+Z 的投递目标是"前台进程"，
+         * 而 fork 不会自动改它 —— 不写这句，信号永远打在 shell 自己身上
+         * （shell 又忽略了 SIGINT/SIGTSTP，于是按键毫无反应）。 */
+        set_front(pid);
+
+        /* WUNTRACED：Ctrl+Z 会让 waitpid 带着"停住"回来，而不是一直等。
+         * 不传它的话，被停住的前台进程会让 shell 一起卡死（谁也动不了）。 */
         int status = 0;
-        while (waitpid(pid, &status, 0) < 0) yield();
+        while (waitpid(pid, &status, WUNTRACED) < 0) {
+            if (errno != EINTR) { status = 0; break; }   /* 没这个孩子了 */
+        }
         set_echo(0);   /* 回 shell 提示符, 关回显 */
+
+        if (WIFSTOPPED(status)) {
+            /* 停住的作业要进作业表，否则 fg/bg 找不到它。
+             * 前台也必须收回自己 —— 否则之后按 Ctrl+C 还会打到那个停止的进程。 */
+            int jid = add_job(pid, argv[0], 1);
+            printf("\n[%d]+  Stopped  %s\n", jid, argv[0]);
+            set_front(getpgrp());
+            return 128 + WSTOPSIG(status);
+        }
+
         /* $? 的约定（与 bash 一致）：正常退出取退出码，被信号杀死取 128+sig。
          * 内核给的是 POSIX wait status，"压平"这一步只发生在 shell 这里 ——
          * 不能把压平后的值当成 waitpid 的返回值去理解。 */
@@ -1504,6 +1644,10 @@ static int run_pipeline(char *line) {
         }
         int pid = fork();
         if (pid == 0) {
+            /* 整条管线一个进程组：第一段当组长，后面几段加入它。
+             * 这样 Ctrl+C / Ctrl+Z 一次就能打到整条管线 —— 否则只停一个，
+             * 剩下的会变成孤儿继续跑，还往已经没人读的管道里写。 */
+            setpgid(0, npid == 0 ? 0 : pids[0]);
             if (prev_read >= 0) dup2(prev_read, 0);
             if (has_next) dup2(pipefd[1], 1);
             if (prev_read >= 0) close(prev_read);
@@ -1514,6 +1658,7 @@ static int run_pipeline(char *line) {
             apply_redirect_and_exec(&segs[s], seg_argc[s], seg_argv[s]);
             exit(1);
         } else if (pid > 0) {
+            setpgid(pid, npid == 0 ? pid : pids[0]);   /* 与子进程那侧配对 */
             pids[npid++] = pid;
         } else {
             fputs("fork failed\n", stdout);
@@ -1528,15 +1673,37 @@ static int run_pipeline(char *line) {
     }
     if (prev_read >= 0) close(prev_read);
 
-    int last_status = 0;
+    /* 把整组交给前台：Ctrl+C / Ctrl+Z 的投递目标是"前台进程组" */
+    int leader = npid > 0 ? pids[0] : 0;
+    if (leader > 0) set_front(leader);
+
+    int last_status = 0, stopped = 0, stop_sig = 0;
     for (int i = 0; i < npid; i++) {
-        int status;
-        waitpid(pids[i], &status, 0);
+        int status = 0;
+        isize wr;
+        do { wr = waitpid(pids[i], &status, WUNTRACED); } while (wr < 0 && errno == EINTR);
+        if (wr < 0) continue;
+        if (WIFSTOPPED(status)) {
+            /* 组投递下整条管线会一起停；拿到第一个就够了 */
+            stopped = 1;
+            stop_sig = WSTOPSIG(status);
+            break;
+        }
         if (i == npid - 1) {
             /* 同上一处：$? = 退出码，或 128 + 信号号 */
             last_status = WIFEXITED(status) ? WEXITSTATUS(status)
                                             : 128 + WTERMSIG(status);
         }
+    }
+
+    if (leader > 0) set_front(getpgrp());
+
+    if (stopped) {
+        char how[LINE_SIZE];
+        copy_str(how, segs[0].cmd_str, LINE_SIZE);
+        int jid = add_job(leader, how, 1);
+        printf("\n[%d]+  Stopped  %s\n", jid, how);
+        return 128 + stop_sig;
     }
     return last_status;
 }
@@ -1600,6 +1767,8 @@ static int run_node(char *cmd, int background) {
     if (streq(exp_argv[0], "chown")) { return builtin_chown(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "rename") || streq(exp_argv[0], "mv")) { return builtin_rename(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "jobs")) { print_jobs(); return 0; }
+    if (streq(exp_argv[0], "fg")) { return builtin_fg(exp_argc, exp_argv); }
+    if (streq(exp_argv[0], "bg")) { return builtin_bg(exp_argc, exp_argv); }
     if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
     if (streq(exp_argv[0], "source") || streq(exp_argv[0], ".")) {
         if (exp_argc < 2) {
@@ -1640,7 +1809,9 @@ static const char *capture_cmd(const char *cmd) {
         exit(0);
     } else if (pid > 0) {
         int status = 0;
-        while (waitpid(pid, &status, 0) < 0) yield();
+        while (waitpid(pid, &status, 0) < 0) {
+            if (errno != EINTR) break;
+        }
     }
 
     buf[0] = 0;
@@ -1906,6 +2077,15 @@ int main(void) {
     load_search_dirs();
 
     signal(SIGINT, SIG_IGN);
+    /* 提示符下按 Ctrl+Z 不该停住 shell：终端驱动是"把 SIGTSTP 发给前台"，
+     * 而前台此时就是 shell 自己。子进程不受影响（fork 不复制处置表）。 */
+    signal(SIGTSTP, SIG_IGN);
+
+    /* shell 自己也要独立成组，并把前台交给自己：
+     *   - 不然它与 init 同组，Ctrl+C 打向前台组时会连 init 一起打
+     *   - 前台变量初值是 init 的组，提示符下按 Ctrl+C 会投错目标 */
+    setpgid(0, 0);
+    set_front(getpgrp());
 
     while (1) {
         set_my_tickets(1);

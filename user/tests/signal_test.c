@@ -26,6 +26,7 @@
  *   [22] sigaction 查询（act == NULL）
  *   [23] 停止/继续：WUNTRACED / WCONTINUED / 打死停止态进程
  *   [24] 组投递：kill(-pgid) 打到整组（管线作业控制的地基）
+ *   [25] waitpid 的 EINTR（阻塞中被信号打断）
  *
  * 为什么值得单独一个测试文件：这条链路跨了内核态（置 pending、压 sigframe、
  * 改写 TrapContext）、trap 出口、用户态汇编（trampoline）和 SIGRETURN 四段，
@@ -164,6 +165,25 @@ static void on_usr1_jump(int sig) {
 /* [20] SIGSEGV handler 里 siglongjmp：跳过出错指令继续跑（JIT trap 的基础） */
 static sigjmp_buf g_segv_jmp;
 static void on_segv_jump(int sig) { (void)sig; siglongjmp(g_segv_jmp, 7); }
+
+/* [25] waitpid 的 EINTR：阻塞等子进程时被信号打断 */
+static volatile int wp_done = 0;
+static volatile int wp_hits = 0;
+
+static void on_usr1_wp(int sig) {
+    (void)sig;
+    wp_hits++;
+}
+
+/* 反复朝 main 投 SIGUSR1：第一次可能落在阻塞之前（handler 先跑掉），
+ * 后续几次就能命中"阻塞中被打断"。有上限，worker 卡住时测试失败而不是挂死。 */
+static void wp_worker(void *arg) {
+    int target = (int)(isize)arg;
+    for (int i = 0; i < 400 && !wp_done; i++) {
+        for (volatile long k = 0; k < 100000L; k++) { }
+        pthread_kill(target, SIGUSR1);
+    }
+}
 
 int main(void) {
     TEST_START("signal");
@@ -520,6 +540,37 @@ int main(void) {
 
         /* 不存在的组：必须失败，不能"当作成功然后什么都没发生" */
         CHECK_EQ(kill(-99999, SIGTERM), -1, "投给不存在的组返回 -1");
+    }
+
+    /* ---------- [25] waitpid 的 EINTR ----------
+     * 阻塞在 waitpid 上时收到可捕获信号 → -1 + EINTR（不是继续睡）。
+     * git 的 wait_or_whine、shell 的等待循环都靠这个语义。 */
+    isize wp = fork();
+    if (wp == 0) {
+        for (;;) { }                 /* 永不退出：父进程只能阻塞在 waitpid 上 */
+    }
+    if (wp > 0) {
+        signal(SIGUSR1, on_usr1_wp);
+        wp_done = 0;
+        wp_hits = 0;
+
+        int wtid = thread_create(wp_worker, (void *)(isize)gettid());
+        CHECK(wtid >= 0, "thread_create 成功（waitpid EINTR 测试）");
+
+        int wst = 0;
+        errno = 0;
+        isize wr = waitpid(wp, &wst, 0);
+        wp_done = 1;
+
+        CHECK_EQ(wr, -1, "阻塞的 waitpid 被信号打断，返回 -1");
+        CHECK_EQ(errno, EINTR, "errno == EINTR（而不是继续睡到子进程退出）");
+        CHECK(wp_hits >= 1, "打断前后 handler 确实跑过");
+
+        int wcode = 0;
+        if (wtid >= 0) thread_join(wtid, &wcode);
+        kill(wp, SIGKILL);
+        waitpid(wp, &wst, 0);
+        signal(SIGUSR1, SIG_DFL);
     }
 
     signal(SIGUSR1, SIG_DFL);

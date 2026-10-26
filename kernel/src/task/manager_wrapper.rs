@@ -279,6 +279,10 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
         __switch(task_cx_ptr, idle_cx_ptr);
     }
 
+    if crate::timer::ticks() < wake_tick {
+        return -crate::syscall::errno::EINTR;
+    }
+
     0
 }
 
@@ -345,6 +349,15 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
     let nohang = (options & super::WNOHANG) != 0;
 
     loop {
+        /* try_waitpid 必须和 block_thread 待在同一个锁区间：中间放掉锁的话，
+         * 孩子刚好在这条缝里退出，`wake_parent_waiting_for` 会落空 ——
+         * 于是父进程睡下去再也没人叫。 */
+        const ACT_SLEEP: u8 = 0;
+        const ACT_INTR: u8 = 1;
+        const ACT_STOP: u8 = 2;
+
+        let mut act = ACT_SLEEP;
+
         let task_cx_ptr = {
             let mut manager = lock_detect!(TASK_MANAGER);
             let current_pid = manager.pid_of_tid(current_tid);
@@ -359,21 +372,44 @@ pub fn waitpid_current(pid: isize, exit_code_ptr: usize, options: usize) -> isiz
                         return 0;
                     }
 
-                    log::info!(
-                        "[task] tid {} waitpid(pid={}) blocking",
-                        current_tid,
-                        pid,
-                    );
+                    /* 要睡了，先看有没有信号要处理。顺序是：数据（上面那步）
+                     * → 停止 → EINTR → 真睡。把信号判断放在 try_waitpid 之前
+                     * 会把"已经能收尸的孩子"让给信号，父进程白丢一次收尸机会。 */
+                    if let Some(stop_sig) = manager.take_pending_stop(current_tid, current_pid) {
+                        manager.stop_process(current_pid, stop_sig);
+                        act = ACT_STOP;
+                    } else if manager.deliverable_pending(current_tid, current_pid) {
+                        act = ACT_INTR;
+                    } else {
+                        log::info!(
+                            "[task] tid {} waitpid(pid={}) blocking",
+                            current_tid,
+                            pid,
+                        );
 
-                    manager.block_thread(
-                        current_tid,
-                        BlockReason::WaitPid { pid },
-                    );
+                        manager.block_thread(
+                            current_tid,
+                            BlockReason::WaitPid { pid },
+                        );
+                    }
 
                     manager.thread_cx_ptr(current_tid)
                 }
             }
         };
+
+        /* POSIX: 被捕获的信号打断阻塞调用 → -1 + EINTR。
+         * git 的 wait_or_whine、shell 的 `while (waitpid(...) < 0)` 都靠它重试。 */
+        if act == ACT_INTR {
+            return -crate::syscall::errno::EINTR;
+        }
+
+        /* 停止类信号就地停住（不返回 EINTR）：继续之后从 switch 返回，
+         * 重新查一遍孩子状态 —— 程序完全看不出中间离开过。 */
+        if act == ACT_STOP {
+            switch_away_stopped();
+            continue;
+        }
 
         let idle_cx_ptr = processor::idle_task_cx_ptr();
          
@@ -2251,7 +2287,7 @@ pub fn tgkill(pid: usize, tid: usize, sig: usize) -> isize {
     0
 }
 
-/// 当前线程此刻是否有"可投递"的信号（未被本线程屏蔽的 pending）。
+/// 当前线程此刻是否有"可投递且会做事"的信号（未被本线程屏蔽的 pending）。
 ///
 /// 阻塞型 syscall 靠它判断"我刚才是被信号唤醒的吗"—— 是就返回 EINTR，
 /// 让用户态决定重试还是借机退出（POSIX 的默认行为；没实现 SA_RESTART）。
@@ -2259,31 +2295,7 @@ pub fn signal_pending_now() -> bool {
     let pid = current_pid();
     let tid = processor::current_tid();
     let manager = lock_detect!(TASK_MANAGER);
-
-    let (t, p) = match (manager.try_thread(tid), manager.try_process(pid)) {
-        (Some(t), Some(p)) => (t, p),
-        _ => return false,
-    };
-
-    let mut pending = (t.sig_pending | p.sig_pending) & !t.sig_blocked;
-
-    /* 只认"真的会做事"的信号：被忽略的、以及默认动作就是忽略的
-     * （SIGCHLD / SIGWINCH / SIGURG）不该打断阻塞的 read ——
-     * 否则子进程一退出，正在敲的那行输入就被 EINTR 打断了。 */
-    while pending != 0 {
-        let sig = pending.trailing_zeros() as usize;
-        pending &= !(1u64 << sig);
-
-        let noop = match p.sig_actions[sig] {
-            SigAction::Ignore => true,
-            SigAction::Handler { .. } => false,
-            SigAction::Default => super::default_action(sig) == DefAction::Ign,
-        };
-        if !noop {
-            return true;
-        }
-    }
-    false
+    manager.deliverable_pending(tid, pid)
 }
 
 /// 信号投递：在"返回用户态之前"调用（trap 出口），所以能拿到 `cx` 并改写它。
@@ -2498,36 +2510,7 @@ pub fn take_pending_stop_signal() -> Option<usize> {
     let pid = current_pid();
     let tid = processor::current_tid();
     let mut manager = lock_detect!(TASK_MANAGER);
-
-    let (blocked, tpend, ppend) = match (manager.try_thread(tid), manager.try_process(pid)) {
-        (Some(t), Some(p)) => (t.sig_blocked, t.sig_pending, p.sig_pending),
-        _ => return None,
-    };
-
-    let mut pending = (tpend | ppend) & !blocked;
-
-    while pending != 0 {
-        let sig = pending.trailing_zeros() as usize;
-        pending &= !(1u64 << sig);
-
-        let is_stop = match manager.process(pid).sig_actions[sig] {
-            SigAction::Ignore => false,
-            SigAction::Handler { .. } => false,
-            SigAction::Default => super::default_action(sig) == DefAction::Stop,
-        };
-        if !is_stop {
-            continue;
-        }
-
-        let bit = 1u64 << sig;
-        if tpend & bit != 0 {
-            manager.thread_mut(tid).sig_pending &= !bit;
-        } else {
-            manager.process_mut(pid).sig_pending &= !bit;
-        }
-        return Some(sig);
-    }
-    None
+    manager.take_pending_stop(tid, pid)
 }
 
 /// 停住当前进程（默认动作 Stop 的实现）。

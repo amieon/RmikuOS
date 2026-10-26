@@ -83,7 +83,11 @@ int main(int argc, char *argv[]) {
         }
 
         int code = -1;
-        isize ret = waitpid(pid, &code, 0);
+        isize ret;
+        do {
+            ret = waitpid(pid, &code, 0);
+        } while (ret < 0 && errno == EINTR);
+
         if (ret != pid) {
             printf("[RUNALL] %s ... FAIL (waitpid 失败)\n", names[i]);
             failed++;
