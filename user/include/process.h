@@ -14,7 +14,7 @@ extern "C" {
 /* 也报告"被 SIGCONT 继续"的子进程。 */
 #define WCONTINUED 8
 
-/* wait status 是 **POSIX 的 16 位编码**（内核在 manager.rs 的 try_waitpid 里
+/* wait status 是 POSIX 的 16 位编码（内核在 manager.rs 的 try_waitpid 里
  * 从内部 exit_code 转换后写回，见那里的注释）：
  *
  *   bits 15..8   退出码（正常退出）/ 暂停信号（WIFSTOPPED）
@@ -83,7 +83,7 @@ static inline isize waitpid(isize pid, int *exit_code, usize option) {
     return rk_sys_ret(syscall3(SYS_WAITPID, (usize)pid, (usize)exit_code, option));
 }
 
-/* wait() 等价于 waitpid(-1, st, 0)：**不**报停止事件。
+/* wait() 等价于 waitpid(-1, st, 0)：不报停止事件。
  * （以前这里传的是 WUNTRACED，只是当时它被定义成 0 才显得没事。） */
 static inline isize wait(int *exit_code) {
     return rk_sys_ret(syscall3(SYS_WAITPID, -1, (usize)exit_code, 0));
@@ -220,7 +220,7 @@ static inline int execvp(const char *file, char *const argv[]) {
 static inline int execve(const char *path, char *const argv[], char *const envp[]) {
     (void)path; (void)argv; (void)envp;
     /* 内核的 exec ABI 没有 envp：环境由 shell/crt0 的 environ 继承。
-     * POSIX 语义要求 execve 用 envp **替换**环境，这里做不到，
+     * POSIX 语义要求 execve 用 envp 替换环境，这里做不到，
      * 所以明确失败而不是静默忽略参数。 */
     errno = ENOSYS;
     return -1;
