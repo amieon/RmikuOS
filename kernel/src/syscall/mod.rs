@@ -130,6 +130,8 @@ pub const SYSCALL_SIGRETURN: usize = 120;
 pub const SYSCALL_SIGPROCMASK: usize = 121;
 pub const SYSCALL_TGKILL: usize = 122;
 pub const SYSCALL_SIGPENDING: usize = 123;
+pub const SYSCALL_SETITIMER: usize = 124;
+pub const SYSCALL_GETITIMER: usize = 125;
 
 
 
@@ -189,7 +191,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_RMDIR => fs::sys_rmdir(args[0],args[1]),
         SYSCALL_REMOVE_RECURSIVE => fs::sys_remove_recursive(args[0],args[1]),
         SYSCALL_SHUTDOWN => arch::shutdown(),
-        SYSCALL_KILL => process::sys_kill(args[0] as isize,args[1]),
+        SYSCALL_KILL => process::sys_kill(args[0] as isize, args[1]),
         SYSCALL_FCNTL => process::sys_fcntl(args[0], args[1], args[2]),
         SYSCALL_GET_TIME => arch::sys_arch_time(),
         SYSCALL_HARTID => arch::sys_hartid(),
@@ -249,7 +251,6 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_UMASK => process::sys_umask(args[0]),
         SYSCALL_GETPAGESIZE => process::sys_getpagesize(),
         SYSCALL_GETTID => process::sys_gettid(),
-
         SYSCALL_NET_SOCKET => net::sys_net_socket(args[0],args[1]),
         SYSCALL_NET_BIND => net::sys_net_bind(args[0], args[1]),
         SYSCALL_NET_SENDTO => net::sys_net_sendto(args[0], args[1], args[2], args[3], args[4]),
@@ -273,7 +274,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SIGPROCMASK => process::sys_sigprocmask(args[0], args[1], args[2]),
         SYSCALL_TGKILL => process::sys_tgkill(args[0], args[1], args[2]),
         SYSCALL_SIGPENDING => process::sys_sigpending(args[0]),
-        
+        SYSCALL_SETITIMER => process::sys_setitimer(args[0], args[1], args[2]),
+        SYSCALL_GETITIMER => process::sys_getitimer(args[0], args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

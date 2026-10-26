@@ -10,6 +10,7 @@
  * （同一个坑之前在 sys/resource.h 踩过一次。）
  */
 #include "../time.h"
+#include "../io.h"      /* syscall3 / rk_sys_ret */
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,14 +18,35 @@ extern "C" {
 
 /*
  * struct itimerval 按 POSIX 归在 <sys/time.h>。
- * 本内核没有"到点发信号"的能力，所以只给结构体、不给 setitimer 原型：
- * git 用 NO_SETITIMER 自带一个 return 0 的桩函数，那个桩需要这个结构体才编得过
- * （否则会报 "struct itimerval declared inside parameter list"）。
+ *
+ * 内核真的实现了 ITIMER_REAL：到点给进程挂 SIGALRM（走的是和 SIGPIPE/SIGALRM
+ * 一样的 pending → trap 出口投递路径）。ITIMER_VIRTUAL / ITIMER_PROF 需要按
+ * CPU 时间记账，不提供 —— 传它们会拿到 EINVAL，而不是"装上了永不响"。
  */
 struct itimerval {
     struct timeval it_interval;   /* 周期 */
     struct timeval it_value;      /* 首次到期 */
 };
+
+#define ITIMER_REAL    0
+#define ITIMER_VIRTUAL 1
+#define ITIMER_PROF    2
+
+/*
+ * git 在没有 setitimer 时会 -DNO_SETITIMER 自带一个 return 0 的桩
+ * （git-compat-util.h 里）。那种情况下这里不能再定义，否则重定义冲突。
+ * 现在内核支持了， 不再设 NO_SETITIMER。
+ */
+#ifndef NO_SETITIMER
+static inline int setitimer(int which, const struct itimerval *value, struct itimerval *old) {
+    return (int)rk_sys_ret(syscall3(SYS_SETITIMER, (usize)which,
+                                    (usize)value, (usize)old));
+}
+
+static inline int getitimer(int which, struct itimerval *value) {
+    return (int)rk_sys_ret(syscall3(SYS_GETITIMER, (usize)which, (usize)value, 0));
+}
+#endif
 
 #ifdef __cplusplus
 }

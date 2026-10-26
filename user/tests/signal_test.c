@@ -27,6 +27,8 @@
  *   [23] 停止/继续：WUNTRACED / WCONTINUED / 打死停止态进程
  *   [24] 组投递：kill(-pgid) 打到整组（管线作业控制的地基）
  *   [25] waitpid 的 EINTR（阻塞中被信号打断）
+ *   [26] SIGPIPE：写无读者的管道（默认终止 / 忽略时 EPIPE）
+ *   [27] ITIMER_REAL：到点发 SIGALRM（setitimer/getitimer）
  *
  * 为什么值得单独一个测试文件：这条链路跨了内核态（置 pending、压 sigframe、
  * 改写 TrapContext）、trap 出口、用户态汇编（trampoline）和 SIGRETURN 四段，
@@ -36,6 +38,7 @@
 #include "signal.h"
 #include "errno.h"
 #include "setjmp.h"
+#include "sys/time.h"
 
 static volatile int usr1_hits = 0;
 static volatile int usr2_hits = 0;
@@ -183,6 +186,13 @@ static void wp_worker(void *arg) {
         for (volatile long k = 0; k < 100000L; k++) { }
         pthread_kill(target, SIGUSR1);
     }
+}
+
+/* [27] ITIMER_REAL → SIGALRM */
+static volatile int alarm_hits = 0;
+static void on_alarm(int sig) {
+    (void)sig;
+    alarm_hits++;
 }
 
 int main(void) {
@@ -572,6 +582,66 @@ int main(void) {
         waitpid(wp, &wst, 0);
         signal(SIGUSR1, SIG_DFL);
     }
+
+    /* ---------- [26] SIGPIPE ----------
+     * 读端全关时写管道：先产生 SIGPIPE（默认终止），只有它被忽略/捕获时
+     * 用户态才拿到 -1/EPIPE。`yes | head -1` 能不能停下来全靠这一条。 */
+    int sp2[2];
+    if (pipe(sp2) == 0) {
+        close(sp2[0]);                /* 读端直接关掉，此后 write 必然出事 */
+
+        isize pw = fork();
+        if (pw == 0) {
+            write(sp2[1], "x", 1);    /* 默认动作 = 终止 */
+            _exit(0);                /* 不该到这里 */
+        }
+        if (pw > 0) {
+            int sst6 = 0;
+            waitpid(pw, &sst6, 0);
+            CHECK(WIFSIGNALED(sst6) && WTERMSIG(sst6) == SIGPIPE,
+                  "写无读者的管道被 SIGPIPE 杀死");
+            CHECK(!WCOREDUMP(sst6), "SIGPIPE 是 Term 类，不产生 core");
+
+            /* 忽略之后，write 才把 EPIPE 交回用户态（git 就是这么干的） */
+            signal(SIGPIPE, SIG_IGN);
+            errno = 0;
+            isize wn = write(sp2[1], "x", 1);
+            CHECK_EQ(wn, -1, "SIGPIPE 被忽略时 write 返回 -1");
+            CHECK_EQ(errno, EPIPE, "errno == EPIPE");
+            signal(SIGPIPE, SIG_DFL);
+        }
+        close(sp2[1]);
+    }
+
+    /* ---------- [27] ITIMER_REAL → SIGALRM ----------
+     * 定时器归内核管（进程级），到点挂 SIGALRM 并唤醒线程。git 的 progress.c
+     * 就靠它每秒刷新一次进度条。 */
+    struct itimerval itv, got;
+    itv.it_interval.tv_sec = 0;
+    itv.it_interval.tv_usec = 0;
+    itv.it_value.tv_sec = 0;
+    itv.it_value.tv_usec = 50000;      /* 50ms，一次性 */
+    signal(SIGALRM, on_alarm);
+    alarm_hits = 0;
+
+    CHECK_EQ(setitimer(ITIMER_REAL, &itv, 0), 0, "setitimer(ITIMER_REAL, 50ms) 成功");
+    CHECK_EQ(getitimer(ITIMER_REAL, &got), 0, "getitimer 成功");
+    CHECK(got.it_value.tv_sec > 0 || got.it_value.tv_usec > 0, "剩余时间非零");
+
+    /* 用 sleep 等：定时器到点会把睡眠打断（EINTR），handler 在 trap 出口跑 */
+    for (int i = 0; i < 400 && alarm_hits == 0; i++) sleep(1);
+    CHECK(alarm_hits >= 1, "定时器到点后 SIGALRM handler 跑了");
+
+    /* it_value 归零 = 关闭 */
+    itv.it_value.tv_usec = 0;
+    CHECK_EQ(setitimer(ITIMER_REAL, &itv, 0), 0, "setitimer 关闭成功");
+    alarm_hits = 0;
+    for (int i = 0; i < 200; i++) sleep(1);
+    CHECK_EQ(alarm_hits, 0, "关掉之后不再有 SIGALRM");
+
+    /* 不支持的 which 必须明确失败，不能"装上了永不响" */
+    CHECK_EQ(setitimer(ITIMER_VIRTUAL, &itv, 0), -1, "ITIMER_VIRTUAL 未实现 -> -1");
+    signal(SIGALRM, SIG_DFL);
 
     signal(SIGUSR1, SIG_DFL);
     signal(SIGUSR2, SIG_DFL);

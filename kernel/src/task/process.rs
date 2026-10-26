@@ -89,6 +89,13 @@ pub struct ProcessControlBlock {
     pub stop_reported: bool,
     /// 曾经停止、之后被 SIGCONT 继续过、尚未报给父进程（`WCONTINUED`）。
     pub continued: bool,
+
+    /// `ITIMER_REAL` 的下次到期时刻（单调微秒，0 = 未启动）。到点发 SIGALRM。
+    /// 用微秒而不是 tick：`setitimer` 的参数就是微秒，而两个架构的 tick
+    /// 频率不同（见 timer/mod.rs），存 tick 就得处处换算。
+    pub itimer_next_us: u64,
+    /// `ITIMER_REAL` 的周期间隔（微秒，0 = 只响一次）。
+    pub itimer_interval_us: u64,
 }
 
 impl ProcessControlBlock {
@@ -152,6 +159,10 @@ impl ProcessControlBlock {
             stop_sig: 0,
             stop_reported: false,
             continued: false,
+            /* 定时器不跨 fork 继承（POSIX）：子进程从"未启动"开始。
+             * exec 则保留，所以这里只在两个构造点初始化。 */
+            itimer_next_us: 0,
+            itimer_interval_us: 0,
         }
     }
 
@@ -233,6 +244,10 @@ impl ProcessControlBlock {
             stop_sig: 0,
             stop_reported: false,
             continued: false,
+            /* 定时器不跨 fork 继承（POSIX）：子进程从"未启动"开始。
+             * exec 则保留，所以这里只在两个构造点初始化。 */
+            itimer_next_us: 0,
+            itimer_interval_us: 0,
         }
     }
 

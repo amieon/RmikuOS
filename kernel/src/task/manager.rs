@@ -31,6 +31,10 @@ pub struct TaskManager {
     /// 睡眠唤醒早退缓存:所有睡眠线程里最早的到期时刻。
     /// None = 没有睡眠线程(或尚未有线程睡过)。
     next_wake_tick: Option<usize>,
+
+    /// `ITIMER_REAL` 早退缓存：所有已启动的进程定时器里最早的到期时刻（单调微秒）。
+    /// None = 没有任何进程开过 setitimer —— 这种情况下每轮调度只花一次比较。
+    next_itimer_us: Option<u64>,
 }
 
 pub enum WaitPidAction {
@@ -54,6 +58,7 @@ impl TaskManager {
             scale_cache: Vec::new(),
             cache_alpha: -1, // 哨兵：任何合法 alpha(0..=100) 都不等于它
             next_wake_tick: None,
+            next_itimer_us: None,
         }
     }
     pub fn alloc_pid(&mut self) -> Pid {
@@ -819,6 +824,102 @@ impl TaskManager {
             return Some(sig);
         }
         None
+    }
+
+    /// 设置进程的 `ITIMER_REAL`。`next_us` 是绝对单调微秒（0 = 关闭）。
+    /// 返回旧的 `(next_us, interval_us)`，供 `setitimer` 回填 `old`。
+    pub fn set_itimer(&mut self, pid: Pid, next_us: u64, interval_us: u64) -> (u64, u64) {
+        let old = {
+            let p = self.process(pid);
+            (p.itimer_next_us, p.itimer_interval_us)
+        };
+
+        {
+            let p = self.process_mut(pid);
+            p.itimer_next_us = next_us;
+            p.itimer_interval_us = interval_us;
+        }
+
+        self.refresh_next_itimer();
+        old
+    }
+
+    pub fn get_itimer(&self, pid: Pid) -> (u64, u64) {
+        let p = self.process(pid);
+        (p.itimer_next_us, p.itimer_interval_us)
+    }
+
+    /// 重算"最早的到期时刻"缓存。进程数不多，全表扫一遍足够；
+    /// 关键是让每轮调度只做一次 Option 比较，而不是遍历所有进程。
+    fn refresh_next_itimer(&mut self) {
+        let mut next: Option<u64> = None;
+        for p in self.processes.iter().flatten() {
+            if p.itimer_next_us == 0 {
+                continue;
+            }
+            next = Some(match next {
+                Some(t) => t.min(p.itimer_next_us),
+                None => p.itimer_next_us,
+            });
+        }
+        self.next_itimer_us = next;
+    }
+
+    /// 把到点的 `ITIMER_REAL` 变成 SIGALRM，并唤醒对应线程。
+    /// 返回是否唤醒了谁（调用方据此决定要不要发 IPI）。
+    pub fn fire_due_itimers(&mut self, now_us: u64) -> bool {
+        match self.next_itimer_us {
+            Some(t) if now_us >= t => {}
+            _ => return false,
+        }
+
+        let mut due: Vec<Pid> = Vec::new();
+        for (pid, slot) in self.processes.iter().enumerate() {
+            if let Some(p) = slot {
+                if p.itimer_next_us != 0 && now_us >= p.itimer_next_us {
+                    due.push(pid);
+                }
+            }
+        }
+
+        if due.is_empty() {
+            self.next_itimer_us = None;
+            return false;
+        }
+
+        let mut woke = false;
+        for pid in due {
+            let threads = self.process(pid).threads.clone();
+
+            if let Some(p) = self.try_process_mut(pid) {
+                /* 进程级 pending：定时器属于进程，任一没屏蔽 SIGALRM 的线程都能处理。 */
+                p.sig_pending |= 1u64 << super::SIGALRM;
+
+                /* 周期定时器推进到"下一个还没到的点"，一次算完 ——
+                 * 若按 `now + interval` 滚，进程被停很久之后会连续爆发；
+                 * 若用 while 循环赶上，间隔设成 1us 时会空转上百万次。 */
+                p.itimer_next_us = if p.itimer_interval_us != 0 {
+                    let iv = p.itimer_interval_us;
+                    let mut n = p.itimer_next_us;
+                    if n <= now_us {
+                        let missed = (now_us - n) / iv + 1;
+                        n = n.saturating_add(missed.saturating_mul(iv));
+                    }
+                    n
+                } else {
+                    0
+                };
+            }
+
+            for tid in threads {
+                if self.mark_thread_ready(tid) {
+                    woke = true;
+                }
+            }
+        }
+
+        self.refresh_next_itimer();
+        woke
     }
 
 /// 进程是否处于"被停住"状态（整个进程一起停，所以只看挂的停止信号）。

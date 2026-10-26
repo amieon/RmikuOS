@@ -105,16 +105,25 @@ pub fn run_tasks() -> ! {
     let hart = processor::current_hart_id();
     loop {
         crate::drivers::net::maybe_poll();
-        // 合并取锁:唤醒睡眠者 + 选线程 + prepare 一次完成,
-        // 每轮调度少抢一次全局锁。
+        // 合并取锁:唤醒睡眠者 + 检查进程定时器 + 选线程 + prepare 一次完成,
+        // 每轮调度少抢两次全局锁。
+        let mut itimer_woke = false;
         let next = {
             let mut manager = lock_detect!(TASK_MANAGER);  // lock 内部已 preempt_disable
             let now = crate::timer::ticks();
             manager.wake_sleeping_threads(now);
+            /* ITIMER_REAL 到点 → SIGALRM。没有进程开过定时器时，这里只是一次
+             * Option 比较（next_itimer_us 的早退缓存）。 */
+            itimer_woke = manager.fire_due_itimers(crate::timer::monotonic_us());
             manager
                 .find_next_ready_thread()
                 .map(|tid| (tid, manager.prepare_thread(tid)))
         };  // 此处 drop guard → unlock → preempt_enable
+
+        /* 定时器唤醒了别的 hart 上的线程？踢一下让它们去跑。 */
+        if itimer_woke {
+            kick_idle_harts();
+        }
 
         if let Some((tid, (pid, root_ppn, kernel_stack_top, trap_cx_addr, task_cx_ptr))) = next {
 
@@ -284,6 +293,21 @@ pub fn sleep_current_and_run_next(ticks: usize) -> isize {
     }
 
     0
+}
+
+/// 设置当前进程的 `ITIMER_REAL`：`next_us` 是绝对单调微秒，0 = 关闭。
+/// 返回旧的 `(next_us, interval_us)`，由 syscall 层换算成 `struct itimerval`。
+pub fn set_itimer(next_us: u64, interval_us: u64) -> (u64, u64) {
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    manager.set_itimer(pid, next_us, interval_us)
+}
+
+/// 查询当前进程的 `ITIMER_REAL`（同样是绝对单调微秒）。
+pub fn get_itimer() -> (u64, u64) {
+    let pid = current_pid();
+    let manager = lock_detect!(TASK_MANAGER);
+    manager.get_itimer(pid)
 }
 
 pub fn suspend_current_and_run_next() -> isize {

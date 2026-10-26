@@ -151,6 +151,119 @@ pub fn sys_sigpending(set_ptr: usize) -> isize {
     crate::task::sigpending(set_ptr)
 }
 
+/* 
+ * `struct itimerval` = 两个 `struct timeval`（it_interval, it_value），
+ * `struct timeval` = 两个 64 位整数（tv_sec, tv_usec），共 32 字节。
+ */
+
+const ITIMERVAL_SIZE: usize = 32;
+/// `ITIMER_REAL`。另两个（VIRTUAL/PROF）要有 CPU 时间记账，本内核不提供。
+const ITIMER_REAL: usize = 0;
+
+fn read_user_u64(bytes: &[u8], off: usize) -> u64 {
+    let mut v = 0u64;
+    for b in 0..8 {
+        v |= (bytes[off + b] as u64) << (b * 8);
+    }
+    v
+}
+
+/// 一个 timeval → 微秒。负值（POSIX 允许）一律当 0：定时器不接受"过去"。
+fn timeval_to_us(sec: u64, usec: u64) -> u64 {
+    let s = sec as i64;
+    let us = usec as i64;
+    if s < 0 || us < 0 {
+        return 0;
+    }
+    (s as u64)
+        .saturating_mul(1_000_000)
+        .saturating_add((us as u64).min(999_999))
+}
+
+/// 读用户态的 `struct itimerval` → `(value_us, interval_us)`。
+fn read_itimerval(ptr: usize) -> Option<(u64, u64)> {
+    let bytes = crate::task::read_current_user_bytes(ptr, ITIMERVAL_SIZE)?;
+    let interval = timeval_to_us(read_user_u64(&bytes, 0), read_user_u64(&bytes, 8));
+    let value = timeval_to_us(read_user_u64(&bytes, 16), read_user_u64(&bytes, 24));
+    Some((value, interval))
+}
+
+/// 把 `(value_us, interval_us)` 写成用户态的 `struct itimerval`。
+fn write_itimerval(ptr: usize, value_us: u64, interval_us: u64) -> bool {
+    let mut buf = [0u8; ITIMERVAL_SIZE];
+
+    let mut put = |off: usize, us: u64| {
+        let sec = us / 1_000_000;
+        let usec = us % 1_000_000;
+        for b in 0..8 {
+            buf[off + b] = ((sec >> (b * 8)) & 0xff) as u8;
+            buf[off + 8 + b] = ((usec >> (b * 8)) & 0xff) as u8;
+        }
+    };
+    put(0, interval_us);
+    put(16, value_us);
+
+    crate::task::write_current_user_bytes(ptr, &buf).is_some()
+}
+
+/// new 为 0 表示"只查询"。
+pub fn sys_setitimer(which: usize, new_ptr: usize, old_ptr: usize) -> isize {
+    if which != ITIMER_REAL {
+        return -super::errno::EINVAL;
+    }
+
+    let now = crate::timer::monotonic_us();
+
+    if new_ptr != 0 {
+        let (value_us, interval_us) = match read_itimerval(new_ptr) {
+            Some(v) => v,
+            None => return -super::errno::EFAULT,
+        };
+
+        /* it_value == 0 → 关闭（哪怕 it_interval 非 0），POSIX 就是这么定的 */
+        let next = if value_us == 0 {
+            0
+        } else {
+            now.saturating_add(value_us)
+        };
+
+        let (old_next, old_interval) = crate::task::set_itimer(next, interval_us);
+
+        if old_ptr != 0 {
+            let remaining = if old_next == 0 { 0 } else { old_next.saturating_sub(now) };
+            if !write_itimerval(old_ptr, remaining, old_interval) {
+                return -super::errno::EFAULT;
+            }
+        }
+    } else if old_ptr != 0 {
+        let (old_next, old_interval) = crate::task::get_itimer();
+        let remaining = if old_next == 0 { 0 } else { old_next.saturating_sub(now) };
+        if !write_itimerval(old_ptr, remaining, old_interval) {
+            return -super::errno::EFAULT;
+        }
+    }
+
+    0
+}
+
+pub fn sys_getitimer(which: usize, cur_ptr: usize) -> isize {
+    if which != ITIMER_REAL {
+        return -super::errno::EINVAL;
+    }
+    if cur_ptr == 0 {
+        return -super::errno::EFAULT;
+    }
+
+    let now = crate::timer::monotonic_us();
+    let (next, interval) = crate::task::get_itimer();
+    let remaining = if next == 0 { 0 } else { next.saturating_sub(now) };
+
+    if !write_itimerval(cur_ptr, remaining, interval) {
+        return -super::errno::EFAULT;
+    }
+    0
+}
+
 
 /// getenv(key_ptr, key_len, buf_ptr, buf_len)
 /// 返回值长度（不含 NUL），不存在返回 -1；buf=0 时仅探测长度。

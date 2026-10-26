@@ -103,6 +103,8 @@ pub use manager_wrapper::{
     kill_front_tstp,
     pgid_of,
     set_pgid,
+    set_itimer,
+    get_itimer,
 
     env_get_current_value,
     env_unset_current_value,
