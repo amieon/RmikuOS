@@ -85,6 +85,8 @@ static inline int getpagesize(void) {
  * 其余一律 -1 + EINVAL，不返回瞎编的数字。 */
 #define _SC_OPEN_MAX          4
 #define _SC_PAGESIZE         30
+/* POSIX 把这两个名字当同义词 */
+#define _SC_PAGE_SIZE        _SC_PAGESIZE
 #define _SC_NPROCESSORS_ONLN 84
 
 static inline long sysconf(int name) {

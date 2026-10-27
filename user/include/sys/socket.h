@@ -43,6 +43,18 @@ struct sockaddr_storage {
 #define SHUT_WR   1
 #define SHUT_RDWR 2
 
+/*
+ * shutdown(fd, how)：套接字半关闭（SHUT_WR 发 FIN，对端能读到 EOF）。
+ *
+ * 名字只和"关机"撞，但那个已经改叫 rk_shutdown() 了（见 arch.h），所以这里
+ * 可以老实叫 shutdown —— POSIX 有的名字不该加前缀，否则可移植代码还得改。
+ * 对非套接字 fd 内核返回 -1（POSIX 是 ENOTSOCK）。
+ */
+static inline int shutdown(int fd, int how) {
+    isize r = rk_sys_ret(syscall3(SYS_NET_SHUTDOWN, (usize)fd, (usize)how, 0));
+    return (r < 0) ? -1 : 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

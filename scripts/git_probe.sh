@@ -49,9 +49,11 @@ NOVARS=(
   NO_MMAP NO_PTHREADS NO_OPENSSL NO_CURL NO_EXPAT NO_GETTEXT NO_ICONV
   NO_TCLTK NO_PERL NO_PYTHON NO_NSEC NO_REGEX NO_MEMMEM NO_STRCASESTR
   NO_SETENV NO_UNSETENV
-  # 这三个 git 自带 compat 实现，比往 libc 里塞更安全：
-  #   strlcpy/strlcat（BSD 扩展）、strtoumax/strtoimax（C99）、setitimer（定时器）
-  NO_STRLCPY NO_STRTOUMAX NO_SETITIMER
+  # 这两个 git 自带 compat 实现，比往 libc 里塞更安全：
+  #   strlcpy/strlcat（BSD 扩展）、strtoumax/strtoimax（C99）
+  # setitimer **不设 NO_SETITIMER**：内核已实现 ITIMER_REAL（syscall 124/125），
+  # 设了等于一边实现一边屏蔽自己，progress.c 的每秒刷新永远不会被验证。
+  NO_STRLCPY NO_STRTOUMAX
 )
 # 注意：不设 NO_INET_PTON / NO_INET_NTOP —— user/include/arpa/inet.h 已有实现，
 # 再编 git 的 compat/inet_*.c 会符号重复。

@@ -1322,6 +1322,54 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
         fd as isize
     }
 
+    /// 在 `>= min` 的范围里分配 fd（`F_DUPFD` / `F_DUPFD_CLOEXEC` 用）。
+    /// 和 `alloc_fd` 共用同一套不变量
+    pub fn alloc_fd_from(&mut self, pid: Pid, file: crate::fs::FileRef, min: usize) -> isize {
+        let process = self.process_mut(pid);
+
+        /* 先找 >= min 的最小空闲槽 */
+        let mut reuse = None;
+        for fd in min..process.fd_table.len() {
+            if process.fd_table[fd].is_none() {
+                reuse = Some(fd);
+                break;
+            }
+        }
+
+        let fd = match reuse {
+            Some(fd) => {
+                if let Some(pos) = process.free_fds.iter().position(|&x| x == fd) {
+                    process.free_fds.remove(pos);
+                }
+                fd
+            }
+            None => {
+                /* 表不够长：先补到 min（中间空槽进 free_fds），再追加一槽 */
+                let len = process.fd_table.len();
+                for i in len..min {
+                    process.fd_table.push(None);
+                    process.free_fds.push(i);
+                }
+                let fd = process.fd_table.len();
+                process.fd_table.push(None);
+                fd
+            }
+        };
+
+        process.fd_table[fd] = Some(file);
+        fd as isize
+    }
+
+    /// 复制 fd 时把「文件状态标志」也搬过去（dup / dup2 / F_DUPFD 共用）。
+    pub fn copy_fd_flags(&mut self, pid: Pid, from: usize, to: usize) {
+        let process = self.process_mut(pid);
+        let v = process.fd_flags.get(from).copied().unwrap_or(0);
+        if to >= process.fd_flags.len() {
+            process.fd_flags.resize(to + 1, 0);
+        }
+        process.fd_flags[to] = v;
+    }
+
     pub fn close_fd(&mut self, pid: Pid, fd: usize) -> isize {
         let file = {
             let process = self.process_mut(pid);

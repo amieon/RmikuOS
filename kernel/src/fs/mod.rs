@@ -23,9 +23,24 @@ pub use stdio::{stdin, stdout};
 pub use flag::*;
 pub const EOF : isize = 0;
 
+pub const F_DUPFD: usize = 0;
+pub const F_GETFD: usize = 1;
+pub const F_SETFD: usize = 2;
 pub const F_GETFL: usize = 3;
 pub const F_SETFL: usize = 4;
+/// Linux 的 F_DUPFD_CLOEXEC（1030）。值照抄，方便对拍。
+pub const F_DUPFD_CLOEXEC: usize = 1030;
+pub const FD_CLOEXEC: usize = 1;
+
+/// open 时"打开即 cloexec"（Linux 的 02000000）。省掉 open+fcntl 两步的竞态。
+pub const O_CLOEXEC: usize = 0o2000000;
 pub const O_NONBLOCK: usize = 2048;
+
+/// `F_GETFL` 报出来的位：访问模式 + 文件状态标志。
+pub const F_GETFL_MASK: usize = O_ACCMODE | O_APPEND | O_NONBLOCK;
+/// `F_SETFL` 只能改这两个 —— 访问模式在 open 那一刻定了，POSIX 不允许改。
+/// 少掩这一下，`fcntl(fd, F_SETFL, O_NONBLOCK)` 会把 O_RDWR 悄悄改成 O_RDONLY。
+pub const F_SETFL_MASK: usize = O_APPEND | O_NONBLOCK;
 
 
 

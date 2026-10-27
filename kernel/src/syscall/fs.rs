@@ -228,7 +228,18 @@ pub fn sys_open(path_ptr: usize, len: usize, flags: usize, mode: usize) -> isize
         }
     };
 
-    crate::task::alloc_fd_current(file)
+    let fd = crate::task::alloc_fd_current(file);
+
+    if fd >= 0 {
+
+        crate::task::set_fd_flags_current(fd as usize, flags);
+
+        if (flags & crate::fs::O_CLOEXEC) != 0 {
+            crate::task::set_fd_cloexec_current(fd as usize, true);
+        }
+    }
+
+    fd
 }
 pub fn sys_close(fd: usize) -> isize {
     crate::task::close_fd_current(fd)
@@ -416,16 +427,24 @@ pub fn sys_dup(fd: usize) -> isize {
 }
 
 /// dup3(fd, newfd, flags)：dup2 加上 flags。
-///
-/// 目前只接受 `flags == 0`。dup3 唯一的 flag 是 O_CLOEXEC，而 fd 表还没有
 pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
-    if flags != 0 {
-        return -1;
+    let unknown = flags & !crate::fs::O_CLOEXEC;
+    if unknown != 0 {
+        return -super::errno::EINVAL;
     }
     if old_fd == new_fd {
-        return -1;
+        return -super::errno::EINVAL;
     }
-    crate::task::dup2(old_fd, new_fd)
+
+    let r = crate::task::dup2(old_fd, new_fd);
+    if r < 0 {
+        return r;
+    }
+
+    if (flags & crate::fs::O_CLOEXEC) != 0 {
+        crate::task::set_fd_cloexec_current(new_fd, true);
+    }
+    r
 }
 
 

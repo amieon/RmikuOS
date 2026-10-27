@@ -8,7 +8,7 @@ extern "C" {
 #include "errno.h"
 
 /* 信号编号与 Linux 一致：
- *   1..31   标准信号（Linux 上这 31 个号**已经排满**，新信号不会往这里插）
+ *   1..31   标准信号（Linux 上这 31 个号已经排满，新信号不会往这里插）
  *   32..64  实时信号段（Linux 里 32/33 归 glibc，实际可用 34..64）。
  *           本内核未实现（不排队、无 sigqueue），但位图按 64 位留好了位置。
  * 常量必须和 kernel/src/task/signal.rs 保持同一套，否则同一个号在内核和 libc
@@ -51,7 +51,7 @@ typedef void (*sighandler_t)(int);
 #define SIG_IGN   ((sighandler_t)1)
 #define SIG_ERR   ((sighandler_t)-1)
 
-/* 返回 0 / -1（POSIX 形状）。**暂不支持负数 pid 的组投递**：内核 kill
+/* 返回 0 / -1（POSIX 形状）。暂不支持负数 pid 的组投递：内核 kill
  * 收的是 usize，`kill(-pgid, ...)` 会变成"一个巨大的 pid"而失败 —— 这不是
  * 静默错误，调用方能从返回值看出来。 */
 static inline int kill(isize pid, usize sig){
@@ -79,7 +79,7 @@ static inline sighandler_t signal(int sig, sighandler_t handler) {
     return (sighandler_t)old;
 }
 
-/* 把信号投给**指定线程**（thread-directed）：只有该线程会处理，别的线程不代收。
+/* 把信号投给指定线程（thread-directed）：只有该线程会处理，别的线程不代收。
  * tid 就是 thread_create() 的返回值或 gettid() 的结果。
  * 和 kill 的区别：kill 挂在进程上（任一未屏蔽线程都能接），这个挂在线程上。 */
 static inline int pthread_kill(int tid, int sig) {
@@ -99,13 +99,16 @@ static inline int raise(int sig) {
  * 解除屏蔽后补投；进入 handler 时自动屏蔽自身信号（POSIX 默认行为），
  * sigreturn 时恢复。仍然没有的：`sa_flags` 一律忽略（含 SA_NODEFER/SA_RESTART）。
  * 查询旧处置只能报 SIG_DFL（内核没有"只查不改"的入口）。
- * 结构体里**没有** sa_sigaction：SA_SIGINFO 风格回调在这个内核里没有意义，
+ * 结构体里没有 sa_sigaction：SA_SIGINFO 风格回调在这个内核里没有意义，
  * git 也不用。少一个匿名 union，TCC 那边更稳。 */
 /* 用户态能命名的信号号上限（1..32）。注意 sigset_t 仍是 8 字节：
- * 本头里的位布局是 **bit(sig-1) 对应信号 sig**（与 glibc/Linux uapi 一致），
+ * 本头里的位布局是 bit(sig-1) 对应信号 sig（与 glibc/Linux uapi 一致），
  * 而内核内部位图是 bit(sig)。SYS_SIGPROCMASK 的两个方向各平移一位，
  * 改这里或改内核表示时两边都要对一下。 */
 #define RK_NSIG 32
+
+/* NSIG = 可命名信号号的上界（不含）。标准信号是 1..31，所以 32 */
+#define NSIG 32
 
 typedef struct {
     unsigned long bits[(RK_NSIG + 63) / 64];
@@ -189,13 +192,13 @@ static inline int sigaction(int sig, const struct sigaction *act, struct sigacti
 
 /* 无信号屏蔽字：接受并忽略，返回 0（否则 git 的 start_command 会 die） */
 /* sigprocmask: how = SIG_BLOCK/SIG_UNBLOCK/SIG_SETMASK，set 为 0 表示只查询。
- * **作用于当前线程**（POSIX 里屏蔽字是线程级的）；sigset_t 正好 8 字节，内核按 u64 读写。 */
+ * 作用于当前线程（POSIX 里屏蔽字是线程级的）；sigset_t 正好 8 字节，内核按 u64 读写。 */
 static inline int sigprocmask(int how, const sigset_t *set, sigset_t *old) {
     isize r = syscall3(SYS_SIGPROCMASK, (usize)how, (usize)set, (usize)old);
     return (r < 0) ? -1 : 0;
 }
 
-/* sigpending(set)：回写"**被本线程屏蔽、且正挂着**"的信号。
+/* sigpending(set)：回写"被本线程屏蔽、且正挂着"的信号。
  * 不是"所有 pending"—— 没屏蔽的那些下一刻就投递了，问也没意义；
  * POSIX 的定义就是 pending & blocked，用来决定"该解除哪些屏蔽"。 */
 static inline int sigpending(sigset_t *set) {

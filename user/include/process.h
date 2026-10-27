@@ -105,7 +105,7 @@ static inline int atexit(void (*func)(void)) {
     return 0;
 }
 
-static inline void exit(int code) {
+static inline __attribute__((noreturn)) void exit(int code) {
     while (_atexit_n > 0) _atexit_funcs[--_atexit_n]();
     /* 必须先冲刷标准流缓冲再退出: 否则 printf 等写入 stdout 缓冲的
      * 内容(如 abort 的 "abort\n"、lua panic 前的部分输出)会随进程
@@ -217,6 +217,51 @@ static inline int execvp(const char *file, char *const argv[]) {
     return -1;
 }
 
+/* execl / execlp：变参版本。argv 由 `...` 里的指针序列组成，以 NULL 结尾。。 */
+static inline int execl(const char *path, const char *arg, ...) {
+    char *argv[EXEC_MAX_ARGS + 1];
+    usize n = 0;
+
+    va_list ap;
+    va_start(ap, arg);
+    const char *a = arg;
+    while (a) {
+        if (n >= EXEC_MAX_ARGS) {
+            va_end(ap);
+            errno = E2BIG;
+            return -1;
+        }
+        argv[n++] = (char *)a;
+        a = va_arg(ap, const char *);
+    }
+    va_end(ap);
+    argv[n] = 0;
+
+    return execv(path, argv);
+}
+
+static inline int execlp(const char *file, const char *arg, ...) {
+    char *argv[EXEC_MAX_ARGS + 1];
+    usize n = 0;
+
+    va_list ap;
+    va_start(ap, arg);
+    const char *a = arg;
+    while (a) {
+        if (n >= EXEC_MAX_ARGS) {
+            va_end(ap);
+            errno = E2BIG;
+            return -1;
+        }
+        argv[n++] = (char *)a;
+        a = va_arg(ap, const char *);
+    }
+    va_end(ap);
+    argv[n] = 0;
+
+    return execvp(file, argv);
+}
+
 static inline int execve(const char *path, char *const argv[], char *const envp[]) {
     (void)path; (void)argv; (void)envp;
     /* 内核的 exec ABI 没有 envp：环境由 shell/crt0 的 environ 继承。
@@ -228,7 +273,7 @@ static inline int execve(const char *path, char *const argv[], char *const envp[
 
 /* _exit：不跑 atexit、不冲刷 stdio（与 exit 的关键区别）。
  * fork 出来的子进程在 exec 失败后应该用它，避免把父进程的缓冲区复制一份再刷出去。 */
-static inline void _exit(int code) {
+static inline __attribute__((noreturn)) void _exit(int code) {
     syscall3(SYS_EXIT, (usize)code, 0, 0);
     for (;;) {}
 }

@@ -30,6 +30,7 @@ pub struct ProcessControlBlock {
 
     pub fd_table: Vec<Option<FileRef>>,
     pub fd_flags: Vec<usize>,
+    pub fd_cloexec: Vec<bool>,
     pub free_fds: Vec<usize>,
     pub cwd: String,
 
@@ -115,6 +116,7 @@ impl ProcessControlBlock {
             fd_table: Self::new_fd_table(),
             free_fds: Vec::new(),
             fd_flags: Vec::new(),
+            fd_cloexec: Vec::new(),
             cwd,
 
             env: Vec::new(),
@@ -172,6 +174,7 @@ impl ProcessControlBlock {
         user_space: MemorySet,
         fd_table: Vec<Option<FileRef>>,
         fd_flags: Vec<usize>,
+        fd_cloexec: Vec<bool>,
         free_fds: Vec<usize>,
         cwd: String,
         env: Vec<(String, String)>,
@@ -202,6 +205,7 @@ impl ProcessControlBlock {
 
             fd_table,
             fd_flags,
+            fd_cloexec,
             free_fds,
             cwd,
 
@@ -272,12 +276,27 @@ impl ProcessControlBlock {
 
     pub fn close_non_standard_fds_on_exec(&mut self) -> Vec<FileRef> {
         let mut closed = Vec::new();
-        for fd in 3..self.fd_table.len() {
+        for fd in 0..self.fd_table.len() {
+            let cloexec = self.fd_cloexec.get(fd).copied().unwrap_or(false);
+
+            /* FD_CLOEXEC 对任何 fd 生效（含 0/1/2）；没有标 cloexec 的
+             * 仍按老规则：标准 fd 保留、其余关闭。 */
+            if fd < 3 && !cloexec {
+                continue;
+            }
+
             if let Some(file) = self.fd_table[fd].take() {
                 self.free_fds.push(fd);
                 closed.push(file);
             }
         }
+
+        /* 关掉的 fd 会被复用，标志必须清 —— 否则下一轮 exec 会把
+         * "复用了同一个编号的新 fd"一起关掉。 */
+        for v in self.fd_cloexec.iter_mut() {
+            *v = false;
+        }
+
         closed   // 把关掉的 file 返回出去
     }
 }

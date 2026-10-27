@@ -52,6 +52,8 @@ pub use manager_wrapper::{
     alloc_fd_current,
     close_fd_current,
     get_fd_flags_current,
+    set_fd_cloexec_current,
+    set_fd_flags_current,
     set_fcntl,
     current_cwd,
     set_current_cwd,

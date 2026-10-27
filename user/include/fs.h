@@ -31,7 +31,7 @@ extern "C" {
  *   - 已打开的目录 fd → path 相对它解析
  *   - AT_FDCWD        → 相对进程 cwd
  *   - path 是绝对路径 → dirfd 被完全忽略（哪怕是 -1 这种无效值）
- * AT_EACCESS 与 AT_REMOVEDIR 数值相同是**故意的**：POSIX 里它们分属
+ * AT_EACCESS 与 AT_REMOVEDIR 数值相同是故意的：POSIX 里它们分属
  * faccessat 与 unlinkat，不会同时出现在一个调用里。
  */
 
@@ -270,7 +270,7 @@ static inline int fchmod(int fd, mode_t mode) {
     return (int)syscall3(SYS_FCHMOD, (usize)fd, (usize)mode, 0);
 }
 
-/* umask(mask): 设置"新建文件/目录默认要去掉的权限位"，返回**旧值**。
+/* umask(mask): 设置"新建文件/目录默认要去掉的权限位"，返回旧值。
  *
  * 内核在 open(O_CREAT) / mkdirat 建东西时按 `mode & ~umask` 收窄权限。
  * 默认 022 → 新文件 0666 落成 0644、新目录 0777 落成 0755。
@@ -298,7 +298,7 @@ static inline int fchmodat(int dirfd, const char *path, mode_t mode, int flags) 
 #endif
 
 /*
- * access(path, amode): 以**真实 uid/gid** 检查访问权限（内核 syscall 实现）。
+ * access(path, amode): 以真实 uid/gid 检查访问权限（内核 syscall 实现）。
  *   F_OK=0 只查存在; R_OK=4 / W_OK=2 / X_OK=1 可按位或。
  * 与 open 的分野：open 按有效身份(euid)放行，access 按真实身份(ruid)，
  * 所以 setuid/su 过的程序用它才能得到"调用者本人能否访问"的答案。
@@ -319,7 +319,7 @@ static inline int access(const char *path, int amode) {
 }
 
 /* faccessat(dirfd, path, amode, flags): 相对目录 fd 的 access。
- * flags 带 AT_EACCESS 时按**有效身份**(euid)检查，否则按真实身份(ruid)。 */
+ * flags 带 AT_EACCESS 时按有效身份(euid)检查，否则按真实身份(ruid)。 */
 static inline isize faccessat2(int dirfd, const char *path, usize len,
                                usize amode, usize flags) {
     return syscall6(SYS_FACCESSAT, (usize)(isize)dirfd, (usize)path, len,
@@ -379,18 +379,18 @@ static inline int mkdirat(int dirfd, const char *path, mode_t mode) {
  *     sprintf(buf, "/tmp/prog.%d", getpid());   // 名字可预测
  *     fp = fopen(buf, "w");                     // 盲目打开
  *
- * 攻击者在程序运行前就把 /tmp/prog.1234 做成**符号链接**指向
+ * 攻击者在程序运行前就把 /tmp/prog.1234 做成符号链接指向
  * /etc/shadow（或受害者 home 下的 authorized_keys）。程序一 open 就
  * 顺着链接把目标文件覆盖了——如果是 setuid 程序，就是提权。
  *
  * 两道防线，缺一不可：
- *   1. **原子性**（真正起作用的）：O_CREAT|O_EXCL。目标只要以任何形式存在
- *      （普通文件、目录、**哪怕是 dangling symlink**）就失败，绝不重用。
+ *   1. 原子性（真正起作用的）：O_CREAT|O_EXCL。目标只要以任何形式存在
+ *      （普通文件、目录、哪怕是 dangling symlink）就失败，绝不重用。
  *      "先 stat 看存不存在、再 open"是错的——中间有窗口，那正是 TOCTOU。
- *   2. **不可预测的名字**：降低"被提前占位"的概率，只是减少重试次数，
+ *   2. 不可预测的名字：降低"被提前占位"的概率，只是减少重试次数，
  *      不是安全边界。所以随机数弱一点没关系，O_EXCL 才是底线。
  *
- * 还有第三条容易被忽略：**返回 fd，而不是让你再按名字打开一次**。
+ * 还有第三条容易被忽略：返回 fd，而不是让你再按名字打开一次。
  * 按名字重新 fopen 就又把刚消掉的竞态装回去了。
  *
  * 权限固定 0600 / 0700：内容可能敏感，不能等 umask 给到 0666 的窗口期。
@@ -429,7 +429,7 @@ static inline unsigned long long _mkstemp_next_seed(const void *tmpl) {
     return _mkstemp_mix64(_mkstemp_base + (++_mkstemp_seq) * 0x9E3779B97F4A7C15ull);
 }
 
-/* 内部实现：把模板里那 6 个 X 换成随机字符并**原子创建**。
+/* 内部实现：把模板里那 6 个 X 换成随机字符并原子创建。
  * is_dir=0 → 建文件(返回 fd)；is_dir=1 → 建目录(返回 0)。失败返回 -1。
  * suffixlen 是尾部要保留的后缀长度（mkstemps 用，例如 "fooXXXXXX.pack"）。 */
 static inline int _mkstemp_create_sfx(char *tmpl, int is_dir, int suffixlen) {
@@ -479,7 +479,7 @@ static inline int _mkstemp_create_sfx(char *tmpl, int is_dir, int suffixlen) {
     return -1;
 }
 
-/* mkstemp: 原子创建唯一临时文件，返回**已打开的可读写 fd**（用完记得 close）。
+/* mkstemp: 原子创建唯一临时文件，返回已打开的可读写 fd（用完记得 close）。
  * 模板形如 "/tmp/fooXXXXXX"，末尾 6 个 X 会被替换成实际名字（就地修改）。
  * 失败返回 -1，此时模板内容未定义（POSIX 同样不保证）。 */
 static inline int mkstemp(char *tmpl) {
@@ -491,7 +491,7 @@ static inline char *mkdtemp(char *tmpl) {
     return _mkstemp_create_sfx(tmpl, 1, 0) == 0 ? tmpl : (char *)0;
 }
 
-/* mkstemps: 6 个 X **后面还带固定后缀**的版本。glibc/BSD 扩展，POSIX 没有，
+/* mkstemps: 6 个 X 后面还带固定后缀的版本。glibc/BSD 扩展，POSIX 没有，
  * 但 git 的 tempfile.c 用它（"XXXXXX.pack"/"XXXXXX.lock" 这种命名）。
  * 例："obj/tmp_objXXXXXX.pack" + suffixlen=5 → X 在前面被替换，".pack" 保留。
  * 语义与 mkstemp 完全一样（O_EXCL 原子性底线的理由见上面那段），
@@ -533,19 +533,20 @@ static inline isize remove_recursive(const char *path) {
     return remove_recursive2(path, strlen(path));
 }
 
-/* fcntl 必须是**变参**：POSIX 里 F_GETFL / F_GETFD 这类"查询"命令只传两个参数，
+/* fcntl 必须是变参：POSIX 里 F_GETFL / F_GETFD 这类"查询"命令只传两个参数，
  * 而 F_SETFL / F_SETFD / F_DUPFD 带第三个。固定三参版本会让
  *     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
  * 这种写法直接编不过（内层只给了两个实参）—— zlib 的 gzlib.c 就是这么写的。
  *
- * 只有查询类命令才跳过 va_arg。目前内核只实现 F_GETFL / F_SETFL，
- * **以后新增 F_GETFD 之类时记得同步这个 switch**，否则会读到栈上的垃圾当 arg。
- * （变参函数编译器不检查实参个数，传错只能靠这里的白名单兜。） */
+ * 只有查询类命令才跳过 va_arg。新增查询类命令时必须加进下面这个白名单，
+ * 否则会读到栈上的垃圾当 arg（变参函数编译器不检查实参个数）。
+ */
 static inline int fcntl(int fd, int cmd, ...) {
     va_list ap;
     int arg = 0;
     switch (cmd) {
     case F_GETFL:
+    case F_GETFD:
         break;                     /* 查询类：没有第三个实参 */
     default:
         va_start(ap, cmd);
@@ -553,7 +554,7 @@ static inline int fcntl(int fd, int cmd, ...) {
         va_end(ap);
         break;
     }
-    return (int)syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg);
+    return (int)rk_sys_ret(syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg));
 }
 
 static inline off_t lseek(int fd, off_t offset, int whence) {

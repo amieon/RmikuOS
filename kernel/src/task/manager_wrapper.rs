@@ -466,6 +466,7 @@ pub fn fork_current() -> isize {
 
         let child_fd_table = manager.process(parent_pid).fd_table.clone();
         let child_fd_flags = manager.process(parent_pid).fd_flags.clone();
+        let child_fd_cloexec = manager.process(parent_pid).fd_cloexec.clone();
         let child_free_fds = manager.process(parent_pid).free_fds.clone();
         for slot in child_fd_table.iter() {
             if let Some(file) = slot {
@@ -488,6 +489,7 @@ pub fn fork_current() -> isize {
             child_user_space,
             child_fd_table,
             child_fd_flags,
+            child_fd_cloexec,
             child_free_fds,
             child_cwd,
             manager.process(parent_pid).env.clone(),
@@ -978,6 +980,32 @@ pub fn close_fd_current(fd: usize) -> isize {
     manager.close_fd(pid, fd)
 }
 
+/// 给刚分配好的 fd 打上/清掉 FD_CLOEXEC。
+pub fn set_fd_cloexec_current(fd: usize, on: bool) {
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let process = manager.process_mut(pid);
+    if fd >= process.fd_cloexec.len() {
+        process.fd_cloexec.resize(fd + 1, false);
+    }
+    process.fd_cloexec[fd] = on;
+}
+
+/// 记录 fd 的**文件状态标志**（访问模式 + O_APPEND + O_NONBLOCK）。
+///
+/// 必须在 open 时调一次：`F_GETFL` 的值就来自这里。少了这一步，
+/// `fcntl(fd, F_GETFL) & O_ACCMODE` 永远报 O_RDONLY —— 用读模式打开的
+/// 文件看起来像可写、反之亦然，属于"不崩但语义全错"。
+pub fn set_fd_flags_current(fd: usize, flags: usize) {
+    let pid = current_pid();
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let process = manager.process_mut(pid);
+    if fd >= process.fd_flags.len() {
+        process.fd_flags.resize(fd + 1, 0);
+    }
+    process.fd_flags[fd] = flags & crate::fs::F_GETFL_MASK;
+}
+
 pub fn get_fd_flags_current(fd: usize) -> usize{
     let current_pid = current_pid();
     let mut manager = lock_detect!(TASK_MANAGER);
@@ -985,23 +1013,85 @@ pub fn get_fd_flags_current(fd: usize) -> usize{
     process.fd_flags.get(fd).copied().unwrap_or(0)
 }
 
+/// fcntl(fd, cmd, arg)。
+///
+/// 支持的命令（其余返回 `-EINVAL`，**不是** `-1` —— 后者会被 libc 当成 EIO）：
+///   F_DUPFD / F_DUPFD_CLOEXEC —— 复制 fd 到「≥ arg 的最小空闲槽」
+///   F_GETFD / F_SETFD          —— 描述符标志（只有 FD_CLOEXEC 一位）
+///   F_GETFL / F_SETFL          —— 文件状态标志（访问模式 + O_APPEND + O_NONBLOCK）
 pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     let pid = current_pid();
     let mut manager = lock_detect!(TASK_MANAGER);
-    let process = manager.process_mut(pid);
-    if fd >= process.fd_table.len() || process.fd_table[fd].is_none() {
-        return -1;
+
+    if fd >= manager.process(pid).fd_table.len()
+        || manager.process(pid).fd_table[fd].is_none()
+    {
+        return -crate::syscall::errno::EBADF;
     }
+
+    /* F_DUPFD 要动 fd 表本身（可能增长），必须先把上一段的 &Process 借还回去。 */
+    if cmd == crate::fs::F_DUPFD || cmd == crate::fs::F_DUPFD_CLOEXEC {
+        if arg >= MAX_FD_PER_PROCESS {
+            return -crate::syscall::errno::EINVAL;
+        }
+
+        let file = match &manager.process(pid).fd_table[fd] {
+            Some(f) => f.clone(),
+            None => return -crate::syscall::errno::EBADF,
+        };
+
+        /* 管道要记账（reader/writer_count），和 dup/dup2 一样。 */
+        file.on_fork();
+        let new_fd = manager.alloc_fd_from(pid, file, arg);
+        if new_fd < 0 {
+            return -crate::syscall::errno::EMFILE;
+        }
+        manager.copy_fd_flags(pid, fd, new_fd as usize);
+
+        /* F_DUPFD 的新 fd **不带** FD_CLOEXEC，F_DUPFD_CLOEXEC 才带。 */
+        if cmd == crate::fs::F_DUPFD_CLOEXEC {
+            let process = manager.process_mut(pid);
+            let n = new_fd as usize;
+            if n >= process.fd_cloexec.len() {
+                process.fd_cloexec.resize(n + 1, false);
+            }
+            process.fd_cloexec[n] = true;
+        }
+        return new_fd;
+    }
+
+    let process = manager.process_mut(pid);
     match cmd {
         crate::fs::F_GETFL => process.fd_flags.get(fd).copied().unwrap_or(0) as isize,
         crate::fs::F_SETFL => {
             if fd >= process.fd_flags.len() {
                 process.fd_flags.resize(fd + 1, 0);
             }
-            process.fd_flags[fd] = arg;
+            /* 只改 O_APPEND / O_NONBLOCK，**保留访问模式**。
+             * 直接 `= arg` 会让 `fcntl(fd, F_SETFL, O_NONBLOCK)` 把 O_RDWR
+             * 悄悄变成 O_RDONLY —— 之后 write 就 EBADF，很难联想到 fcntl。 */
+            let cur = process.fd_flags[fd];
+            process.fd_flags[fd] =
+                (cur & !crate::fs::F_SETFL_MASK) | (arg & crate::fs::F_SETFL_MASK);
             0
         }
-        _ => -1,
+        /* 描述符标志：只有一个 bit（FD_CLOEXEC）。git 在 fork 前用它标记
+         * "这个 fd 不要漏给子进程"，exec 时由 close_non_standard_fds_on_exec 收。 */
+        crate::fs::F_GETFD => {
+            if process.fd_cloexec.get(fd).copied().unwrap_or(false) {
+                crate::fs::FD_CLOEXEC as isize
+            } else {
+                0
+            }
+        }
+        crate::fs::F_SETFD => {
+            if fd >= process.fd_cloexec.len() {
+                process.fd_cloexec.resize(fd + 1, false);
+            }
+            process.fd_cloexec[fd] = (arg & crate::fs::FD_CLOEXEC) != 0;
+            0
+        }
+        _ => -crate::syscall::errno::EINVAL,
     }
 }
 
@@ -1911,7 +2001,15 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     {
         let process = manager.process_mut(current_pid);
         process.fd_table[new_fd] = Some(old_file);
+        /* dup2 得到的新 fd **不带** FD_CLOEXEC（POSIX）。少了这一句，
+         * `dup2(f, 1)` 之后 exec 会把 stdout 关掉。 */
+        if new_fd < process.fd_cloexec.len() {
+            process.fd_cloexec[new_fd] = false;
+        }
     }
+
+    /* 同一个 open file description，文件状态标志要一起搬过去。 */
+    manager.copy_fd_flags(current_pid, old_fd, new_fd);
 
     new_fd as isize
 }
@@ -1960,6 +2058,9 @@ pub fn dup(old_fd: usize) -> isize {
         process.fd_table[target] = Some(old_file);
         target as isize
     };
+
+    /* 同一个 open file description，文件状态标志跟着走。 */
+    manager.copy_fd_flags(current_pid, old_fd, new_fd as usize);
     new_fd
 }
 
