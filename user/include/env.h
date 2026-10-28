@@ -26,22 +26,41 @@ static inline char *getenv(const char *key) {
     return __getenv_buf;
 }
 
-/* 设置环境变量。overwrite=0 且已存在则不覆盖。返回 0 成功，-1 失败。 */
-static inline isize setenv(const char *key, usize key_len, const char *val, usize val_len, usize overwrite) {
+/* 长度式底层接口。**故意不叫 setenv**：POSIX 的 setenv 是
+ * (name, value, overwrite) 三参 + int 返回，名字占住就没有 POSIX 版本了。
+ * 自造标识符一律加 rk_ 前缀。 */
+static inline isize rk_setenv_len(const char *key, usize key_len, const char *val, usize val_len, usize overwrite) {
     return syscall6(SYS_SETENV, (usize)key, key_len, (usize)val, val_len, overwrite, 0);
 }
 
-static inline isize setenv_s(const char *key, const char *val, usize overwrite) {
-    return setenv(key, strlen(key), val, strlen(val), overwrite);
-}
-
-/* 删除环境变量。返回 0。 */
-static inline isize unsetenv(const char *key, usize key_len) {
+static inline isize rk_unsetenv_len(const char *key, usize key_len) {
     return syscall3(SYS_UNSETENV, (usize)key, key_len, 0);
 }
 
+/* 便捷包装：名字/值按 strlen 算长度。返回 0 成功，负值为 -errno。 */
+static inline isize setenv_s(const char *key, const char *val, usize overwrite) {
+    return rk_setenv_len(key, strlen(key), val, strlen(val), overwrite);
+}
+
 static inline isize unsetenv_s(const char *key) {
-    return unsetenv(key, strlen(key));
+    return rk_unsetenv_len(key, strlen(key));
+}
+
+/* ---- POSIX 版（<stdlib.h> 归口，env.h 被它 include） ---- */
+static inline int rk_env_ret(isize r) {
+    if (r < 0 && r >= -4095) { errno = (int)(-r); return -1; }
+    return (int)r;
+}
+
+/* 成功返回 0，失败 -1 + errno。名字为空或含 '=' 是 EINVAL（POSIX）。 */
+static inline int setenv(const char *name, const char *value, int overwrite) {
+    if (!name || !*name || !value || strchr(name, '=')) { errno = EINVAL; return -1; }
+    return rk_env_ret(rk_setenv_len(name, strlen(name), value, strlen(value), (usize)overwrite));
+}
+
+static inline int unsetenv(const char *name) {
+    if (!name || !*name || strchr(name, '=')) { errno = EINVAL; return -1; }
+    return rk_env_ret(rk_unsetenv_len(name, strlen(name)));
 }
 
 /* 清空全部环境变量。返回 0。 */
@@ -65,7 +84,7 @@ static inline int putenv(char *s) {
     if (nlen >= sizeof(name)) { errno = EINVAL; return -1; }   /* 变量名过长 */
     memcpy(name, s, nlen);
     name[nlen] = '\0';
-    return (int)setenv(name, nlen, eq + 1, strlen(eq + 1), 1);
+    return (int)rk_setenv_len(name, nlen, eq + 1, strlen(eq + 1), 1);
 }
 
 #ifdef __cplusplus

@@ -363,6 +363,32 @@ int main(void) {
     CHECK_EQ(putenv(pbad), -1, "没有 '=' 的字符串 -> EINVAL（POSIX 未定义，不猜）");
     unsetenv_s("RK_PUTENV");         /* 清理，不计断言 */
 
+    /* ---------- 19b. POSIX setenv / unsetenv ----------
+     * 名字必须与 POSIX 签名一致（三参/单参、返回 int），否则第三方代码
+     * 要么编译不过，要么隐式声明后参数错位。长度式接口另名 rk_*_len。 */
+    CHECK_EQ(setenv("RK_SE", "v1", 1), 0, "setenv 三参形式成功");
+    char *sv = getenv("RK_SE");
+    CHECK(sv && strcmp(sv, "v1") == 0, "setenv 之后 getenv 读回 v1");
+    CHECK_EQ(setenv("RK_SE", "v2", 0), 0, "overwrite=0 且已存在：返回 0 不算失败");
+    sv = getenv("RK_SE");
+    CHECK(sv && strcmp(sv, "v1") == 0, "overwrite=0 不覆盖原值");
+    CHECK_EQ(setenv("RK_SE", "v2", 1), 0, "overwrite=1 覆盖");
+    sv = getenv("RK_SE");
+    CHECK(sv && strcmp(sv, "v2") == 0, "overwrite=1 后值是 v2");
+
+    errno = 0;
+    CHECK_EQ(setenv("", "x", 1), -1, "空名字 -> -1");
+    CHECK_EQ(errno, EINVAL, "空名字 errno == EINVAL");
+    errno = 0;
+    CHECK_EQ(setenv("A=B", "x", 1), -1, "名字含 '=' -> -1");
+    CHECK_EQ(errno, EINVAL, "名字含 '=' errno == EINVAL");
+
+    CHECK_EQ(unsetenv("RK_SE"), 0, "unsetenv 成功");
+    CHECK(getenv("RK_SE") == 0, "unsetenv 之后 getenv 返回 NULL");
+    errno = 0;
+    CHECK_EQ(unsetenv("A=B"), -1, "unsetenv 名字含 '=' -> -1");
+    CHECK_EQ(errno, EINVAL, "unsetenv 含 '=' errno == EINVAL");
+
     /* ---------- 20. POSIX setsockopt ----------
      * 关键是"不支持就明确失败"：git 的 enable_keepalive 只把失败打成一条
      * error 日志、不中断连接，所以返回 ENOPROTOOPT 比假装成功安全得多。 */
