@@ -28,6 +28,15 @@ static inline int abs(int x) {
     return x < 0 ? -x : x;
 }
 
+/* 返回类型必须与被除的宽度一致：声明成 int 会在 LP64 下截断 */
+static inline long labs(long x) {
+    return x < 0 ? -x : x;
+}
+
+static inline long long llabs(long long x) {
+    return x < 0 ? -x : x;
+}
+
 static inline long strtol(const char *s, char **e, int b) {
     long n = 0;
     int sign = 1;
@@ -76,6 +85,31 @@ static inline unsigned long long strtoull(const char *s, char **e, int b) {
     return (unsigned long long)strtoul(s, e, b);
 }
 
+static inline long atol(const char *s) {
+    return strtol(s, (char **)0, 10);
+}
+
+static inline long long atoll(const char *s) {
+    return strtoll(s, (char **)0, 10);
+}
+
+/* div/ldiv/lldiv：一次除法同时取商余，调用方只需一次硬件除法 */
+typedef struct { int quot, rem; } div_t;
+typedef struct { long quot, rem; } ldiv_t;
+typedef struct { long long quot, rem; } lldiv_t;
+
+static inline div_t div(int num, int den) {
+    div_t r; r.quot = num / den; r.rem = num % den; return r;
+}
+
+static inline ldiv_t ldiv(long num, long den) {
+    ldiv_t r; r.quot = num / den; r.rem = num % den; return r;
+}
+
+static inline lldiv_t lldiv(long long num, long long den) {
+    lldiv_t r; r.quot = num / den; r.rem = num % den; return r;
+}
+
 
 
 static inline double strtod(const char *s, char **e) {
@@ -119,6 +153,10 @@ static inline float strtof(const char *s, char **e) {
 
 static inline long double strtold(const char *s, char **e) {
     return (long double)strtod(s, e);   /* 教学简化: 经 double 计算 */
+}
+
+static inline double atof(const char *s) {
+    return strtod(s, (char **)0);
 }
 
 static unsigned int _seed = 1;
