@@ -678,60 +678,324 @@ static inline isize getline(char **lineptr, size_t *n, FILE *fp) {
     return getdelim(lineptr, n, '\n', fp);
 }
 
-/* ================================================================
- *  sscanf —— 最小实现: 仅支持 shell.c hexdb 读取器用到的
- *  %d / %u / %x / %i 与字面量匹配。不支持宽度/精度/%s 等。
- * ================================================================ */
+
+typedef struct {
+    const char *s;   /* 非 NULL：字符串源，s 自己往前走 */
+    FILE *fp;        /* s 为 NULL：流源 */
+} rk_scanf_src_t;
+
+static inline int rk_scanf_get(rk_scanf_src_t *src) {
+    if (src->s) {
+        unsigned char c = (unsigned char)*src->s;
+        if (!c) return -1;
+        src->s++;
+        return (int)c;
+    }
+    return fgetc(src->fp);
+}
+
+/* 至多回退一个字符：解析器每次只多看一个字节 */
+static inline void rk_scanf_unget(rk_scanf_src_t *src, int c) {
+    if (c < 0) return;
+    if (src->s) src->s--;
+    else        ungetc(c, src->fp);
+}
+
+static inline int rk_scanf_space(int c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
+static inline int rk_scanf_digit(int c, int base) {
+    int d;
+    if      (c >= '0' && c <= '9') d = c - '0';
+    else if (c >= 'a' && c <= 'z') d = c - 'a' + 10;
+    else if (c >= 'A' && c <= 'Z') d = c - 'A' + 10;
+    else return -1;
+    return d < base ? d : -1;
+}
+
+/* 按长度修饰写回。LP64 下 long/ll/j/z/t 全是 64 位，共用一条路径。 */
+static inline void rk_scanf_store(va_list *ap, int len, int uns, int neg,
+                                  unsigned long long v) {
+    /* 无符号转换带负号时按模运算回绕：%u 读 "-1" 得 UINT_MAX（不是 1） */
+    unsigned long long uv = neg ? (0ULL - v) : v;
+    long long sv = neg ? -(long long)v : (long long)v;
+    switch (len) {
+    case 1:
+        if (uns) *va_arg(*ap, unsigned char *) = (unsigned char)uv;
+        else     *va_arg(*ap, signed char *)   = (signed char)sv;
+        break;
+    case 2:
+        if (uns) *va_arg(*ap, unsigned short *) = (unsigned short)uv;
+        else     *va_arg(*ap, short *)          = (short)sv;
+        break;
+    case 3:
+        if (uns) *va_arg(*ap, unsigned long *) = (unsigned long)uv;
+        else     *va_arg(*ap, long *)          = (long)sv;
+        break;
+    case 4:
+    case 5: case 6: case 7:   /* intmax / size / ptrdiff：LP64 下同为 64 位 */
+        if (uns) *va_arg(*ap, unsigned long long *) = uv;
+        else     *va_arg(*ap, long long *)          = sv;
+        break;
+    default:
+        if (uns) *va_arg(*ap, unsigned int *) = (unsigned int)uv;
+        else     *va_arg(*ap, int *)          = (int)sv;
+        break;
+    }
+}
+
+/* 读一个整数。1 = 成功；0 = 匹配失败（不是数字）；-1 = 输入耗尽。
+ * base==0（%i）按 C 规则推断：0x→16、0…→8、其余 →10。 */
+static inline int rk_scanf_uint(rk_scanf_src_t *src, int base, int width,
+                                int *negp, unsigned long long *valp) {
+    int c, nd = 0, neg = 0, used = 0;
+    unsigned long long v = 0;
+
+    do { c = rk_scanf_get(src); } while (rk_scanf_space(c));
+    if (c < 0) return -1;
+
+    if (c == '-' || c == '+') { neg = (c == '-'); used = 1; c = rk_scanf_get(src); }
+
+    if ((base == 16 || base == 0) && c == '0') {
+        int c2 = rk_scanf_get(src);
+        if (c2 == 'x' || c2 == 'X') {
+            base = 16;                  /* 前缀成立，后面还得真有十六进制位 */
+            c = rk_scanf_get(src);
+            used += 2;
+        } else {
+            v = 0; nd = 1; used += 1;   /* 那个 '0' 本身就是数字 */
+            if (base == 0) base = 8;
+            c = c2;
+        }
+    } else if (base == 0) {
+        base = 10;
+    }
+
+    while (c >= 0 && (width == 0 || used < width)) {
+        int d = rk_scanf_digit(c, base);
+        if (d < 0) break;
+        v = v * (unsigned)base + (unsigned)d;
+        nd++; used++;
+        c = rk_scanf_get(src);
+    }
+    rk_scanf_unget(src, c);
+    if (nd == 0) return 0;
+    *negp = neg;
+    *valp = v;
+    return 1;
+}
+
+/* %s：先跳空白，再吃到空白为止。dst 为 NULL 表示只消耗不写入（* 抑制符）。
+ * 返回 1 成功 / -1 输入耗尽。 */
+static inline int rk_scanf_nonspace(rk_scanf_src_t *src, int width, char *dst) {
+    int c, n = 0;
+    do { c = rk_scanf_get(src); } while (rk_scanf_space(c));
+    if (c < 0) return -1;
+    while (c >= 0 && !rk_scanf_space(c) && (width == 0 || n < width)) {
+        if (dst) dst[n] = (char)c;
+        n++;
+        c = rk_scanf_get(src);
+    }
+    rk_scanf_unget(src, c);
+    if (dst) dst[n] = '\0';
+    return 1;
+}
+
+/* %c：不跳空白，不补 '\0'，宽度默认 1。返回 1 满额 / 0 不足 / -1 一个都没读到 */
+static inline int rk_scanf_chars(rk_scanf_src_t *src, int width, char *dst) {
+    int want = width ? width : 1, n = 0;
+    while (n < want) {
+        int c = rk_scanf_get(src);
+        if (c < 0) break;
+        if (dst) dst[n] = (char)c;
+        n++;
+    }
+    if (n == want) return 1;
+    return n == 0 ? -1 : 0;
+}
+
+static inline void rk_scanf_set_add(unsigned char *set, int c) {
+    unsigned char u = (unsigned char)c;
+    set[u >> 3] |= (unsigned char)(1u << (u & 7));
+}
+
+static inline int rk_scanf_set_has(const unsigned char *set, int c) {
+    unsigned char u = (unsigned char)c;
+    return (set[u >> 3] >> (u & 7)) & 1;
+}
+
+static inline int rk_scanf_vscan(rk_scanf_src_t *src, const char *fmt, va_list ap) {
+    int count = 0, eof = 0;
+
+    while (*fmt) {
+        if (rk_scanf_space((unsigned char)*fmt)) {
+            /* 格式串里的空白 = 吃掉输入里任意多（含 0）个空白 */
+            while (rk_scanf_space((unsigned char)*fmt)) fmt++;
+            int c;
+            do { c = rk_scanf_get(src); } while (rk_scanf_space(c));
+            rk_scanf_unget(src, c);
+            if (c < 0) eof = 1;
+            continue;
+        }
+
+        if (*fmt != '%') {
+            int c = rk_scanf_get(src);
+            if (c != (int)(unsigned char)*fmt) {
+                rk_scanf_unget(src, c);
+                if (c < 0) eof = 1;
+                break;
+            }
+            fmt++;
+            continue;
+        }
+
+        fmt++;                            /* 跳过 '%' */
+        if (*fmt == '%') {
+            int c = rk_scanf_get(src);
+            if (c != '%') {
+                rk_scanf_unget(src, c);
+                if (c < 0) eof = 1;
+                break;
+            }
+            fmt++;
+            continue;
+        }
+
+        int suppress = 0, width = 0, len = 0;
+        if (*fmt == '*') { suppress = 1; fmt++; }
+        while (*fmt >= '0' && *fmt <= '9') width = width * 10 + (*fmt++ - '0');
+        if      (fmt[0] == 'h' && fmt[1] == 'h') { len = 1; fmt += 2; }
+        else if (fmt[0] == 'h')                  { len = 2; fmt++; }
+        else if (fmt[0] == 'l' && fmt[1] == 'l') { len = 4; fmt += 2; }
+        else if (fmt[0] == 'l')                  { len = 3; fmt++; }
+        else if (fmt[0] == 'j')                  { len = 5; fmt++; }
+        else if (fmt[0] == 'z')                  { len = 6; fmt++; }
+        else if (fmt[0] == 't')                  { len = 7; fmt++; }
+        else if (fmt[0] == 'L')                  { len = 8; fmt++; }
+
+        int conv = (unsigned char)*fmt;
+        if (!conv) break;                 /* 格式串以 '%' 结尾 */
+        fmt++;
+
+        int base = -1, uns = 0;
+        if      (conv == 'd')                { base = 10; }
+        else if (conv == 'i')                { base = 0;  }
+        else if (conv == 'u')                { base = 10; uns = 1; }
+        else if (conv == 'o')                { base = 8;  uns = 1; }
+        else if (conv == 'x' || conv == 'X') { base = 16; uns = 1; }
+        else if (conv == 'p')                { base = 16; uns = 1; len = 4; }
+
+        if (base >= 0) {
+            int neg = 0, r;
+            unsigned long long v = 0;
+            r = rk_scanf_uint(src, base, width, &neg, &v);
+            if (r < 0) { eof = 1; break; }   /* 输入耗尽 */
+            if (r == 0) break;               /* 匹配失败，不是 EOF */
+            if (suppress) continue;
+            rk_scanf_store(&ap, len, uns, neg, v);
+            count++;
+            continue;
+        }
+
+        if (conv == 's') {
+            char *dst = 0;
+            int r;
+            if (!suppress) dst = va_arg(ap, char *);
+            r = rk_scanf_nonspace(src, width, dst);
+            if (r < 0) { eof = 1; break; }
+            if (!suppress) count++;
+            continue;
+        }
+
+        if (conv == 'c') {
+            char *dst = 0;
+            int r;
+            if (!suppress) dst = va_arg(ap, char *);
+            r = rk_scanf_chars(src, width, dst);
+            if (r < 0) { eof = 1; break; }
+            if (r == 0) break;
+            if (!suppress) count++;
+            continue;
+        }
+
+        if (conv == '[') {
+            unsigned char set[32] = {0};
+            int negate = 0;
+            if (*fmt == '^') { negate = 1; fmt++; }
+            if (*fmt == ']') { rk_scanf_set_add(set, ']'); fmt++; }   /* 首位 ']' 是字面量 */
+            while (*fmt && *fmt != ']') {
+                if (fmt[1] == '-' && fmt[2] && fmt[2] != ']') {
+                    int a = (unsigned char)fmt[0], b = (unsigned char)fmt[2], ch;
+                    for (ch = a; ch <= b; ch++) rk_scanf_set_add(set, ch);
+                    fmt += 3;
+                } else {
+                    rk_scanf_set_add(set, (unsigned char)*fmt);
+                    fmt++;
+                }
+            }
+            if (*fmt == ']') fmt++;
+
+            char *dst = 0;
+            if (!suppress) dst = va_arg(ap, char *);
+            int n = 0, c;
+            for (;;) {
+                c = rk_scanf_get(src);
+                if (c < 0) break;
+                if (width && n >= width) break;
+                if ((rk_scanf_set_has(set, c) != 0) == negate) break;
+                if (dst) dst[n] = (char)c;
+                n++;
+            }
+            rk_scanf_unget(src, c);
+            if (dst) dst[n] = '\0';
+            if (n == 0) { eof = (c < 0); break; }
+            count++;
+            continue;
+        }
+
+        break;                            /* 不支持的转换：停下，不写错值 */
+    }
+
+    return (count == 0 && eof) ? -1 : count;
+}
+
+static inline int vsscanf(const char *s, const char *fmt, va_list ap) {
+    rk_scanf_src_t src;
+    src.s = s;
+    src.fp = 0;
+    return rk_scanf_vscan(&src, fmt, ap);
+}
+
+static inline int vfscanf(FILE *fp, const char *fmt, va_list ap) {
+    rk_scanf_src_t src;
+    src.s = 0;
+    src.fp = fp;
+    return rk_scanf_vscan(&src, fmt, ap);
+}
 
 static inline int sscanf(const char *s, const char *fmt, ...) {
     va_list ap;
-    int count = 0;
     va_start(ap, fmt);
-    while (*fmt) {
-        if (*fmt == ' ') {
-            /* 格式串里的空白匹配输入里任意连续空白 */
-            while (*fmt == ' ') fmt++;
-            while (*s == ' ' || *s == '\t' || *s == '\n') s++;
-        } else if (*fmt == '%') {
-            fmt++;
-            int base = 10, neg = 0;
-            if (*fmt == 'x' || *fmt == 'X')        { base = 16; fmt++; }
-            else if (*fmt == 'd' || *fmt == 'i' ||
-                     *fmt == 'u')                  { fmt++; }
-            else if (*fmt == '%') {
-                if (*s != '%') break;
-                s++; fmt++;
-                continue;
-            } else {
-                break;   /* 不支持的转换, 终止 */
-            }
-            while (*s == ' ') s++;
-            int v = 0, any = 0;
-            if (*s == '-' && base == 10) { neg = 1; s++; }
-            for (;;) {
-                int d;
-                if      (*s >= '0' && *s <= '9') d = *s - '0';
-                else if (base == 16 && *s >= 'a' && *s <= 'f') d = *s - 'a' + 10;
-                else if (base == 16 && *s >= 'A' && *s <= 'F') d = *s - 'A' + 10;
-                else break;
-                v = v * base + d; s++; any = 1;
-            }
-            if (!any) break;                 /* 一个字符都没匹配到 */
-            if (base == 10) {
-                int *p = va_arg(ap, int *);
-                *p = neg ? -v : v;
-            } else {
-                unsigned int *p = va_arg(ap, unsigned int *);
-                *p = (unsigned int)v;
-            }
-            count++;
-        } else {
-            if (*fmt != *s) break;
-            fmt++; s++;
-        }
-    }
+    int r = vsscanf(s, fmt, ap);
     va_end(ap);
-    return count;
+    return r;
+}
+
+static inline int fscanf(FILE *fp, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vfscanf(fp, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+static inline int scanf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vfscanf(stdin, fmt, ap);
+    va_end(ap);
+    return r;
 }
 
 /* ================================================================
