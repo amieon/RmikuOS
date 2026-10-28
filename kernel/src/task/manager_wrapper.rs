@@ -506,6 +506,7 @@ pub fn fork_current() -> isize {
             manager.process(parent_pid).ngroups,
             manager.process(parent_pid).umask,
             manager.process(parent_pid).pgid,
+            manager.process(parent_pid).sid,
         );
         let child_thread = ThreadControlBlock::new_main_thread(
             child_tid,
@@ -991,7 +992,7 @@ pub fn set_fd_cloexec_current(fd: usize, on: bool) {
     process.fd_cloexec[fd] = on;
 }
 
-/// 记录 fd 的**文件状态标志**（访问模式 + O_APPEND + O_NONBLOCK）。
+/// 记录 fd 的文件状态标志（访问模式 + O_APPEND + O_NONBLOCK）。
 ///
 /// 必须在 open 时调一次：`F_GETFL` 的值就来自这里。少了这一步，
 /// `fcntl(fd, F_GETFL) & O_ACCMODE` 永远报 O_RDONLY —— 用读模式打开的
@@ -1015,7 +1016,7 @@ pub fn get_fd_flags_current(fd: usize) -> usize{
 
 /// fcntl(fd, cmd, arg)。
 ///
-/// 支持的命令（其余返回 `-EINVAL`，**不是** `-1` —— 后者会被 libc 当成 EIO）：
+/// 支持的命令（其余返回 `-EINVAL`，不是 `-1` —— 后者会被 libc 当成 EIO）：
 ///   F_DUPFD / F_DUPFD_CLOEXEC —— 复制 fd 到「≥ arg 的最小空闲槽」
 ///   F_GETFD / F_SETFD          —— 描述符标志（只有 FD_CLOEXEC 一位）
 ///   F_GETFL / F_SETFL          —— 文件状态标志（访问模式 + O_APPEND + O_NONBLOCK）
@@ -1048,7 +1049,7 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
         }
         manager.copy_fd_flags(pid, fd, new_fd as usize);
 
-        /* F_DUPFD 的新 fd **不带** FD_CLOEXEC，F_DUPFD_CLOEXEC 才带。 */
+        /* F_DUPFD 的新 fd 不带 FD_CLOEXEC，F_DUPFD_CLOEXEC 才带。 */
         if cmd == crate::fs::F_DUPFD_CLOEXEC {
             let process = manager.process_mut(pid);
             let n = new_fd as usize;
@@ -1067,7 +1068,7 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
             if fd >= process.fd_flags.len() {
                 process.fd_flags.resize(fd + 1, 0);
             }
-            /* 只改 O_APPEND / O_NONBLOCK，**保留访问模式**。
+            /* 只改 O_APPEND / O_NONBLOCK，保留访问模式。
              * 直接 `= arg` 会让 `fcntl(fd, F_SETFL, O_NONBLOCK)` 把 O_RDWR
              * 悄悄变成 O_RDONLY —— 之后 write 就 EBADF，很难联想到 fcntl。 */
             let cur = process.fd_flags[fd];
@@ -2001,7 +2002,7 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     {
         let process = manager.process_mut(current_pid);
         process.fd_table[new_fd] = Some(old_file);
-        /* dup2 得到的新 fd **不带** FD_CLOEXEC（POSIX）。少了这一句，
+        /* dup2 得到的新 fd 不带 FD_CLOEXEC（POSIX）。少了这一句，
          * `dup2(f, 1)` 之后 exec 会把 stdout 关掉。 */
         if new_fd < process.fd_cloexec.len() {
             process.fd_cloexec[new_fd] = false;
@@ -2111,19 +2112,18 @@ pub fn pgid_of(pid: isize) -> isize {
     };
     match manager.try_process(target) {
         Some(p) => p.pgid as isize,
-        None => -1,
+        None => -crate::syscall::errno::ESRCH,
     }
 }
 
 /// 把 target 放进组 pgid（POSIX setpgid 的一个诚实子集）：
-///
-///   - 只能改自己，或自己的直接子进程（否则 -1）
-///   - pid = 0 表示"我自己"；pgid = 0 表示"用 target 的 pid 当组号"，
-///     也就是"自成一组、自己当组长"，这个总是允许（因为它必然是个空组号）
-///   - 除此之外，目标组必须已经存在（本模型不创建空组，组是派生视图）
-///
-/// 没有 session，所以 POSIX 的"同一 session 内""session leader 不能改"两条
-/// 无法适用，这里明确省略而不是假装检查。
+/// 只能改自己，或自己的直接子进程（否则 EPERM）
+/// pid = 0 表示"我自己"；pgid = 0 表示"用 target 的 pid 当组号"，
+/// 也就是"自成一组、自己当组长"，这个总是允许（因为它必然是个空组号）
+/// 除此之外，目标组必须已经存在（本模型不创建空组，组是派生视图）
+/// 没有 session 边界检查：POSIX 的"同一 session 内""session leader 不能改"
+/// 依赖 session 的成员集合，而这里 sid 只是个标号（见 PCB::sid），
+/// 无法用来判定"同会话"，所以明确省略而不是假装检查。
 pub fn set_pgid(pid: isize, pgid: isize) -> isize {
     let mut manager = lock_detect!(TASK_MANAGER);
     let self_pid = manager.current_pid();
@@ -2131,14 +2131,14 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
     let target = if pid == 0 {
         self_pid
     } else if pid < 0 {
-        return -1;
+        return -crate::syscall::errno::EINVAL;
     } else {
         pid as usize
     };
 
     // 1) 目标进程必须存在
     if manager.try_process(target).is_none() {
-        return -1;
+        return -crate::syscall::errno::ESRCH;
     }
 
     // 2) 只能改自己或直接子进程
@@ -2148,7 +2148,7 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
             .map(|p| p.children.contains(&target))
             .unwrap_or(false);
         if !is_child {
-            return -1;
+            return -crate::syscall::errno::EPERM;
         }
     }
 
@@ -2156,18 +2156,33 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
     let new_pgid = if pgid == 0 {
         target
     } else if pgid < 0 {
-        return -1;
+        return -crate::syscall::errno::EINVAL;
     } else {
         pgid as usize
     };
 
     // 4) 除了"自成一组"，目标组必须已存在
     if new_pgid != target && !manager.group_exists(new_pgid) {
-        return -1;
+        return -crate::syscall::errno::EPERM;
     }
 
     manager.process_mut(target).pgid = new_pgid;
     0
+}
+
+/// setsid(): 新建会话，调用者成为会话首进程 + 新进程组组长，返回新 sid。
+pub fn setsid() -> isize {
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let pid = manager.current_pid();
+
+    if manager.process(pid).pgid == pid {
+        return -crate::syscall::errno::EPERM;
+    }
+
+    let p = manager.process_mut(pid);
+    p.pgid = pid;
+    p.sid = pid;
+    pid as isize
 }
 
 /// signal(sig, action): 设置信号处置。

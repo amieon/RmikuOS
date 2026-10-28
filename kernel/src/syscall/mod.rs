@@ -132,6 +132,7 @@ pub const SYSCALL_TGKILL: usize = 122;
 pub const SYSCALL_SIGPENDING: usize = 123;
 pub const SYSCALL_SETITIMER: usize = 124;
 pub const SYSCALL_GETITIMER: usize = 125;
+pub const SYSCALL_SETSID: usize = 126;
 
 
 
@@ -276,6 +277,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SIGPENDING => process::sys_sigpending(args[0]),
         SYSCALL_SETITIMER => process::sys_setitimer(args[0], args[1], args[2]),
         SYSCALL_GETITIMER => process::sys_getitimer(args[0], args[1]),
+        SYSCALL_SETSID => process::sys_setsid(),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

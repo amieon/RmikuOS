@@ -10,7 +10,7 @@
  *   3. `F_DUPFD` 的新 fd 不带 FD_CLOEXEC，`F_DUPFD_CLOEXEC` 才带；
  *      两者都要落到「≥ 第三个参数的最小空闲槽」。
  */
-#include "user.h"
+#include "test.h"
 
 int main(void) {
     TEST_START("fcntl");

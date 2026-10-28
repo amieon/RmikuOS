@@ -137,6 +137,7 @@ extern "C" {
 #define SYS_SIGPENDING               123  
 #define SYS_SETITIMER                124
 #define SYS_GETITIMER                125 
+#define SYS_SETSID                   126
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);

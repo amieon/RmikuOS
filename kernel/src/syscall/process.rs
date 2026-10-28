@@ -129,6 +129,11 @@ pub fn sys_setpgid(pid: usize, pgid: usize) -> isize {
     crate::task::set_pgid(pid as isize, pgid as isize)
 }
 
+/// setsid(): 新会话 + 新进程组，成功返回 sid（= pid）。
+pub fn sys_setsid() -> isize {
+    crate::task::setsid()
+}
+
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     crate::task::set_fcntl(fd, cmd, arg)
 }

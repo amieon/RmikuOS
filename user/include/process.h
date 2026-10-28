@@ -55,15 +55,25 @@ static inline isize getppid(void) {
 }
 
 static inline isize getpgid(isize pid) {
-    return syscall3(SYS_GETPGID, (usize)pid, 0, 0);
+    return rk_sys_ret(syscall3(SYS_GETPGID, (usize)pid, 0, 0));
 }
 
 static inline isize getpgrp(void) {
     return getpgid(0);
 }
 
+/* 失败时内核给 -ESRCH / -EPERM / -EINVAL */
 static inline int setpgid(isize pid, isize pgid) {
-    return (int)syscall3(SYS_SETPGID, (usize)pid, (usize)pgid, 0);
+    return (int)rk_sys_ret(syscall3(SYS_SETPGID, (usize)pid, (usize)pgid, 0));
+}
+
+/* setsid(): 新建会话 + 新进程组，成功返回新会话号（= pid），失败 -1 + errno。
+ * 已经是进程组组长时内核给 EPERM（典型症状：fork 后没再 fork 一步就 setsid）。
+ * 本内核没有终端对象，所以这里不会像 Linux 那样顺带脱离控制终端、
+ * 也不会发 SIGHUP —— git 的 daemonize() 只需要"别再收终端信号"，
+ * 而终端信号本来就只投给 FRONT_PGID，自成一组之后就收不到了。 */
+static inline isize setsid(void) {
+    return rk_sys_ret(syscall3(SYS_SETSID, 0, 0, 0));
 }
 
 /* 把 pid 设为前台进程(Ctrl+C 投递目标)。shell 启动后台任务后用它夺回前台。 */
@@ -217,7 +227,7 @@ static inline int execvp(const char *file, char *const argv[]) {
     return -1;
 }
 
-/* execl / execlp：变参版本。argv 由 `...` 里的指针序列组成，以 NULL 结尾。。 */
+/* execl / execlp：变参版本。argv 由 `...` 里的指针序列组成，以 NULL 结尾。 */
 static inline int execl(const char *path, const char *arg, ...) {
     char *argv[EXEC_MAX_ARGS + 1];
     usize n = 0;

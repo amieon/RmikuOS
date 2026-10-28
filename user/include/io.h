@@ -11,8 +11,11 @@ extern "C" {
 #include <stdarg.h>   /* open() 变参取 mode */
 
 
+/* 内核统一返回 `-errno`，这里翻成 POSIX 的 `-1 + errno`。
+ * 注意 `-1` 本身就是 `-EPERM`（EPERM == 1）—— 早先有一个"r == -1 → EIO"
+ * 的过渡分支，那会把真实的 EPERM 谎报成 EIO（setsid/fcntl 之类全靠它），
+ * 已经删掉：现在负数一律按 errno 解，一个分支就够。 */
 static inline isize rk_sys_ret(isize r) {
-    if (r == -1) { errno = EIO; return -1; }
     if (r < 0 && r >= -4095) { errno = (int)(-r); return -1; }
     return r;
 }

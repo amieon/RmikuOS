@@ -76,6 +76,9 @@ pub struct ProcessControlBlock {
     /// 进程组号
     pub pgid: usize,
 
+    /// 会话号
+    pub sid: usize,
+
     pub exit_code: i32,
 
     /// 是否以"core dump 类"信号死亡（SIGSEGV/SIGABRT/...）。`waitpid` 的
@@ -155,6 +158,8 @@ impl ProcessControlBlock {
 
             // 新进程自成一组：组号就是自己的 pid。
             pgid: pid,
+            // 同理自成一会话。
+            sid: pid,
 
             exit_code: 0,
             coredump: false,
@@ -191,6 +196,7 @@ impl ProcessControlBlock {
         ngroups: usize,
         umask: u16,
         pgid: usize,
+        sid: usize,
     ) -> Self {
         let tickets = parent_tickets.max(1);
         let stride = BIG_STRIDE / tickets;
@@ -242,6 +248,7 @@ impl ProcessControlBlock {
             ngroups,
             umask,
             pgid,
+            sid,
 
             exit_code: 0,
             coredump: false,
