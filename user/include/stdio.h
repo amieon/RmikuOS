@@ -6,6 +6,8 @@ extern "C" {
 #include <stdarg.h>
 #include "file.h"   /* 带入 io.h → syscall.h, flag.h; 以及 FILE, stdin/stdout/stderr,
                        fopen, fclose, fgetc, fputc, fread, fwrite, fflush, fputs 等 */
+#include "mem.h"    /* getdelim/getline 要 malloc/realloc —— 缓冲长度由库决定,
+                       调用者无法预知行长 */
 
 /* C89 <stdio.h> standard macro: max length of a filename string.
  * shell.c uses it for output buffers (char outfile[FILENAME_MAX]). */
@@ -630,6 +632,50 @@ static inline char *fgets(char *s, int size, FILE *fp) {
     }
     s[i] = '\0';
     return i > 0 ? s : (char*)0;
+}
+
+static inline isize getdelim(char **lineptr, size_t *n, int delim, FILE *fp) {
+    if (!lineptr || !n || !fp) { errno = EINVAL; return -1; }
+
+    if (*lineptr == NULL || *n == 0) {
+        char *fresh = (char*)malloc(128);
+        if (!fresh) { errno = ENOMEM; return -1; }
+        *lineptr = fresh;
+        *n = 128;
+    }
+
+    size_t len = 0;
+    for (;;) {
+        int ch = fgetc(fp);
+        if (ch == EOF) {
+            /* 读到一半遇 EOF 是**正常结束**（最后一行没有换行符），
+             * 只有"一个字节都没读到"才算失败。 */
+            if (len == 0) return -1;
+            break;
+        }
+        /* 留一格给 '\0'：len+1 >= *n 时扩，别等到 len == *n 才动手。
+         * 这里不用 realloc 而是 malloc+拷贝+free：realloc 定义在 stdlib.h，
+         * 而 stdlib.h 是 include 本文件的 —— 反过来 include 会成环，且环里
+         * 的 stdlib 半定义状态用不了它的 inline。扩容代价是行级的，无所谓。 */
+        if (len + 1 >= *n) {
+            size_t want = *n * 2;
+            char *grown = (char*)malloc(want);
+            if (!grown) { errno = ENOMEM; return -1; }
+            for (size_t i = 0; i < len; i++) grown[i] = (*lineptr)[i];
+            free(*lineptr);
+            *lineptr = grown;
+            *n = want;
+        }
+        (*lineptr)[len++] = (char)ch;
+        if (ch == delim) break;
+    }
+
+    (*lineptr)[len] = '\0';
+    return (isize)len;
+}
+
+static inline isize getline(char **lineptr, size_t *n, FILE *fp) {
+    return getdelim(lineptr, n, '\n', fp);
 }
 
 /* ================================================================
