@@ -887,6 +887,42 @@ def zlib_libs(arch: str):
     return [str(libz)] if libz.exists() else []
 
 
+# ==================== git 构建 ====================
+
+def build_git(arch: str):
+    """编译 git 可执行文件 —— 放进 /bin/git，guest 里直接 `git init` 就能玩。
+
+    分工刻意拆开：NO_* 列表、编译开关、链接参数**只在 scripts/git_probe.sh 里写一份**，
+    三个阶段（probe / lib / bin）共用。这边只负责"按需调用 + 收产物"，
+    免得改个 -DNO_XXX 要在两个文件里同步。
+
+    不自己做缓存：make 面对 git 的几百个 .o 本来就有增量能力，
+    比按文件 hash 算一遍（四千多个源文件）又快又准。
+
+    失败**不中断整体构建**：git 是可选的，其余程序不该因为它编不过就一起废掉。
+    """
+    src = USER_DIR / "git" / "src"
+    if not (src / "git.c").exists():
+        print(f"[user] no git source at {src}, skip")
+        return
+
+    out_dir = BUILD_DIR / arch / "git"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    script = ROOT / "scripts" / "git_probe.sh"
+
+    print(f"[user] git: 调用 {script.relative_to(ROOT)} {arch} bin")
+    proc = subprocess.run(["bash", str(script), arch, "bin"], cwd=str(ROOT))
+
+    elf = out_dir / "git.elf"
+    if proc.returncode != 0 or not elf.exists() or elf.stat().st_size == 0:
+        print(f"[user] git: ✗ 没编出来（其余程序照常构建）")
+        print(f"[user] git:   完整日志 {out_dir / 'make_git.log'}")
+        print(f"[user] git:   单独重试: bash scripts/git_probe.sh {arch} bin")
+        return
+
+    print(f"[user] git: git.elf {elf.stat().st_size} bytes -> /bin/git")
+
+
 # ==================== TCC 构建(从 user/tcc/build_tcc.py 融合) ====================
 
 def gen_tccdefs(src: Path, dst: Path):
@@ -1339,6 +1375,7 @@ def main():
     if _libz.exists():
         deploy_libz(args.arch, _libz)
     build_sqlite3(args.arch)
+    build_git(args.arch)
     build_gcn(args.arch)
     build_java_projects(args.arch)
 

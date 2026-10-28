@@ -160,6 +160,18 @@ if [ -d "user/build/${ARCH}/zlib" ]; then
   done
 fi
 
+# git（专门构建目录 user/build/<arch>/git/）
+# 产物固定 git.elf -> /bin/git：PATH 里有 /bin，guest 里直接 `git xxx`。
+# 目录里还有一堆 .o 和 make_git.log，这里只挑 *.elf，不会把中间件灌进 rootfs。
+if [ -d "user/build/${ARCH}/git" ]; then
+  for f in user/build/${ARCH}/git/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/bin/$base"
+    echo "  [git] $base -> /bin/$base"
+  done
+fi
+
 # Java 字节码（JVM 项目）
 for proj_dir in user/java/*; do
   [ -d "$proj_dir" ] || continue

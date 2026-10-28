@@ -4,6 +4,7 @@
 #
 #   bash scripts/git_probe.sh riscv64 probe     # 只编 3 个文件，压头文件/配置面
 #   bash scripts/git_probe.sh riscv64 lib       # make libgit.a（核心对象，不含 builtin）
+#   bash scripts/git_probe.sh riscv64 bin       # make git（全部 builtin + 链接成可执行）
 #
 # 为什么要分级：直接 make 会一次吐几百条错误，绝大多数是同一个原因重复出现，
 # 真正的问题被淹没。probe 用 3 个文件先把"头文件 + 编译开关"这一层单独压平，
@@ -48,11 +49,12 @@ fi
 NOVARS=(
   NO_MMAP NO_PTHREADS NO_OPENSSL NO_CURL NO_EXPAT NO_GETTEXT NO_ICONV
   NO_TCLTK NO_PERL NO_PYTHON NO_NSEC NO_REGEX NO_MEMMEM NO_STRCASESTR
-  NO_SETENV NO_UNSETENV
   # 这两个 git 自带 compat 实现，比往 libc 里塞更安全：
   #   strlcpy/strlcat（BSD 扩展）、strtoumax/strtoimax（C99）
   # setitimer **不设 NO_SETITIMER**：内核已实现 ITIMER_REAL（syscall 124/125），
   # 设了等于一边实现一边屏蔽自己，progress.c 的每秒刷新永远不会被验证。
+  # setenv/unsetenv 同理不设：env.h 已有 POSIX 三参/单参版本
+  # （以前同名函数是五参长度版，签名不 POSIX，才不得不关掉用 git 自带实现）。
   NO_STRLCPY NO_STRTOUMAX
 )
 # 注意：不设 NO_INET_PTON / NO_INET_NTOP —— user/include/arpa/inet.h 已有实现，
@@ -137,8 +139,55 @@ case "$STAGE" in
     fi
     ;;
 
+  bin)
+    LINKER="$ROOT/user/linker-$ARCH.ld"
+    ZLIB="$ROOT/user/build/$ARCH/zlib"
+    if [ ! -f "$ZLIB/libz.a" ]; then
+      echo "[git] ✗ 缺 $ZLIB/libz.a"
+      echo "      git 的 object 存储全靠 zlib。先跑一次 user/build.py（build_zlib 会产出它）。"
+      exit 1
+    fi
+
+    # crt0 / 系统调用入口 / memcpy+memset 是 libc 侧裸件，git 的 Makefile 不认识它们。
+    # 编成 .o 塞进 LDFLAGS：链接命令里 .o 出现在任何位置都能被解析，不用改 Makefile。
+    echo "[git] 编 libc 裸件（crt0 / syscall / string）"
+    "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/crt0_$ARCH.S"    -o "$OUT/_crt0.o"    || exit 1
+    "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/syscall_$ARCH.S" -o "$OUT/_syscall.o" || exit 1
+    "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/string.c"        -o "$OUT/_string.o"  || exit 1
+
+    LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"
+    LINK_FLAGS="$LINK_FLAGS $OUT/_crt0.o $OUT/_string.o $OUT/_syscall.o -T $LINKER"
+
+    # LIBS 整份覆盖：默认是 `libgit.a xdiff/lib.a $(EXTLIBS)`，而 EXTLIBS 里会混进
+    # -lrt / -lpthread / -lcurl 之类宿主库，交叉环境一个都没有。我们自己写死。
+    LIBS_OVERRIDE="libgit.a xdiff/lib.a -L$ZLIB -lz -lgcc"
+
+    # 先删旧产物：make 失败时 $SRC/git 还留着上一次的，会被误判成"成功"。
+    rm -f "$SRC/git"
+
+    echo "[git] make git（$ARCH，-j$(nproc 2>/dev/null || echo 4)）"
+    make -C "$SRC" -j"$(nproc 2>/dev/null || echo 4)" \
+      CC="$CC" AR="$AR" \
+      CFLAGS="${CFLAGS[*]}" \
+      LDFLAGS="$LINK_FLAGS" \
+      LIBS="$LIBS_OVERRIDE" \
+      NEEDS_LIBRT= SHELL_PATH=/bin/sh \
+      "${NOMAKE[@]}" \
+      git 2>&1 | tee "$OUT/make_git.log" | tail -40
+
+    echo
+    echo "[git] 完整日志: $OUT/make_git.log"
+    if [ -s "$SRC/git" ]; then
+      cp "$SRC/git" "$OUT/git.elf"
+      echo "[git] ✓ git.elf $(wc -c < "$OUT/git.elf") bytes"
+    else
+      echo "[git] ✗ 未产出 git，错误数: $(grep -c 'error:' "$OUT/make_git.log" 2>/dev/null || echo 0)"
+      exit 1
+    fi
+    ;;
+
   *)
-    echo "未知阶段: $STAGE（probe | lib）"
+    echo "未知阶段: $STAGE（probe | lib | bin）"
     exit 2
     ;;
 esac
