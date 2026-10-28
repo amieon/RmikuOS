@@ -246,8 +246,38 @@ int main(void) {
     CHECK_EQ(sigismember(&ss, SIGPIPE), 0, "sigdelset");
     CHECK_EQ(sigprocmask(SIG_UNBLOCK, &ss, 0), 0, "sigprocmask 接受并返回 0");
 
-    /* ---------- 14. getpwnam ---------- */
-    CHECK(getpwnam("root") == 0, "getpwnam 与 getpwuid 一致(未接账户库返回 NULL)");
+    /* ---------- 14. getpwnam / getpwuid（真读 /var/etc/passwd → /etc/passwd） ---------- */
+    struct passwd *pwn = getpwnam("root");
+    struct passwd *pwu = getpwuid(0);
+    CHECK((pwn == 0) == (pwu == 0), "getpwnam(\"root\") 与 getpwuid(0) 口径一致");
+    if (pwn) {
+        CHECK(strcmp(pwn->pw_name, "root") == 0, "getpwnam 返回的条目名字就是 root");
+        CHECK_EQ(pwn->pw_uid, 0, "root 的 uid 是 0");
+        CHECK(pwn->pw_dir[0] == '/', "root 的 home 是绝对路径");
+        CHECK(strcmp(pwn->pw_name, pwu->pw_name) == 0, "两个入口查到同一个条目");
+    }
+    CHECK(getpwnam("no_such_user_xyz") == 0, "查不到的用户返回 NULL(不编条目)");
+    CHECK(getpwuid(65000) == 0, "查不到的 uid 返回 NULL");
+
+    /* ---------- 14b. isatty（真的问内核：字符设备 + 控制台设备号） ---------- */
+    CHECK_EQ(isatty(0), 1, "stdin 是控制台 → 终端");
+    int pf[2];
+    CHECK_EQ(pipe(pf), 0, "pipe() 建管道");
+    CHECK_EQ(isatty(pf[0]), 0, "管道读端不是终端");
+    errno = 0;
+    CHECK_EQ(isatty(999), 0, "非法 fd 不是终端");
+    CHECK_EQ(errno, EBADF, "非法 fd 置 EBADF");
+    int nul = (int)open("/dev/null", O_RDONLY);
+    CHECK(nul >= 0, "open(/dev/null) 成功");
+    if (nul >= 0) {
+        CHECK_EQ(isatty(nul), 0, "/dev/null 是字符设备但不是终端");
+        close(nul);
+    }
+    errno = 0;
+    CHECK_EQ(isatty(pf[0]), 0, "管道 fd 再问一次仍不是终端");
+    CHECK_EQ(errno, ENOTTY, "不是终端时置 ENOTTY");
+    close(pf[0]);
+    close(pf[1]);
 
     /* ---------- 15. exec 家族的失败语义 ---------- */
     char *nargv[2] = {(char *)"no_such_cmd_xyz", 0};
@@ -454,6 +484,28 @@ int main(void) {
     raise(SIGUSR1);
     CHECK_EQ(g_sigusr1_hits, 2, "handler 可反复进入（现场能正确恢复）");
     signal(SIGUSR1, SIG_DFL);
+
+    /* ---------- 24. labs / llabs / ato* / div（stdlib 的整数面） ----------
+     * labs 的返回类型必须是 long。声明成 int 在 LP64 下会把 am.c 那条
+     * "秒 → hhmm" 的时区换算静默截断；这次是靠 -Wimplicit-function-declaration
+     * 才被抓出来的，所以宽度本身也要测，而不只是"能调用"。 */
+    CHECK_EQ(labs(-7200L), 7200L, "labs 处理负数");
+    CHECK_EQ(labs(-2147483649L), 2147483649L, "labs 保持 long 宽度，不被截断");
+    CHECK_EQ(llabs(-5000000000LL), 5000000000LL, "llabs 超出 32 位也不截断");
+    CHECK_EQ(atol("-42"), -42L, "atol 认负号");
+    CHECK_EQ(atol("  17"), 17L, "atol 跳过前导空白");
+    CHECK_EQ(atoll("99"), 99LL, "atoll 解析成功");
+    CHECK(atof("3.5") > 3.49 && atof("3.5") < 3.51, "atof 解析小数");
+
+    /* C99 起整数除法一律向零截断，余数取被除数符号（不是 Python 的向下取整） */
+    div_t dq = div(7, 2);
+    CHECK(dq.quot == 3 && dq.rem == 1, "div(7,2) = 3 余 1");
+    div_t dn = div(-7, 2);
+    CHECK(dn.quot == -3 && dn.rem == -1, "div(-7,2) 向零截断：-3 余 -1");
+    ldiv_t lq = ldiv(7L, 2L);
+    CHECK(lq.quot == 3 && lq.rem == 1, "ldiv(7,2) = 3 余 1");
+    lldiv_t llq = lldiv(-7LL, 2LL);
+    CHECK(llq.quot == -3 && llq.rem == -1, "lldiv(-7,2) 向零截断：-3 余 -1");
 
     TEST_END();
 }

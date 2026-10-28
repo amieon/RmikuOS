@@ -51,7 +51,7 @@ NOVARS=(
   NO_TCLTK NO_PERL NO_PYTHON NO_NSEC NO_REGEX NO_MEMMEM NO_STRCASESTR
   # 这两个 git 自带 compat 实现，比往 libc 里塞更安全：
   #   strlcpy/strlcat（BSD 扩展）、strtoumax/strtoimax（C99）
-  # setitimer **不设 NO_SETITIMER**：内核已实现 ITIMER_REAL（syscall 124/125），
+  # setitimer 不设 NO_SETITIMER：内核已实现 ITIMER_REAL（syscall 124/125），
   # 设了等于一边实现一边屏蔽自己，progress.c 的每秒刷新永远不会被验证。
   # setenv/unsetenv 同理不设：env.h 已有 POSIX 三参/单参版本
   # （以前同名函数是五参长度版，签名不 POSIX，才不得不关掉用 git 自带实现）。
@@ -148,8 +148,11 @@ case "$STAGE" in
       exit 1
     fi
 
-    # crt0 / 系统调用入口 / memcpy+memset 是 libc 侧裸件，git 的 Makefile 不认识它们。
-    # 编成 .o 塞进 LDFLAGS：链接命令里 .o 出现在任何位置都能被解析，不用改 Makefile。
+    # crt0 / 系统调用入口 / memcpy+memset+errno 是 libc 侧裸件，git 的 Makefile
+    # 不认识它们。编成 .o 塞进 LDFLAGS：链接命令里 .o 出现在任何位置都能被解析，
+    # 不用改 Makefile。
+    # 只有 string.c 必须在场：errno 的唯一定义、memset/memcpy、isatty 都在里面。
+    # strdup / getpwuid / getpwnam 现在都是头文件 inline，不再需要额外的 .o。
     echo "[git] 编 libc 裸件（crt0 / syscall / string）"
     "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/crt0_$ARCH.S"    -o "$OUT/_crt0.o"    || exit 1
     "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/syscall_$ARCH.S" -o "$OUT/_syscall.o" || exit 1

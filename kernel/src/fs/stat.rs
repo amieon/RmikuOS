@@ -9,6 +9,10 @@ pub struct Stat {
     /// 最后修改时间(epoch 秒)。未校准墙钟(未跑 ntpdate)时为 0。
     /// 复用原 reserved[4], 保持 32 字节布局不变。
     pub mtime: u32,
+    /// 字符设备的次设备号(仅 STAT_TYPE_CHAR 有意义)。占原 reserved 尾部 4 字节,
+    /// 仍是 32 字节。用户态 st_rdev 取它, isatty() 靠它区分"终端"和 /dev/null
+    /// —— 两者都是 STAT_TYPE_CHAR, 只看类型分不开。
+    pub dev: u32,
 }
 
 pub const STAT_TYPE_FILE: u8 = 1;
@@ -17,6 +21,11 @@ pub const STAT_TYPE_CHAR: u8 = 3;
 pub const STAT_TYPE_PIPE: u8 = 4;
 pub const STAT_TYPE_SOCKET: u8 = 5;
 pub const STAT_TYPE_SYMLINK: u8 = 6;
+
+/// 字符设备的"次设备号"。值随手按 Linux 惯例取, 只要内核内不重复即可:
+/// /dev/null = makedev(1,3), 控制台 = makedev(5,0)。
+pub const DEV_NULL: u32 = 0x0103;
+pub const DEV_CONSOLE: u32 = 0x0500;
 
 // ===== 权限位(低 12 位) =====
 pub const S_IRWXU: u16 = 0o700;
@@ -44,12 +53,19 @@ impl Stat {
             gid,
             size,
             mtime: 0,
+            dev: 0,
         }
     }
 
     /// 链式设置修改时间(epoch 秒), 供各文件系统在 stat() 时填墙钟真值。
     pub fn with_mtime(mut self, t: u32) -> Self {
         self.mtime = t;
+        self
+    }
+
+    /// 链式设置设备号(只有字符设备用得上)。
+    pub fn with_dev(mut self, d: u32) -> Self {
+        self.dev = d;
         self
     }
 }

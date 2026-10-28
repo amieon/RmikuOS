@@ -26,7 +26,9 @@ extern "C" {
 #define SEEK_END 2
 #endif
 
-/* ---- implemented in rmiku_shims.c ---- */
+/* ---- isatty 在 lib/string.c（weak）----
+ * 需要 fstat 判设备号，放头文件里就得让每个 TU 都拉 fs.h；而且它是 weak 的，
+ * 移植代码自带实现时能让位。 */
 extern int isatty(int);
 
 /* 标准流文件描述符(kilo 等需要) */
@@ -39,7 +41,7 @@ extern int access(const char *path, int amode);
 /* symlink/readlink/link/lstat: 见 fs.h（内核 SYS_SYMLINK/READLINK/LINK/LSTAT）。 */
 
 /* 全局环境指针(POSIX): crt0 启动时把 exec 传入的 envp 保存到这里 */
-extern char **environ;
+extern char environ;
 
 /* gethostname: 没有 hostname syscall，返回编译期常量（与 uname().nodename 一致）。
  * 移植代码（git 的 ident.c）用它拼默认邮箱，拿不到才更要显式配置 user.email。 */
@@ -55,7 +57,7 @@ static inline int gethostname(char *name, unsigned long len) {
 /* ---- getpagesize / sysconf ----
  * getpagesize() 是 BSD 名字，POSIX 的正规写法是 sysconf(_SC_PAGESIZE)。
  *
- * **页大小只在内核定义一次**（kernel/src/mm/config.rs 的 PAGE_SIZE），
+ * 页大小只在内核定义一次（kernel/src/mm/config.rs 的 PAGE_SIZE），
  * 用户态通过 98 号系统调用问出来：这样以后换页大小只改内核一处，
  * 不会出现"内核改了、libc 还写死 4096"这种没有编译错误、只会在运行时
  * 表现成 mmap 未对齐的怪 bug。
@@ -85,7 +87,9 @@ static inline int getpagesize(void) {
  * 其余一律 -1 + EINVAL，不返回瞎编的数字。 */
 #define _SC_OPEN_MAX          4
 #define _SC_PAGESIZE         30
-/* POSIX 把这两个名字当同义词 */
+/* POSIX 把这两个名字当同义词（Linux 上值也相同）。git 的 wrapper.c 用的是
+ * 带下划线的 _SC_PAGE_SIZE，只在 `#ifdef _SC_PAGE_SIZE` 里取值 ——
+ * 不定义也不会崩，但会静默退回硬编码的 4096，页大小一变就错。 */
 #define _SC_PAGE_SIZE        _SC_PAGESIZE
 #define _SC_NPROCESSORS_ONLN 84
 

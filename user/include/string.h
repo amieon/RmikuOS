@@ -7,6 +7,7 @@ extern "C" {
 
 #include "types.h"   
 #include "errno.h"   /* strerror 用符号名而不是魔法数字 */
+#include "mem.h"     /* strdup 要 malloc（mem.h 自包含，不会回来引 string.h） */
 
 /* ===== 这两个在 lib/string.c 里实现，链接时提供 ===== */
 void *memcpy(void *dst, const void *src, size_t n);
@@ -254,8 +255,15 @@ static inline int strncasecmp(const char *s1, const char *s2, usize n) {
     return 0;
 }
 
-/* strdup: 由 rmiku_shims.c 提供实现（需要 malloc, 不便 inline 进 string.h） */
-extern char *strdup(const char *s);
+
+static inline char *strdup(const char *s) {
+    if (!s) return 0;
+    size_t n = strlen(s) + 1;
+    char *p = (char *)malloc(n);
+    if (!p) return 0;
+    memcpy(p, s, n);
+    return p;
+}
 
 #ifdef __cplusplus
 }

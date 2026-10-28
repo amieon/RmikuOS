@@ -151,22 +151,17 @@ struct stat {
     long     st_blksize;    /* 近似值 512 */
     long     st_blocks;     /* 恒 0 */
 
-    /* 以下三个字段本内核没有真实语义, 但必须存在 —— POSIX 程序会直接读它们*/
+    /* st_dev / st_ino 本内核没有真实语义, 但必须存在 —— POSIX 程序会直接读它们*/
     dev_t    st_dev;        /* 恒 0(无设备号概念) */
     ino_t    st_ino;        /* 恒 0(无 inode 号) */
     nlink_t  st_nlink;      /* 目录 2 / 其余 1(假装没有子目录, du/find 够用) */
-    dev_t    st_rdev;       /* 恒 0(无设备文件) */
+    dev_t    st_rdev;       /* 真值: 字符设备的设备号(控制台 0x500, /dev/null 0x103), 其余 0 */
 };
 
-/* 内核 Stat 的私有字节布局（32 字节, 必须与 kernel/src/fs/stat.rs 一致） */
-typedef struct rk_stat_kernel {
-    unsigned char file_type;   /* @0 */
-    unsigned short mode;       /* @2 */
-    unsigned int   uid;        /* @4 */
-    unsigned int   gid;        /* @8 */
-    usize          size;       /* @16 */
-    unsigned int   mtime;      /* @24 最后修改时间(epoch 秒, 墙钟校准后为真值) */
-} rk_stat_kernel_t;
+/* 内核 Stat 的私有字节布局（32 字节, 与 kernel/src/fs/stat.rs 一致）。
+ * 定义点其实在 io.h（rk_stat_raw_t）—— 那里是最底层，lib/string.c 的 isatty
+ * 只用得上"类型 + 设备号"，不该为了它把整个 fs.h 拉进来。这里只做个别名。 */
+typedef rk_stat_raw_t rk_stat_kernel_t;
 
 static inline int rk_stat_convert(const rk_stat_kernel_t *k, struct stat *st) {
     if (!st) return -1;
@@ -194,7 +189,7 @@ static inline int rk_stat_convert(const rk_stat_kernel_t *k, struct stat *st) {
      * 我们不计子目录, 对 du/find 这类"判断是否还有别的链接"的用法足够。 */
     st->st_dev   = 0;
     st->st_ino   = 0;
-    st->st_rdev  = 0;
+    st->st_rdev  = (dev_t)k->dev;
     st->st_nlink = ((st->st_mode & S_IFMT) == S_IFDIR) ? 2 : 1;
     return 0;
 }
@@ -235,8 +230,7 @@ static inline int lstat(const char *path, struct stat *st) {
 
 static inline int fstat(int fd, struct stat *st) {
     rk_stat_kernel_t k;
-    isize r = syscall3(SYS_FSTAT, (usize)fd, (usize)&k, 0);
-    if (r < 0) return -1;
+    if (rk_fstat_raw(fd, &k) < 0) return -1;
     return rk_stat_convert(&k, st);
 }
 
@@ -540,7 +534,8 @@ static inline isize remove_recursive(const char *path) {
  *
  * 只有查询类命令才跳过 va_arg。新增查询类命令时必须加进下面这个白名单，
  * 否则会读到栈上的垃圾当 arg（变参函数编译器不检查实参个数）。
- */
+ * 曾经漏过一次：加了 F_GETFD 之后 git 的 `fcntl(fd, F_GETFD)` 读到垃圾，
+ * 于是 `flags | FD_CLOEXEC` 变成一个乱七八糟的值。 */
 static inline int fcntl(int fd, int cmd, ...) {
     va_list ap;
     int arg = 0;

@@ -105,6 +105,39 @@ static inline isize close(int fd) {
 static inline isize set_echo(int on) {
     return syscall3(SYS_SET_ECHO, (usize)on, 0, 0);
 }
+
+/* ---- 内核 Stat 的原始 32 字节布局 + 一次裸 fstat ----
+ *
+ * 为什么这层的定义放在 io.h 而不是 fs.h：io.h 是最底层（fs.h 反过来 include
+ * 它），而 lib/string.c 的 isatty 只需要"文件类型 + 设备号"，却不想把整个
+ * fs.h 拉进来 —— fs.h → process.h 里有 `static inline exit()`，会和 string.c
+ * 里那个留给 crt0 的 weak exit() 撞成重定义。布局仍是唯一定义点：fs.h 直接
+ * `typedef rk_stat_raw_t rk_stat_kernel_t` 复用，不重复写一遍。
+ *
+ * 与 kernel/src/fs/stat.rs 的 Stat 逐字段对应，改一边必须改另一边。 */
+#define RK_STAT_TYPE_CHAR 3   /* 同 kernel 的 STAT_TYPE_CHAR */
+
+/* 设备号（仅字符设备有意义），与 kernel/src/fs/stat.rs 的 DEV_* 一致：
+ * isatty 靠"是控制台"而不是"是字符设备"来判定 —— /dev/null 也是字符设备。 */
+#define RK_DEV_CONSOLE 0x0500u
+#define RK_DEV_NULL    0x0103u
+
+typedef struct rk_stat_raw {
+    unsigned char  file_type;   /* @0  */
+    unsigned short mode;        /* @2  权限位 */
+    unsigned int   uid;         /* @4  */
+    unsigned int   gid;         /* @8  */
+    usize          size;        /* @16 */
+    unsigned int   mtime;       /* @24 epoch 秒 */
+    unsigned int   dev;         /* @28 设备号(仅字符设备) */
+} rk_stat_raw_t;
+
+/* 成功返回 0，失败返回内核的 -errno（不翻成 -1/errno，留给上层决定） */
+static inline int rk_fstat_raw(int fd, rk_stat_raw_t *k) {
+    isize r = syscall3(SYS_FSTAT, (usize)fd, (usize)k, 0);
+    return (r < 0) ? (int)r : 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

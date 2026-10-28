@@ -1,19 +1,6 @@
 #include "user.h"
 #include <time.h>      /* gmtime_r —— 文件 mtime 格式化 */
-
-/* getpwuid 由 sqlite3 的 rmiku_shims.c 提供, ls 不一定链接到它。
- * 这里用 weak 符号: 链接到实现时自动生效, 否则为 NULL(回退显示 uid 数字)。
- * 注意不能 include <pwd.h>——它的强声明会与 weak 声明冲突。 */
-struct passwd {
-    char  *pw_name;
-    char  *pw_passwd;
-    uid_t  pw_uid;
-    gid_t  pw_gid;
-    char  *pw_gecos;
-    char  *pw_dir;
-    char  *pw_shell;
-};
-extern struct passwd *getpwuid(uid_t uid) __attribute__((weak));
+#include <pwd.h>       /* getpwuid —— 整份 inline 在 pwd.h 里, 直接 include 就行 */
 
 static void copy_dirent_name(struct dirent *d, char *out, int out_size) {
     int n = d->name_len;
@@ -70,9 +57,9 @@ static void print_mode(mode_t m) {
            (m & 0004) ? 'r' : '-', (m & 0002) ? 'w' : '-', (m & 0001) ? 'x' : '-');
 }
 
-/* 属主名: 有账号库(getpwuid 被链接)显示用户名, 否则回退 uid 数字 */
+/* 属主名: 账户库里查得到就显示名字, 查不到回退 uid 数字 */
 static void print_owner(uid_t uid) {
-    struct passwd *pw = getpwuid ? getpwuid(uid) : 0;
+    struct passwd *pw = getpwuid(uid);
     if (pw && pw->pw_name) {
         printf("%-8s", pw->pw_name);
     } else {

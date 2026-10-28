@@ -12,6 +12,7 @@ pub mod mount;
 pub mod fatfs;
 pub mod flag;
 pub mod rsext4fs;
+pub mod null;
 
 //pub mod initramfs;
 mod stdio;
@@ -19,6 +20,7 @@ mod stdio;
 pub use file::{File, FileRef, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT};
 pub use inode::{Inode, InodeRef, Metadata, InodeType};
 use crate::fs::inode::{check_access, R_OK, W_OK, X_OK};
+use crate::syscall::errno;
 pub use stdio::{stdin, stdout};
 pub use flag::*;
 pub const EOF : isize = 0;
@@ -30,6 +32,10 @@ pub const F_GETFL: usize = 3;
 pub const F_SETFL: usize = 4;
 /// Linux 的 F_DUPFD_CLOEXEC（1030）。值照抄，方便对拍。
 pub const F_DUPFD_CLOEXEC: usize = 1030;
+
+/* 描述符标志（和"文件状态标志"是两套东西）：
+ * F_GETFD/F_SETFD 读写的是一个 bit —— FD_CLOEXEC，存在 PCB.fd_cloexec 里。
+ * 不能塞进 fd_flags：FD_CLOEXEC=1，而 O_WRONLY 也是 1，会撞车。 */
 pub const FD_CLOEXEC: usize = 1;
 
 /// open 时"打开即 cloexec"（Linux 的 02000000）。省掉 open+fcntl 两步的竞态。
@@ -38,7 +44,7 @@ pub const O_NONBLOCK: usize = 2048;
 
 /// `F_GETFL` 报出来的位：访问模式 + 文件状态标志。
 pub const F_GETFL_MASK: usize = O_ACCMODE | O_APPEND | O_NONBLOCK;
-/// `F_SETFL` 只能改这两个 —— 访问模式在 open 那一刻定了，POSIX 不允许改。
+/// `F_SETFL` **只**能改这两个 —— 访问模式在 open 那一刻定了，POSIX 不允许改。
 /// 少掩这一下，`fcntl(fd, F_SETFL, O_NONBLOCK)` 会把 O_RDWR 悄悄改成 O_RDONLY。
 pub const F_SETFL_MASK: usize = O_APPEND | O_NONBLOCK;
 
@@ -69,68 +75,103 @@ pub fn mode_with_umask(mode: usize) -> u16 {
     ((mode & 0o777) & !(crate::task::current_umask() as usize)) as u16
 }
 
-pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Option<FileRef> {
+/// 打开文件。失败返回 errno（正数），由 syscall 层取负。
+///
+/// 以前这里返回 `Option`，syscall 层一律写 `-1` —— 而 `-1` 就是 `-EPERM`，
+/// 于是"文件不存在"被用户态看成 "Operation not permitted"。git 找 `/dev/null`
+/// 结果报 EPERM 就是被这个吞掉的。
+pub fn open_at(cwd: &str, path: &str, flags: usize, mode: usize) -> Result<FileRef, isize> {
     // 绝对路径只算一次：建文件与"告诉目录 fd 自己是谁"都要用
-    let abs = path::normalize_path(cwd, path)?;
+    let abs = path::normalize_path(cwd, path).ok_or(errno::EINVAL)?;
+
+    /* 内置设备节点（/dev/null）绕开挂载表：它不是任何文件系统里的 inode。
+     * 放这么前面是因为它必须在 O_CREAT 建文件的逻辑之前拦下 —— 否则
+     * `open("/dev/null", O_CREAT)` 会先创建一个普通文件把设备遮住。
+     * O_CREAT|O_EXCL 对已存在的设备照 POSIX 报 EEXIST。 */
+    if let Some(dev) = null::builtin_device(&abs) {
+        if flags & O_CREAT != 0 && flags & O_EXCL != 0 {
+            return Err(errno::EEXIST);
+        }
+        return Ok(dev);
+    }
+
     let inode = match path::lookup_path_at(cwd, path) {
         Some(i) => {
             if flags & O_CREAT != 0 && flags & O_EXCL != 0 {
-                return None;
+                return Err(errno::EEXIST);
             }
             i
         }
         None => {
             // 文件不存在
-            if flags & O_CREAT != 0 {
-                // 创建后按 mode（经 umask 收窄）设权限位
-                let inode = create_file(&abs)?;
-                inode.chmod(mode_with_umask(mode));
-                inode
-            } else {
-                return None;
+            if flags & O_CREAT == 0 {
+                return Err(errno::ENOENT);
             }
+            // 创建后按 mode（经 umask 收窄）设权限位
+            let inode = create_file(&abs)?;
+            inode.chmod(mode_with_umask(mode));
+            inode
         }
     };
 
     // 访问检查(现有文件): 目录/普通文件按 R/W 请求检查; O_EXEC 由 exec 自管
     if !check_open(&inode, flags) {
-        return None;
+        // 写打开目录是 EISDIR 而不是 EACCES —— git/mv 靠这个区分"没权限"和"搞错对象"
+        let is_dir = inode.metadata().inode_type == InodeType::Directory;
+        return Err(if is_dir && (flags & O_ACCMODE) != O_RDONLY {
+            errno::EISDIR
+        } else {
+            errno::EACCES
+        });
     }
 
     if flags & O_TRUNC != 0 {
         inode.truncate();
     }
-    inode.open(flags, &abs)
+    inode.open(flags, &abs).ok_or(errno::EACCES)
 }
 
-pub fn open(path: &str, flags: usize, mode: usize) -> Option<FileRef> {
-    let abs = path::normalize_path("/", path)?;
+pub fn open(path: &str, flags: usize, mode: usize) -> Result<FileRef, isize> {
+    let abs = path::normalize_path("/", path).ok_or(errno::EINVAL)?;
+
+    // 同 open_at：内置设备先于文件系统解析（见那里的注释）。
+    if let Some(dev) = null::builtin_device(&abs) {
+        if flags & O_CREAT != 0 && flags & O_EXCL != 0 {
+            return Err(errno::EEXIST);
+        }
+        return Ok(dev);
+    }
+
     let inode = match path::lookup_abs_path(&abs) {
         Some(i) => {
             if flags & O_CREAT != 0 && flags & O_EXCL != 0 {
-                return None;
+                return Err(errno::EEXIST);
             }
             i
         }
         None => {
-            if flags & O_CREAT != 0 {
-                let inode = create_file(&abs)?;
-                inode.chmod(mode_with_umask(mode));
-                inode
-            } else {
-                return None;
+            if flags & O_CREAT == 0 {
+                return Err(errno::ENOENT);
             }
+            let inode = create_file(&abs)?;
+            inode.chmod(mode_with_umask(mode));
+            inode
         }
     };
 
     if !check_open(&inode, flags) {
-        return None;
+        let is_dir = inode.metadata().inode_type == InodeType::Directory;
+        return Err(if is_dir && (flags & O_ACCMODE) != O_RDONLY {
+            errno::EISDIR
+        } else {
+            errno::EACCES
+        });
     }
 
     if flags & O_TRUNC != 0 {
         inode.truncate();
     }
-    inode.open(flags, &abs)
+    inode.open(flags, &abs).ok_or(errno::EACCES)
 }
 
 pub mod stat;
@@ -233,15 +274,17 @@ fn split_parent(path: &str) -> (String, String) {
     }
 }
 
-pub fn create_file(path: &str) -> Option<InodeRef> {
-    let abs = normalize_path("/", path)?;
+pub fn create_file(path: &str) -> Result<InodeRef, isize> {
+    let abs = normalize_path("/", path).ok_or(errno::EINVAL)?;
     let (parent, name) = split_parent(&abs);
-    let parent_inode = path::lookup_abs_path(&parent)?;
+    let parent_inode = path::lookup_abs_path(&parent).ok_or(errno::ENOENT)?;
     // 在目录中创建文件需要父目录的 写+搜索 权限(root 绕过)
     if !check_dir_write(&parent_inode) {
-        return None;
+        return Err(errno::EACCES);
     }
-    parent_inode.create(&name)                    
+    // 底层 create 返回 None 基本只有一种情况: 挂载的是只读 FS(rootfs 的 ext4-view)。
+    // 报 EROFS 而不是 EACCES —— git/mv 靠这个区分"换个地方写"和"没权限".
+    parent_inode.create(&name).ok_or(errno::EROFS)
 }
 
 pub fn make_dir(path: &str) -> Option<InodeRef> {

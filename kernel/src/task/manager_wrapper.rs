@@ -712,10 +712,11 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         .collect();
 
     let file = match crate::fs::open(path, crate::fs::flag::O_EXEC, 0) {
-        Some(file) => file,
-        None => {
-            log::info!("[exec] open failed: {}", path);
-            return -1;
+        Ok(file) => file,
+        Err(e) => {
+            // exec 的错误码必须准: shell 靠 ENOENT/EACCES 区分"命令不存在"与"不可执行"
+            log::info!("[exec] open failed: {} (errno {})", path, e);
+            return -e;
         }
     };
 
@@ -992,7 +993,7 @@ pub fn set_fd_cloexec_current(fd: usize, on: bool) {
     process.fd_cloexec[fd] = on;
 }
 
-/// 记录 fd 的文件状态标志（访问模式 + O_APPEND + O_NONBLOCK）。
+/// 记录 fd 的**文件状态标志**（访问模式 + O_APPEND + O_NONBLOCK）。
 ///
 /// 必须在 open 时调一次：`F_GETFL` 的值就来自这里。少了这一步，
 /// `fcntl(fd, F_GETFL) & O_ACCMODE` 永远报 O_RDONLY —— 用读模式打开的
@@ -1016,7 +1017,7 @@ pub fn get_fd_flags_current(fd: usize) -> usize{
 
 /// fcntl(fd, cmd, arg)。
 ///
-/// 支持的命令（其余返回 `-EINVAL`，不是 `-1` —— 后者会被 libc 当成 EIO）：
+/// 支持的命令（其余返回 `-EINVAL`，**不是** `-1` —— 后者会被 libc 当成 EIO）：
 ///   F_DUPFD / F_DUPFD_CLOEXEC —— 复制 fd 到「≥ arg 的最小空闲槽」
 ///   F_GETFD / F_SETFD          —— 描述符标志（只有 FD_CLOEXEC 一位）
 ///   F_GETFL / F_SETFL          —— 文件状态标志（访问模式 + O_APPEND + O_NONBLOCK）
@@ -1049,7 +1050,7 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
         }
         manager.copy_fd_flags(pid, fd, new_fd as usize);
 
-        /* F_DUPFD 的新 fd 不带 FD_CLOEXEC，F_DUPFD_CLOEXEC 才带。 */
+        /* F_DUPFD 的新 fd **不带** FD_CLOEXEC，F_DUPFD_CLOEXEC 才带。 */
         if cmd == crate::fs::F_DUPFD_CLOEXEC {
             let process = manager.process_mut(pid);
             let n = new_fd as usize;
@@ -1068,7 +1069,7 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
             if fd >= process.fd_flags.len() {
                 process.fd_flags.resize(fd + 1, 0);
             }
-            /* 只改 O_APPEND / O_NONBLOCK，保留访问模式。
+            /* 只改 O_APPEND / O_NONBLOCK，**保留访问模式**。
              * 直接 `= arg` 会让 `fcntl(fd, F_SETFL, O_NONBLOCK)` 把 O_RDWR
              * 悄悄变成 O_RDONLY —— 之后 write 就 EBADF，很难联想到 fcntl。 */
             let cur = process.fd_flags[fd];
@@ -2002,7 +2003,7 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     {
         let process = manager.process_mut(current_pid);
         process.fd_table[new_fd] = Some(old_file);
-        /* dup2 得到的新 fd 不带 FD_CLOEXEC（POSIX）。少了这一句，
+        /* dup2 得到的新 fd **不带** FD_CLOEXEC（POSIX）。少了这一句，
          * `dup2(f, 1)` 之后 exec 会把 stdout 关掉。 */
         if new_fd < process.fd_cloexec.len() {
             process.fd_cloexec[new_fd] = false;
@@ -2117,10 +2118,12 @@ pub fn pgid_of(pid: isize) -> isize {
 }
 
 /// 把 target 放进组 pgid（POSIX setpgid 的一个诚实子集）：
-/// 只能改自己，或自己的直接子进程（否则 EPERM）
-/// pid = 0 表示"我自己"；pgid = 0 表示"用 target 的 pid 当组号"，
-/// 也就是"自成一组、自己当组长"，这个总是允许（因为它必然是个空组号）
-/// 除此之外，目标组必须已经存在（本模型不创建空组，组是派生视图）
+///
+///   - 只能改自己，或自己的直接子进程（否则 EPERM）
+///   - pid = 0 表示"我自己"；pgid = 0 表示"用 target 的 pid 当组号"，
+///     也就是"自成一组、自己当组长"，这个总是允许（因为它必然是个空组号）
+///   - 除此之外，目标组必须已经存在（本模型不创建空组，组是派生视图）
+///
 /// 没有 session 边界检查：POSIX 的"同一 session 内""session leader 不能改"
 /// 依赖 session 的成员集合，而这里 sid 只是个标号（见 PCB::sid），
 /// 无法用来判定"同会话"，所以明确省略而不是假装检查。
@@ -2171,6 +2174,17 @@ pub fn set_pgid(pid: isize, pgid: isize) -> isize {
 }
 
 /// setsid(): 新建会话，调用者成为会话首进程 + 新进程组组长，返回新 sid。
+///
+/// 三条 POSIX 语义里能做到的：
+///   - 组长不能调（EPERM）—— 因为它已经是组长，再"新建组"就是自指，
+///     POSIX 拿这条挡住 fork 后忘了再 fork 一步的进程
+///   - 成功后 pgid = sid = pid
+///
+/// 做不到的一条（不假装做）：会话和控制终端绑定、脱离时给前台组发 SIGHUP。
+/// 本内核没有终端对象（`tcsetpgrp` 也没做），所以 setsid 的效果就是
+/// "自成一组 + 记下自己是会话首进程"，足够 daemonize 用 —— git 的
+/// `daemonize()` 要的正是"别再收终端信号"，而这里终端信号本来就只发给
+/// `FRONT_PGID`，新组自然不在其中。
 pub fn setsid() -> isize {
     let mut manager = lock_detect!(TASK_MANAGER);
     let pid = manager.current_pid();

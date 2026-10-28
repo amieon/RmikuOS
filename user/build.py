@@ -614,7 +614,7 @@ def build_sqlite3(arch: str):
     SQLite 是巨型可移植库，必须靠 -D 宏关掉宿主 OS 后端，否则会去编
     os_unix.c 撞上 pthread.h / dlfcn.h。
 
-    注意：本函数编译 sqlite3.c + shell.c + rmiku_vfs.c + rmiku_shims.c，
+    注意：本函数编译 sqlite3.c + shell.c + rmiku_vfs.c，
     链出交互式 shell（sqlite3.elf）；另保留原探针 sqlite_main.c，
     链出 sqlite3_probe.elf 作回归验证。
     """
@@ -662,7 +662,6 @@ def build_sqlite3(arch: str):
         "sqlite3": src_dir / "sqlite3.c",
         "shell": src_dir / "shell.c",
         "rmiku_vfs": src_dir / "rmiku_vfs.c",
-        "rmiku_shims": src_dir / "rmiku_shims.c",
         "sqlite_main": src_dir / "sqlite_main.c",
         "sqlite_test": src_dir / "sqlite_test.c",
     }
@@ -700,9 +699,9 @@ def build_sqlite3(arch: str):
         objs[name] = str(obj)
 
     def link(elf_name, entry_obj):
-        """链接一个可执行文件: crt0 + sqlite3.o + 入口 + vfs + shims + 运行时"""
+        """链接一个可执行文件: crt0 + sqlite3.o + 入口 + vfs + 运行时"""
         link_objs = [str(crt0_obj), objs["sqlite3"], entry_obj,
-                     objs["rmiku_vfs"], objs["rmiku_shims"], str(runtime_obj)]
+                     objs["rmiku_vfs"], str(runtime_obj)]
         if string_obj:
             link_objs.append(str(string_obj))
         out_elf = out_dir / elf_name

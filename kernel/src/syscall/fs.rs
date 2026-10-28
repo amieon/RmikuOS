@@ -220,20 +220,23 @@ pub fn sys_open(path_ptr: usize, len: usize, flags: usize, mode: usize) -> isize
 
     let cwd = crate::task::current_cwd();
 
+    /* 失败要返回 -errno，不能返回裸 -1 —— 那等于 -EPERM，用户态会把
+     * "没有这个文件"读成 "Operation not permitted"。
+     * 这里也不打日志: open 试探是高频路径，串口只有 11.5K 字符/秒。 */
     let file = match crate::fs::open_at(&cwd, path, flags, mode) {
-        Some(file) => file,
-        None => {
-            log::info!("[fs] open failed: cwd={}, path={}", cwd, path);
-            return -1;
-        }
+        Ok(file) => file,
+        Err(e) => return -e,
     };
 
     let fd = crate::task::alloc_fd_current(file);
 
     if fd >= 0 {
-
+        /* 记住访问模式 + O_APPEND/O_NONBLOCK —— `F_GETFL` 就报这个。
+         * 不记的话 `fcntl(fd, F_GETFL) & O_ACCMODE` 永远报 O_RDONLY。 */
         crate::task::set_fd_flags_current(fd as usize, flags);
 
+        /* O_CLOEXEC：一次系统调用就定好"别漏给子进程"，省掉 open+fcntl 之间
+         * 那段被别的线程 fork 的竞态。 */
         if (flags & crate::fs::O_CLOEXEC) != 0 {
             crate::task::set_fd_cloexec_current(fd as usize, true);
         }
@@ -362,22 +365,22 @@ fn write_stat_to_user(user_ptr: usize, stat: &crate::fs::Stat) -> isize {
 pub fn sys_stat(path_ptr: usize, path_len: usize, stat_ptr: usize) -> isize {
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, path_len) {
         Some(bytes) => bytes,
-        None => return -1,
+        None => return -super::errno::EFAULT,
     };
 
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s.trim_matches('\0').trim(),
-        Err(_) => return -1,
+        Err(_) => return -super::errno::EINVAL,
     };
 
     let cwd = crate::task::current_cwd();
 
+    /* 失败要给 -errno: git 的 real_path_internal 靠 `errno == ENOENT` 判断
+     * "最后一级允许不存在"。返回裸 -1(=EPERM) 会让 `git init` 在建 .git
+     * 之前就误判成权限问题。 */
     let stat = match crate::fs::stat_at(&cwd, path) {
         Some(stat) => stat,
-        None => {
-            log::warn!("[fs] stat failed: cwd={}, path={}", cwd, path);
-            return -1;
-        }
+        None => return -super::errno::ENOENT,
     };
 
     write_stat_to_user(stat_ptr, &stat)
@@ -386,7 +389,8 @@ pub fn sys_stat(path_ptr: usize, path_len: usize, stat_ptr: usize) -> isize {
 pub fn sys_fstat(fd: usize, stat_ptr: usize) -> isize {
     let file = match crate::task::current_file(fd) {
         Some(file) => file,
-        None => return -1,
+        // isatty 就靠这个 EBADF 区分"fd 没开"和"不是终端"
+        None => return -super::errno::EBADF,
     };
 
     let stat = file.stat();
@@ -397,18 +401,18 @@ pub fn sys_fstat(fd: usize, stat_ptr: usize) -> isize {
 pub fn sys_lstat(path_ptr: usize, path_len: usize, stat_ptr: usize) -> isize {
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, path_len) {
         Some(bytes) => bytes,
-        None => return -1,
+        None => return -super::errno::EFAULT,
     };
 
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s.trim_matches('\0').trim(),
-        Err(_) => return -1,
+        Err(_) => return -super::errno::EINVAL,
     };
 
     let cwd = crate::task::current_cwd();
     let stat = match crate::fs::lstat_at(&cwd, path) {
         Some(stat) => stat,
-        None => return -1,
+        None => return -super::errno::ENOENT,
     };
 
     write_stat_to_user(stat_ptr, &stat)
@@ -427,6 +431,10 @@ pub fn sys_dup(fd: usize) -> isize {
 }
 
 /// dup3(fd, newfd, flags)：dup2 加上 flags。
+///
+/// 只认 `O_CLOEXEC`（其余位返回 EINVAL）。和 dup2 的两点差别：
+///   - `old_fd == new_fd` 必须是 EINVAL（dup2 是「什么都不做、返回成功」）；
+///   - 新 fd 的描述符标志由 flags 决定，不从旧 fd 继承。
 pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
     let unknown = flags & !crate::fs::O_CLOEXEC;
     if unknown != 0 {
@@ -511,8 +519,8 @@ pub fn sys_create(path_ptr : usize, len : usize) -> isize {
     };
 
     match crate::fs::create_file(&abs) {
-        Some(_) => 0,
-        None => -1,
+        Ok(_) => 0,
+        Err(e) => -e,
     }
 }
 
@@ -730,11 +738,11 @@ pub fn sys_set_echo(on: usize) -> isize {
 
 /* 
  * 设计：本 VFS 是按"路径字符串"解析的——挂载表按路径前缀匹配、symlink 也按路径
- * 重新解析。所以 dirfd **不能**像 Linux 那样从 dentry 往下走（一往下走就断了
+ * 重新解析。所以 dirfd 不能像 Linux 那样从 dentry 往下走（一往下走就断了
  * 挂载点，例如 dirfd=/ + "fat/x" 会落到 rootfs 里那个空的 fat 目录，而不是 FAT 盘）。
  *
  * 做法：让目录 fd 自报绝对路径（File::abs_path，open 时写入），拼成绝对路径后
- * **完全复用**现有实现。好处是 at 与非 at 的行为天然一致——同一套 lookup、
+ * 完全复用现有实现。好处是 at 与非 at 的行为天然一致——同一套 lookup、
  * 挂载穿越、symlink 跟随逻辑，不需要给每个操作维护两份。
  *
  * 已知取舍：目录被 rename 之后，旧的 dirfd 仍指向旧路径（Linux 用 inode 就不会）。
@@ -752,9 +760,9 @@ pub const AT_REMOVEDIR: usize = 0x200;
 pub const AT_EACCESS: usize = 0x200;
 
 /// 把 (dirfd, path) 解析成绝对路径。三条规则与 Linux 一致：
-///   1. path 是绝对路径 → **忽略 dirfd**（哪怕 dirfd 是无效的）
+///   1. path 是绝对路径 → 忽略 dirfd（哪怕 dirfd 是无效的）
 ///   2. dirfd == AT_FDCWD → 相对进程 cwd
-///   3. 否则 dirfd 必须是一个**已打开的目录**（普通文件/pipe 当 dirfd 会失败）
+///   3. 否则 dirfd 必须是一个已打开的目录（普通文件/pipe 当 dirfd 会失败）
 fn resolve_at(dirfd: isize, path: &str) -> Option<String> {
     if path.starts_with('/') {
         return crate::fs::normalize_path("/", path);
@@ -789,11 +797,8 @@ pub fn sys_openat(dirfd: usize, path_ptr: usize, len: usize, flags: usize, mode:
         None => return -1,
     };
     let file = match crate::fs::open(&abs, flags, mode) {
-        Some(file) => file,
-        None => {
-            log::info!("[fs] openat failed: dirfd={}, abs={}", dirfd as isize, abs);
-            return -1;
-        }
+        Ok(file) => file,
+        Err(e) => return -e,
     };
     crate::task::alloc_fd_current(file)
 }
@@ -806,11 +811,11 @@ pub fn sys_fstatat(dirfd: usize, path_ptr: usize, len: usize, stat_ptr: usize, f
     // 只支持 AT_SYMLINK_NOFOLLOW。AT_EMPTY_PATH / AT_NO_AUTOMOUNT 没有实现，
     // 明确拒绝好过按"跟随 symlink"的默认语义糊过去。
     if flags & !AT_SYMLINK_NOFOLLOW != 0 {
-        return -1;
+        return -super::errno::EINVAL;
     }
     let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
         Some(abs) => abs,
-        None => return -1,
+        None => return -super::errno::EFAULT,
     };
     let stat = if flags & AT_SYMLINK_NOFOLLOW != 0 {
         crate::fs::lstat(&abs)
@@ -819,7 +824,7 @@ pub fn sys_fstatat(dirfd: usize, path_ptr: usize, len: usize, stat_ptr: usize, f
     };
     match stat {
         Some(stat) => write_stat_to_user(stat_ptr, &stat),
-        None => -1,
+        None => -super::errno::ENOENT,
     }
 }
 
@@ -872,7 +877,7 @@ pub fn sys_mkdirat(dirfd: usize, path_ptr: usize, len: usize, mode: usize) -> is
 
 /// faccessat(dirfd, path, amode, flags)
 ///
-/// 默认用**真实身份**(ruid/rgid)，带 AT_EACCESS 时用**有效身份**(euid/egid)。
+/// 默认用真实身份(ruid/rgid)，带 AT_EACCESS 时用有效身份(euid/egid)。
 /// amode 与 access 一致：F_OK=0 / X_OK=1 / W_OK=2 / R_OK=4。
 pub fn sys_faccessat(dirfd: usize, path_ptr: usize, len: usize, amode: usize, flags: usize) -> isize {
     // AT_SYMLINK_NOFOLLOW 需要"检查链接本身"，本内核的 access 一定跟随 symlink，
@@ -944,7 +949,7 @@ pub fn sys_fchown(fd: usize, uid: usize, gid: usize) -> isize {
 /// fchdir(fd)：把进程 cwd 切到 fd 指向的目录。
 ///
 /// 相比 `chdir("路径")` 的价值：路径在"解析完到真正切换"之间可能被别的线程改掉，
-/// 而 fd 指向的是**已经打开的那个目录**，没有这个窗口。
+/// 而 fd 指向的是已经打开的那个目录，没有这个窗口。
 /// 本 VFS 存的是路径字符串，所以这里靠 `File::abs_path()` 取回绝对路径。
 pub fn sys_fchdir(fd: usize) -> isize {
     let file = match crate::task::current_file(fd) {
