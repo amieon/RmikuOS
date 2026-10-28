@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include "types.h"   
+#include "errno.h"   /* strerror 用符号名而不是魔法数字 */
 
 /* ===== 这两个在 lib/string.c 里实现，链接时提供 ===== */
 void *memcpy(void *dst, const void *src, size_t n);
@@ -160,16 +161,64 @@ static inline char *strpbrk(const char *s, const char *accept) {
     return NULL;
 }
 
+/* 只覆盖内核真会产生的那些（含 socket/进程），不追求与 glibc 全文一致。 */
 static inline char *strerror(int err) {
     switch (err) {
-        case  2: return "No such file or directory";
-        case  9: return "Bad file descriptor";
-        case 12: return "Out of memory";
-        case 22: return "Invalid argument";
-        case 28: return "No space left on device";
-        case 33: return "Argument out of domain";
-        case 34: return "Result too large";
-        default: return "Unknown error";
+        case EPERM:            return "Operation not permitted";
+        case ENOENT:           return "No such file or directory";
+        case ESRCH:            return "No such process";
+        case EINTR:            return "Interrupted system call";
+        case EIO:              return "Input/output error";
+        case ENXIO:            return "No such device or address";
+        case ENOEXEC:          return "Exec format error";
+        case EBADF:            return "Bad file descriptor";
+        case ECHILD:           return "No child processes";
+        case EAGAIN:           return "Resource temporarily unavailable";
+        case ENOMEM:           return "Out of memory";
+        case EACCES:           return "Permission denied";
+        case EFAULT:           return "Bad address";
+        case EBUSY:            return "Device or resource busy";
+        case EEXIST:           return "File exists";
+        case EXDEV:            return "Invalid cross-device link";
+        case ENODEV:           return "No such device";
+        case ENOTDIR:          return "Not a directory";
+        case EISDIR:           return "Is a directory";
+        case EINVAL:           return "Invalid argument";
+        case ENFILE:           return "Too many open files in system";
+        case EMFILE:           return "Too many open files";
+        case ENOTTY:           return "Inappropriate ioctl for device";
+        case EFBIG:            return "File too large";
+        case ENOSPC:           return "No space left on device";
+        case ESPIPE:           return "Illegal seek";
+        case EROFS:            return "Read-only file system";
+        case EPIPE:            return "Broken pipe";
+        case EDOM:             return "Argument out of domain";
+        case ERANGE:           return "Result too large";
+        case ENAMETOOLONG:     return "File name too long";
+        case ENOSYS:           return "Function not implemented";
+        case ENOTEMPTY:        return "Directory not empty";
+        case ELOOP:            return "Too many levels of symbolic links";
+        case ENOTSOCK:         return "Socket operation on non-socket";
+        case EPROTOTYPE:       return "Protocol wrong type for socket";
+        case EPROTONOSUPPORT:  return "Protocol not supported";
+        case EOPNOTSUPP:       return "Operation not supported";
+        case EAFNOSUPPORT:     return "Address family not supported";
+        case EADDRINUSE:       return "Address already in use";
+        case EADDRNOTAVAIL:    return "Cannot assign requested address";
+        case ENETDOWN:         return "Network is down";
+        case ENETUNREACH:      return "Network is unreachable";
+        case ECONNABORTED:     return "Software caused connection abort";
+        case ECONNRESET:       return "Connection reset by peer";
+        case ENOBUFS:          return "No buffer space available";
+        case EISCONN:          return "Transport endpoint is already connected";
+        case ENOTCONN:         return "Transport endpoint is not connected";
+        case ETIMEDOUT:        return "Connection timed out";
+        case ECONNREFUSED:     return "Connection refused";
+        case EHOSTUNREACH:     return "No route to host";
+        case EALREADY:         return "Operation already in progress";
+        case EINPROGRESS:      return "Operation now in progress";
+        case ECANCELED:        return "Operation canceled";
+        default:               return "Unknown error";
     }
 }
 
