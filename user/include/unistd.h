@@ -40,8 +40,9 @@ extern int access(const char *path, int amode);
 
 /* symlink/readlink/link/lstat: 见 fs.h（内核 SYS_SYMLINK/READLINK/LINK/LSTAT）。 */
 
-/* 全局环境指针(POSIX): crt0 启动时把 exec 传入的 envp 保存到这里 */
-extern char environ;
+/* 全局环境指针(POSIX): crt0 启动时把 exec 传入的 envp 保存到这里。
+ * 是 char** 不是 char —— crt0 里 `.size environ, 8` 存的就是 envp 这个指针本身。 */
+extern char **environ;
 
 /* gethostname: 没有 hostname syscall，返回编译期常量（与 uname().nodename 一致）。
  * 移植代码（git 的 ident.c）用它拼默认邮箱，拿不到才更要显式配置 user.email。 */
