@@ -29,11 +29,11 @@ static inline isize read(int fd, char *buf, usize len) {
 }
 
 static inline isize pread(int fd, char *buf, usize count, usize offset) {
-    return syscall6(SYS_PREAD, (usize)fd, (usize)buf, count, offset, 0, 0);
+    return rk_sys_ret(syscall6(SYS_PREAD, (usize)fd, (usize)buf, count, offset, 0, 0));
 }
 
 static inline isize pwrite(int fd, const char *buf, usize count, usize offset) {
-    return syscall6(SYS_PWRITE, (usize)fd, (usize)buf, count, offset, 0, 0);
+    return rk_sys_ret(syscall6(SYS_PWRITE, (usize)fd, (usize)buf, count, offset, 0, 0));
 }
 
 static inline void put_char(char ch) {
@@ -42,7 +42,7 @@ static inline void put_char(char ch) {
 
 
 static inline isize create2(const char *path, usize len) {
-    return syscall3(SYS_CREATE, (usize)path, len, 0);
+    return rk_sys_ret(syscall3(SYS_CREATE, (usize)path, len, 0));
 }
 
 static inline isize create(const char *path) {

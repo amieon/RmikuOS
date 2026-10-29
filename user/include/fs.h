@@ -63,13 +63,13 @@ struct dirent {
 };
 
 static inline isize getdents(int fd, struct dirent *buf, usize len) {
-    return syscall3(SYS_GETDENTS, (usize)fd, (usize)buf, len);
+    return rk_sys_ret(syscall3(SYS_GETDENTS, (usize)fd, (usize)buf, len));
 }
 
 /* ---- 工作目录 ---- */
 
 static inline isize chdir2(const char *path, usize len) {
-    return syscall3(SYS_CHDIR, (usize)path, len, 0);
+    return rk_sys_ret(syscall3(SYS_CHDIR, (usize)path, len, 0));
 }
 
 static inline int chdir(const char *path) {
@@ -80,12 +80,12 @@ static inline int chdir(const char *path) {
  * 比 chdir("路径") 安全：路径在"解析完到切换"之间可能被别的线程改掉，
  * fd 指向的已经是那个目录本身。非目录 fd / 目录已被删除 → -1。 */
 static inline int fchdir(int fd) {
-    return (int)syscall3(SYS_FCHDIR, (usize)fd, 0, 0);
+    return (int)rk_sys_ret(syscall3(SYS_FCHDIR, (usize)fd, 0, 0));
 }
 
 /* POSIX 语义: 成功返回 buf, 失败返回 NULL */
 static inline char *getcwd(char *buf, usize len) {
-    if (syscall3(SYS_GETCWD, (usize)buf, len, 0) < 0) return (char *)0;
+    if (rk_sys_ret(syscall3(SYS_GETCWD, (usize)buf, len, 0)) < 0) return (char *)0;
     return buf;
 }
 
@@ -205,9 +205,13 @@ static inline int stat_type_of(mode_t m) {
     return STAT_TYPE_FILE;
 }
 
+/* 三个 stat 变体都必须过 rk_sys_ret: 内核失败返回 -errno, 这里要翻成 -1+errno。
+ * 直接透传负数的话 errno 一个字都不会被设置, 调用方读到的是上一次的残留值。
+ * git 的 real_path_internal 就是靠 `errno == ENOENT` 判断"最后一级可以不存在",
+ * 脏 errno 会让 `git init` 把还不存在的 .git 当成权限问题。 */
 static inline isize stat2(const char *path, usize len, struct stat *st) {
     rk_stat_kernel_t k;
-    isize r = syscall3(SYS_STAT, (usize)path, len, (usize)&k);
+    isize r = rk_sys_ret(syscall3(SYS_STAT, (usize)path, len, (usize)&k));
     if (r < 0) return r;
     return (isize)rk_stat_convert(&k, st);
 }
@@ -219,7 +223,7 @@ static inline int stat(const char *path, struct stat *st) {
 /* lstat: 路径中间 symlink 仍跟随，但最终 symlink 返回链接自身 */
 static inline isize lstat2(const char *path, usize len, struct stat *st) {
     rk_stat_kernel_t k;
-    isize r = syscall3(SYS_LSTAT, (usize)path, len, (usize)&k);
+    isize r = rk_sys_ret(syscall3(SYS_LSTAT, (usize)path, len, (usize)&k));
     if (r < 0) return r;
     return (isize)rk_stat_convert(&k, st);
 }
@@ -230,7 +234,8 @@ static inline int lstat(const char *path, struct stat *st) {
 
 static inline int fstat(int fd, struct stat *st) {
     rk_stat_kernel_t k;
-    if (rk_fstat_raw(fd, &k) < 0) return -1;
+    /* rk_fstat_raw 是裸的(返回 -errno), 这里补 errno 再返回 -1 */
+    if (rk_sys_ret((isize)rk_fstat_raw(fd, &k)) < 0) return -1;
     return rk_stat_convert(&k, st);
 }
 
@@ -239,8 +244,8 @@ static inline int fstat(int fd, struct stat *st) {
 static inline isize fstatat2(int dirfd, const char *path, usize len,
                              struct stat *st, usize flags) {
     rk_stat_kernel_t k;
-    isize r = syscall6(SYS_FSTATAT, (usize)(isize)dirfd, (usize)path, len,
-                       (usize)&k, flags, 0);
+    isize r = rk_sys_ret(syscall6(SYS_FSTATAT, (usize)(isize)dirfd, (usize)path, len,
+                                  (usize)&k, flags, 0));
     if (r < 0) return r;
     return (isize)rk_stat_convert(&k, st);
 }
@@ -251,7 +256,7 @@ static inline int fstatat(int dirfd, const char *path, struct stat *st, int flag
 
 /* chmod(path, mode): 修改文件权限位(低 12 位)。仅 root 或文件属主可改。 */
 static inline isize chmod2(const char *path, usize len, usize mode) {
-    return syscall3(SYS_CHMOD, (usize)path, len, mode);
+    return rk_sys_ret(syscall3(SYS_CHMOD, (usize)path, len, mode));
 }
 
 static inline int chmod(const char *path, mode_t mode) {
@@ -261,7 +266,7 @@ static inline int chmod(const char *path, mode_t mode) {
 /* fchmod(fd, mode): 按 fd 改权限位（省一次路径解析，也不受文件被改名影响）。
  * 特权检查同 chmod：root 或文件属主。pipe/终端/只读 rootfs 的 fd 返回 -1。 */
 static inline int fchmod(int fd, mode_t mode) {
-    return (int)syscall3(SYS_FCHMOD, (usize)fd, (usize)mode, 0);
+    return (int)rk_sys_ret(syscall3(SYS_FCHMOD, (usize)fd, (usize)mode, 0));
 }
 
 /* umask(mask): 设置"新建文件/目录默认要去掉的权限位"，返回旧值。
@@ -276,8 +281,8 @@ static inline mode_t umask(mode_t mask) {
 /* fchmodat(dirfd, path, mode, flags): 相对目录 fd 改权限。
  * 目前不接受 AT_SYMLINK_NOFOLLOW（内核明确返回 -1，而不是静默忽略 flag）。 */
 static inline int fchmodat(int dirfd, const char *path, mode_t mode, int flags) {
-    return (int)syscall6(SYS_FCHMODAT, (usize)(isize)dirfd, (usize)path,
-                         (usize)strlen(path), (usize)mode, (usize)flags, 0);
+    return (int)rk_sys_ret(syscall6(SYS_FCHMODAT, (usize)(isize)dirfd, (usize)path,
+                                    (usize)strlen(path), (usize)mode, (usize)flags, 0));
 }
 
 /*
@@ -300,39 +305,33 @@ static inline int fchmodat(int dirfd, const char *path, mode_t mode, int flags) 
  * 注意：内核只有一个返回码，无法区分"不存在"和"权限不足"，这个粗分与
  * 大多数调用方的用法（只看成败）兼容。
  */
+/* access 系列：内核真能看到"不存在 vs 没权限"，所以 errno 由内核给，
+ * 不再自己瞎猜（老实现恒 ENOENT/EACCES，把只读 FS 也报成没权限）。 */
 static inline isize access2(const char *path, usize len, usize amode) {
-    return syscall3(SYS_ACCESS, (usize)path, len, amode);
+    return rk_sys_ret(syscall3(SYS_ACCESS, (usize)path, len, amode));
 }
 
 static inline int access(const char *path, int amode) {
-    int r = (int)access2(path, strlen(path), (usize)amode);
-    if (r != 0) {
-        errno = (amode == 0) ? ENOENT : EACCES;
-    }
-    return r;
+    return (int)access2(path, strlen(path), (usize)amode);
 }
 
 /* faccessat(dirfd, path, amode, flags): 相对目录 fd 的 access。
  * flags 带 AT_EACCESS 时按有效身份(euid)检查，否则按真实身份(ruid)。 */
 static inline isize faccessat2(int dirfd, const char *path, usize len,
                                usize amode, usize flags) {
-    return syscall6(SYS_FACCESSAT, (usize)(isize)dirfd, (usize)path, len,
-                    amode, flags, 0);
+    return rk_sys_ret(syscall6(SYS_FACCESSAT, (usize)(isize)dirfd, (usize)path, len,
+                               amode, flags, 0));
 }
 
 static inline int faccessat(int dirfd, const char *path, int amode, int flags) {
-    int r = (int)faccessat2(dirfd, path, strlen(path), (usize)amode, (usize)flags);
-    if (r != 0) {
-        errno = (amode == 0) ? ENOENT : EACCES;
-    }
-    return r;
+    return (int)faccessat2(dirfd, path, strlen(path), (usize)amode, (usize)flags);
 }
 
 /*
  * chown(path, uid, gid): 修改文件属主。简化模型下仅 root 可改。
  */
 static inline isize chown2(const char *path, usize len, usize uid, usize gid) {
-    return syscall6(SYS_CHOWN, (usize)path, len, uid, gid, 0, 0);
+    return rk_sys_ret(syscall6(SYS_CHOWN, (usize)path, len, uid, gid, 0, 0));
 }
 
 static inline int chown(const char *path, uid_t uid, gid_t gid) {
@@ -343,14 +342,14 @@ static inline int chown(const char *path, uid_t uid, gid_t gid) {
  * 特权与 chown 一致（仅 root）；pipe/终端/只读 rootfs 的 fd → -1。
  * 不支持 Linux 的 (uid_t)-1 哨兵，与 chown 保持一致。 */
 static inline int fchown(int fd, uid_t uid, gid_t gid) {
-    return (int)syscall6(SYS_FCHOWN, (usize)fd, (usize)uid, (usize)gid, 0, 0, 0);
+    return (int)rk_sys_ret(syscall6(SYS_FCHOWN, (usize)fd, (usize)uid, (usize)gid, 0, 0, 0));
 }
 
 /* ---- 目录 / 文件增删 ---- */
 
 /* POSIX 签名: mkdir(path, mode)。内核不记录新建目录的权限, mode 忽略。 */
 static inline isize mkdir2(const char *path, usize len) {
-    return syscall3(SYS_MKDIR, (usize)path, len, 0);
+    return rk_sys_ret(syscall3(SYS_MKDIR, (usize)path, len, 0));
 }
 
 static inline int mkdir(const char *path, mode_t mode) {
@@ -361,8 +360,8 @@ static inline int mkdir(const char *path, mode_t mode) {
 /* mkdirat(dirfd, path, mode): 相对目录 fd 建目录，mode 会真正落到权限位上
  * （与 mkdir 不同——那条老路径的 mode 被历史忽略，at 版本按 POSIX 生效）。 */
 static inline int mkdirat(int dirfd, const char *path, mode_t mode) {
-    return (int)syscall6(SYS_MKDIRAT, (usize)(isize)dirfd, (usize)path,
-                         (usize)strlen(path), (usize)mode, 0, 0);
+    return (int)rk_sys_ret(syscall6(SYS_MKDIRAT, (usize)(isize)dirfd, (usize)path,
+                                    (usize)strlen(path), (usize)mode, 0, 0));
 }
 
 /* 
@@ -495,7 +494,7 @@ static inline int mkstemps(char *tmpl, int suffixlen) {
 }
 
 static inline isize unlink2(const char *path, usize len) {
-    return syscall3(SYS_UNLINK, (usize)path, len, 0);
+    return rk_sys_ret(syscall3(SYS_UNLINK, (usize)path, len, 0));
 }
 
 static inline int unlink(const char *path) {
@@ -507,12 +506,12 @@ static inline int unlink(const char *path) {
  *   flags=AT_REMOVEDIR → 删目录（等价 rmdir）
  * 其他值内核一律拒绝（POSIX 只定义这两个）。 */
 static inline int unlinkat(int dirfd, const char *path, int flags) {
-    return (int)syscall6(SYS_UNLINKAT, (usize)(isize)dirfd, (usize)path,
-                         (usize)strlen(path), (usize)flags, 0, 0);
+    return (int)rk_sys_ret(syscall6(SYS_UNLINKAT, (usize)(isize)dirfd, (usize)path,
+                                    (usize)strlen(path), (usize)flags, 0, 0));
 }
 
 static inline isize rmdir2(const char *path, usize len) {
-    return syscall3(SYS_RMDIR, (usize)path, len, 0);
+    return rk_sys_ret(syscall3(SYS_RMDIR, (usize)path, len, 0));
 }
 
 static inline int rmdir(const char *path) {
@@ -520,7 +519,7 @@ static inline int rmdir(const char *path) {
 }
 
 static inline isize remove_recursive2(const char *path, usize len) {
-    return syscall3(SYS_REMOVE_RECURSIVE, (usize)path, len, 0);
+    return rk_sys_ret(syscall3(SYS_REMOVE_RECURSIVE, (usize)path, len, 0));
 }
 
 static inline isize remove_recursive(const char *path) {
@@ -553,15 +552,15 @@ static inline int fcntl(int fd, int cmd, ...) {
 }
 
 static inline off_t lseek(int fd, off_t offset, int whence) {
-    return (off_t)syscall3(SYS_LSEEK, (usize)fd, (usize)offset, (usize)whence);
+    return (off_t)rk_sys_ret(syscall3(SYS_LSEEK, (usize)fd, (usize)offset, (usize)whence));
 }
 
 static inline int ftruncate(int fd, off_t length) {
-    return (int)syscall3(SYS_FTRUNCATE, (usize)fd, (usize)length, 0);
+    return (int)rk_sys_ret(syscall3(SYS_FTRUNCATE, (usize)fd, (usize)length, 0));
 }
 
 static inline int fsync(int fd) {
-    return (int)syscall3(SYS_FSYNC, (usize)fd, 0, 0);
+    return (int)rk_sys_ret(syscall3(SYS_FSYNC, (usize)fd, 0, 0));
 }
 
 /* fdatasync(fd): 只保证数据落盘（不含 metadata）。本内核的 fsync 已经是
@@ -572,7 +571,7 @@ static inline int fdatasync(int fd) {
 }
 
 static inline isize truncate2(const char *path, usize len, usize length) {
-    return syscall3(SYS_TRUNCATE, (usize)path, len, length);
+    return rk_sys_ret(syscall3(SYS_TRUNCATE, (usize)path, len, length));
 }
 
 static inline int truncate(const char *path, off_t length) {
@@ -580,7 +579,7 @@ static inline int truncate(const char *path, off_t length) {
 }
 
 static inline isize rename2(const char *oldpath, usize oldlen, const char *newpath, usize newlen) {
-    return syscall6(SYS_RENAME, (usize)oldpath, oldlen, (usize)newpath, newlen, 0, 0);
+    return rk_sys_ret(syscall6(SYS_RENAME, (usize)oldpath, oldlen, (usize)newpath, newlen, 0, 0));
 }
 
 static inline int rename(const char *oldpath, const char *newpath) {
@@ -592,17 +591,17 @@ static inline int rename(const char *oldpath, const char *newpath) {
  * dirfd 被忽略。跨挂载点的 rename 仍由底层拒绝。 */
 static inline int renameat(int olddirfd, const char *oldpath,
                            int newdirfd, const char *newpath) {
-    return (int)syscall6(SYS_RENAMEAT,
+    return (int)rk_sys_ret(syscall6(SYS_RENAMEAT,
                          (usize)(isize)olddirfd, (usize)oldpath, (usize)strlen(oldpath),
-                         (usize)(isize)newdirfd, (usize)newpath, (usize)strlen(newpath));
+                         (usize)(isize)newdirfd, (usize)newpath, (usize)strlen(newpath)));
 }
 
 /* ---- 链接 ---- */
 
 static inline isize symlink2(const char *target, usize target_len,
                              const char *linkpath, usize link_len) {
-    return syscall6(SYS_SYMLINK, (usize)target, target_len,
-                    (usize)linkpath, link_len, 0, 0);
+    return rk_sys_ret(syscall6(SYS_SYMLINK, (usize)target, target_len,
+                               (usize)linkpath, link_len, 0, 0));
 }
 
 static inline int symlink(const char *target, const char *linkpath) {
@@ -611,14 +610,14 @@ static inline int symlink(const char *target, const char *linkpath) {
 
 /* POSIX: 返回实际写入字节数，readlink 不写 NUL */
 static inline ssize_t readlink(const char *path, char *buf, size_t bufsiz) {
-    return (ssize_t)syscall6(SYS_READLINK, (usize)path, strlen(path),
-                             (usize)buf, (usize)bufsiz, 0, 0);
+    return (ssize_t)rk_sys_ret(syscall6(SYS_READLINK, (usize)path, strlen(path),
+                                        (usize)buf, (usize)bufsiz, 0, 0));
 }
 
 static inline isize link2(const char *oldpath, usize oldlen,
                           const char *newpath, usize newlen) {
-    return syscall6(SYS_LINK, (usize)oldpath, oldlen,
-                    (usize)newpath, newlen, 0, 0);
+    return rk_sys_ret(syscall6(SYS_LINK, (usize)oldpath, oldlen,
+                               (usize)newpath, newlen, 0, 0));
 }
 
 static inline int link(const char *oldpath, const char *newpath) {
@@ -633,11 +632,12 @@ static inline int link(const char *oldpath, const char *newpath) {
 static inline int linkat(int olddirfd, const char *oldpath,
                          int newdirfd, const char *newpath, int flags) {
     if (flags != 0) {
+        errno = EINVAL;
         return -1;
     }
-    return (int)syscall6(SYS_LINKAT,
+    return (int)rk_sys_ret(syscall6(SYS_LINKAT,
                          (usize)(isize)olddirfd, (usize)oldpath, (usize)strlen(oldpath),
-                         (usize)(isize)newdirfd, (usize)newpath, (usize)strlen(newpath));
+                         (usize)(isize)newdirfd, (usize)newpath, (usize)strlen(newpath)));
 }
 
 #ifdef __cplusplus
