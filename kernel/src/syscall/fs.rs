@@ -503,12 +503,12 @@ pub fn sys_mkdir(path_ptr : usize, len : usize) -> isize {
 
     let abs = match user_path_to_abs (path_ptr, len) {
         Some(abs) => abs,
-        None => return -1,
+        None => return -super::errno::EFAULT,
     };
 
     match crate::fs::make_dir(&abs) {
-        Some(_) => 0,
-        None => -1,
+        Ok(_) => 0,
+        Err(e) => -e,
     }
 }
 
@@ -862,19 +862,19 @@ pub fn sys_unlinkat(dirfd: usize, path_ptr: usize, len: usize, flags: usize) -> 
 pub fn sys_mkdirat(dirfd: usize, path_ptr: usize, len: usize, mode: usize) -> isize {
     let abs = match user_path_to_abs_at(dirfd as isize, path_ptr, len) {
         Some(abs) => abs,
-        None => return -1,
+        None => return -super::errno::EFAULT,
     };
     match crate::fs::make_dir(&abs) {
-        Some(inode) => {
+        Ok(inode) => {
             // 与 open(O_CREAT) 一致：建完按 mode 落权限位
             let perm = crate::fs::mode_with_umask(mode);
             if inode.chmod(perm) != 0 {
                 log::warn!("[fs] mkdirat: chmod(0o{:o}) failed on {}", perm, abs);
-                return -1;
+                return -super::errno::EPERM;
             }
             0
         }
-        None => -1,
+        Err(e) => -e,
     }
 }
 

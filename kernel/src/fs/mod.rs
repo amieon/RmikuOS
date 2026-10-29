@@ -44,7 +44,7 @@ pub const O_NONBLOCK: usize = 2048;
 
 /// `F_GETFL` 报出来的位：访问模式 + 文件状态标志。
 pub const F_GETFL_MASK: usize = O_ACCMODE | O_APPEND | O_NONBLOCK;
-/// `F_SETFL` **只**能改这两个 —— 访问模式在 open 那一刻定了，POSIX 不允许改。
+/// `F_SETFL` 只能改这两个 —— 访问模式在 open 那一刻定了，POSIX 不允许改。
 /// 少掩这一下，`fcntl(fd, F_SETFL, O_NONBLOCK)` 会把 O_RDWR 悄悄改成 O_RDONLY。
 pub const F_SETFL_MASK: usize = O_APPEND | O_NONBLOCK;
 
@@ -287,14 +287,23 @@ pub fn create_file(path: &str) -> Result<InodeRef, isize> {
     parent_inode.create(&name).ok_or(errno::EROFS)
 }
 
-pub fn make_dir(path: &str) -> Option<InodeRef> {
-    let abs = normalize_path("/", path)?;
+pub fn make_dir(path: &str) -> Result<InodeRef, isize> {
+    let abs = normalize_path("/", path).ok_or(errno::EINVAL)?;
     let (parent, name) = split_parent(&abs);
-    let parent_inode = path::lookup_abs_path(&parent)?;
-    if !check_dir_write(&parent_inode) {
-        return None;
+    let parent_inode = path::lookup_abs_path(&parent).ok_or(errno::ENOENT)?;
+
+    /* 目标已存在 → EEXIST。必须在权限检查之前：这一步只要遍历，不需要写权限，
+     * 而 POSIX 规定 mkdir 对已存在路径一律回 EEXIST（不管它是文件还是目录） */
+    if path::lookup_abs_path(&abs).is_some() {
+        return Err(errno::EEXIST);
     }
-    parent_inode.mkdir(&name)
+
+    if !check_dir_write(&parent_inode) {
+        return Err(errno::EACCES);
+    }
+    // 底层 mkdir 返回 None 基本只剩只读 FS（rootfs 的 ext4-view），
+    // 与 create_file 一致报 EROFS，让调用方能区分“换个地方写”和“没权限”。
+    parent_inode.mkdir(&name).ok_or(errno::EROFS)
 }
 
 /// symlink(target, linkpath): 创建内容为 target 的符号链接。
