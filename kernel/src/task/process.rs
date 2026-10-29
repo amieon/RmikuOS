@@ -81,6 +81,9 @@ pub struct ProcessControlBlock {
 
     pub exit_code: i32,
 
+    /// 致死信号号（0 = 进程自己 `exit()` 正常退出）。
+    pub term_sig: usize,
+
     /// 是否以"core dump 类"信号死亡（SIGSEGV/SIGABRT/...）。`waitpid` 的
     /// wait status bit7（`WCOREDUMP`）就取自这里。内核本身不写 core 文件。
     pub coredump: bool,
@@ -162,6 +165,7 @@ impl ProcessControlBlock {
             sid: pid,
 
             exit_code: 0,
+            term_sig: 0,
             coredump: false,
             stop_sig: 0,
             stop_reported: false,
@@ -251,6 +255,7 @@ impl ProcessControlBlock {
             sid,
 
             exit_code: 0,
+            term_sig: 0,
             coredump: false,
             stop_sig: 0,
             stop_reported: false,

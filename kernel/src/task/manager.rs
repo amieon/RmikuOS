@@ -1016,7 +1016,7 @@ pub fn continue_process(&mut self, pid: Pid) -> bool {
 /// 前提检查：任何一个线程还在 hart 上跑就直接返回 false（调用方退回
 /// "置 pending"，等它自己退出）—— 不能把一个正在执行的线程标成 Dead，
 /// 那会让它的内核栈在返回途中被回收。
-pub fn force_exit_stopped(&mut self, pid: Pid, code: i32, core: bool) -> bool {
+pub fn force_exit_stopped(&mut self, pid: Pid, code: i32, core: bool, term_sig: usize) -> bool {
     if !self.process_is_stopped(pid) {
         return false;
     }
@@ -1052,6 +1052,7 @@ pub fn force_exit_stopped(&mut self, pid: Pid, code: i32, core: bool) -> bool {
         }
         process.runnable_count = process.runnable_count.saturating_sub(runnable_dec);
         process.exit_code = code;
+        process.term_sig = term_sig;
         process.stop_sig = 0;        // 不再"停着"，别让 waitpid 再报停止
         process.stop_reported = false;
         process.continued = false;
@@ -1231,19 +1232,22 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
                 continue;
             }
 
-            let (code, dumped) = self
+            let (code, dumped, term_sig) = self
                 .try_process(child_pid)
-                .map(|child| (child.exit_code, child.coredump))
-                .unwrap_or((0, false));
+                .map(|child| (child.exit_code, child.coredump, child.term_sig))
+                .unwrap_or((0, false, 0));
 
             /* 写给用户态的是 POSIX wait status，不是原始退出码。
              *
-             * 内核内部仍保存 `exit_code`（信号死亡时 = 128 + sig，见
-             * manager_wrapper.rs 的 exit_current_and_run_next），只在这一个
-             * 边界上做编码 —— 这样日志、shell 的 $?、内部判断都不用跟着改：
+             *   正常退出（term_sig == 0）→ (code & 0xff) << 8  低 7 位 = 0
+             *   信号致死（term_sig != 0）→ term_sig & 0x7f     低 7 位 = 信号号
              *
-             *   正常退出 → (code & 0xff) << 8    低 7 位 = 0（标签：已退出）
-             *   信号死亡 → (code - 128) & 0x7f   低 7 位 = 信号号
+             * 判据必须是 `term_sig`，不能用 `code >= 128` 反推。
+             * 旧写法靠 `exit_code` 的编码（信号死亡 = 128 + sig）来区分结局，
+             * 于是用户态一次 `exit(128)` 的正常退出会被当成"被信号 0 杀死"，
+             * 编码出的 status = 0，父进程看到 `WIFEXITED && WEXITSTATUS == 0`
+             * —— 一切致命错误都变成成功。git 的 `die()` 恰好是 `exit(128)`，
+             * 移植期表现为"打 fatal 但 rc=0"，整整掩盖了三层问题。
              *
              * 为什么不能直接写 code：那样 `exit(139)` 和 "被 SIGSEGV 杀死"
              * 变成同一个数，父进程无法区分；core dump 位与暂停态也没有位置。
@@ -1252,8 +1256,8 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
              * bit7 = core dump（POSIX / glibc 的 `WCOREDUMP`）。内核不写真 core
              * 文件，只在 `apply_default_action` 走 Core 分支时把 `child.coredump`
              * 置上 —— 这个位是"这个信号本该产生 core"，不是"core 文件存在"。 */
-            let status: i32 = if code >= 128 {
-                ((code - 128) & 0x7f) | if dumped { 0x80 } else { 0 }
+            let status: i32 = if term_sig != 0 {
+                ((term_sig as i32) & 0x7f) | if dumped { 0x80 } else { 0 }
             } else {
                 (code & 0xff) << 8
             };

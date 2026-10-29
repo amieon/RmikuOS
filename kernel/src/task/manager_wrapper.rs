@@ -642,6 +642,8 @@ struct UserExecArgs {
 /// `-1` 就是 `-EPERM`，shell 会把它当成"permisssion denied"，
 /// 而真正的原因（ENOENT/EACCES/ENOEXEC/ENOMEM）全被吞掉。
 fn exec_fail(path: &str, why: &str, e: isize) -> isize {
+    // warn 而不是 info：内核默认日志级别是 Warn（option_env!("LOG") 的兜底），
+    // exec 失败本来就是异常事件、频次极低，用 info 等于把诊断彻底静音。
     log::warn!("[exec] {}: {} -> errno {}", why, path, e);
     -e
 }
@@ -743,9 +745,13 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     // 每次读 4 KiB。真正的批量在下面两层：ext4 的 CachedBlockReader 会把
     // 连续块合并成一次 fill_blocks，驱动再按 128 扇区（64 KiB）发一次请求。
     // 这里就是 4 KiB 的 syscall 分摊，再放大也不会改变底层请求次数。
+    //
+    // 缓冲放堆上：4 KiB 数组搁栈上在这个内核里没出过事，但 exec 是最深的一条
+    // 调用链，没必要赌栈余量。
     let mut buf = alloc::vec![0u8; 4096];
 
     // 预分配：不预分配的话 10 MB 的 ELF 会反复 realloc + 整体搬迁，
+    // 那是纯浪费（而且是"越到后面越慢"的那种）。
     let expect_size = file.stat().size;
     let capacity = if expect_size > 0 && expect_size < 64 * 1024 * 1024 {
         expect_size
@@ -2361,7 +2367,7 @@ fn kill_one(pid: usize, sig: usize) -> isize {
         if stopped && sig == super::SIGKILL {
             /* 先试"就地结束"：停住的进程没有线程在跑，所以能做完整退出簿记。
              * 做不了（有线程还在 hart 上）就退回普通路径，让它自己处理。 */
-            if manager.force_exit_stopped(pid, 128 + sig as i32, false) {
+            if manager.force_exit_stopped(pid, 128 + sig as i32, false, sig) {
                 if let Some(parent) = manager.process(pid).parent {
                     if let Some(p) = manager.try_process_mut(parent) {
                         p.sig_pending |= 1u64 << super::SIGCHLD;
@@ -2596,7 +2602,7 @@ fn deliver_handler(cx: &mut TrapContext, sig: usize, entry: usize, restorer: usi
 
      let frame_addr = match cx.user_sp().checked_sub(frame_size) {
         Some(v) => v & !15usize,
-        None => crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32),
+        None => crate::task::exit_with_signal(super::SIGSEGV, false),
     };
 
     let frame = SigFrame { cx: *cx, signo: sig, blocked: old_blocked };
@@ -2606,7 +2612,7 @@ fn deliver_handler(cx: &mut TrapContext, sig: usize, entry: usize, restorer: usi
 
     if write_current_user_bytes(frame_addr, bytes).is_none() {
         /* 用户栈到底了，或者那段压根没映射。按栈溢出处理：SIGSEGV 终止。 */
-        crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32);
+        crate::task::exit_with_signal(super::SIGSEGV, false);
     }
 
     cx.set_sp(frame_addr);
@@ -2631,7 +2637,7 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
 
     let bytes = match crate::task::read_current_user_bytes(sp, frame_size) {
         Some(b) => b,
-        None => crate::task::exit_current_and_run_next(128 + super::SIGSEGV as i32),
+        None => crate::task::exit_with_signal(super::SIGSEGV, false),
     };
 
     let mut frame = SigFrame { cx: *cx, signo: 0, blocked: 0 };
@@ -2659,11 +2665,17 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
 /// 但这个位必须真的置上：否则 `WIFSIGNALED` 有了、`WCOREDUMP` 永远 0，
 /// 诊断工具会得出"段错误没有 core"的错误结论。
 pub fn exit_with_signal(sig: usize, core: bool) -> ! {
-    if core {
+    {
         let pid = current_pid();
         let mut manager = lock_detect!(TASK_MANAGER);
         if let Some(p) = manager.try_process_mut(pid) {
-            p.coredump = true;
+            /* `term_sig` 必须无条件记下：`waitpid` 的编码靠它判断"这次是被
+             * 信号打死的"还是"自己 exit 的"，绝不能用 `exit_code >= 128`
+             * 反推（见 process.rs 的 term_sig 注释）。`coredump` 只影响 bit7。 */
+            p.term_sig = sig;
+            if core {
+                p.coredump = true;
+            }
         }
         /* 锁必须在 exit 之前放掉：exit_current_and_run_next 自己会加锁。 */
         drop(manager);
