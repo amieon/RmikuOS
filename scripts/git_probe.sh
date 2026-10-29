@@ -85,7 +85,22 @@ if [ ! -f "$SRC/compat/regex/regex.h" ]; then
   exit 1
 fi
 
+# -std=gnu11 必须显式钉死，不能让编译器默认标准说了算。
+#
+# 起因：git 2.33 的 builtin/index-pack.c:89 拿 `struct thread_local` 当结构体名，
+# 而 C23 把 thread_local 变成了关键字 → `struct thread_local` 被读成
+# "struct + 存储类说明符"，直接语法错误（gcc 原文：expected '{' before 'thread_local'），
+# 后续 nothread_data / thread_data 全变 undeclared，一个根因炸出十几条 error。
+#
+# 而 git 的 Makefile（CFLAGS = -g -O2 -Wall）根本不写 -std，用的是编译器默认：
+# 老的 riscv64-unknown-elf-gcc 默认 gnu11/gnu17 能过，新的 loongarch64 gcc 默认
+# 已经到 gnu23 就炸 —— 同一份源码一边过一边不过，差的不是 NO_* 宏，是标准。
+#
+# 全树扫过：只有 index-pack.c 这一处撞 C23 新关键字
+# （nullptr / constexpr / static_assert / alignas / alignof / typeof_unqual 均 0 命中）。
+# gnu11 也覆盖 git 里所有 `__STDC_VERSION__ >= 199901L` 的分支，无副作用。
 CFLAGS=(
+  -std=gnu11
   "${ARCHFLAGS[@]}"
   -Os -ffreestanding -fno-builtin
   -I"$ROOT/user/include"
@@ -96,6 +111,22 @@ CFLAGS=(
 )
 
 mkdir -p "$OUT"
+
+# CFLAGS 变更检测。
+#
+# make 只按时间戳判依赖，完全不感知命令行变量变化：改了 CFLAGS（比如这次加
+# -std=gnu11）之后直接 make，旧的 .o 会被原样复用，改动等于没生效，而且一声不响 ——
+# 比起编译失败，这种"静默不生效"更浪费时间（之前改 prefix 也踩过同一个坑）。
+# 这里按 CFLAGS 数组内容存一份快照，变了就 clean 掉旧产物再编。
+if [ "$STAGE" = "lib" ] || [ "$STAGE" = "bin" ]; then
+  CFLAGS_SIG="$(printf '%s\n' "${CFLAGS[@]}" | sha256sum | cut -d' ' -f1)"
+  CFLAGS_SNAP="$OUT/cflags.sha256"
+  if [ -f "$CFLAGS_SNAP" ] && [ "$(cat "$CFLAGS_SNAP")" != "$CFLAGS_SIG" ]; then
+    echo "[git] CFLAGS 变了 → 清理旧的 .o（make 不知道命令行变量变化）"
+    make -C "$SRC" clean >/dev/null 2>&1 || true
+  fi
+  printf '%s\n' "$CFLAGS_SIG" > "$CFLAGS_SNAP"
+fi
 
 # 每次把搜索路径打出来：probe / lib 两个阶段的差异一旦出现，第一眼就能看见，
 # 不用去猜"我到底跑的是不是改过的脚本"。
