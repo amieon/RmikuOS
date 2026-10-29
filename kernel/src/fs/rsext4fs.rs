@@ -262,8 +262,8 @@ impl Ext4RwFs {
     /// ```ignore
     /// let data = Ext4RwFs::init_and_mount("/data", dev)?;   // 盘根挂 /data
     /// data.ensure_layout();                                // 建 home/ var/ var/etc/
-    /// mount_bind("/home", lookup_abs_path("/data/home")?); // 绑定出去
-    /// mount_bind("/var",  lookup_abs_path("/data/var")?);
+    /// mount_bind("/home", lookup_abs_path("/data/home")?, "home"); // 第三参=盘内路径
+    /// mount_bind("/var",  lookup_abs_path("/data/var")?, "var");
     /// ```
     pub fn init_and_mount(mount_point: &str, dev: Arc<dyn BlockDevice>) -> Option<Arc<Self>> {
         match Self::mount_or_format(dev, mount_point) {
@@ -647,16 +647,14 @@ impl Inode for Ext4RwInode {
         }
     }
 
-    /// self = 源目录, from = 源名, to = 目标**绝对路径**（可跨目录，仅限本挂载点内）。
+    /// self = 源目录, from = 源名, to = 目标路径**相对本 fs 根**
+    /// （上层 fs::rename 已剥挂载点前缀、并按 bind 映射补回 inner_base，可直接走父子链）。
     fn rename(&self, from: &str, to: &str) -> isize {
         let Some(from_name) = fname(from) else { return -1 };
 
-        // 去掉挂载点前缀 → 本 fs 内相对路径
-        let mp = self.fs.mount_point.trim_end_matches('/');
-        let rel = match to.strip_prefix(mp) {
-            Some(r) => r,
-            None => return -1, // 跨挂载点，交给上层处理（或拒绝）
-        };
+        // 注意别在这里再剥一次挂载点：/home 是 /data/home 的 bind，to 已经是
+        // "home/root/x/HEAD" 这种盘内路径，strip_prefix("/home") 恒不中。
+        let rel = to.trim_start_matches('/');
         // 拆成父目录路径 + 目标名
         let (parent_path, child) = match rel.rfind('/') {
             Some(i) => (&rel[..i], &rel[i + 1..]),

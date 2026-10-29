@@ -10,6 +10,11 @@ pub trait FileSystem: Send + Sync {
 
 pub struct Mount {
     mount_point : String,
+    /// 该挂载点的根在**底层 fs 内**的路径(相对 fs 根, 无前导 '/')。
+    /// 普通挂载是 ""(fs 根即挂载点根); bind 挂载要记源路径, 例如
+    /// `/home` ← bind 自 `/data/home` 时是 "home"。
+    /// rename 要走目标父目录的父子链, 只有这个字段能把 VFS 路径翻译回 fs 内路径。
+    inner_base  : String,
     root : InodeRef,
 }
 
@@ -21,15 +26,20 @@ pub fn mount(mount_point: &str, fs: Arc<dyn FileSystem>) {
     let mut mounts = MOUNTS.lock();
     mounts.push(Mount {
         mount_point: String::from(mount_point),
+        inner_base: String::new(),
         root,
     });
 }
 
 
-pub fn mount_bind(mount_point: &str, inode: InodeRef) {
+/// 把已存在的 inode 绑到另一个路径上(bind mount)。
+/// `inner_base` = 该 inode 在底层 fs 内的路径(相对 fs 根), 由调用方给出 ——
+/// 例如 `/home` 绑 `/data/home`, 底层 fs 挂在 `/data`, 则 inner_base = "home"。
+pub fn mount_bind(mount_point: &str, inode: InodeRef, inner_base: &str) {
     let mut mounts = MOUNTS.lock();
     mounts.push(Mount {
         mount_point: String::from(mount_point),
+        inner_base: String::from(inner_base.trim_matches('/')),
         root: inode,
     });
 }
@@ -61,6 +71,19 @@ pub fn resolve_mount(abs_path: &str) -> Option<(InodeRef, String)> {
 /// 注意: 这与 `resolve_mount` 不同——后者第二个返回值是挂载点之内的相对路径,
 /// 而本函数返回的是挂载点本身。rename 的 EXDEV 判断必须用本函数。
 pub fn mount_point_of(abs_path: &str) -> Option<String> {
+    best_mount_of(abs_path).map(|(_, mp, _)| mp)
+}
+
+/// 返回 (挂载点, 挂载点根在底层 fs 内的路径)。
+/// rename 要把 VFS 绝对路径翻译成"相对 fs 根"的路径才能让各 fs 走父子链;
+/// 光剥挂载点前缀不够 —— bind 出来的挂载点(如 /home ← /data/home)会少一段。
+pub fn mount_info_of(abs_path: &str) -> Option<(String, String)> {
+    best_mount_of(abs_path).map(|(_, mp, inner)| (mp, inner))
+}
+
+/// (root inode, 挂载点, inner_base) —— 最长挂载点前缀匹配(嵌套挂载取更深的)。
+/// 都在锁内 clone 出来, 避免把 MutexGuard 的借出带出作用域。
+fn best_mount_of(abs_path: &str) -> Option<(InodeRef, String, String)> {
     let mounts = MOUNTS.lock();
     let mut best: Option<&Mount> = None;
     for m in mounts.iter() {
@@ -72,7 +95,7 @@ pub fn mount_point_of(abs_path: &str) -> Option<String> {
             }
         }
     }
-    best.map(|m| m.mount_point.clone())
+    best.map(|m| (m.root.clone(), m.mount_point.clone(), m.inner_base.clone()))
 }
 
 fn path_under(abs_path: &str, mount_point: &str) -> bool {

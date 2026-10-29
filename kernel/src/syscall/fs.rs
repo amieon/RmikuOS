@@ -719,13 +719,16 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> isize {
 pub fn sys_rename(old_ptr: usize, old_len: usize, new_ptr: usize, new_len: usize) -> isize {
     let old = match user_path_to_abs(old_ptr, old_len) {
         Some(p) => p,
-        None => return -1,
+        None => return -super::errno::EINVAL,
     };
     let new = match user_path_to_abs(new_ptr, new_len) {
         Some(p) => p,
-        None => return -1,
+        None => return -super::errno::EINVAL,
     };
-    crate::fs::rename(&old, &new)
+    match crate::fs::rename(&old, &new) {
+        Ok(()) => 0,
+        Err(e) => -e,
+    }
 }
 
 
@@ -987,13 +990,16 @@ pub fn sys_renameat(d1: usize, old_ptr: usize, old_len: usize,
                     d2: usize, new_ptr: usize, new_len: usize) -> isize {
     let old = match user_path_to_abs_at(d1 as isize, old_ptr, old_len) {
         Some(p) => p,
-        None => return -1,
+        None => return -super::errno::EINVAL,
     };
     let new = match user_path_to_abs_at(d2 as isize, new_ptr, new_len) {
         Some(p) => p,
-        None => return -1,
+        None => return -super::errno::EINVAL,
     };
-    crate::fs::rename(&old, &new)
+    match crate::fs::rename(&old, &new) {
+        Ok(()) => 0,
+        Err(e) => -e,
+    }
 }
 
 /// linkat(olddirfd, old, newdirfd, new)：硬链接，两侧各自相对 dirfd。

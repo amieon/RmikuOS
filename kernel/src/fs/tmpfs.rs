@@ -83,9 +83,8 @@ impl crate::fs::mount::FileSystem for TmpfsFs {
 }
 
 impl TmpfsInode {
-    /// 从 root 出发,按绝对路径定位到目录节点。用于 rename 跨目录时定位目标父目录。
+    /// 从本 fs 根出发, 按"挂载根相对路径"定位目录节点。用于 rename 跨目录时定位目标父目录。
     fn find_dir(&self, path: &str) -> Option<Arc<TmpfsDirNode>> {
-        log::info!("[rename-debug] find_dir path={}", path);
         if path == "/" || path.is_empty() {
             return Some(self.root.clone());
         }
@@ -97,12 +96,11 @@ impl TmpfsInode {
                 let children = cur.children.lock();
                 match children.get(comp) {
                     Some(TmpfsNode::Dir(d)) => d.clone(),
-                    _ => { log::info!("[rename-debug] find_dir: component '{}' not a dir / not found", comp); return None; }
+                    _ => return None,
                 }
             };
             cur = next;
         }
-        log::info!("[rename-debug] find_dir => found for {}", path);
         Some(cur)
     }
 }
@@ -413,11 +411,10 @@ impl Inode for TmpfsInode {
     }
 
     fn rename(&self, from: &str, to: &str) -> isize {
-        log::info!("[rename-debug] TmpfsInode::rename from={} to={}", from, to);
-        // self = 源所在目录; from = 源名; to = 目标完整绝对路径(可跨目录)。
+        // self = 源所在目录; from = 源名; to = 目标路径(相对本 fs 挂载根, 可跨目录)。
         let src_children = match &self.node {
             TmpfsNode::Dir(d) => d.children.clone(),
-            _ => { log::info!("[rename-debug] self is not a dir"); return -1; }
+            _ => return -1,
         };
 
         // 解析目标父目录路径与目标名
@@ -427,19 +424,16 @@ impl Inode for TmpfsInode {
             Some(pos) => (String::from(&trimmed[..pos]), String::from(&trimmed[pos + 1..])),
             None => (String::from("/"), String::from(trimmed)),
         };
-        log::info!("[rename-debug] parent_path={} name={}", parent_path, name);
 
         let tgt_dir = match self.find_dir(&parent_path) {
             Some(d) => d,
-            None => { log::info!("[rename-debug] find_dir returned None for {}", parent_path); return -1; }
+            None => return -1,
         };
-        log::info!("[rename-debug] tgt_dir found");
 
         // 目标名若为目录则拒绝(不覆盖目录);文件则随后覆盖
         {
             let tc = tgt_dir.children.lock();
             if let Some(TmpfsNode::Dir(_)) = tc.get(&name) {
-                log::info!("[rename-debug] target '{}' is a dir, reject", name);
                 return -1;
             }
         }
@@ -449,18 +443,16 @@ impl Inode for TmpfsInode {
             let mut sc = src_children.lock();
             let n = match sc.get(from) {
                 Some(x) => x.clone_ref(),
-                None => { log::info!("[rename-debug] source '{}' not found in src dir", from); return -1; }
+                None => return -1,
             };
             sc.remove(from);
             n
         };
-        log::info!("[rename-debug] source removed, inserting into tgt");
 
         // 插入目标目录(覆盖同名文件)
         let mut tc = tgt_dir.children.lock();
         tc.remove(&name);
         tc.insert(name, node);
-        log::info!("[rename-debug] TmpfsInode::rename => 0");
         0
     }
 

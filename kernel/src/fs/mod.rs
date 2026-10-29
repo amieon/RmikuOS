@@ -439,11 +439,12 @@ pub fn access_path(path: &str, request: u16) -> isize {
 pub fn access_path_as(path: &str, request: u16, uid: usize, gid: usize) -> isize {
     let abs = match normalize_path("/", path) {
         Some(p) => p,
-        None => return -1,
+        None => return -errno::EINVAL,
     };
     let inode = match path::lookup_abs_path(&abs) {
         Some(i) => i,
-        None => return -1,           // 不存在，或路径上有组件不可穿越
+        // 不存在，或路径上有组件不可穿越
+        None => return -errno::ENOENT,
     };
     if request == 0 {
         return 0;                    // F_OK：能解析到 inode 即视为存在
@@ -453,7 +454,7 @@ pub fn access_path_as(path: &str, request: u16, uid: usize, gid: usize) -> isize
     if check_access(meta.mode, meta.uid, meta.gid, uid, gid, &groups[..ngroups], request) {
         0
     } else {
-        -1
+        -errno::EACCES
     }
 }
 
@@ -483,70 +484,51 @@ pub fn truncate_path(path: &str, len: usize) -> isize {
 
 /// rename(old, new): 移动/改名。同一文件系统内支持跨目录;跨设备返回 -1(EXDEV)。
 /// 防自环: 不允许把目录移进它自己的子目录。特权检查由系统调用层完成。
-pub fn rename(old: &str, new: &str) -> isize {
-    log::info!("[rename-debug] enter old={} new={}", old, new);
-    let old_abs = match normalize_path("/", old) {
-        Some(p) => p,
-        None => { log::info!("[rename-debug] normalize old failed"); return -1; }
-    };
-    let new_abs = match normalize_path("/", new) {
-        Some(p) => p,
-        None => { log::info!("[rename-debug] normalize new failed"); return -1; }
-    };
-    log::info!("[rename-debug] old_abs={} new_abs={}", old_abs, new_abs);
+pub fn rename(old: &str, new: &str) -> Result<(), isize> {
+    let old_abs = normalize_path("/", old).ok_or(errno::EINVAL)?;
+    let new_abs = normalize_path("/", new).ok_or(errno::EINVAL)?;
 
-    // 跨设备检测: 两边挂载点不同则不可 rename
-    let mp_old = match mount::mount_point_of(&old_abs) {
-        Some( mp) => mp,
-        None => { log::info!("[rename-debug] resolve_mount old=None"); return -1; }
-    };
-    let mp_new = match mount::mount_point_of(&new_abs) {
-        Some(mp) => mp,
-        None => { log::info!("[rename-debug] resolve_mount new=None"); return -1; }
-    };
-    log::info!("[rename-debug] mp_old={} mp_new={}", mp_old, mp_new);
+    // 跨设备: 两边挂载点不同则不可 rename(git 收到 EXDEV 会退化成 copy+delete)
+    let mp_old = mount::mount_point_of(&old_abs).ok_or(errno::ENOENT)?;
+    let (mp_new, inner_new) = mount::mount_info_of(&new_abs).ok_or(errno::ENOENT)?;
     if mp_old != mp_new {
-        log::info!("[rename-debug] cross-device EXDEV");
-        return -1; // EXDEV
+        return Err(errno::EXDEV);
     }
-
 
     // 防自环: 不允许 "/a" -> "/a/b"
     if new_abs.starts_with(&format!("{}/", old_abs)) {
-        log::info!("[rename-debug] self-into-subdir rejected");
-        return -1;
+        return Err(errno::EINVAL);
     }
 
     let (old_parent, old_name) = split_parent(&old_abs);
     let (new_parent, _) = split_parent(&new_abs);
-    log::info!("[rename-debug] old_parent={} old_name={} new_parent={}", old_parent, old_name, new_parent);
 
-    let old_parent_inode = match path::lookup_abs_path(&old_parent) {
-        Some(i) => i,
-        None => { log::info!("[rename-debug] old_parent lookup None: {}", old_parent); return -1; }
-    };
-    let new_parent_inode = match path::lookup_abs_path(&new_parent) {
-        Some(i) => i,
-        None => { log::info!("[rename-debug] new_parent lookup None: {}", new_parent); return -1; }
-    };
+    let old_parent_inode = path::lookup_abs_path(&old_parent).ok_or(errno::ENOENT)?;
+    let new_parent_inode = path::lookup_abs_path(&new_parent).ok_or(errno::ENOENT)?;
 
     // 在源目录与目标目录中改名/创建 都需要父目录的 写+搜索 权限(root 绕过)
     if !check_dir_write(&old_parent_inode) || !check_dir_write(&new_parent_inode) {
-        log::info!("[rename-debug] check_dir_write failed");
-        return -1;
+        return Err(errno::EACCES);
     }
-    // inode 内部的 rename/find_dir/open_dir 都基于"挂载根相对路径"导航
-    // (例如 FAT 根内没有 "fat" 目录, tmpfs 根内也没有 "tmp" 目录),
-    // 而 new_abs 是带挂载前缀的绝对 VFS 路径。必须剥掉挂载点前缀再传下去,
-    // 否则 find_dir("/tmp/rntest") 会在根下找 "tmp" 失败,
-    // 而 to_fat_path("/fat") 也会留下 "fat" 导致 open_dir 失败。
+    // 下层各 fs 的 rename 约定: to 是"相对该 fs 根"的路径, 各 fs 自己走父子链。
+    // 只剥挂载点前缀不够 —— bind 出来的挂载点(/home ← /data/home)要补回 inner_base,
+    // 否则 rsext4 会从 fs 根去找 "root/try_git", 而它在 fs 里其实是 "home/root/try_git"。
     let new_rel = {
-        let s = new_abs.strip_prefix(&mp_new).unwrap_or(&new_abs);
-        s.trim_start_matches('/').to_string()
+        let suffix = new_abs
+            .strip_prefix(&mp_new)
+            .unwrap_or(&new_abs)
+            .trim_start_matches('/');
+        match (inner_new.is_empty(), suffix.is_empty()) {
+            (true, _) => String::from(suffix),
+            (false, true) => inner_new.clone(),
+            (false, false) => alloc::format!("{}/{}", inner_new, suffix),
+        }
     };
 
-    log::info!("[rename-debug] calling inode.rename(old_name={}, new_abs={})", old_name, new_abs);
-    let r = old_parent_inode.rename(&old_name, &new_rel);
-    log::info!("[rename-debug] inode.rename returned {}", r);
-    r
+    match old_parent_inode.rename(&old_name, &new_rel) {
+        0 => Ok(()),
+        // 下层只给出 0 / -1, 拿不到更细的原因; 把 -errno 原样上报(不再假装 EPERM)
+        r if r < 0 => Err(-r),
+        _ => Err(errno::EIO),
+    }
 }
