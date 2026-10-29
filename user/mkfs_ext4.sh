@@ -185,6 +185,18 @@ if [ -x "$ROOT/bin/git" ]; then
   done
 fi
 
+# /bin/sh：git 的 SHELL_PATH 编死成它，且不能改成 /bin/shell。
+# Makefile:2128 有 `SHELL = $(SHELL_PATH)` —— 这个变量同时是 make 自己的执行 shell，
+# 所以它必须是宿主上也存在的路径（宿主只有 /bin/sh）。想让 guest 里有 sh，
+# 就只能让镜像提供 /bin/sh，而不是让编译器去找 /bin/shell：
+# 那样 make 会拿一个宿主上不存在的路径跑 recipe，首条 GIT-CFLAGS 就 `错误 127`，
+# 而且一个 error: 都不出现（编译根本没开始），非常容易误判成"工具链坏了"。
+# login 仍然 exec /bin/shell，两个名字都留着；别名理由同上（mke2fs -d 不保留硬链接）。
+if [ -x "$ROOT/bin/shell" ]; then
+  cp "$ROOT/bin/shell" "$ROOT/bin/sh"
+  echo "  [shell] shell -> /bin/sh (git 的 SHELL_PATH)"
+fi
+
 # git 模板：init 时往 .git 里铺 hooks/*.sample、info/exclude、description。
 # 源码里用 "目录--文件" 命名（如 hooks--pre-commit.sample），make -C templates
 # 会生成 blt/ 下的真实布局，并替换里面的 @SHELL_PATH@ / @PERL_PATH@。

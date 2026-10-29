@@ -261,6 +261,16 @@ static int run_git(const char *const av[], int ac, char *out, usize outsz) {
 #define RUN_GIT(av, out, outsz) \
     run_git((av), (int)(sizeof(av) / sizeof((av)[0])), (out), (outsz))
 
+/* mkdir 探针：把 errno 摊开。perror 以前硬编码 "error"（已修，但要等 libc
+ * 重编才生效），所以这里直接 strerror，不依赖它。
+ * e_ 必须先存：printf 内部还会调 write，失败会改 errno。 */
+#define MKDIR_PROBE(label, path_) do {                    \
+    int r_ = mkdir((path_), 0755);                        \
+    int e_ = errno;                                       \
+    printf("       %-36s rc=%-3d %s\n", (label), r_,      \
+           r_ == 0 ? "ok" : strerror(e_));                \
+} while (0)
+
 int main() {
     TEST_START("git_push");
 
@@ -293,6 +303,36 @@ int main() {
     /* ---- 1. 准备 ---- */
     rm_tree(ROOT_DIR);
     CHECK_EQ(mkdir(ROOT_DIR, 0755), 0, "准备: mkdir " ROOT_DIR);
+
+    /* ---- 1.5 mkdir 探针 ----
+     * `git init DIR`（走默认模板）死在这条链上：
+     *   path.c:902 safe_create_dir: mkdir(dir) < 0 -> perror(dir) -> exit(1)
+     * perror 原来从不打 errno，只吐字面量 "error"，所以只能看到
+     * "<dir>/.git/: error" 这七个字。这里自己把 errno 摊开。
+     *
+     * 五种写法一次跑完，直接分出问题属于哪一类：
+     *   绝对路径能不能建 / 尾斜杠有没有影响 / 相对路径行不行 / 嵌套一层行不行。
+     * 注意别以为这是 `--bare` 的锅 —— 上面矩阵里连非 bare 的 `init DIR` 也挂了。 */
+    {
+        puts("[git] mkdir 探针:");
+        rm_tree(ROOT_DIR "/probe");
+        MKDIR_PROBE("mkdir(probe) 建基准",        ROOT_DIR "/probe");
+        MKDIR_PROBE("mkdir(probe/a) 绝对无斜杠",  ROOT_DIR "/probe/a");
+        MKDIR_PROBE("mkdir(probe/b/) 绝对带斜杠", ROOT_DIR "/probe/b/");
+        if (chdir(ROOT_DIR "/probe") != 0) {
+            printf("       chdir(probe) 失败: %s\n", strerror(errno));
+        } else {
+            MKDIR_PROBE("mkdir(c) 相对无斜杠",    "c");
+            MKDIR_PROBE("mkdir(d/) 相对带斜杠",   "d/");
+            if (chdir("c") != 0) {
+                printf("       chdir(c) 失败: %s\n", strerror(errno));
+            } else {
+                MKDIR_PROBE("mkdir(.git) 嵌套一层",     ".git");
+                MKDIR_PROBE("mkdir(.git2/) 嵌套带斜杠", ".git2/");
+                chdir("/home/root");
+            }
+        }
+    }
 
     /* ---- 2. 建裸远端 ----
      * bare: push 的目标必须是裸仓库。往非裸仓库的当前分支推会被

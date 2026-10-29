@@ -38,14 +38,8 @@ esac
 CC="${CC:-${PREFIX}gcc}"
 AR="${AR:-${PREFIX}ar}"
 
-# git 在三条传输路径(file:// / git:// / ssh://)上要反向 fork 一个服务端，方式是
-# `sh -c "git-receive-pack '<path>'"`(connect.c)，所以 SHELL_PATH 必须指向镜像里
-# 真实存在的 shell。RmikuOS 的 shell 装成 /bin/shell(build.py 按源文件名，login.c
-# 也是 exec("/bin/shell"))，默认的 /bin/sh 是空的 —— 路径写错的后果不是"报错找不到
-# sh"，而是 execve 返回 ENOENT 后 git 用原始 argv[0] 打印
-# `fatal: cannot run git-receive-pack '...': No such file or directory`，
-# 看上去像是 git-receive-pack 没装，实际缺的是 sh。排查时极容易被带偏。
-SHELL_PATH="/bin/shell"
+# SHELL_PATH 必须同时是宿主和镜像上都能执行的路径，所以只能是 /bin/sh。
+SHELL_PATH="/bin/sh"
 
 
 if [ ! -f "$SRC/git.c" ]; then
@@ -132,11 +126,19 @@ if [ "$STAGE" = "lib" ] || [ "$STAGE" = "bin" ]; then
   # SHELL_PATH 也进快照：它不是 CFLAGS 的一部分（是 make 变量），但会被编进
   # run-command.o 的字符串常量里。改了却不重编，旧 .o 会静默带着旧路径 ——
   # 和当初 -std 变了 make 不感知是同一个坑。
-  CFLAGS_SIG="$(printf '%s\n' "${CFLAGS[@]}" "SHELL_PATH=$SHELL_PATH" \
+  #
+  # 我们的头文件同样进快照。理论上 make 的 .depend 会跟踪 -I 目录下的头，
+  # 但 libc 是 header-only（static inline），改了 include/*.h 等于改了源码：
+  # 一旦 .d 没覆盖到（或 .o 比头新一个时间戳误差），就会跑出"改了库但行为没变"
+  # 的幽灵 bug —— perror 那次就是这样，输出还是旧的 "error"。
+  # 头文件变更频率极低，宁可全量重编一次，也不要静默复用旧 .o。
+  INC_SIG="$(cat "$ROOT"/user/include/*.h "$ROOT"/user/zlib/*.h 2>/dev/null \
+             | sha256sum | cut -d' ' -f1)"
+  CFLAGS_SIG="$(printf '%s\n' "${CFLAGS[@]}" "SHELL_PATH=$SHELL_PATH" "INC=$INC_SIG" \
                 | sha256sum | cut -d' ' -f1)"
   CFLAGS_SNAP="$OUT/cflags.sha256"
   if [ -f "$CFLAGS_SNAP" ] && [ "$(cat "$CFLAGS_SNAP")" != "$CFLAGS_SIG" ]; then
-    echo "[git] CFLAGS 变了 → 清理旧的 .o（make 不知道命令行变量变化）"
+    echo "[git] CFLAGS 或 user 头文件变了 → 清理旧的 .o（make 不知道命令行变量变化）"
     make -C "$SRC" clean >/dev/null 2>&1 || true
   fi
   printf '%s\n' "$CFLAGS_SIG" > "$CFLAGS_SNAP"
