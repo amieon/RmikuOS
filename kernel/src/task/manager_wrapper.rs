@@ -642,7 +642,7 @@ struct UserExecArgs {
 /// `-1` 就是 `-EPERM`，shell 会把它当成"permisssion denied"，
 /// 而真正的原因（ENOENT/EACCES/ENOEXEC/ENOMEM）全被吞掉。
 fn exec_fail(path: &str, why: &str, e: isize) -> isize {
-    log::info!("[exec] {}: {} -> errno {}", why, path, e);
+    log::warn!("[exec] {}: {} -> errno {}", why, path, e);
     -e
 }
 
@@ -740,8 +740,26 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         return exec_fail(path, "not a regular file", crate::syscall::errno::EACCES);
     }
 
-    let mut app_data = Vec::new();
-    let mut buf = [0u8; 4096];
+    // 每次读 4 KiB。真正的批量在下面两层：ext4 的 CachedBlockReader 会把
+    // 连续块合并成一次 fill_blocks，驱动再按 128 扇区（64 KiB）发一次请求。
+    // 这里就是 4 KiB 的 syscall 分摊，再放大也不会改变底层请求次数。
+    let mut buf = alloc::vec![0u8; 4096];
+
+    // 预分配：不预分配的话 10 MB 的 ELF 会反复 realloc + 整体搬迁，
+    let expect_size = file.stat().size;
+    let capacity = if expect_size > 0 && expect_size < 64 * 1024 * 1024 {
+        expect_size
+    } else {
+        64 * 1024
+    };
+    let mut app_data = Vec::with_capacity(capacity);
+
+    // "开始加载"这条是为了能定位卡在 exec 里的情况：它和下面 exec-load 的
+    // 统计行配成一对，中间没有第三行。串口最后一行是这条 → 卡在读 ELF；
+    // 是 exec-load → exec 已经读完，问题在后面。
+    if capacity >= 1024 * 1024 {
+        log::info!("[exec] loading {} ({} KiB)", path, capacity / 1024);
+    }
 
     loop {
         let n = file.read(&mut buf);
@@ -755,6 +773,12 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         }
 
         app_data.extend_from_slice(&buf[..n as usize]);
+    }
+
+    // 大二进制（git 这种 10 MB 级）是块缓存的压力测试点：这一行直接给出
+    // 命中率，用来判断扩容量到底值不值。小文件不打，省串口带宽。
+    if app_data.len() >= 1024 * 1024 {
+        crate::drivers::block::cache::log_stats("exec-load");
     }
 
     if app_data.is_empty() {
