@@ -139,7 +139,8 @@ pub trait Inode: Send + Sync {
         -1
     }
 
-    /// 改名/移动: self 为源所在目录, from 为源名, to 为目标的完整绝对路径(可跨目录)。
+    /// 改名/移动: self 为源所在目录, from 为源名, to 为目标路径——
+    /// **相对于本 fs 挂载根**(上层 fs::rename 已剥掉挂载点前缀), 可跨目录。
     /// 默认不支持(只读文件系统返回 -1)。
     fn rename(&self, _from: &str, _to: &str) -> isize {
         -1

@@ -162,14 +162,15 @@ fn primary_init(id: usize) -> ! {
 
                 match fs::path::lookup_abs_path("/data/home") {
                     Some(inode) => {
-                        fs::mount::mount_bind("/home", inode);
+                        // inner_base "home" 让 rename 能把 /home/x 翻译回 /data 里的 home/x
+                        fs::mount::mount_bind("/home", inode, "home");
                         log::info!("[disk] /home ← /data/home (bind)");
                     }
                     None => log::warn!("[disk] /data/home 缺失, /home 未绑定"),
                 }
                 match fs::path::lookup_abs_path("/data/var") {
                     Some(inode) => {
-                        fs::mount::mount_bind("/var", inode);
+                        fs::mount::mount_bind("/var", inode, "var");
                         log::info!("[disk] /var ← /data/var (bind)");
                     }
                     None => log::warn!("[disk] /data/var 缺失, /var 未绑定"),
