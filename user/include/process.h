@@ -169,7 +169,8 @@ static inline isize exec(const char *path) {
  *
  * 三个必须知道的边界：
  *   1. 超过 8 个参数 → E2BIG（不是截断！截断会让子进程收到错的参数）
- *   2. execve 的 envp 没有传递通道 → 明确 ENOSYS，不假装设置环境
+ *   2. execve 的 envp 没有内核通道 → 用户态先把本进程环境表换成 envp 再 exec
+ *      （见下方 execve；"KEY=VALUE" 覆盖、"裸 KEY" 删除）
  *   3. exec* 成功不返回；返回就一定是失败 */
 static inline int execv(const char *path, char *const argv[]) {
     if (!path) { errno = ENOENT; return -1; }
@@ -272,13 +273,70 @@ static inline int execlp(const char *file, const char *arg, ...) {
     return execvp(file, argv);
 }
 
+/* execve: envp 是完整环境（POSIX）。
+ * 内核的 exec ABI 没有 envp 通道，但环境本身就是进程属性，所以这里先把本进程的
+ * 环境表调成 envp，再走 execv —— 子进程启动时读到的就是 envp。
+ *
+ * 两个必须做对的东西（git 的 run-command.c 全靠它们）：
+ *   1. "KEY=VALUE" → 覆盖或新增
+ *   2. 裸 "KEY"    → 从环境里删掉（git 用这个把 local_repo_env 里的 GIT_DIR
+ *      之类传染变量清掉；只加不删会让子进程继承不该有的仓库上下文）
+ *
+ * 残留语义差异：exec 失败时本进程的环境已经被改过（POSIX 保证不变）。
+ * 调用方（git 等）都是 fork 之后立刻 exec、失败即 _exit，所以不做回滚快照。
+ * envp == NULL 按 Linux 的实际行为当空环境。 */
 static inline int execve(const char *path, char *const argv[], char *const envp[]) {
-    (void)path; (void)argv; (void)envp;
-    /* 内核的 exec ABI 没有 envp：环境由 shell/crt0 的 environ 继承。
-     * POSIX 语义要求 execve 用 envp 替换环境，这里做不到，
-     * 所以明确失败而不是静默忽略参数。 */
-    errno = ENOSYS;
-    return -1;
+    if (!path || !*path) { errno = ENOENT; return -1; }
+
+    static char cur[1024];
+    char name[128];
+
+    if (!envp) {
+        clearenv();
+        return execv(path, argv);
+    }
+
+    /* 1. 删掉 envp 里没有的键。listenv 拿的是内核里的真实环境表
+     *    （不是 crt0 那份启动快照，后者不含 setenv 之后的改动）。 */
+    isize n = listenv(cur, sizeof(cur));
+    if (n > 0 && n <= (isize)sizeof(cur)) {
+        for (isize i = 0; i < n; ) {
+            const char *kv = cur + i;
+            isize len = (isize)strlen(kv);
+            if (len <= 0) break;                 /* 防御：格式异常就收工 */
+            const char *eq = strchr(kv, '=');
+            usize nlen = eq ? (usize)(eq - kv) : (usize)len;
+
+            int keep = 0;
+            for (char *const *e = envp; *e; e++) {
+                if (strncmp(*e, kv, nlen) == 0 &&
+                    ((*e)[nlen] == '=' || (*e)[nlen] == '\0')) { keep = 1; break; }
+            }
+            if (!keep && nlen > 0 && nlen < sizeof(name)) {
+                memcpy(name, kv, nlen);
+                name[nlen] = '\0';
+                unsetenv(name);
+            }
+            i += len + 1;
+        }
+    }
+
+    /* 2. 按 envp 覆盖/新增/删除。 */
+    for (char *const *e = envp; *e; e++) {
+        const char *eq = strchr(*e, '=');
+        if (!eq) {                                /* 裸名字 = 删除 */
+            unsetenv(*e);
+            continue;
+        }
+        if (eq == *e) continue;                   /* "=VALUE" 非法，跳过 */
+        usize nlen = (usize)(eq - *e);
+        if (nlen >= sizeof(name)) continue;
+        memcpy(name, *e, nlen);
+        name[nlen] = '\0';
+        setenv(name, eq + 1, 1);
+    }
+
+    return execv(path, argv);
 }
 
 /* _exit：不跑 atexit、不冲刷 stdio（与 exit 的关键区别）。
