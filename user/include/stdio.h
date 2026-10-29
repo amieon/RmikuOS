@@ -37,20 +37,6 @@ static inline void __pf_u64(FILE *fp, unsigned long long v, int base, int upper)
     while (n > 0) fputc((unsigned char)tmp[--n], fp);
 }
 
-static inline void __pf_i64(FILE *fp, long long v, int width, char pad) {
-    int neg = v < 0;
-    unsigned long long uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL
-                                : (unsigned long long)v;
-    char tmp[24];
-    int n = 0;
-    if (uv == 0) tmp[n++] = '0';
-    while (uv) { tmp[n++] = (char)('0' + uv % 10); uv /= 10; }
-    int total = n + neg;
-    if (pad == '0' && neg) { fputc('-', fp); neg = 0; }
-    while (total < width) { fputc((unsigned char)pad, fp); total++; }
-    if (neg) fputc('-', fp);
-    while (n > 0) fputc((unsigned char)tmp[--n], fp);
-}
 
 static inline void __pf_float(FILE *fp, double v, int prec) {
     if (v < 0) { fputc('-', fp); v = -v; }
@@ -107,8 +93,6 @@ static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
 
     /* 包装 fputc 同时计数 */
     #define _PUT(ch) do { fputc((unsigned char)(ch), fp); count++; } while(0)
-    #define _PUTS(s) do { const char *_s=(s); if(!_s)_s="(null)"; \
-                          while(*_s){ fputc((unsigned char)*_s++,fp); count++; } } while(0)
 
     while (*fmt) {
         char ch = *fmt++;
@@ -116,25 +100,42 @@ static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
 
         /* flags */
         char pad = ' ';
-        int alt = 0;
-        while (*fmt == '0' || *fmt == '-' || *fmt == '#') {
+        int alt = 0, left = 0;
+        while (*fmt == '0' || *fmt == '-' || *fmt == '#' ||
+               *fmt == ' ' || *fmt == '+') {
             if (*fmt == '0') pad = '0';
+            if (*fmt == '-') left = 1;
             if (*fmt == '#') alt = 1;
             fmt++;
         }
 
-        /* width */
+        /* width: 数字, 或 '*' 从参数取(负数 = 左对齐 + 取绝对值)。
+         * git 里 "%-*s" / "%*s" 到处是(utf8.c 对齐、parse-options 缩进),
+         * 不支持的话 '*' 会被当成未知转换符原样吐出, 而且**不消费那个 int**,
+         * 后面的 %s 就会把长度当成指针解引用 —— 段错误的经典来源。 */
         int width = 0;
-        while (*fmt >= '0' && *fmt <= '9')
-            width = width * 10 + (*fmt++ - '0');
+        if (*fmt == '*') {
+            fmt++;
+            width = va_arg(ap, int);
+            if (width < 0) { left = 1; width = -width; }
+        } else {
+            while (*fmt >= '0' && *fmt <= '9')
+                width = width * 10 + (*fmt++ - '0');
+        }
 
-        /* precision */
+        /* precision: '.' 后可跟数字或 '*'。负精度按"未指定"处理(C 标准)。 */
         int prec = -1;
         if (*fmt == '.') {
             fmt++;
-            prec = 0;
-            while (*fmt >= '0' && *fmt <= '9')
-                prec = prec * 10 + (*fmt++ - '0');
+            if (*fmt == '*') {
+                fmt++;
+                prec = va_arg(ap, int);
+                if (prec < 0) prec = -1;
+            } else {
+                prec = 0;
+                while (*fmt >= '0' && *fmt <= '9')
+                    prec = prec * 10 + (*fmt++ - '0');
+            }
         }
 
         /* length */
@@ -158,7 +159,7 @@ static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
                         : is_l  ? va_arg(ap, long)
                         : is_z  ? (long long)va_arg(ap, usize)
                         :         va_arg(ap, int);
-            /* 手动展开 __pf_i64 以计数 */
+
             int neg = v < 0;
             unsigned long long uv = neg ? (unsigned long long)(-(v+1))+1ULL
                                         : (unsigned long long)v;
@@ -166,10 +167,11 @@ static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
             if (uv == 0) tmp[n++] = '0';
             while (uv) { tmp[n++] = (char)('0' + uv%10); uv /= 10; }
             int total = n + neg;
-            if (pad=='0' && neg) { _PUT('-'); neg = 0; }
-            while (total < width) { _PUT(pad); total++; }
+            if (pad=='0' && neg && !left) { _PUT('-'); neg = 0; }
+            if (!left) while (total < width) { _PUT(pad); total++; }
             if (neg) _PUT('-');
             while (n > 0) _PUT(tmp[--n]);
+            if (left) while (total < width) { _PUT(' '); total++; }
             break;
         }
         case 'u': case 'o': case 'x': case 'X': {
@@ -187,8 +189,10 @@ static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
             char tmp[64]; int n = 0;
             if (v == 0) tmp[n++] = '0';
             while (v) { tmp[n++] = dig[v % base]; v /= base; }
-            while (n < width) { _PUT(pad); width--; }
+            int total = n;
+            if (!left) while (total < width) { _PUT(pad); total++; }
             while (n > 0) _PUT(tmp[--n]);
+            if (left) while (total < width) { _PUT(' '); total++; }
             break;
         }
         case 'p': {
@@ -208,9 +212,13 @@ static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
         case 's': {
             const char *s = va_arg(ap, const char *);
             if (!s) s = "(null)";
-            int len = 0; while (s[len]) len++;
-            for (int i = len; i < width; i++) _PUT(' ');
-            _PUTS(s);
+            /* 有精度就只打前 prec 字节。这是 "%.*s" 的语义 —— git 用它打印
+             * 非 NUL 结尾的子串(advice.c 逐行加 "hint: " 就是 np - cp)。 */
+            int len = 0;
+            while (s[len] && (prec < 0 || len < prec)) len++;
+            if (!left) for (int i = len; i < width; i++) _PUT(' ');
+            for (int i = 0; i < len; i++) _PUT(s[i]);
+            if (left) for (int i = len; i < width; i++) _PUT(' ');
             break;
         }
         case 'f': case 'F': {
@@ -321,7 +329,7 @@ static inline int vfprintf(FILE *fp, const char *fmt, va_list ap) {
     }
 
     #undef _PUT
-    #undef _PUTS
+
     return count;
 }
 
@@ -344,15 +352,32 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
         if (ch != '%') { _SP(ch); continue; }
 
         char pad = ' ';
-        int alt = 0, width = 0, is_l = 0, is_ll = 0, is_z = 0;
-        while (*fmt=='0'||*fmt=='-'||*fmt=='#') {
+        int alt = 0, width = 0, left = 0, is_l = 0, is_ll = 0, is_z = 0;
+        while (*fmt=='0'||*fmt=='-'||*fmt=='#'||*fmt==' '||*fmt=='+') {
             if (*fmt=='0') pad='0';
+            if (*fmt=='-') left=1;
             if (*fmt=='#') alt=1;
             fmt++;
         }
-        while (*fmt>='0'&&*fmt<='9') { width=width*10+(*fmt++-'0'); }
+        /* width: 同 vfprintf —— '*' 从参数取, 负数 = 左对齐 */
+        if (*fmt=='*') {
+            fmt++;
+            width = va_arg(ap, int);
+            if (width < 0) { left = 1; width = -width; }
+        } else {
+            while (*fmt>='0'&&*fmt<='9') { width=width*10+(*fmt++-'0'); }
+        }
         int prec = -1;
-        if (*fmt=='.') { fmt++; prec=0; while(*fmt>='0'&&*fmt<='9') prec=prec*10+(*fmt++-'0'); }
+        if (*fmt=='.') {
+            fmt++;
+            if (*fmt=='*') {
+                fmt++;
+                prec = va_arg(ap, int);
+                if (prec < 0) prec = -1;
+            } else {
+                prec=0; while(*fmt>='0'&&*fmt<='9') prec=prec*10+(*fmt++-'0');
+            }
+        }
         if (*fmt=='l') { fmt++; if(*fmt=='l'){is_ll=1;fmt++;} else is_l=1; }
         else if (*fmt=='z') { is_z=1; fmt++; }
 
@@ -369,10 +394,11 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
             if (uv==0) tmp[n++]='0';
             while (uv) { tmp[n++]=(char)('0'+uv%10); uv/=10; }
             int total = n+neg;
-            if (pad=='0'&&neg) { _SP('-'); neg=0; }
-            while (total<width) { _SP(pad); total++; }
+            if (pad=='0'&&neg&&!left) { _SP('-'); neg=0; }
+            if (!left) while (total<width) { _SP(pad); total++; }
             if (neg) _SP('-');
             while (n>0) _SP(tmp[--n]);
+            if (left) while (total<width) { _SP(' '); total++; }
             break;
         }
         case 'u': case 'o': case 'x': case 'X': {
@@ -387,8 +413,10 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
             char tmp[64]; int n=0;
             if (v==0) tmp[n++]='0';
             while (v) { tmp[n++]=dig[v%base]; v/=base; }
-            while (n<width) { _SP(pad); width--; }
+            int total = n;
+            if (!left) while (total<width) { _SP(pad); total++; }
             while (n>0) _SP(tmp[--n]);
+            if (left) while (total<width) { _SP(' '); total++; }
             break;
         }
         case 'p': {
@@ -405,9 +433,11 @@ static inline int vsnprintf(char *str, usize cap, const char *fmt, va_list ap) {
         case 's': {
             const char *s = va_arg(ap,const char*);
             if (!s) s="(null)";
-            int len=0; while(s[len]) len++;
-            for (int i=len;i<width;i++) _SP(' ');
-            while (*s) _SP(*s++);
+            int len=0;
+            while (s[len] && (prec < 0 || len < prec)) len++;
+            if (!left) for (int i=len;i<width;i++) _SP(' ');
+            for (int i=0;i<len;i++) _SP(s[i]);
+            if (left) for (int i=len;i<width;i++) _SP(' ');
             break;
         }
         case 'f': case 'F': {
