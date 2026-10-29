@@ -6,7 +6,13 @@ use crate::mm::{
     PAGE_SIZE_BITS,
 };
 use crate::mm::config::PAGE_SIZE;
-use crate::mm::frame_allocator::alloc_frame;
+// DMA 区（request / status / data）的布局统一在 virtio_blk_dma.rs，
+// 和 virtio_pci_blk 共用一份——两套驱动原本各定义一份，改容量时漏一处
+// 就会变成"一个架构快、另一个还慢"。
+use super::virtio_blk_dma::{
+    VirtioBlkDma,
+    DMA_MAX_SECTORS,
+};
 
 use crate::drivers::virtio::transport::mmio::{
     VirtioMmioHeader,
@@ -427,52 +433,6 @@ impl VirtioQueue {
 }
 
 
-const DMA_REQ_OFFSET: usize = 0;
-const DMA_DATA_OFFSET: usize = 512;
-const DMA_STATUS_OFFSET: usize = DMA_DATA_OFFSET + 512;
-
-
-pub struct VirtioBlkDma {
-    ppn: PhysPageNum,
-    pa: usize,
-    va: usize,
-
-    req_pa: usize,
-    data_pa: usize,
-    status_pa: usize,
-
-    req_va: usize,
-    data_va: usize,
-    status_va: usize,
-}
-
-impl VirtioBlkDma {
-    pub fn new() -> Option<Self> {
-        let ppn = alloc_frame()?;
-
-        let pa = ppn.0 << PAGE_SIZE_BITS;
-        let va = kernel_phys_to_virt(pa);
-
-        unsafe {
-            core::ptr::write_bytes(va as *mut u8, 0, PAGE_SIZE);
-        }
-
-        Some(Self {
-            ppn,
-            pa,
-            va,
-
-            req_pa: pa + DMA_REQ_OFFSET,
-            data_pa: pa + DMA_DATA_OFFSET,
-            status_pa: pa + DMA_STATUS_OFFSET,
-
-            req_va: va + DMA_REQ_OFFSET,
-            data_va: va + DMA_DATA_OFFSET,
-            status_va: va + DMA_STATUS_OFFSET,
-        })
-    }
-}
-
 pub struct VirtioBlkInner {
     pub queue0: VirtioQueue,
     pub dma: VirtioBlkDma,
@@ -482,8 +442,18 @@ pub struct VirtioBlkInner {
 
 
 impl VirtioBlkDevice {
-    fn read_sector_sync(&self, sector: usize, out: &mut [u8]) -> isize {
-        if out.len() != 512 {
+    /// 一次读 `count` 个连续扇区。
+    ///
+    /// 全部成功返回字节数（= count * 512），否则 -1。
+    /// **不做部分成功**：返回 -1 时 out 的内容不可用，调用方不能拿去用。
+    fn read_sectors_sync(&self, sector: usize, count: usize, out: &mut [u8]) -> isize {
+        if count == 0 || count > DMA_MAX_SECTORS {
+            return -1;
+        }
+
+        let bytes = count * 512;
+
+        if out.len() < bytes {
             return -1;
         }
 
@@ -531,9 +501,10 @@ impl VirtioBlkDevice {
             write_volatile(status_va as *mut u8, 0xff);
 
             /*
-             * data buffer 清零，方便 debug。
+             * 不清零 data buffer。原来这里有一句 write_bytes(data_va, 0, 512)
+             * "方便 debug"——数据区扩到 64 KiB 之后它会变成每次白搬 64 KiB，
+             * 正好把批量读省下来的全吐回去。
              */
-            core::ptr::write_bytes(data_va as *mut u8, 0, 512);
 
             /*
              * 2. descriptor chain:
@@ -556,7 +527,7 @@ impl VirtioBlkDevice {
                 desc1,
                 VirtqDesc {
                     addr: data_pa as u64,
-                    len: 512,
+                    len: bytes as u32,
                     flags: VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE,
                     next: 2,
                 },
@@ -670,17 +641,26 @@ impl VirtioBlkDevice {
             }
 
             /*
-             * 9. 关键：把 DMA data buffer 复制到 out。
+             * 9. 关键：把 DMA data buffer 复制到 out（bounce buffer）。
              */
             let data = core::slice::from_raw_parts(
                 data_va as *const u8,
-                512,
+                bytes,
             );
 
-            out.copy_from_slice(data);
+            out[..bytes].copy_from_slice(data);
         }
 
-        512
+        bytes as isize
+    }
+
+    /// 单扇区读，保留给只需要一个块的调用方。
+    fn read_sector_sync(&self, sector: usize, out: &mut [u8]) -> isize {
+        if out.len() != 512 {
+            return -1;
+        }
+
+        self.read_sectors_sync(sector, 1, out)
     }
 }
 
@@ -855,6 +835,15 @@ impl BlockDevice for VirtioBlkDevice {
         }
 
         self.read_sector_sync(block_id, buf)
+    }
+
+    /// 覆写默认的"逐块循环"：一次 ring 往返搬 count 个扇区。
+    fn read_blocks(&self, start: usize, count: usize, buf: &mut [u8]) -> isize {
+        self.read_sectors_sync(start, count, buf)
+    }
+
+    fn max_transfer_blocks(&self) -> usize {
+        DMA_MAX_SECTORS
     }
 
     fn write_block(&self, block_id: usize, buf: &[u8]) -> isize {

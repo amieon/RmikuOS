@@ -23,6 +23,7 @@ use crate::drivers::virtio::queue::{
 use super::virtio_blk_dma::{
     VirtioBlkDma,
     VirtioBlkReq,
+    DMA_MAX_SECTORS,
 };
 
 
@@ -362,8 +363,15 @@ impl VirtioPciBlkDevice {
 }
 
 impl VirtioPciBlkDevice {
-    fn read_sector_sync(&self, sector: usize, out: &mut [u8]) -> isize {
-        if out.len() != 512 {
+    /// 一次读 `count` 个连续扇区。全部成功返回字节数，否则 -1（无部分成功）。
+    fn read_sectors_sync(&self, sector: usize, count: usize, out: &mut [u8]) -> isize {
+        if count == 0 || count > DMA_MAX_SECTORS {
+            return -1;
+        }
+
+        let bytes = count * 512;
+
+        if out.len() < bytes {
             return -1;
         }
 
@@ -400,7 +408,7 @@ impl VirtioPciBlkDevice {
 
             write_volatile(req_va as *mut VirtioBlkReq, req);
             write_volatile(status_va as *mut u8, 0xff);
-            core::ptr::write_bytes(data_va as *mut u8, 0, 512);
+            // 不清 data 区：扩到 64 KiB 后清零等于每次白搬 64 KiB。
 
             write_volatile(
                 desc0,
@@ -416,7 +424,7 @@ impl VirtioPciBlkDevice {
                 desc1,
                 VirtqDesc {
                     addr: data_pa as u64,
-                    len: 512,
+                    len: bytes as u32,
                     flags: VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE,
                     next: 2,
                 },
@@ -505,11 +513,20 @@ impl VirtioPciBlkDevice {
                 return -1;
             }
 
-            let data = core::slice::from_raw_parts(data_va as *const u8, 512);
-            out.copy_from_slice(data);
+            let data = core::slice::from_raw_parts(data_va as *const u8, bytes);
+            out[..bytes].copy_from_slice(data);
         }
 
-        512
+        bytes as isize
+    }
+
+    /// 单扇区读，保留给只读一个块的调用方。
+    fn read_sector_sync(&self, sector: usize, out: &mut [u8]) -> isize {
+        if out.len() != 512 {
+            return -1;
+        }
+
+        self.read_sectors_sync(sector, 1, out)
     }
 }
 
@@ -667,7 +684,19 @@ impl BlockDevice for VirtioPciBlkDevice {
     }
 
     fn read_block(&self, block_id: usize, buf: &mut [u8]) -> isize {
+        if buf.len() != 512 {
+            return -1;
+        }
         self.read_sector_sync(block_id, buf)
+    }
+
+    /// 覆写默认的"逐块循环"：一次 ring 往返搬 count 个扇区。
+    fn read_blocks(&self, start: usize, count: usize, buf: &mut [u8]) -> isize {
+        self.read_sectors_sync(start, count, buf)
+    }
+
+    fn max_transfer_blocks(&self) -> usize {
+        DMA_MAX_SECTORS
     }
     fn write_block(&self, block_id: usize, buf: &[u8]) -> isize {
         if buf.len() != 512 {

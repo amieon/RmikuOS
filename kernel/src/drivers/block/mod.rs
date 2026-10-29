@@ -14,7 +14,11 @@ pub use cache::{
     BLOCK_SIZE,
     BlockCache,
     BlockCacheRef,
+    CacheStats,
+    fill_blocks,
     get_block_cache,
+    log_stats,
+    stats,
 };
 
 

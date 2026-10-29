@@ -146,6 +146,8 @@ fn primary_init(id: usize) -> ! {
         crate::drivers::block::ext4_image::rootfs_ramdisk()
     });
 
+    crate::test::block_batch_test::test_batch_read(rootfs_device.clone());
+
     fs::ext4fs::init(rootfs_device);
     fs::tmpfs::init();
 

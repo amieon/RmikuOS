@@ -6,6 +6,7 @@ pub mod user_memory_set_test;
 pub mod user_test;
 pub mod block_test;
 pub mod block_cache_tset;
+pub mod block_batch_test;
 pub mod loader;
 pub mod write_setion_test;
 pub mod test_second_disk_rw;

@@ -45,6 +45,20 @@ impl BlockCache {
         }
     }
 
+    /// 用已经读到的数据造一个缓存块，不再读盘。给批量预读用。
+    fn from_raw(
+        block_id: usize,
+        data: [u8; BLOCK_SIZE],
+        device: Arc<dyn BlockDevice>,
+    ) -> Self {
+        Self {
+            block_id,
+            data,
+            device,
+            modified: false,
+        }
+    }
+
     pub fn block_id(&self) -> usize {
         self.block_id
     }
@@ -160,17 +174,17 @@ struct Slot {
 ///
 /// 两个关键点（都是相对旧实现修的）：
 ///
-/// * 查找从线性扫描改成树索引。旧实现每命中一个块都要 `cache.lock()`
+/// * **查找从线性扫描改成树索引**。旧实现每命中一个块都要 `cache.lock()`
 ///   遍历整个队列，64 项就是 64 次自旋锁；现在一次 B 树查找，零加锁。
 ///   （no_std 没有 HashMap，引入 hashbrown 只为一处查找不划算；
 ///   块号是密集整数，B 树的比较分支对缓存友好，8192 项也才 13 层。）
 ///
-/// * 淘汰用 CLOCK 而不是纯 FIFO。旧实现按插入顺序淘汰，刚被高频访问的
+/// * **淘汰用 CLOCK 而不是纯 FIFO**。旧实现按插入顺序淘汰，刚被高频访问的
 ///   元数据块（inode 表、块位图）一样会被踢掉。CLOCK 给被访问过的块一次
 ///   留任机会，逼近 LRU 但不需要维护链表。
 pub struct BlockCacheManager {
     slots: BTreeMap<CacheKey, Slot>,
-    /// CLOCK 环。只存键，不持有 Arc —— 否则 strong_count 永远 >= 2，
+    /// CLOCK 环。只存键，**不持有 Arc** —— 否则 strong_count 永远 >= 2，
     /// 没有任何块能被判定为“无人使用”，淘汰会直接卡死。
     clock: VecDeque<CacheKey>,
 }
@@ -258,6 +272,111 @@ impl BlockCacheManager {
         );
     }
 
+    /// 把一块**已经读到的**数据放进缓存（不读盘）。
+    fn insert_raw(
+        &mut self,
+        block_id: usize,
+        data: [u8; BLOCK_SIZE],
+        device: Arc<dyn BlockDevice>,
+    ) -> BlockCacheRef {
+        let key = cache_key(block_id, &device);
+
+        if let Some(slot) = self.slots.get_mut(&key) {
+            slot.referenced = true;
+            return slot.cache.clone();
+        }
+
+        if self.slots.len() >= BLOCK_CACHE_CAPACITY {
+            self.evict_one();
+        }
+
+        let cache: BlockCacheRef =
+            Arc::new(Mutex::new(BlockCache::from_raw(block_id, data, device)));
+
+        self.slots.insert(
+            key,
+            Slot {
+                cache: cache.clone(),
+                referenced: false,
+            },
+        );
+        self.clock.push_back(key);
+
+        cache
+    }
+
+    /// 批量预读 `[start, start+count)` 进缓存，返回实际填入的块数。
+    ///
+    /// 已命中的块直接跳过；剩下的连续缺口合并成一次 `device.read_blocks()`——
+    /// 这才是多扇区读真正兑现收益的地方：一个 4 KiB 的 ext4 块是 8 个扇区，
+    /// 不合并就是 8 次 ring 往返。
+    ///
+    /// 失败不 panic：这一段跳过，调用方随后按单块再走一遍 `get_block_cache`，
+    /// 让真实的错误（ENOENT/EIO）从原来那条路径冒出来，而不是在这里被吞掉。
+    fn fill_blocks(
+        &mut self,
+        start: usize,
+        count: usize,
+        device: Arc<dyn BlockDevice>,
+    ) -> usize {
+        if count == 0 || device.block_size() != BLOCK_SIZE {
+            return 0;
+        }
+
+        // 驱动一次最多能搬多少块（virtio 受 DMA 数据区大小限制）
+        let step = device.max_transfer_blocks().max(1);
+
+        let mut filled = 0usize;
+        let mut i = 0usize;
+
+        while i < count {
+            let key = cache_key(start + i, &device);
+
+            if let Some(slot) = self.slots.get_mut(&key) {
+                slot.referenced = true;
+                HITS.fetch_add(1, Ordering::Relaxed);
+                i += 1;
+                continue;
+            }
+
+            // 往后找出连续未命中的区间 [i, j)
+            let mut j = i + 1;
+
+            while j < count {
+                if self.slots.contains_key(&cache_key(start + j, &device)) {
+                    break;
+                }
+                j += 1;
+            }
+
+            let run = core::cmp::min(j - i, step);
+            let bytes = run * BLOCK_SIZE;
+
+            let mut buf = alloc::vec![0u8; bytes];
+            let ret = device.read_blocks(start + i, run, &mut buf);
+
+            if ret != bytes as isize {
+                // 整段失败。别把半个缓冲塞进缓存——那会让上层读到全 0 的
+                // "合法数据"，比直接失败更难查。
+                MISSES.fetch_add(run, Ordering::Relaxed);
+                i += run;
+                continue;
+            }
+
+            for k in 0..run {
+                let mut one = [0u8; BLOCK_SIZE];
+                one.copy_from_slice(&buf[k * BLOCK_SIZE..(k + 1) * BLOCK_SIZE]);
+                self.insert_raw(start + i + k, one, device.clone());
+            }
+
+            MISSES.fetch_add(run, Ordering::Relaxed);
+            filled += run;
+            i += run;
+        }
+
+        filled
+    }
+
     pub fn resident(&self) -> usize {
         self.slots.len()
     }
@@ -277,6 +396,17 @@ pub fn get_block_cache(
     BLOCK_CACHE_MANAGER
         .lock()
         .get_block_cache(block_id, device)
+}
+
+/// 批量预读一段连续块进缓存，返回实际填入的块数。
+pub fn fill_blocks(
+    start: usize,
+    count: usize,
+    device: Arc<dyn BlockDevice>,
+) -> usize {
+    BLOCK_CACHE_MANAGER
+        .lock()
+        .fill_blocks(start, count, device)
 }
 
 /// 缓存统计快照。命中率是判断“扩容到底有没有意义”的唯一实测依据，
