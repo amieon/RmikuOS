@@ -1356,6 +1356,9 @@ static void build_exec_path(const char *prefix, const char *cmd, char *out, int 
 
 
 
+/* exec_with_args 成功不返回；返回就是失败，值是内核原生的 -errno
+ * （不带 rk_sys_ret 的 -1 语义）。候选路径里"后面的目录不存在"是正常的，
+ * 真正的原因在第一个非 ENOENT 的错误上，所以要记第一个而不是最后一个。 */
 static void report_exec_failure(const char *cmd, int err) {
     if (err == 0 || err == ENOENT) {
         printf("command not found: %s\n", cmd);
@@ -2082,12 +2085,23 @@ static int builtin_source(const char *path) {
 
 
 /* ---- main ---- */
-int main(void) {
+int main(int argc, char *argv[]) {
     char line[LINE_SIZE];
+
+    /* 程序搜索路径先加载: -c 分支和交互分支都要靠它查 PATH */
+    load_search_dirs();
+
+    /* `shell -c "cmd"`: POSIX 的非交互形态 —— 执行一条命令, 按它的退出码退出。*/
+    if (argc >= 2 && strcmp(argv[1], "-c") == 0) {
+        if (argc < 3) {
+            fputs("shell: -c requires an argument\n", stderr);
+            return 2;
+        }
+        return execute_line(argv[2]);
+    }
 
     fputs("\nRmikuOS shell\n", stdout);
     print_help();
-    load_search_dirs();
 
     signal(SIGINT, SIG_IGN);
     /* 提示符下按 Ctrl+Z 不该停住 shell：终端驱动是"把 SIGTSTP 发给前台"，
@@ -2101,7 +2115,7 @@ int main(void) {
     set_front(getpgrp());
 
     while (1) {
-        set_my_tickets(1);
+        // set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];
