@@ -172,6 +172,23 @@ if [ -d "user/build/${ARCH}/git" ]; then
   done
 fi
 
+# git 模板：init 时往 .git 里铺 hooks/*.sample、info/exclude、description。
+# 源码里用 "目录--文件" 命名（如 hooks--pre-commit.sample），make -C templates
+# 会生成 blt/ 下的真实布局，并替换里面的 @SHELL_PATH@ / @PERL_PATH@。
+# 二进制里编死的模板目录是构建机的 $(HOME)/share/git-core/templates，所以内核给
+# init 播了 GIT_TEMPLATE_DIR 指向这里（见 kernel/src/task/manager_wrapper.rs）。
+GIT_TPL="user/git/src/templates"
+if [ -d "$GIT_TPL" ]; then
+  make -C "$GIT_TPL" all >/dev/null 2>&1 || true
+  if [ -d "$GIT_TPL/blt" ]; then
+    mkdir -p "$ROOT/usr/share/git-core/templates"
+    cp -R "$GIT_TPL/blt/." "$ROOT/usr/share/git-core/templates/"
+    echo "  [git] templates -> /usr/share/git-core/templates"
+  else
+    echo "  [git] ! templates 未生成（git init 会 warning，功能不受影响）"
+  fi
+fi
+
 # Java 字节码（JVM 项目）
 for proj_dir in user/java/*; do
   [ -d "$proj_dir" ] || continue

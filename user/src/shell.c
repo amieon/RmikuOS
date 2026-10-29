@@ -33,7 +33,7 @@ static int g_last_exit = 0;
 struct job {
     int used;
     int id;
-    /* 存的是**进程组号**，不是 pid：一条管线是多个进程，`fg`/`bg`/Ctrl+C
+    /* 存的是进程组号，不是 pid：一条管线是多个进程，`fg`/`bg`/Ctrl+C
      * 都要对整组生效。单命令时 pgid == pid（fork 后立刻 setpgid(child, child)）。 */
     isize pgid;
     int stopped;   /* 1 = 被 Ctrl+Z 停住，等 fg/bg 继续 */
@@ -674,7 +674,7 @@ static struct job *find_job(const char *arg) {
     return 0;
 }
 
-/* 一个作业可能是整条管线，所以按**组**回收：循环到没有新状态为止。
+/* 一个作业可能是整条管线，所以按组回收：循环到没有新状态为止。
  * 循环结束的 r：> 0 表示还有成员没报完、0 表示暂时没变化、< 0 表示组里
  * 已经没有子进程了 —— 只有最后一种才算"整个作业结束"。 */
 static void reap_jobs(void) {
@@ -1356,8 +1356,25 @@ static void build_exec_path(const char *prefix, const char *cmd, char *out, int 
 
 
 
+static void report_exec_failure(const char *cmd, int err) {
+    if (err == 0 || err == ENOENT) {
+        printf("command not found: %s\n", cmd);
+    } else {
+        printf("cannot execute %s: %s (errno %d)\n", cmd, strerror(err), err);
+    }
+}
+
+static void exec_try(const char *path, struct exec_args *args, int *err) {
+    isize r = exec_with_args(path, args);
+    if (r < 0) {
+        int e = (int)(-r);
+        if (*err == 0 || (*err == ENOENT && e != ENOENT)) *err = e;
+    }
+}
+
 static void run_exec(int argc, char *argv[]){
     struct exec_args args;
+    int err = 0;
     args.argc = argc;
 
     for (int i = 0; i < EXEC_MAX_ARGS; i++) {
@@ -1370,24 +1387,20 @@ static void run_exec(int argc, char *argv[]){
     }
 
     if (has_slash(argv[0])) {
-        exec_with_args(argv[0], &args);
-        fputs("exec failed: ", stdout);
-        fputs(argv[0], stdout);
-        fputs("\n", stdout);
+        exec_try(argv[0], &args, &err);
+        report_exec_failure(argv[0], err);
         return;
     }
 
-    exec_with_args(argv[0], &args);
+    exec_try(argv[0], &args, &err);
 
     for (int d = 0; d < num_dirs; d++) {
         char path[96];
         build_exec_path(search_dirs[d], argv[0], path, sizeof(path));
-        exec_with_args(path, &args);
+        exec_try(path, &args, &err);
     }
 
-    fputs("command not found: ", stdout);
-    fputs(argv[0], stdout);
-    fputs("\n", stdout);
+    report_exec_failure(argv[0], err);
 }
 
 static int run_external(int argc, char *argv[], int background) {
@@ -1398,16 +1411,16 @@ static int run_external(int argc, char *argv[], int background) {
     set_echo(1);
     isize pid = fork();
     if (pid == 0) {
-        /* 自成进程组：这样 Ctrl+C / Ctrl+Z 按**组**投递时只打到作业本身，
+        /* 自成进程组：这样 Ctrl+C / Ctrl+Z 按组投递时只打到作业本身，
          * 不会连 shell 一起打（shell 和前台作业必须在不同的组）。
          * 父子两边都调一次是 bash 的做法：谁先跑到都不会漏。 */
         setpgid(0, 0);
         /* Child stdin must stay BLOCKING. The old code set O_NONBLOCK on
-        ** fd 0 before fork for Ctrl+C polling, and fd_flags get cloned
-        ** into the child, so interactive programs (sqlite3 shell, cat,
-        ** lua...) saw read()==0 (EOF) on stdin and exited immediately.
-        ** Reset here; per-process fd_flags so this does not affect the
-        ** parent. */
+         fd 0 before fork for Ctrl+C polling, and fd_flags get cloned
+         into the child, so interactive programs (sqlite3 shell, cat,
+         lua...) saw read()==0 (EOF) on stdin and exited immediately.
+         Reset here; per-process fd_flags so this does not affect the
+         parent. */
         fcntl(0, F_SETFL, 0);
         run_exec(argc, argv);
         exit(1);
@@ -1421,10 +1434,10 @@ static int run_external(int argc, char *argv[], int background) {
             return 0;
         }
         /* Foreground: block until the child exits. We no longer poll
-        ** read(0) for Ctrl+C: that consumed input chars meant for the
-        ** child from the shared terminal. Kernel signal delivery is
-        ** incomplete; Ctrl+C interrupt can come back with a kernel
-        ** Ctrl+C -> SIGINT implementation later. */
+         read(0) for Ctrl+C: that consumed input chars meant for the
+         child from the shared terminal. Kernel signal delivery is
+         incomplete; Ctrl+C interrupt can come back with a kernel
+         Ctrl+C -> SIGINT implementation later. */
         /* 把前台交给子进程：Ctrl+C / Ctrl+Z 的投递目标是"前台进程"，
          * 而 fork 不会自动改它 —— 不写这句，信号永远打在 shell 自己身上
          * （shell 又忽略了 SIGINT/SIGTSTP，于是按键毫无反应）。 */

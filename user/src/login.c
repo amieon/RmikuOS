@@ -92,6 +92,10 @@ int main(void) {
             setgid(u.gid);               /* 先 setgid（此时还是 root） */
             setuid(u.uid);               /* 再 setuid，euid 降为非 0 */
             chdir(u.home);               /* 家目录（不存在则留在 /） */
+            setenv("HOME", u.home, 1);
+            setenv("PWD", u.home, 1);
+            setenv("USER", u.name, 1);
+            setenv("LOGNAME", u.name, 1);
             exec("/bin/shell");
             puts("[login] exec /bin/shell failed\n");
             exit(1);

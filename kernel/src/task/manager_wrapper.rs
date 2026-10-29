@@ -79,6 +79,13 @@ pub fn init() {
     process.env.push((String::from("PATH"), String::from("/bin:/tests:/programs")));
     process.env.push((String::from("HOME"), String::from("/home")));
     process.env.push((String::from("PWD"), String::from("/")));
+    // git 的 init 模板(hooks/*.sample、info/exclude)装在镜像里，但二进制里
+    // 编译进去的路径是构建机的 $(HOME)/share/git-core/templates —— 交叉构建时
+    // 那是宿主机路径，guest 里必然找不到。用环境变量指到镜像内的真实位置。
+    process.env.push((
+        String::from("GIT_TEMPLATE_DIR"),
+        String::from("/usr/share/git-core/templates"),
+    ));
 
     let thread = ThreadControlBlock::new_main_thread(
         0,
@@ -631,19 +638,27 @@ struct UserExecArgs {
     argv: [UserArg; EXEC_MAX_ARGS],
 }
 
+/// exec 失败的统一出口：必须返回真实 errno，不能一律 -1。
+/// `-1` 就是 `-EPERM`，shell 会把它当成"permisssion denied"，
+/// 而真正的原因（ENOENT/EACCES/ENOEXEC/ENOMEM）全被吞掉。
+fn exec_fail(path: &str, why: &str, e: isize) -> isize {
+    log::info!("[exec] {}: {} -> errno {}", why, path, e);
+    -e
+}
+
 pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize {
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, path_len) {
         Some(bytes) => bytes,
-        None => return -1,
+        None => return exec_fail("<path>", "path not readable", crate::syscall::errno::EFAULT),
     };
 
     let name = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s.trim_matches('\0').trim(),
-        Err(_) => return -1,
+        Err(_) => return exec_fail("<path>", "path not utf8", crate::syscall::errno::ENOENT),
     };
 
     if name.is_empty() {
-        return -1;
+        return exec_fail("", "empty path", crate::syscall::errno::ENOENT);
     }
 
     let cwd = crate::task::current_cwd();
@@ -655,7 +670,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
                 path_buf = p;
                 path_buf.as_str()
             }
-            None => return -1,
+            None => return exec_fail(name, "path normalize failed", crate::syscall::errno::ENOENT),
         }
     } else {
         path_buf.push_str("/bin/");
@@ -675,7 +690,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
                 m.mode, m.uid, m.gid, euid, egid, &groups[..ngroups], crate::fs::inode::X_OK,
             ) {
                 log::warn!("[exec] permission denied (no exec bit): {}", path);
-                return -1;
+                return -crate::syscall::errno::EACCES;
             }
             let (u, ue, g, ge) = crate::task::current_creds();
             let new_ue = if m.mode & crate::fs::stat::S_ISUID != 0 { m.uid } else { ue };
@@ -687,8 +702,8 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     };
 
     let argv = match read_exec_args(args_ptr, name) {
-        Some(argv) => argv,
-        None => return -1,
+        Ok(argv) => argv,
+        Err(e) => return exec_fail(path, "bad exec args", e),
     };
 
     let argc = argv.len();
@@ -722,7 +737,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 
     if file.is_dir() || !file.readable() {
         log::warn!("[exec] not a regular readable file: {}", path);
-        return -1;
+        return exec_fail(path, "not a regular file", crate::syscall::errno::EACCES);
     }
 
     let mut app_data = Vec::new();
@@ -732,8 +747,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         let n = file.read(&mut buf);
 
         if n < 0 {
-            log::warn!("[exec] read failed: {}", path);
-            return -1;
+            return exec_fail(path, "read failed", crate::syscall::errno::EIO);
         }
 
         if n == 0 {
@@ -744,17 +758,13 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     }
 
     if app_data.is_empty() {
-        log::warn!("[exec] empty executable: {}", path);
-        return -1;
+        return exec_fail(path, "empty executable", crate::syscall::errno::ENOEXEC);
     }
 
     let (new_user_space, entry, user_sp) =
     match crate::mm::MemorySet::from_elf(&app_data) {
         Some(v) => v,
-        None => {
-            log::warn!("[exec] invalid ELF executable: {}", path);
-            return -1;
-        }
+        None => return exec_fail(path, "invalid ELF", crate::syscall::errno::ENOEXEC),
     };;
 
     let (new_user_sp, argv_ptr) = match build_user_stack_with_args(
@@ -764,7 +774,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
         &env,
     ) {
         Some(v) => v,
-        None => return -1,
+        None => return exec_fail(path, "build user stack failed", crate::syscall::errno::ENOMEM),
     };
 
 
@@ -785,7 +795,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
                 "[exec] pid={} has multiple threads, exec denied in first version",
                 current_pid,
             );
-            return -1;
+            return -crate::syscall::errno::EINVAL;
         }
 
         let (old_space, closed_files) = {
@@ -836,24 +846,26 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
 fn read_exec_args(
     args_ptr: usize,
     default_argv0: &str,
-) -> Option<Vec<Vec<u8>>> {
+) -> Result<Vec<Vec<u8>>, isize> {
     if args_ptr == 0 {
         let mut argv = Vec::new();
         argv.push(default_argv0.as_bytes().to_vec());
-        return Some(argv);
+        return Ok(argv);
     }
 
     let bytes = crate::task::read_current_user_bytes(
         args_ptr,
         core::mem::size_of::<UserExecArgs>(),
-    )?;
+    )
+    .ok_or(crate::syscall::errno::EFAULT)?;
 
     let raw = unsafe {
         core::ptr::read_unaligned(bytes.as_ptr() as *const UserExecArgs)
     };
 
     if raw.argc == 0 || raw.argc > EXEC_MAX_ARGS {
-        return None;
+        log::info!("[exec] bad argc={} (limit {})", raw.argc, EXEC_MAX_ARGS);
+        return Err(crate::syscall::errno::E2BIG);
     }
 
     let mut argv = Vec::new();
@@ -862,10 +874,17 @@ fn read_exec_args(
         let arg = raw.argv[i];
 
         if arg.ptr == 0 || arg.len > 256 {
-            return None;
+            log::info!(
+                "[exec] bad argv[{}]: ptr={:#x} len={}",
+                i,
+                arg.ptr,
+                arg.len,
+            );
+            return Err(crate::syscall::errno::EINVAL);
         }
 
-        let mut data = crate::task::read_current_user_bytes(arg.ptr, arg.len)?;
+        let mut data = crate::task::read_current_user_bytes(arg.ptr, arg.len)
+            .ok_or(crate::syscall::errno::EFAULT)?;
 
         if let Some(pos) = data.iter().position(|&c| c == 0) {
             data.truncate(pos);
@@ -874,7 +893,7 @@ fn read_exec_args(
         argv.push(data);
     }
 
-    Some(argv)
+    Ok(argv)
 }
 
 fn write_to_user_space(
@@ -993,7 +1012,7 @@ pub fn set_fd_cloexec_current(fd: usize, on: bool) {
     process.fd_cloexec[fd] = on;
 }
 
-/// 记录 fd 的**文件状态标志**（访问模式 + O_APPEND + O_NONBLOCK）。
+/// 记录 fd 的文件状态标志（访问模式 + O_APPEND + O_NONBLOCK）。
 ///
 /// 必须在 open 时调一次：`F_GETFL` 的值就来自这里。少了这一步，
 /// `fcntl(fd, F_GETFL) & O_ACCMODE` 永远报 O_RDONLY —— 用读模式打开的
@@ -1017,7 +1036,7 @@ pub fn get_fd_flags_current(fd: usize) -> usize{
 
 /// fcntl(fd, cmd, arg)。
 ///
-/// 支持的命令（其余返回 `-EINVAL`，**不是** `-1` —— 后者会被 libc 当成 EIO）：
+/// 支持的命令（其余返回 `-EINVAL`，不是 `-1` —— 后者会被 libc 当成 EIO）：
 ///   F_DUPFD / F_DUPFD_CLOEXEC —— 复制 fd 到「≥ arg 的最小空闲槽」
 ///   F_GETFD / F_SETFD          —— 描述符标志（只有 FD_CLOEXEC 一位）
 ///   F_GETFL / F_SETFL          —— 文件状态标志（访问模式 + O_APPEND + O_NONBLOCK）
@@ -1050,7 +1069,7 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
         }
         manager.copy_fd_flags(pid, fd, new_fd as usize);
 
-        /* F_DUPFD 的新 fd **不带** FD_CLOEXEC，F_DUPFD_CLOEXEC 才带。 */
+        /* F_DUPFD 的新 fd 不带 FD_CLOEXEC，F_DUPFD_CLOEXEC 才带。 */
         if cmd == crate::fs::F_DUPFD_CLOEXEC {
             let process = manager.process_mut(pid);
             let n = new_fd as usize;
@@ -1069,7 +1088,7 @@ pub fn set_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
             if fd >= process.fd_flags.len() {
                 process.fd_flags.resize(fd + 1, 0);
             }
-            /* 只改 O_APPEND / O_NONBLOCK，**保留访问模式**。
+            /* 只改 O_APPEND / O_NONBLOCK，保留访问模式。
              * 直接 `= arg` 会让 `fcntl(fd, F_SETFL, O_NONBLOCK)` 把 O_RDWR
              * 悄悄变成 O_RDONLY —— 之后 write 就 EBADF，很难联想到 fcntl。 */
             let cur = process.fd_flags[fd];
@@ -2003,7 +2022,7 @@ pub fn dup2(old_fd : usize,new_fd : usize) -> isize{
     {
         let process = manager.process_mut(current_pid);
         process.fd_table[new_fd] = Some(old_file);
-        /* dup2 得到的新 fd **不带** FD_CLOEXEC（POSIX）。少了这一句，
+        /* dup2 得到的新 fd 不带 FD_CLOEXEC（POSIX）。少了这一句，
          * `dup2(f, 1)` 之后 exec 会把 stdout 关掉。 */
         if new_fd < process.fd_cloexec.len() {
             process.fd_cloexec[new_fd] = false;
