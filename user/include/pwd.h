@@ -1,7 +1,12 @@
 #ifndef RMIKU_PWD_H
 #define RMIKU_PWD_H
 
-/* POSIX <pwd.h> —— shell 的 ~ 展开、ls/id 的名字列、git 的 ident.c 都要它。*/
+/* POSIX <pwd.h> —— shell 的 ~ 展开、ls/id 的名字列、git 的 ident.c 都要它。
+ *
+ * 数据源是本系统自己的 passwd 格式（6 列）:
+ *     name:uid:gid:home:salt:sha256
+ * 覆盖层 /var/etc/passwd 优先, 读不到回退只读的 /etc/passwd。
+ * 与 login.c / accounts.h / id.c 用的是同一套约定。 */
 #include "sys/types.h"
 #include "io.h"        /* open2 / read / close */
 #include "string.h"    /* strlen / strcmp */
@@ -66,16 +71,19 @@ static inline struct passwd *rk_pw_scan(int by_uid, uid_t uid, const char *name)
                 if (*q == ':') { *q = 0; if (nf < 7) f[nf++] = q + 1; }
             }
             if (nf >= 4) {
-                int hit = by_uid ? (rk_pw_atoi(f[2]) == (int)uid)
+                /* 本系统的 passwd 是 6 列: name:uid:gid:home:salt:sha256
+                 * 不是 Linux 的 name:x:uid:gid:gecos:home:shell —— 所以字段索引
+                 * 比标准少一位, 与 login.c / accounts.h / id.c 保持一致。*/
+                int hit = by_uid ? (rk_pw_atoi(f[1]) == (int)uid)
                                  : (name != 0 && strcmp(f[0], name) == 0);
                 if (hit) {
                     ent.pw_name   = f[0];
-                    ent.pw_passwd = f[1];
-                    ent.pw_uid    = (uid_t)rk_pw_atoi(f[2]);
-                    ent.pw_gid    = (gid_t)rk_pw_atoi(f[3]);
-                    ent.pw_gecos  = (nf > 4) ? f[4] : (char *)"";
-                    ent.pw_dir    = (nf > 5) ? f[5] : (char *)"/";
-                    ent.pw_shell  = (nf > 6) ? f[6] : (char *)"";
+                    ent.pw_passwd = (char *)"";   /* 口令是 salt+hash 两列，不导出 */
+                    ent.pw_uid    = (uid_t)rk_pw_atoi(f[1]);
+                    ent.pw_gid    = (gid_t)rk_pw_atoi(f[2]);
+                    ent.pw_gecos  = (char *)"";   /* 本系统没有 gecos 列 */
+                    ent.pw_dir    = (nf > 3 && f[3][0]) ? f[3] : (char *)"/";
+                    ent.pw_shell  = (char *)"/bin/sh";
                     return &ent;
                 }
             }
