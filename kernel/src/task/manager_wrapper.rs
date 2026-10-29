@@ -741,7 +741,7 @@ pub fn exec_current(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize 
     }
 
     let mut app_data = Vec::new();
-    let mut buf = [0u8; 512];
+    let mut buf = [0u8; 4096];
 
     loop {
         let n = file.read(&mut buf);
