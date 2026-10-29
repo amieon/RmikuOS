@@ -94,15 +94,26 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        if (code == 0) {
-            printf("[RUNALL] %s ... PASS\n", names[i]);
-            passed++;
-        } else if (code == 77) {
-            /* 77 = SKIP: 测试自己判定"本次不具备运行条件"(如需要宿主配合) */
-            printf("[RUNALL] %s ... SKIP\n", names[i]);
-            skipped++;
+        if (WIFEXITED(code)) {
+            int st = WEXITSTATUS(code);
+            if (st == 0) {
+                printf("[RUNALL] %s ... PASS\n", names[i]);
+                passed++;
+            } else if (st == 77) {
+                /* 77 = SKIP: 测试自己判定"本次不具备运行条件"(如需要宿主配合) */
+                printf("[RUNALL] %s ... SKIP\n", names[i]);
+                skipped++;
+            } else {
+                printf("[RUNALL] %s ... FAIL (exit=%d)\n", names[i], st);
+                failed++;
+            }
+        } else if (WIFSIGNALED(code)) {
+            printf("[RUNALL] %s ... FAIL (signal=%d%s)\n",
+                   names[i], WTERMSIG(code), WCOREDUMP(code) ? ", core" : "");
+            failed++;
         } else {
-            printf("[RUNALL] %s ... FAIL (exit=%d)\n", names[i], code);
+            /* 停下(WIFSTOPPED)不该在这里出现: waitpid 没带 WUNTRACED */
+            printf("[RUNALL] %s ... FAIL (status=0x%x)\n", names[i], code);
             failed++;
         }
     }
