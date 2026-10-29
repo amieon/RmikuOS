@@ -4,6 +4,7 @@
  * weak: runmain.o(-run) 自带强 exit 时让位。 */
 #include "../include/file.h"
 #include "../include/stdio.h"
+#include "../include/io.h"      /* isatty 要 rk_fstat_raw / RK_DEV_CONSOLE */
 
 /* 三个标准流的唯一定义（file.h 里是 extern 声明）。
  * FILE 池(fopen 用)仍每 TU 一份, 但 stdout/stderr 必须跨 TU 共享。 */
@@ -53,9 +54,25 @@ void __sync_lock_release(int *ptr) {
     *ptr = 0;
 }
 
-/* isatty: 0/1/2(标准流)是终端, 其余 fd 视为文件(kilo 等编辑器需要) */
+/* isatty: 真的去问内核这个 fd 是不是终端。
+ * 判据 = 字符设备 且 设备号是控制台 —— /dev/null 也是字符设备, 只看类型分不开。
+ * 老实现是 "fd 在 0..2 就是终端" 的谎话, 后果: `cat x | git am` 里 fd0 是管道,
+ * isatty 却说 1, git 于是按交互式去读终端。
+ * 放 string.c 而不是头文件: 它要 fstat, 而 fs.h 会带进 process.h 的 inline exit,
+ * 与下面 crt0 要的 weak exit 撞重定义。io.h 是最底层, 没有这个问题。
+ * weak: 个别程序自带强定义时让位。 */
 __attribute__((weak)) int isatty(int fd) {
-    return fd >= 0 && fd <= 2;
+    rk_stat_raw_t k;
+    if (fd < 0) {
+        errno = EBADF;
+        return 0;
+    }
+    if (rk_sys_ret((isize)rk_fstat_raw(fd, &k)) < 0) {
+        return 0;      /* errno 已由内核给出(EBADF) */
+    }
+    if (k.file_type == RK_STAT_TYPE_CHAR && k.dev == RK_DEV_CONSOLE) return 1;
+    errno = ENOTTY;
+    return 0;
 }
 
 void *memset(void *s, int c, unsigned long n) {
