@@ -172,6 +172,19 @@ if [ -d "user/build/${ARCH}/git" ]; then
   done
 fi
 
+# git 的"独立命令"形态：file:// / git:// / ssh:// 传输时，客户端要反向 fork
+# 一个服务端，命令名是 `git-receive-pack`(push) / `git-upload-pack`(fetch)。
+# 注意它不是 `git receive-pack` —— connect.c 是拼出 `git-receive-pack '<path>'`
+# 丢给 shell 做 PATH 查找，所以这两个名字必须各自有一个可执行文件。
+# 为什么是 cp 而不是 ln：镜像走 mke2fs -d，它按文件逐个写 inode，不保留宿主上
+# 的硬链接关系，ln 出来的两个目录项最后还是两份数据。既然都是两份，就别装。
+if [ -x "$ROOT/bin/git" ]; then
+  for alias in git-receive-pack git-upload-pack; do
+    cp "$ROOT/bin/git" "$ROOT/bin/$alias"
+    echo "  [git] git -> /bin/$alias"
+  done
+fi
+
 # git 模板：init 时往 .git 里铺 hooks/*.sample、info/exclude、description。
 # 源码里用 "目录--文件" 命名（如 hooks--pre-commit.sample），make -C templates
 # 会生成 blt/ 下的真实布局，并替换里面的 @SHELL_PATH@ / @PERL_PATH@。

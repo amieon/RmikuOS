@@ -38,6 +38,16 @@ esac
 CC="${CC:-${PREFIX}gcc}"
 AR="${AR:-${PREFIX}ar}"
 
+# git 在三条传输路径(file:// / git:// / ssh://)上要反向 fork 一个服务端，方式是
+# `sh -c "git-receive-pack '<path>'"`(connect.c)，所以 SHELL_PATH 必须指向镜像里
+# 真实存在的 shell。RmikuOS 的 shell 装成 /bin/shell(build.py 按源文件名，login.c
+# 也是 exec("/bin/shell"))，默认的 /bin/sh 是空的 —— 路径写错的后果不是"报错找不到
+# sh"，而是 execve 返回 ENOENT 后 git 用原始 argv[0] 打印
+# `fatal: cannot run git-receive-pack '...': No such file or directory`，
+# 看上去像是 git-receive-pack 没装，实际缺的是 sh。排查时极容易被带偏。
+SHELL_PATH="/bin/shell"
+
+
 if [ ! -f "$SRC/git.c" ]; then
   echo "[git] ✗ 源码不在 $SRC"
   echo "      先取源码（SSH，通常最快）:"
@@ -119,7 +129,11 @@ mkdir -p "$OUT"
 # 比起编译失败，这种"静默不生效"更浪费时间（之前改 prefix 也踩过同一个坑）。
 # 这里按 CFLAGS 数组内容存一份快照，变了就 clean 掉旧产物再编。
 if [ "$STAGE" = "lib" ] || [ "$STAGE" = "bin" ]; then
-  CFLAGS_SIG="$(printf '%s\n' "${CFLAGS[@]}" | sha256sum | cut -d' ' -f1)"
+  # SHELL_PATH 也进快照：它不是 CFLAGS 的一部分（是 make 变量），但会被编进
+  # run-command.o 的字符串常量里。改了却不重编，旧 .o 会静默带着旧路径 ——
+  # 和当初 -std 变了 make 不感知是同一个坑。
+  CFLAGS_SIG="$(printf '%s\n' "${CFLAGS[@]}" "SHELL_PATH=$SHELL_PATH" \
+                | sha256sum | cut -d' ' -f1)"
   CFLAGS_SNAP="$OUT/cflags.sha256"
   if [ -f "$CFLAGS_SNAP" ] && [ "$(cat "$CFLAGS_SNAP")" != "$CFLAGS_SIG" ]; then
     echo "[git] CFLAGS 变了 → 清理旧的 .o（make 不知道命令行变量变化）"
@@ -205,7 +219,7 @@ case "$STAGE" in
       CFLAGS="${CFLAGS[*]}" \
       LDFLAGS="$LINK_FLAGS" \
       LIBS="$LIBS_OVERRIDE" \
-      NEEDS_LIBRT= SHELL_PATH=/bin/sh \
+      NEEDS_LIBRT= SHELL_PATH="$SHELL_PATH" \
       "${NOMAKE[@]}" \
       git 2>&1 | tee "$OUT/make_git.log" | tail -40
 
