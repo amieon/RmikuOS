@@ -14,6 +14,7 @@ extern "C" {
 
 #include "syscall.h"
 #include "errno.h"    /* bind/connect 要把"非 AF_INET"报成 EAFNOSUPPORT */
+#include "io.h"       /* rk_sys_ret：把内核的 -errno 翻成 -1 + errno（getsockopt 用） */
 
 /* ---- 常量(POSIX 对齐) ---- */
 #define AF_INET      2
@@ -227,11 +228,16 @@ static inline int net_shutdown(int fd, int how) {
 
 /* ---- socket 层选项 ----
  * SOL_SOCKET 表示"这个选项属于 socket 层"（与 Linux 一致，都是 1）。
- * SO_* 的数值和内核 drivers/net/socket.rs 用的是同一套：
- *   注意 SO_REUSEADDR 这里是 1，而 Linux 是 2 —— 想对齐 Linux 必须**同时**
- *   改内核那个常量，只改一边会让 net_setsockopt 静默失败。 */
+ * SO_* 的数值和内核 drivers/net/socket.rs 用的是同一套，且**对齐 Linux**
+ * （asm-generic/socket.h）：1=SO_DEBUG  2=SO_REUSEADDR  3=SO_TYPE  4=SO_ERROR。
+ *
+ * SO_REUSEADDR 以前是 1，和 Linux 的 SO_DEBUG 撞号 —— 我们自己人传宏没事，但
+ * 只要有外部代码按 Linux 常量传 2（比如 git daemon.c），就会落到"未实现"分支
+ * 静默失败。改值必须**同时**改内核那个常量，只改一边同样会静默失败。 */
 #define SOL_SOCKET    1
-#define SO_REUSEADDR  1
+#define SO_REUSEADDR  2
+#define SO_TYPE       3
+#define SO_ERROR      4
 #define SO_KEEPALIVE  9    /* 只为让可移植代码编过；内核没有 TCP keepalive */
 
 static inline int net_getsockname(int fd, struct sockaddr_in *addr) {
@@ -300,6 +306,21 @@ static inline int setsockopt(int fd, int level, int optname,
     }
     errno = ENOPROTOOPT;
     return -1;
+}
+
+/* POSIX 名字的 getsockopt。
+ *
+ * 内核只认 SOL_SOCKET 层的 SO_TYPE / SO_ERROR / SO_REUSEADDR，其余一律
+ * ENOPROTOOPT —— 包括 SO_KEEPALIVE（我们没有 TCP keepalive）。诚实的拒绝比
+ * 假装成功好：返回 1 会让调用方以为保活已开启，真断线时才发现没有。
+ *
+ * 返回值走 rk_sys_ret：内核这里是真 -errno（不是 setsockopt 那条老链的裸 -1），
+ * 所以 errno 一定是真的。 */
+static inline int getsockopt(int fd, int level, int optname,
+                             void *optval, socklen_t *optlen) {
+    isize r = rk_sys_ret(syscall6(SYS_NET_GETSOCKOPT, (usize)fd, (usize)level,
+                                  (usize)optname, (usize)optval, (usize)optlen, 0));
+    return (r < 0) ? -1 : 0;
 }
 
 

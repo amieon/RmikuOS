@@ -366,7 +366,13 @@ impl Drop for SocketFile {
     }
 }
 
-pub const SO_REUSEADDR: usize = 1;
+/// SOL_SOCKET 层的选项号。数值对齐 Linux（asm-generic/socket.h）：
+///   1=SO_DEBUG  2=SO_REUSEADDR  3=SO_TYPE  4=SO_ERROR
+/// SO_REUSEADDR 曾经是 1（和 Linux 的 SO_DEBUG 撞号）。对内部使用无害，但只要
+/// 有外部代码按 Linux 常量传值就会静默变成另一个选项 —— 那是最难查的一类错。
+pub const SO_REUSEADDR: usize = 2;
+pub const SO_TYPE: usize = 3;
+pub const SO_ERROR: usize = 4;
 
 
 /// getsockname: 本端地址 = MY_IP + local_port(未绑定端口为 0)
@@ -401,5 +407,31 @@ pub fn socket_setsockopt(slot: usize, optname: usize, optval: usize) -> bool {
         Some(Some(Socket::Tcp(t))) => { t.reuse_addr = on; true }
         Some(Some(Socket::Udp(u))) => { u.reuse_addr = on; true }
         _ => false,                               // RAW 无端口概念,不支持
+    }
+}
+
+/// getsockopt: 只认 SOL_SOCKET 层的三个选项，未知返回 None（→ ENOPROTOOPT）。
+pub fn socket_getsockopt(slot: usize, optname: usize) -> Option<i32> {
+    let mut table = SOCKET_TABLE.lock();
+    let s = match table.slots.get_mut(slot) {
+        Some(Some(s)) => s,
+        _ => return None,
+    };
+    match optname {
+        SO_TYPE => Some(match s {
+            Socket::Tcp(_) => SOCKET_TYPE_TCP as i32,
+            Socket::Udp(_) => SOCKET_TYPE_UDP as i32,
+            Socket::Raw(_) => SOCKET_TYPE_RAW as i32,
+        }),
+        SO_REUSEADDR => Some(match s {
+            Socket::Tcp(t) => t.reuse_addr as i32,
+            Socket::Udp(u) => u.reuse_addr as i32,
+            Socket::Raw(_) => 0,                  // RAW 无端口概念
+        }),
+        SO_ERROR => Some(match s {
+            Socket::Tcp(t) => { let e = t.so_error; t.so_error = 0; e }
+            _ => 0,                               // UDP/RAW 无握手，没有 pending error
+        }),
+        _ => None,
     }
 }

@@ -7,6 +7,7 @@ use crate::drivers::net::socket::{alloc_ephem_port, alloc_slot, release_slot, So
 use crate::fs::{POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT};
 use crate::println;
 use crate::sync::spin::Mutex;
+use crate::syscall::errno::{ECONNREFUSED, ECONNRESET};
 
 #[cfg(target_arch = "riscv64")]
 fn now_ms() -> u64 { (crate::timer::monotonic_time() / 10_000) as u64 }
@@ -117,6 +118,11 @@ pub struct TcpSocket {
     pub backlog: usize,
     pub parent: Option<usize>,
     pub rst: bool,
+    /// 上一次 connect 失败的原因，供 getsockopt(SO_ERROR) 读取（0 = 无错）。
+    /// Linux 语义：读一次就清零，否则调用方会反复看到同一个旧错误。
+    /// 我们的 connect 是阻塞的，失败时已直接返回 -1；这里记录是为了让
+    /// "连接失败"在 socket 仍然存在时也能被查询到，而不是让 SO_ERROR 恒 0 说谎。
+    pub so_error: i32,
     // ---------- 拥塞控制(CUBIC) ----------
     pub cwnd: u32,        // 拥塞窗口,单位:段 × CWND_SCALE(定点)
     pub ssthresh: u32,    // 慢启动阈值,同单位
@@ -166,6 +172,7 @@ impl TcpSocket {
             backlog: 0,
             parent: None,
             rst: false,
+            so_error: 0,
             cwnd: INIT_CWND,
             ssthresh: INIT_SSTHRESH,
             dup_acks: 0,
@@ -798,6 +805,7 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
             None => return -1,
         };
         let isn = next_isn();
+        t.so_error = 0;                 // 新一次 connect：清掉上一次的失败原因
         t.remote = Some(SocketAddr { ip, port });
         t.snd_una = isn;
         t.snd_nxt = isn.wrapping_add(1);
@@ -813,12 +821,21 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
     loop {
         crate::drivers::net::poll();
         {
-            let table = SOCKET_TABLE.lock();
-            match table.slots.get(fd).and_then(|s| s.as_ref()).and_then(as_tcp) {
-                Some(t) if t.state == TcpState::Established => return 0,
-                Some(t) if t.state == TcpState::Closed => return -1,
-                None => return -1,
-                _ => {}
+            let mut table = SOCKET_TABLE.lock();
+            if let Some(t) = table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+                match t.state {
+                    TcpState::Established => return 0,
+                    TcpState::Closed => {
+                        // 记下失败原因给 getsockopt(SO_ERROR)。返回值仍按原来的 -1，
+                        // 不改动既有调用方的语义：这里只是"补上可查询的记录"。
+                        // 收到 RST = 对端拒绝；否则是对端/链路把连接关了。
+                        t.so_error = if t.rst { ECONNREFUSED as i32 } else { ECONNRESET as i32 };
+                        return -1;
+                    }
+                    _ => {}
+                }
+            } else {
+                return -1;
             }
         }
         spins += 1;

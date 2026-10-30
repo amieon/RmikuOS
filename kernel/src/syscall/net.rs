@@ -6,6 +6,7 @@ use crate::drivers::net::socket::{self, SOCKET_TABLE, SocketAddr, SocketFile, re
 use crate::drivers::net::socket::SlotKind;
 use crate::drivers::net::{tcp, udp};
 use crate::task::{get_fd_flags_current, read_current_user_bytes, write_current_user_bytes};
+use super::errno::{EINVAL, ENOPROTOOPT, ENOTSOCK, EFAULT};
 
 fn get_slot_from_fd(fd: usize) -> isize{
     let mut slot = -1;
@@ -65,12 +66,21 @@ pub fn sys_net_sendto(fd: usize, buf: usize, len: usize, ip: usize, port: usize)
 }
 
 /// recvfrom(fd, buf, maxlen, info) -> 实际长度 / 0(超时) / -1
+///
+/// 超时按**时间**算，不按自旋圈数。原来那个 `spins > 50_000_000` 有两层错：
+///   ① 圈数根本不等价于时间 —— 同一段代码在 TCG 上是几十秒，在真机上可能是
+///      几毫秒，一个常数不可能同时对上；
+///   ② 等的时候是**空转**，一个 vCPU 被 100% 占满。TCG 多线程下宿主被这一个
+///      线程拖慢，整个 guest（包括键盘回显）都跟着一顿一顿。
+/// 改成睡一个 tick 再回来看，等待期间 CPU 占用接近 0，也不影响键盘。
 pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> isize {
     let mut slot = get_slot_from_fd(fd);
     if slot < 0 {return -1;}
     let cap = maxlen.min(2048);
     let mut kbuf = alloc::vec![0u8; cap];
     let slot = slot as usize;
+    /* 2 秒：本地回环是毫秒级，局域网一个来回也远不到；再长没意义，
+     * 用户态自己还有重试。 */
     let deadline = crate::timer::monotonic_us() + 2_000_000;
     loop {
         crate::drivers::net::maybe_poll(); 
@@ -308,4 +318,32 @@ pub fn sys_net_setsockopt(fd: usize, optname: usize, optval: usize) -> isize {
     let slot = get_slot_from_fd(fd);
     if slot < 0 { return -1; }
     if socket::socket_setsockopt(slot as usize, optname, optval) { 0 } else { -1 }
+}
+
+/// getsockopt(fd, level, optname, optval, optlen) -> 0 / -errno
+pub fn sys_net_getsockopt(fd: usize, level: usize, optname: usize,
+                          optval: usize, optlen: usize) -> isize {
+    const SOL_SOCKET: usize = 1;
+
+    if level != SOL_SOCKET { return -ENOPROTOOPT; }
+    if optval == 0 || optlen == 0 { return -EINVAL; }
+
+    let len_raw = match read_current_user_bytes(optlen, 4) {
+        Some(b) if b.len() == 4 => b,
+        _ => return -EFAULT,
+    };
+    let cap = i32::from_ne_bytes([len_raw[0], len_raw[1], len_raw[2], len_raw[3]]);
+    if cap < 4 { return -EINVAL; }
+
+    let slot = get_slot_from_fd(fd);
+    if slot < 0 { return -ENOTSOCK; }
+
+    let val = match socket::socket_getsockopt(slot as usize, optname) {
+        Some(v) => v,
+        None => return -ENOPROTOOPT,
+    };
+
+    if write_current_user_bytes(optval, &val.to_ne_bytes()).is_none() { return -EFAULT; }
+    if write_current_user_bytes(optlen, &4i32.to_ne_bytes()).is_none() { return -EFAULT; }
+    0
 }

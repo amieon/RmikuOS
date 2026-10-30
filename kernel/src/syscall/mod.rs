@@ -135,6 +135,9 @@ pub const SYSCALL_SETITIMER: usize = 124;
 pub const SYSCALL_GETITIMER: usize = 125;
 pub const SYSCALL_SETSID: usize = 126;
 pub const SYSCALL_GETRANDOM: usize = 127;
+/// 128 起继续往后排。网络组原本是 100-117，但 118-127 已经分给进程/信号/定时器，
+/// 不回头抢占号段（ABI 一旦发出去就不能重排），所以 getsockopt 挂在末尾。
+pub const SYSCALL_NET_GETSOCKOPT: usize = 128;
 
 
 
@@ -281,6 +284,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETITIMER => process::sys_getitimer(args[0], args[1]),
         SYSCALL_SETSID => process::sys_setsid(),
         SYSCALL_GETRANDOM => random::sys_getrandom(args[0], args[1], args[2]),
+        SYSCALL_NET_GETSOCKOPT => net::sys_net_getsockopt(
+            args[0], args[1], args[2], args[3], args[4]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",
