@@ -4,6 +4,7 @@ mod process;
 mod thread;
 mod arch;
 mod net;
+mod random;
 pub mod errno;
 
 pub const SYSCALL_EXIT: usize = 0;
@@ -133,6 +134,7 @@ pub const SYSCALL_SIGPENDING: usize = 123;
 pub const SYSCALL_SETITIMER: usize = 124;
 pub const SYSCALL_GETITIMER: usize = 125;
 pub const SYSCALL_SETSID: usize = 126;
+pub const SYSCALL_GETRANDOM: usize = 127;
 
 
 
@@ -278,6 +280,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_SETITIMER => process::sys_setitimer(args[0], args[1], args[2]),
         SYSCALL_GETITIMER => process::sys_getitimer(args[0], args[1]),
         SYSCALL_SETSID => process::sys_setsid(),
+        SYSCALL_GETRANDOM => random::sys_getrandom(args[0], args[1], args[2]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",
