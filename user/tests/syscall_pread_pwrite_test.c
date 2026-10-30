@@ -19,11 +19,11 @@ static void check(int cond, const char *msg) {
     if (cond) {
         puts("  OK   ");
         puts(msg);
-        put_char('\n');
+        rk_put_char('\n');
     } else {
         puts("  FAIL ");
         puts(msg);
-        put_char('\n');
+        rk_put_char('\n');
         fails++;
     }
 }

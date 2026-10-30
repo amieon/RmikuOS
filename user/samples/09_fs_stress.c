@@ -1,9 +1,9 @@
 #include "user.h"
 
 static void print_file_type_char(unsigned char type) {
-    if (type == FILE_TYPE_FILE) put_char('-');
-    else if (type == FILE_TYPE_DIR) put_char('d');
-    else put_char('?');
+    if (type == FILE_TYPE_FILE) rk_put_char('-');
+    else if (type == FILE_TYPE_DIR) rk_put_char('d');
+    else rk_put_char('?');
 }
 
 static void print_stat(const char *path) {
@@ -12,7 +12,7 @@ static void print_stat(const char *path) {
         puts("  stat失败");
         return;
     }
-    put_char(' ');
+    rk_put_char(' ');
     print_file_type_char(stat_type_of(st.st_mode));
     puts(" size=");
     printf("%d", st.st_size);
@@ -34,11 +34,11 @@ static void do_ls(const char *path) {
     while ((nread = getdents(fd, (struct dirent*)buf, sizeof(buf))) > 0) {
         struct dirent *d = (struct dirent*)buf;
         while ((char*)d < buf + nread) {
-            put_char(' ');
+            rk_put_char(' ');
             print_file_type_char(d->file_type);
-            put_char(' ');
+            rk_put_char(' ');
             write(1, d->name, d->name_len);
-            put_char('\n');
+            rk_put_char('\n');
             d = (struct dirent*)((char*)d + sizeof(struct dirent));
             total++;
         }
@@ -69,7 +69,7 @@ static void do_cat(const char *path) {
     if (n < 0) {
         puts("  读文件错误");
     }
-    put_char('\n');
+    rk_put_char('\n');
     close(fd);
 }
 
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
         // 5. stat /bin/hello
         puts("[stat /bin/hello]\n");
         print_stat("/bin/hello");
-        put_char('\n');
+        rk_put_char('\n');
 
         // 主动让出 CPU 一下，让其他 stress 实例有机会运行（可选）
         // yield();

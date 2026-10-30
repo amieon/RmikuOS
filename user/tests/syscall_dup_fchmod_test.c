@@ -21,7 +21,7 @@ static void check(int cond, const char *msg) {
         fails++;
     }
     puts(msg);
-    put_char('\n');
+    rk_put_char('\n');
 }
 
 int main() {

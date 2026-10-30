@@ -63,11 +63,11 @@ static void ok_msg(const char *where) {
 
 static void print_type(unsigned char type) {
     if (type == STAT_TYPE_DIR || type == FILE_TYPE_DIR) {
-        put_char('d');
+        rk_put_char('d');
     } else if (type == STAT_TYPE_FILE || type == FILE_TYPE_FILE) {
-        put_char('-');
+        rk_put_char('-');
     } else {
-        put_char('?');
+        rk_put_char('?');
     }
 }
 
@@ -192,7 +192,7 @@ static int scan_dir(const char *path, int min_entries) {
             if (verbose) {
                 puts("[dirent] ");
                 print_type(d->file_type);
-                put_char(' ');
+                rk_put_char(' ');
                 write(1, d->name, d->name_len);
                 puts("\n");
             }

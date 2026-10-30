@@ -20,7 +20,7 @@ static int readline(char *buf, int maxlen) {
         }
 
         if (ch == '\n') {
-            put_char('\n');
+            rk_put_char('\n');
             break;
         }
 
@@ -33,7 +33,7 @@ static int readline(char *buf, int maxlen) {
         }
 
         buf[i++] = ch;
-        put_char(ch);   // 回显输入
+        rk_put_char(ch);   // 回显输入
     }
 
     buf[i] = '\0';
@@ -173,7 +173,7 @@ int main() {
     printf("%d", total_inside);
     puts("\n估算的 π ≈ ");
     printf("%d", pi_integer);
-    put_char('.');
+    rk_put_char('.');
     // 补零到 6 位小数
     int frac_digits[6];
     for (int i = 5; i >= 0; i--) {
@@ -181,7 +181,7 @@ int main() {
         pi_fraction /= 10;
     }
     for (int i = 0; i < 6; i++) {
-        put_char('0' + frac_digits[i]);
+        rk_put_char('0' + frac_digits[i]);
     }
     puts("\n真实 π ≈ 3.1415926535");
     puts("\n===============================\n");

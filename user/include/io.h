@@ -36,7 +36,7 @@ static inline isize pwrite(int fd, const char *buf, usize count, usize offset) {
     return rk_sys_ret(syscall6(SYS_PWRITE, (usize)fd, (usize)buf, count, offset, 0, 0));
 }
 
-static inline void put_char(char ch) {
+static inline void rk_put_char(char ch) {
     write(1, &ch, 1);
 }
 

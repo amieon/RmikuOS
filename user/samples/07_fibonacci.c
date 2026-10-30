@@ -21,7 +21,7 @@ static int readline(char *buf, int maxlen) {
         }
 
         if (ch == '\n') {
-            put_char('\n');
+            rk_put_char('\n');
             break;
         }
 
@@ -34,7 +34,7 @@ static int readline(char *buf, int maxlen) {
         }
 
         buf[i++] = ch;
-        put_char(ch);   // 回显输入
+        rk_put_char(ch);   // 回显输入
     }
 
     buf[i] = '\0';
