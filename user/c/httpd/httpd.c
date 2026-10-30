@@ -34,7 +34,7 @@ int main(int argc, char **argv)
         if (cfd < 0) {
             continue;                 // accept 周期性超时是正常的
         }
-        unsigned ip = ntohl(from.sin_addr);
+        unsigned ip = ntohl(from.sin_addr.s_addr);
         printf("[httpd] conn from %u.%u.%u.%u:%u (fd=%d)\n",
                (ip>>24)&0xff, (ip>>16)&0xff, (ip>>8)&0xff, ip&0xff,
                ntohs(from.sin_port), cfd);

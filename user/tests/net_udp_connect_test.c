@@ -62,7 +62,7 @@ int main(void) {
     /* [4] getpeername 回读默认对端 */
     struct sockaddr_in peer;
     CHECK(net_getpeername(fd, &peer) == 0, "getpeername");
-    CHECK(ntohl(peer.sin_addr) == DNS_SERVER_IP && ntohs(peer.sin_port) == DNS_PORT,
+    CHECK(ntohl(peer.sin_addr.s_addr) == DNS_SERVER_IP && ntohs(peer.sin_port) == DNS_PORT,
           "peer == 10.0.2.3:53");
 
     /* [5] send()/recv() 真实 DNS 查询(不经过 sendto/recvfrom) */

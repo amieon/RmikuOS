@@ -57,8 +57,8 @@ int main(int argc, char **argv)
             if (n >= 8) {
                 struct icmp_hdr *r = (void *)buf;
                 if (r->type == 0 && r->id == htons(PING_ID) && r->seq == htons(seq)) {
-                    unsigned ip = ntohl(from.sin_addr);
-                    unsigned char *p = (unsigned char *)&from.sin_addr;
+                    unsigned ip = ntohl(from.sin_addr.s_addr);
+                    unsigned char *p = (unsigned char *)&from.sin_addr.s_addr;
                     printf("64 bytes from %u.%u.%u.%u: icmp_seq=%d time=%d ticks\n",
                         p[0], p[1], p[2], p[3], seq, get_ticks() - t0);
                     // printf("64 bytes from %u.%u.%u.%u: icmp_seq=%d time=%lu ticks\n",

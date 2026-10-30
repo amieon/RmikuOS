@@ -109,6 +109,17 @@ CNF_OPTS=(
   no-comp      # SSL 层压缩，要额外维护 zlib 绑定
 )
 
+# 熵源钉成 DEVRANDOM（展开就是 /dev/urandom, /dev/random, ...）。
+# 默认值是 os，会展开成 GETRANDOM + DEVRANDOM 两条路：
+#   · riscv64-unknown-elf 是裸机 target，不定义 __linux → syscall_random() 直接
+#     errno=ENOSYS → 退化读 DEVRANDOM（probe 的宏 dump 已确认没有 __linux）；
+#   · loongarch64-unknown-linux-gnu 会定义 __linux，可能真去调 syscall(__NR_getrandom)，
+#     而内核没有 getrandom、libc 也没有通用 syscall()（只有 syscall3/6）。
+# 与其让同一份代码在两个架构上走不同分支、还可能在 loongarch 上编不过，
+# 不如显式声明"我们只有 /dev/urandom"。内核侧刚好加了这台设备。
+# 可选值：os|getrandom|devrandom|egd|rdcpu|librandom|none，逗号分隔。
+CNF_OPTS+=(--with-rand-seed=devrandom)
+
 # 这几个被 Configure 拒掉就不是"少个开关"的问题，而是源码形态不对（或版本不对），
 # 直接停 —— 自动裁剪只用来兜住可选开关，不能拿来蒙混过关。
 CRITICAL_OPTS=(no-asm no-threads no-shared no-dso no-module)
@@ -117,9 +128,45 @@ CRITICAL_OPTS=(no-asm no-threads no-shared no-dso no-module)
 # 会命中 newlib/glibc 的声明，malloc 变成 extern 引用 → 链接到它们那套堆 → 跨库
 # free 直接崩。-I 天然排在系统目录前，所以只要写了就在前面，probe 阶段会验证。
 # -fno-stack-protector 不是可选项：没有 __stack_chk_fail。
+#
+# 另外：工具链是 GCC 14，implicit-function-declaration 已经是 **error**（老版本
+# 只是 warning）。所以"少一个原型"当场就拦住构建，这是好事 —— 缺口立刻可见，
+# 不用等链接期的 undefined reference。别用 -Wno-implicit-function-declaration
+# 把它糊过去，那等于把"缺声明"重新变成"运行期随机崩"。
 CFLAGS_STR="-std=gnu11 ${ARCHFLAGS[*]} -O2 -ffreestanding -fno-builtin -fno-stack-protector -I$ROOT/user/include"
 
 mkdir -p "$BASE"
+
+# ---------------------------------------------------------------------------
+# 生成头必须在任何编译之前存在 —— 而且**不能只靠 probe 阶段跑过一次**。
+#
+# 根 build.info 里一长串 GENERATE[include/openssl/xxx.h]=...h.in，都登记在顶层
+# DEPEND[]（索引为空 = 无条件先建），落到 Makefile 就是 GENERATED_MANDATORY，
+# 也就是目标 build_generated。Configure 只把声明解析进 configdata.pm，**不产文件**。
+#
+# 两个坑叠在一起：
+#   1. `make libcrypto.a` **不会**自动先建这些头。头挂在 build_generated 上，而 .o
+#      的编译规则并不依赖它，-j8 下直接开编 →
+#      fatal error: openssl/opensslv.h: No such file or directory。
+#      原来用 build_libs 时看不出来（build_libs 依赖 build_generated），换成裸 .a
+#      目标躲开 apps/lib/libapps 的同时，把这个副作用一起躲掉了。—— 踩过
+#   2. Configure 一变就 rm -rf "$OBJ"，生成头跟着一起没了，所以每次 Configure
+#      之后都得补一遍。
+# 所以把它挂成 Configure 的收尾动作，而不是某个阶段的一次性步骤。
+# ---------------------------------------------------------------------------
+ensure_generated() {
+  if [ -f "$OBJ/include/openssl/opensslv.h" ] && [ -f "$OBJ/include/openssl/crypto.h" ]; then
+    return 0
+  fi
+  echo "[openssl] make build_generated（opensslv.h / crypto.h / ssl.h 等生成头）"
+  if ! make -C "$OBJ" -j"$NPROC" build_generated >"$BASE/make_generated.log" 2>&1 \
+     || [ ! -f "$OBJ/include/openssl/opensslv.h" ]; then
+    echo "[openssl] ✗ 生成头没出来，日志 $BASE/make_generated.log"
+    tail -15 "$BASE/make_generated.log" | sed 's/^/          /'
+    return 1
+  fi
+  return 0
+}
 
 # ---------------------------------------------------------------------------
 # Configure：幂等。参数或 CFLAGS 变了就整份重建（不是 make clean ——
@@ -130,6 +177,7 @@ configure_openssl() {
   local sig
   sig="$(printf '%s\n' "$SRC_VER" "$ARCH_CFG" "${CNF_OPTS[@]}" "$CFLAGS_STR" "$CC" | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/.cfg.sha256" ] && [ "$(cat "$OBJ/.cfg.sha256")" = "$sig" ]; then
+    ensure_generated || return 1      # 生成头可能被 distclean/手删过
     return 0
   fi
 
@@ -263,8 +311,18 @@ configure_openssl() {
     echo "[openssl] ! configuration.h 里没有 SIXTY_FOUR_BIT_LONG，确认一下 target 是不是 linux-generic64"
   fi
 
+  # 开关自检：Configure 收下参数 ≠ 它真写进了 config。configuration.h 是编译器
+  # 唯一看到的事实，所以"我传了 no-async"和"代码里还有 async 分支"这种矛盾，
+  # 只能拿这张表判。之前靠翻源码 guard 猜，纯属浪费轮次。
+  local nos
+  nos="$(grep -oE 'define OPENSSL_NO_[A-Z0-9_]+' "$OBJ/include/openssl/configuration.h" 2>/dev/null \
+         | sed 's/define OPENSSL_NO_//' | sort | tr '\n' ' ')"
+  echo "[openssl]   OPENSSL_NO_*（真正生效的）: ${nos:-（一个都没有）}"
+
   printf '%s\n' "$sig" > "$OBJ/.cfg.sha256"
   echo "[openssl]   日志 $BASE/configure.log"
+
+  ensure_generated || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -338,25 +396,7 @@ scan_undefined() {
 
 case "$STAGE" in
   probe)
-    configure_openssl || exit 1
-
-    # 生成头先建出来。根 build.info 里有一长串
-    #   GENERATE[include/openssl/opensslv.h]=include/openssl/opensslv.h.in
-    # （crypto.h / ssl.h / asn1.h / x509.h / bn_conf.h ... 都是 .h.in 模板），
-    # 并且都登记在顶层 DEPEND[]（索引为空 = 无条件先建）里，落到 Makefile 就是
-    # GENERATED_MANDATORY，也就是目标 build_generated。
-    # Configure 只解析这些声明、写进 configdata.pm，**不生成文件**；文件由 make
-    # 跑 util/dofile.pl 产出到 $OBJ/include/openssl/。
-    # 少了这一步，任何 include <openssl/crypto.h> / <openssl/opensslv.h> 的 .c 都会
-    #   fatal error: openssl/opensslv.h: No such file or directory
-    # 看着像源码缺头，其实是漏了生成阶段（踩过）。
-    echo "[openssl] make build_generated（opensslv.h / crypto.h / ssl.h 等生成头）"
-    make -C "$OBJ" -j"$NPROC" build_generated >"$BASE/make_generated.log" 2>&1
-    if [ $? -ne 0 ] || [ ! -f "$OBJ/include/openssl/opensslv.h" ]; then
-      echo "[openssl] ✗ 生成头没出来，日志 $BASE/make_generated.log"
-      tail -15 "$BASE/make_generated.log" | sed 's/^/          /'
-      exit 1
-    fi
+    configure_openssl || exit 1        # 内部已含 ensure_generated
 
     # 挑 4 个文件：最底层的 mem、BN 核心、**熵源**（最担心的那条路）、时间。
     # 熵源路径是 3.0 的：1.1.1 的 crypto/rand/rand_unix.c 在 3.0 已搬到
@@ -425,8 +465,25 @@ case "$STAGE" in
 
   lib)
     configure_openssl || exit 1
-    echo "[openssl] make build_libs（-j$NPROC）"
-    make -C "$OBJ" -j"$NPROC" build_libs 2>&1 | tee "$BASE/make_libs.log" | tail -30
+    # 不用 build_libs：它把所有 LIBS 都编一遍，**包括 apps/lib 的 noinst 库
+    # libapps**（apps/lib/build.info 里 LIBS{noinst}=libapps），于是
+    # apps/lib/apps.c 被拖进来——它要 fd_set/select/setbuf，而且里面有一堆
+    # 和库无关的 CLI 代码。库阶段只认这两个 .a，apps 的坑留到 bin 阶段再打。
+    echo "[openssl] make libcrypto.a libssl.a（-j$NPROC，只编库）"
+    if ! make -C "$OBJ" -j"$NPROC" libcrypto.a libssl.a >"$BASE/make_libs.log" 2>&1; then
+      if grep -q 'No rule to make target' "$BASE/make_libs.log"; then
+        echo "[openssl]   这份 Makefile 没有 libcrypto.a 目标，退回 build_libs（会带上 apps）"
+        make -C "$OBJ" -j"$NPROC" build_libs >"$BASE/make_libs.log" 2>&1 || true
+      fi
+    fi
+    tail -40 "$BASE/make_libs.log"
+    if [ ! -f "$OBJ/libcrypto.a" ]; then
+      echo
+      echo "[openssl] ✗ 未产出 libcrypto.a —— 错误按句子归并（-j8 下同一类错会在几十个"
+      echo "          文件里重复，这里只列一次 + 出现次数，方便一次看全）："
+      sed -n -e 's/.*: fatal error: //p' -e 's/.*: error: //p' "$BASE/make_libs.log" \
+        | sort | uniq -c | sort -rn | head -20 | sed 's/^/      /'
+    fi
     echo
     echo "[openssl] 日志: $BASE/make_libs.log"
     for a in libcrypto.a libssl.a; do
@@ -484,6 +541,13 @@ case "$STAGE" in
     else
       echo "[openssl] ✗ 链接失败（错误数 $(grep -c 'error:\|undefined reference' "$BASE/make_bin.log" 2>/dev/null || echo 0)）"
       grep -E 'undefined reference|error:' "$BASE/make_bin.log" | head -20 | sed 's/^/      /'
+      if grep -q 'wait_for_async\|fd_set\|FD_SET' "$BASE/make_bin.log"; then
+        echo
+        echo "[openssl] apps.c 的 wait_for_async 被编进来了。它的 guard 和 sys/select.h 的"
+        echo "          包含位置（internal/sockets.h 只给 AIX 包了 <sys/select.h>）："
+        grep -n -B6 'int wait_for_async' "$SRC/apps/lib/apps.c" 2>/dev/null | sed 's/^/      /'
+        grep -n 'sys/select.h' "$SRC/apps/lib/apps.c" 2>/dev/null | sed 's/^/      /'
+      fi
       echo
       echo "[openssl] 若是 undefined reference，把它和 undefined.txt 对一遍；"
       echo "[openssl] 链接期的 -lgcc 缺口要手工加：make ... LDFLAGS=\"$LINK_FLAGS -lgcc\""

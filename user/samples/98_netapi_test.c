@@ -17,7 +17,7 @@
 #include "user.h"
 
 static void print_addr(const char *tag, struct sockaddr_in *a) {
-    unsigned int ip = ntohl(a->sin_addr);
+    unsigned int ip = ntohl(a->sin_addr.s_addr);
     printf("%s %u.%u.%u.%u:%u\n", tag,
            (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff,
            ntohs(a->sin_port));
@@ -49,7 +49,7 @@ int main(void) {
     }
     if (net_getpeername(fd, &a) == 0) {
         print_addr("       [2] peer =", &a);
-        if (ntohl(a.sin_addr) == 0x0A000202 && ntohs(a.sin_port) == 9999) {
+        if (ntohl(a.sin_addr.s_addr) == 0x0A000202 && ntohs(a.sin_port) == 9999) {
             printf("[PASS] [2] peername == 10.0.2.2:9999\n"); pass++;
         } else { printf("[FAIL] [2] peername wrong value\n"); fail++; }
     } else { printf("[FAIL] [2] getpeername after connect -> -1\n"); fail++; }
@@ -57,7 +57,7 @@ int main(void) {
     /* [3] 查本端:10.0.2.15 + 临时端口 */
     if (net_getsockname(fd, &a) == 0) {
         print_addr("       [3] local =", &a);
-        if (ntohl(a.sin_addr) == 0x0A00020F && ntohs(a.sin_port) != 0) {
+        if (ntohl(a.sin_addr.s_addr) == 0x0A00020F && ntohs(a.sin_port) != 0) {
             printf("[PASS] [3] sockname == 10.0.2.15 + ephemeral port\n"); pass++;
         } else { printf("[FAIL] [3] sockname wrong value\n"); fail++; }
     } else { printf("[FAIL] [3] getsockname -> -1\n"); fail++; }

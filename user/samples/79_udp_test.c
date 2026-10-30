@@ -20,7 +20,7 @@ int main(void) {
         int n = recvfrom(fd, buf, sizeof(buf) - 1, 0, (struct sockaddr *)&from, 0);
         if (n > 0) {
             buf[n] = 0;
-            unsigned ip = ntohl(from.sin_addr);
+            unsigned ip = ntohl(from.sin_addr.s_addr);
             printf("[user] got %d bytes from %u.%u.%u.%u:%u\n", n,
                    (ip >> 24) & 0xff, (ip >> 16) & 0xff,
                    (ip >> 8) & 0xff, ip & 0xff,

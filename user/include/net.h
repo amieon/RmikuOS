@@ -37,6 +37,14 @@ static inline unsigned int  ntohl(unsigned int x) { return htonl(x); }
 typedef unsigned int   socklen_t;
 typedef unsigned short sa_family_t;
 
+
+typedef unsigned int   in_addr_t;
+typedef unsigned short in_port_t;
+
+struct in_addr {
+    in_addr_t s_addr;            /* 网络字节序 */
+};
+
 /* 通用地址头：POSIX 规定所有具体地址结构都以它为前缀。
  * 定义放在 net.h（而不是 sys/socket.h）是因为后面的 bind/connect 要按
  * sa_family 分派 —— 写成 sys/socket.h 会变成"socket.h 包含 net.h，
@@ -48,17 +56,17 @@ struct sockaddr {
 
 struct sockaddr_in {
     sa_family_t    sin_family;   /* AF_INET */
-    unsigned short sin_port;     /* 网络字节序 */
-    unsigned int   sin_addr;     /* 网络字节序 */
+    in_port_t      sin_port;     /* 网络字节序 */
+    struct in_addr sin_addr;     /* 网络字节序；取点分十进制要 .s_addr */
     char           sin_zero[8];
 };
 
 /* 便捷构造:传【主机序】 ip/port,返回填好的 sockaddr_in */
 static inline struct sockaddr_in addr_of(unsigned int ip, unsigned short port) {
     struct sockaddr_in a = { 0 };
-    a.sin_family = AF_INET;
-    a.sin_port   = htons(port);
-    a.sin_addr   = htonl(ip);
+    a.sin_family      = AF_INET;
+    a.sin_port        = htons(port);
+    a.sin_addr.s_addr = htonl(ip);
     return a;
 }
 
@@ -101,7 +109,7 @@ static inline int connect(int fd, const struct sockaddr *addr, socklen_t len) {
     (void)len;
     const struct sockaddr_in *in = rk_sockaddr_in(addr);
     if (!in) return -1;
-    return syscall3(SYS_NET_CONNECT, fd, ntohl(in->sin_addr), ntohs(in->sin_port));
+    return syscall3(SYS_NET_CONNECT, fd, ntohl(in->sin_addr.s_addr), ntohs(in->sin_port));
 }
 static inline int accept(int fd, struct sockaddr *addr, socklen_t *len) {
     struct net_peer p;
@@ -116,9 +124,9 @@ static inline int accept(int fd, struct sockaddr *addr, socklen_t *len) {
         unsigned short port = (unsigned short)((unsigned)p.raw[4]
                         | ((unsigned)p.raw[5] << 8));
         struct sockaddr_in *in = (struct sockaddr_in *)addr;
-        in->sin_family = AF_INET;
-        in->sin_addr   = htonl(ip);
-        in->sin_port   = htons(port);
+        in->sin_family      = AF_INET;
+        in->sin_addr.s_addr = htonl(ip);
+        in->sin_port        = htons(port);
     }
     return ret;
 }
@@ -138,7 +146,7 @@ static inline int sendto(int fd, const void *buf, int len, int flags,
     const struct sockaddr_in *in = rk_sockaddr_in(dst);
     if (!in) return -1;
     return syscall6(SYS_NET_SENDTO0, fd, (long)buf, len,
-                    ntohl(in->sin_addr), ntohs(in->sin_port), 0);
+                    ntohl(in->sin_addr.s_addr), ntohs(in->sin_port), 0);
 }
 static inline int recvfrom(int fd, void *buf, int len, int flags,
                            struct sockaddr *src, socklen_t *slen) {
@@ -154,9 +162,9 @@ static inline int recvfrom(int fd, void *buf, int len, int flags,
         unsigned short port = (unsigned short)((unsigned)p.raw[4]
                         | ((unsigned)p.raw[5] << 8));
         struct sockaddr_in *in = (struct sockaddr_in *)src;
-        in->sin_family = AF_INET;
-        in->sin_addr   = htonl(ip);
-        in->sin_port   = htons(port);
+        in->sin_family      = AF_INET;
+        in->sin_addr.s_addr = htonl(ip);
+        in->sin_port        = htons(port);
     }
     return ret;
 }
@@ -232,9 +240,9 @@ static inline int net_getsockname(int fd, struct sockaddr_in *addr) {
     unsigned int ip = (unsigned)p.raw[0] | ((unsigned)p.raw[1] << 8)
                     | ((unsigned)p.raw[2] << 16) | ((unsigned)p.raw[3] << 24);
     unsigned short port = (unsigned short)((unsigned)p.raw[4] | ((unsigned)p.raw[5] << 8));
-    addr->sin_family = AF_INET;
-    addr->sin_addr   = htonl(ip);
-    addr->sin_port   = htons(port);
+    addr->sin_family      = AF_INET;
+    addr->sin_addr.s_addr = htonl(ip);
+    addr->sin_port        = htons(port);
     return 0;
 }
 
@@ -244,9 +252,9 @@ static inline int net_getpeername(int fd, struct sockaddr_in *addr) {
     unsigned int ip = (unsigned)p.raw[0] | ((unsigned)p.raw[1] << 8)
                 | ((unsigned)p.raw[2] << 16) | ((unsigned)p.raw[3] << 24);
     unsigned short port = (unsigned short)((unsigned)p.raw[4] | ((unsigned)p.raw[5] << 8));
-    addr->sin_family = AF_INET;          /* 原来漏了这行，读 family 的代码会拿到垃圾 */
-    addr->sin_addr   = htonl(ip);
-    addr->sin_port   = htons(port);
+    addr->sin_family      = AF_INET;     /* 原来漏了这行，读 family 的代码会拿到垃圾 */
+    addr->sin_addr.s_addr = htonl(ip);
+    addr->sin_port        = htons(port);
     return 0;
 }
 
