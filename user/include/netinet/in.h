@@ -1,16 +1,16 @@
 /*
  * netinet/in.h —— IPv4 协议常量与地址结构
  *
- * struct in_addr 是**布局兼容**的补充，不替换 net.h 里 sockaddr_in 的
- * `unsigned int sin_addr`：
- *   - net.h 的现有用户代码（8 处）直接对 sin_addr 做算术语义运算
- *     （ntohl(a.sin_addr)、&sin_addr 取字节），改成结构体会连带改一圈；
- *   - 而 struct in_addr 只有 4 字节、对齐 4，与 unsigned int 完全同布局，
- *     所以 `*(struct in_addr *)&sa.sin_addr` 这类写法（git 的 connect.c 就这么用）
- *     是安全的。
+ * `in_addr_t` / `in_port_t` / `struct in_addr` 的**定义在 net.h**，这里只做
+ * 包含与说明，不重复定义：sockaddr_in 需要 struct in_addr，而包含方向是单向的
+ *     netinet/in.h -> sys/socket.h -> net.h
+ * 所以定义只能在下游的 net.h 里（详见那边的注释）。
  *
- * 代价：想写 `sin.sin_addr.s_addr = ...` 的代码不能直接编过（git 里只有
- * daemon.c / imap-send.c 这样写，而这两个本来就不进本地 git 的构建）。
+ * 历史教训：sockaddr_in.sin_addr 曾经被声明成裸 `unsigned int`（理由是"现有代码
+ * 直接做算术运算，改成结构体要连带改一圈"）。这省了 8 处改动，代价是任何按
+ * POSIX 写 `sa.sin_addr.s_addr` 的代码都编不过 —— 包括 git 的 daemon.c、
+ * OpenSSL 的 bio_addr.c。真正的标准写法反而是**少数**要迁就的，所以已改正。
+ * 布局上 struct in_addr 只含一个 u32，ABI 与原来的 unsigned int 完全一致。
  */
 #ifndef RK_NETINET_IN_H
 #define RK_NETINET_IN_H
@@ -21,12 +21,40 @@
 extern "C" {
 #endif
 
-typedef unsigned int in_addr_t;
-typedef unsigned short in_port_t;
-
-struct in_addr {
-    in_addr_t s_addr;      /* 网络字节序 */
+/* ---- IPv6 地址：只有**类型**，没有功能 ----
+ */
+struct in6_addr {
+    union {
+        unsigned char  __u6_addr8[16];
+        unsigned short __u6_addr16[8];
+        unsigned int   __u6_addr32[4];
+    } __u6_addr;
 };
+#define s6_addr   __u6_addr.__u6_addr8
+#define s6_addr16 __u6_addr.__u6_addr16
+#define s6_addr32 __u6_addr.__u6_addr32
+
+struct sockaddr_in6 {
+    sa_family_t     sin6_family;    /* AF_INET6 */
+    in_port_t       sin6_port;      /* 网络字节序 */
+    unsigned int    sin6_flowinfo;
+    struct in6_addr sin6_addr;
+    unsigned int    sin6_scope_id;
+};
+
+/* 常量形式的全零/回环地址（glibc 的 IN6ADDR_*_INIT 是三层花括号，对应
+ * struct -> union -> 数组）。指针形式的 in6addr_any 在这里用不到就不引入，
+ * 免得变成"声明了但没有定义"的链接期意外。 */
+#define IN6ADDR_ANY_INIT      { { { 0 } } }
+#define IN6ADDR_LOOPBACK_INIT { { { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1 } } }
+
+/* inet_ntop / inet_pton 的缓冲区上限（POSIX 在 <netinet/in.h> 里给） */
+#ifndef INET_ADDRSTRLEN
+#define INET_ADDRSTRLEN  16    /* "255.255.255.255" + NUL */
+#endif
+#ifndef INET6_ADDRSTRLEN
+#define INET6_ADDRSTRLEN 46    /* 最长 "xxxx:...:255.255.255.255" + NUL */
+#endif
 
 /* INADDR_* 都是**主机序**，用的时候要 htonl()（POSIX 语义） */
 #define INADDR_ANY       0x00000000u
@@ -45,6 +73,9 @@ struct in_addr {
 #endif
 #ifndef IPPROTO_UDP
 #define IPPROTO_UDP 17
+#endif
+#ifndef IPPROTO_IPV6
+#define IPPROTO_IPV6 41
 #endif
 
 #ifdef __cplusplus
