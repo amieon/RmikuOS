@@ -132,9 +132,13 @@ fn primary_init(id: usize) -> ! {
     mm::init();
     mm::init_paging();
 
+    drivers::rtc::init();
+
 
 
     let disks = drivers::block::discover_disks::discover_disks();
+
+    drivers::rng::init();
 
     #[cfg(feature = "oscomp")]
     {
@@ -184,6 +188,7 @@ fn primary_init(id: usize) -> ! {
         log::warn!("[disk] no data disk, /home 与 /var 未挂载");
     }
 
+    drivers::rtc::stamp::restore();
 
     log::info!("==== RmikuOS 启动 ====");
     log::info!("架构: {}", arch::NAME);

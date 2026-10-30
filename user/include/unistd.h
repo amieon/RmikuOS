@@ -40,8 +40,7 @@ extern int access(const char *path, int amode);
 
 /* symlink/readlink/link/lstat: 见 fs.h（内核 SYS_SYMLINK/READLINK/LINK/LSTAT）。 */
 
-/* 全局环境指针(POSIX): crt0 启动时把 exec 传入的 envp 保存到这里。
- * 是 char** 不是 char —— crt0 里 `.size environ, 8` 存的就是 envp 这个指针本身。 */
+/* 全局环境指针(POSIX): crt0 启动时把 exec 传入的 envp 保存到这里。*/
 extern char **environ;
 
 /* gethostname: 没有 hostname syscall，返回编译期常量（与 uname().nodename 一致）。
@@ -109,6 +108,16 @@ static inline long sysconf(int name) {
 static inline unsigned int alarm(unsigned int seconds) {
     (void)seconds;
     return 0;
+}
+
+/* getrandom：内核熵源（virtio-rng）的唯一出口。
+ *
+ * 语义对齐 Linux：返回实际写入的字节数，失败返回 -1 并置 errno。
+ * 关键差别只有一处：Linux 在熵池未初始化时会阻塞，本内核没有"等熵池"
+ * 这个状态，设备不在就直接 EAGAIN，两种 flags 表现相同。
+ */
+static inline ssize_t getrandom(void *buf, usize count, unsigned int flags) {
+    return rk_sys_ret(syscall3(SYS_GETRANDOM, (usize)buf, count, (usize)flags));
 }
 
 #ifdef __cplusplus

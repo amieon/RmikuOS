@@ -4,13 +4,23 @@
  * 流程：
  *   1. 本地假时钟 = get_time_us()（单调微秒, 自启动起, 0 基准）
  *   2. 发 NTP 请求（VN=4 Mode=3, Origin=T1）→ 收响应（T2/T3）
- *   3. 5 次采样, 每样本算 (offset, delay), 取 delay 最小（最对称=最准）
+ *   3. N 次采样, 每样本算 (offset, delay), 取 delay 最小（最对称=最准）
  *   4. 校准：当前 epoch 微秒 = (offset − 1900基准差) + 本地单调微秒
  *   5. set_wall_clock() 交给内核, 之后 time()/stat 时间戳单调累加
  *
- * 服务器：默认 QEMU slirp 网关 10.0.2.2:123（host 上跑 tools/ntp_server.py）。
- * 用法：ntpdate [端口] 或 ntpdate <server> [端口]（server 支持 IP 或域名）
+ * 两种用法：
+ *   ntpdate [-b] [端口]            纯数字 = 端口（旧用法）
+ *   ntpdate [-b] <server> [端口]   server 支持 IP 或域名
  *   例：ntpdate 12300 ; ntpdate time.example.com ; ntpdate 10.0.2.2 12300
+ *
+ * -b（boot）：开机自动校时用。单样本、单次接收、全静默、失败也返回 0。
+ *   两条硬约束决定了它必须长这样：
+ *     ① 内核 recvfrom 是自旋忙等（syscall/net.rs 里 5000 万次后返回 0），
+ *        服务器不通时**一次**接收就要好几秒，多次重试会把开机拖成分钟级。
+ *        所以启动模式只发 1 个包、只收 1 次。
+ *     ② 开机路径不能因为没网就失败。返回非 0 会让 login 判断出"出错了"，
+ *        而这本来是完全正常的情况（离线机器）。真正的兜底是
+ *        /var/lib/rtcstamp（drivers/rtc/stamp.rs），不是这里。
  * ==========================================================================*/
 #include "user.h"
 
@@ -49,42 +59,29 @@ static int is_all_digits(const char *s) {
     return 1;
 }
 
-int main(int argc, char *argv[]) {
-    int port = NTP_PORT;
-    const char *server_str = 0;
-    unsigned long server_ip = 0x0A000202UL; /* 默认 10.0.2.2 = QEMU slirp 网关 */
-
-    /* 用法: ntpdate [端口] 或 ntpdate <server> [端口](server 支持 IP 或域名) */
-    if (argc > 1) {
-        if (is_all_digits(argv[1])) {
-            port = atoi(argv[1]);       /* 旧用法:纯数字 = 端口 */
-        } else {
-            server_str = argv[1];
-            if (argc > 2) port = atoi(argv[2]);
-        }
-    }
-    if (server_str) {
-        unsigned int ip = parse_ip(server_str);
-        if (ip == 0) ip = net_resolve(server_str);
-        if (ip == 0) {
-            fputs("ntpdate: cannot resolve server\n", stdout);
-            return 1;
-        }
-        server_ip = ip;
-    }
-
+/* 对一台服务器采样并校准墙钟。成功返回 0，失败 -1。
+ *
+ * quiet=1 时一个字都不打印：启动模式下 stdout 就是用户的登录界面，
+ * 任何输出都会插在 "RmikuOS login:" 中间。 */
+static int sync_from(unsigned long server_ip, int port,
+                     int samples, int retry, int quiet) {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) { fputs("ntpdate: socket failed\n", stdout); return 1; }
+    if (fd < 0) {
+        if (!quiet) fputs("ntpdate: socket failed\n", stdout);
+        return -1;
+    }
     struct sockaddr_in local = addr_of(0, 0);
     if (bind(fd, (struct sockaddr *)&local, sizeof local) < 0) {
-        fputs("ntpdate: bind failed\n", stdout); return 1;
+        if (!quiet) fputs("ntpdate: bind failed\n", stdout);
+        close(fd);
+        return -1;
     }
     struct sockaddr_in srv = addr_of(server_ip, port);
 
     unsigned long best_delay = ~0UL, best_offset = 0;
     int got = 0;
 
-    for (int i = 0; i < SAMPLES; i++) {
+    for (int i = 0; i < samples; i++) {
         unsigned char pkt[NTP_PKT_LEN] = {0};
         pkt[0] = 0x1B; /* LI=0 VN=4 Mode=3(client) */
         unsigned long t1 = local_ntp64();
@@ -93,7 +90,7 @@ int main(int argc, char *argv[]) {
 
         unsigned long t2 = 0, t3 = 0;
         int ok = 0;
-        for (int r = 0; r < RECV_RETRY; r++) {
+        for (int r = 0; r < retry; r++) {
             unsigned char buf[512];
             struct sockaddr_in from = {0};
             int n = recvfrom(fd, buf, sizeof buf, 0, (struct sockaddr *)&from, 0);
@@ -117,7 +114,12 @@ int main(int argc, char *argv[]) {
             got = 1;
         }
     }
-    if (!got) { fputs("ntpdate: no reply\n", stdout); return 1; }
+    close(fd);
+
+    if (!got) {
+        if (!quiet) fputs("ntpdate: no reply\n", stdout);
+        return -1;
+    }
 
     /* 校准: 当前 epoch 微秒 = (offset − 1900基准差) + 本地单调微秒 */
     long off_sec = (long)(best_offset >> 32) - (long)NTP_EPOCH_OFFSET;
@@ -127,8 +129,77 @@ int main(int argc, char *argv[]) {
                            + (unsigned long)get_time_us();
     set_wall_clock(epoch_us);
 
-    printf("[ntpdate] synced: epoch=%lu s, delay=%lu ms\n",
-           epoch_us / 1000000,
-           (best_delay * 1000) >> 32);
+    if (!quiet) {
+        printf("[ntpdate] synced: epoch=%lu s, delay=%lu ms\n",
+               epoch_us / 1000000,
+               (best_delay * 1000) >> 32);
+    }
+
+    /* 顺手存下来，下次开机内核直接读（fake-hwclock，见 drivers/rtc/stamp.rs）。
+     * 存不下只是"下次开机没有历史值"，不该让本次校时算失败，所以只警告。 */
+    if (hwclock_stamp_write(epoch_us / 1000000) != 0) {
+        if (!quiet) fputs("[ntpdate] warning: cannot save hwclock stamp\n", stdout);
+    }
     return 0;
+}
+
+/* 开机模式：按顺序试几个服务器，第一个成功的就够。
+ *
+ * 顺序有讲究：10.0.2.2 是 QEMU slirp 网关，宿主上跑了 tools/ntp_server.py
+ * 时会**毫秒级**回包（本地回环，没有 DNS，没有外网）；
+ * 公网那两个在宿主能出网时可用，但先要一次 DNS 查询。
+ *
+ * 注意 slirp **自己不实现 NTP**，10.0.2.2:123 只在宿主真的起了服务时才通；
+ * 不通的时候是"发出去没人理"，只能等满一次接收超时——所以单次尝试必须是
+ * 单样本单接收，不能像交互模式那样 5 样本 × 20 次重试。 */
+static const char *const boot_servers[] = {
+    "10.0.2.2",        /* QEMU slirp 网关（宿主 tools/ntp_server.py） */
+    "ntp.aliyun.com",  /* 公网；走 slirp NAT */
+};
+
+int main(int argc, char *argv[]) {
+    int port = NTP_PORT;
+    const char *server_str = 0;
+    unsigned long server_ip = 0x0A000202UL; /* 默认 10.0.2.2 = QEMU slirp 网关 */
+    int argi = 1;
+
+    int boot = 0;
+    if (argc > argi && strcmp(argv[argi], "-b") == 0) {
+        boot = 1;
+        argi++;
+    }
+
+    /* ---- 开机模式 ---- */
+    if (boot) {
+        int n = (int)(sizeof boot_servers / sizeof boot_servers[0]);
+        for (int i = 0; i < n; i++) {
+            unsigned long ip = parse_ip(boot_servers[i]);
+            if (ip == 0) ip = net_resolve(boot_servers[i]);
+            if (ip == 0) continue;            /* DNS 挂了就换下一个，不报错 */
+            if (sync_from(ip, NTP_PORT, 1, 1, 1) == 0) return 0;
+        }
+        return 0;   /* 全失败是正常情况：stamp 已经兜过底了 */
+    }
+
+    /* ---- 交互模式 ---- */
+    /* 用法: ntpdate [端口] 或 ntpdate <server> [端口](server 支持 IP 或域名) */
+    if (argc > argi) {
+        if (is_all_digits(argv[argi])) {
+            port = atoi(argv[argi]);       /* 旧用法:纯数字 = 端口 */
+        } else {
+            server_str = argv[argi];
+            if (argc > argi + 1) port = atoi(argv[argi + 1]);
+        }
+    }
+    if (server_str) {
+        unsigned int ip = parse_ip(server_str);
+        if (ip == 0) ip = net_resolve(server_str);
+        if (ip == 0) {
+            fputs("ntpdate: cannot resolve server\n", stdout);
+            return 1;
+        }
+        server_ip = ip;
+    }
+
+    return sync_from(server_ip, port, SAMPLES, RECV_RETRY, 0) == 0 ? 0 : 1;
 }

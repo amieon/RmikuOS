@@ -540,11 +540,8 @@ pub fn fork_current() -> isize {
         child_pid
     };
 
-    // 新增：fork 产生了新的就绪线程，通知其他核
     ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 
-    // fork 出的子进程成为前台进程（Ctrl+C 投递目标）
-    set_front(child_pid);
 
     child_pid as isize
 }

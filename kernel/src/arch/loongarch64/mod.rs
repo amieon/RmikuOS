@@ -28,6 +28,8 @@ pub const MEMORY_END: usize = MEMORY_START + MEMORY_SIZE;
 pub const UART_PADDR: usize = 0x1fe0_01e0;
 pub const UART_BASE: usize = crate::mm::config::KERNEL_OFFSET + UART_PADDR;
 
+pub const RTC_PADDR: usize = 0x100d_0100;
+
 
 pub const PCI_ECAM_BASE: usize = 0x2000_0000;
 pub const PCI_ECAM_SIZE: usize = 0x0800_0000;

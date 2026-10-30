@@ -165,6 +165,8 @@ case "$ARCH" in
       -device "virtio-blk-device,drive=blk1"
       -drive "file=target/data-riscv64.img,format=raw,if=none,id=blk2"
       -device "virtio-blk-device,drive=blk2"
+      # 熵源：走 PCI（不是 MMIO），因此不受 virtio-mmio 地址反序影响
+      -device "virtio-rng-pci,disable-legacy=on"
       "${NET_ARGS[@]}"
     )
     ;;
@@ -184,6 +186,8 @@ case "$ARCH" in
       -device "virtio-blk-pci,drive=blk1,disable-legacy=on"
       -drive "file=target/data-loongarch64.img,format=raw,if=none,id=blk2"
       -device "virtio-blk-pci,drive=blk2,disable-legacy=on"
+      # 熵源：与 blk/net 同走 PCI
+      -device "virtio-rng-pci,disable-legacy=on"
       "${NET_ARGS[@]}"
     )
     ;;

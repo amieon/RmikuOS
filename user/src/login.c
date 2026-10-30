@@ -64,10 +64,43 @@ static int ensure_dir(const char *path) {
     return (int) mkdir(path, 0777);
 }
 
+static isize g_ntp_pid = -1;
+
+static void spawn_ntp_sync(void) {
+    isize p = fork();
+    if (p == 0) {
+        /* 子进程独立成组：不跟 login 共享前台，Ctrl+C 也打不到它 */
+        setpgid(0, 0);
+        char *const av[] = { "/bin/ntpdate", "-b", 0 };
+        execv("/bin/ntpdate", av);
+        exit(0);   /* exec 失败也别在登录界面上报错：校时是锦上添花 */
+    }
+    if (p > 0) {
+        g_ntp_pid = p;
+
+        /* 必须抢回前台，否则整个登录界面会被挂起 */
+        set_front(getpgrp());
+    }
+}
+
+/* 收掉已经退出的校时子进程。只认 g_ntp_pid 这一个，绝不用 waitpid(-1)：
+ * 那会把 shell 也一起收割掉（login 靠 waitpid(pc) 等 shell 退出）。 */
+static void reap_ntp_sync(void) {
+    if (g_ntp_pid <= 0) return;
+    int code = 0;
+    isize r = waitpid(g_ntp_pid, &code, WNOHANG);
+    /* r == pid：刚收掉。r < 0：ECHILD/ESRCH，说明已经不在表里了 —— 两种都清掉，
+     * 只有 r == 0（还在跑）才保留。留着无效 pid 会让每轮提示符都白跑一次系统调用。 */
+    if (r == g_ntp_pid || r < 0) g_ntp_pid = -1;
+}
+
 int main(void) {
     char name[64], pass[64], hex[65];
 
+    spawn_ntp_sync();
+
     for (;;) {
+        reap_ntp_sync();
         puts("RmikuOS login: ");
         if (acct_readline(name, (int) sizeof name) <= 0) continue;
         puts("Password: ");

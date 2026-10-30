@@ -92,29 +92,39 @@ impl BlockIo for RmikuBlockIo {
 
 // 2. runtime services
 
-/// 时钟：接 RTC。sec 是 Unix 秒。
+/// 时钟：接内核墙钟。
+///
+/// 墙钟在开机时由 `drivers::rtc::init()` 用硬件 RTC 校准一次，之后就是
+/// `RTC 读数 + monotonic_us()`，NTP 成功了会再覆盖一次。未校准时
+/// `now_secs()` 返回 0（= 1970），**不会**给出一个看似合理的假时间。
 pub struct RmikuClock;
 
 impl Clock for RmikuClock {
     fn now(&self) -> Ext4Result<Ext4Timestamp> {
-        // TODO: 换成 RmikuOS 的 RTC 读取
         Ok(Ext4Timestamp::new(rmiku_rtc_unix_seconds(), 0))
     }
 }
 
-// 占位：接内核 RTC 后删掉
 fn rmiku_rtc_unix_seconds() -> i64 {
-    0
+    crate::timer::now_secs() as i64
 }
 
-/// 熵源：接内核 RNG。
+/// 熵源：内核 RNG（virtio-rng）。
+///
+/// 拿不到可信熵时必须返回 Err，不能"成功但填 0"。
 pub struct RmikuEntropy;
 
 impl EntropySource for RmikuEntropy {
     fn fill_bytes(&mut self, output: &mut [u8]) -> Ext4Result<()> {
-        // TODO: 换成内核 RNG；返回 Err 则 rsext4 报 unsupported_capability("runtime:entropy")
-        output.fill(0);
-        Ok(())
+        if crate::drivers::rng::fill_bytes(output) {
+            return Ok(());
+        }
+        if crate::drivers::rng::available() {
+            // 设备在，但这次请求超时/短读：按 IO 失败上报
+            Err(Ext4Error::timeout())
+        } else {
+            Err(Ext4Error::unsupported_capability("runtime:entropy"))
+        }
     }
 }
 

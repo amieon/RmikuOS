@@ -2114,8 +2114,19 @@ int main(int argc, char *argv[]) {
     setpgid(0, 0);
     set_front(getpgrp());
 
+    /* fake-hwclock 的定期快照。*/
+    unsigned long last_stamp = 0;
+
     while (1) {
-        // set_my_tickets(1);
+        time_t now = time(0);
+        if (now > 0 &&
+            (last_stamp == 0 || (unsigned long)now - last_stamp >= HWCLOCK_STAMP_INTERVAL)) {
+            /* 失败也更新计数：/var 没挂载时不该每轮都去撞一次文件系统 */
+            hwclock_stamp_write((unsigned long)now);
+            last_stamp = (unsigned long)now;
+        }
+
+        set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];

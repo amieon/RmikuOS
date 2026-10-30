@@ -23,6 +23,7 @@ extern "C" {
 #include "net.h"
 #include "env.h"
 #include "utime.h"
+#include "hwclock.h"
 
 #ifdef __cplusplus
 }

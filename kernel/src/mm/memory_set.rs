@@ -227,6 +227,12 @@ impl MemorySet {
                     crate::mm::PAGE_SIZE,
                 ) + crate::mm::PAGE_SIZE,
             ),
+            (
+                // RTC 只占一个 4 KiB 页；不映射的话读它会直接触发内核缺页
+                crate::mm::align_down(crate::arch::RTC_PADDR, crate::mm::PAGE_SIZE),
+                crate::mm::align_down(crate::arch::RTC_PADDR + crate::mm::PAGE_SIZE - 1, crate::mm::PAGE_SIZE)
+                    + crate::mm::PAGE_SIZE,
+            ),
         ];
 
         for &(start, end) in small_mmio_ranges.iter() {
