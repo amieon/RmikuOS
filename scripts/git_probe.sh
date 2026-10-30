@@ -200,13 +200,16 @@ case "$STAGE" in
     # 不用改 Makefile。
     # 只有 string.c 必须在场：errno 的唯一定义、memset/memcpy、isatty 都在里面。
     # strdup / getpwuid / getpwnam 现在都是头文件 inline，不再需要额外的 .o。
-    echo "[git] 编 libc 裸件（crt0 / syscall / string）"
+    echo "[git] 编 libc 裸件（crt0 / syscall / string / mem）"
     "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/crt0_$ARCH.S"    -o "$OUT/_crt0.o"    || exit 1
     "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/syscall_$ARCH.S" -o "$OUT/_syscall.o" || exit 1
     "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/string.c"        -o "$OUT/_string.o"  || exit 1
+    # mem.o 必须带：堆状态（malloc_head / slab_freelist）从 mem.h 挪到 mem.c 之后，
+    # 任何用到 malloc 的 TU 都会引用它，不带就是 undefined reference。
+    "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/mem.c"           -o "$OUT/_mem.o"     || exit 1
 
     LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"
-    LINK_FLAGS="$LINK_FLAGS $OUT/_crt0.o $OUT/_string.o $OUT/_syscall.o -T $LINKER"
+    LINK_FLAGS="$LINK_FLAGS $OUT/_crt0.o $OUT/_string.o $OUT/_mem.o $OUT/_syscall.o -T $LINKER"
 
     # LIBS 整份覆盖：默认是 `libgit.a xdiff/lib.a $(EXTLIBS)`，而 EXTLIBS 里会混进
     # -lrt / -lpthread / -lcurl 之类宿主库，交叉环境一个都没有。我们自己写死。

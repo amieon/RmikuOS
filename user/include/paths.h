@@ -1,8 +1,11 @@
 /*
  * paths.h —— 标准路径常量
  *
- * 只放"标准名字"：真正的设备节点现在还没有（/dev 是空目录，内核没有
- * /dev/null 这类字符设备），所以 open(_PATH_DEVNULL) 会 ENOENT。
+ * 只放"标准名字"。设备节点不在文件系统里：/dev 是个空目录，但
+ * /dev/null 和 /dev/urandom 由内核的内置设备表直接接管
+ * （kernel/src/fs/null.rs 的 builtin_device，在挂载表和 O_CREAT 之前拦下），
+ * open 这两个路径是成功的。其余（/dev/zero、/dev/tty、/dev/console）
+ * 还没有实现，open 会 ENOENT —— 宁可报错，也不返回行为不对的东西。
  */
 #ifndef RK_PATHS_H
 #define RK_PATHS_H

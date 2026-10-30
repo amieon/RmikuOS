@@ -65,8 +65,10 @@ typedef struct malloc_block {
     struct malloc_block *next;
 } malloc_block_t;
 
-static malloc_block_t *malloc_head = 0;
-static mutex_t malloc_lock = MUTEX_INIT;
+/* 堆的可变状态：**必须全进程唯一**，所以不能留在头里*/
+extern malloc_block_t *malloc_head;
+extern mutex_t malloc_lock;
+
 
 static inline usize malloc_align_up(usize x, usize align) {
     return (x + align - 1) & ~(align - 1);
@@ -92,7 +94,8 @@ static const usize slab_sizes[SLAB_COUNT] = {
     16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024
 };
 
-static void *slab_freelist[SLAB_COUNT] = {0};
+/* slab 的空闲链也是堆状态（理由见上面 malloc_head 那段）。 */
+extern void *slab_freelist[SLAB_COUNT];
 
 static inline int size_to_sc(usize size) {
     for (int i = 0; i < SLAB_COUNT; i++) {

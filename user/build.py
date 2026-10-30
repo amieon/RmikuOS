@@ -97,7 +97,7 @@ def shared_deps_hash(arch: str) -> str:
     任何一个文件变动 → 所有用户态二进制缓存失效。
     覆盖:
       - include/ 下所有头文件 (user.h 等)
-      - lib/ 下 string.c, thread.c, cpp_runtime.cpp, crt0, runtime syscall
+      - lib/ 下 string.c, thread.c, mem.c, cpp_runtime.cpp, crt0, runtime syscall
       - 链接脚本
       - user/cpp_runtime/ 下头文件 (C++ 项目用)
     """
@@ -354,6 +354,20 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
             str(thread_obj),
         ])
 
+    mem_src = LIB_DIR / "mem.c"
+    mem_obj = out_dir / f"{app_id}_{stem}_mem.o"
+    has_mem = mem_src.exists()
+    if has_mem:
+        run([
+            cfg["gcc"],
+            *cfg["cflags"],
+            *common_flags,
+            "-c",
+            str(mem_src),
+            "-o",
+            str(mem_obj),
+        ])
+
     link_objects = []
     if source.suffix == ".c":
         link_objects.append(str(crt0_obj))
@@ -365,6 +379,8 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
         link_objects.append(str(string_obj))
     if has_thread:
         link_objects.append(str(thread_obj))
+    if has_mem:
+        link_objects.append(str(mem_obj))
 
     link_cmd = [
         cfg["gcc"],
@@ -439,6 +455,13 @@ def _build_cpp_real(arch, source, app_id, category, out_dir, stem, elf_path):
         run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
              str(thread_src), "-o", str(thread_obj)])
 
+    mem_src = LIB_DIR / "mem.c"
+    mem_obj = out_dir / f"{app_id}_{stem}_mem.o"
+    has_mem = mem_src.exists()
+    if has_mem:
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(mem_src), "-o", str(mem_obj)])
+
     link_cmd = [
         cfg["gxx"], *cfg["cflags"],
         "-nostdlib", "-nostartfiles", "-static", "-no-pie",
@@ -450,6 +473,8 @@ def _build_cpp_real(arch, source, app_id, category, out_dir, stem, elf_path):
         link_cmd.append(str(string_obj))
     if has_thread:
         link_cmd.append(str(thread_obj))
+    if has_mem:
+        link_cmd.append(str(mem_obj))
     link_cmd.extend(["-o", str(elf)])
     run(link_cmd)
     data = elf.read_bytes()
@@ -557,11 +582,18 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
              str(string_src), "-o", str(string_obj)])
 
     thread_obj = None
+    mem_obj = None
     thread_src = LIB_DIR / "thread.c"
     if thread_src.exists():
         thread_obj = out_dir / "_thread.o"
         run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
              str(thread_src), "-o", str(thread_obj)])
+
+    mem_src = LIB_DIR / "mem.c"
+    if mem_src.exists():
+        mem_obj = out_dir / "_mem.o"
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(mem_src), "-o", str(mem_obj)])
 
     run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
          str(cfg["crt0"]), "-o", str(crt0_obj)])
@@ -620,6 +652,8 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
             link_objs.append(str(string_obj))
         if thread_obj:
             link_objs.append(str(thread_obj))
+        if mem_obj:
+            link_objs.append(str(mem_obj))
         if cpprt_obj and cpprt_obj.exists():
             link_objs.append(str(cpprt_obj))
 
@@ -724,11 +758,18 @@ def build_sqlite3(arch: str):
              str(string_src), "-o", str(string_obj)])
 
     thread_obj = None
+    mem_obj = None
     thread_src = LIB_DIR / "thread.c"
     if thread_src.exists():
         thread_obj = out_dir / "_thread.o"
         run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
              str(thread_src), "-o", str(thread_obj)])
+
+    mem_src = LIB_DIR / "mem.c"
+    if mem_src.exists():
+        mem_obj = out_dir / "_mem.o"
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(mem_src), "-o", str(mem_obj)])
 
     objs = {}
     for name, src in sources.items():
@@ -747,6 +788,8 @@ def build_sqlite3(arch: str):
             link_objs.append(str(string_obj))
         if thread_obj:
             link_objs.append(str(thread_obj))
+        if mem_obj:
+            link_objs.append(str(mem_obj))
         out_elf = out_dir / elf_name
         run([cfg["gcc"], *cfg["cflags"],
              "-nostdlib", "-nostartfiles", "-static", "-no-pie",
@@ -878,6 +921,13 @@ def build_zlib(arch: str):
         run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
              str(thread_src), "-o", str(thread_obj)])
         link_objs.append(str(thread_obj))
+
+    mem_src = LIB_DIR / "mem.c"
+    if mem_src.exists():
+        mem_obj = out_dir / "_mem.o"
+        run([cfg["gcc"], *cfg["cflags"], *common_flags, "-c",
+             str(mem_src), "-o", str(mem_obj)])
+        link_objs.append(str(mem_obj))
 
     link_objs.append(str(runtime_obj))
     link_objs.append(str(libz))      # 库放最后：静态库的符号解析是顺序的
@@ -1062,6 +1112,11 @@ def build_tcc(arch: str):
     run([cfg["gcc"], *cfg["cflags"], "-fno-builtin", "-c", LIB_DIR / "thread.c", "-o", thread_o])
     objs.append(thread_o)
 
+    # 2c) 堆状态(lib/mem.c): 同上, malloc 在 A.o、free 在 B.o 时不能各有一份
+    mem_o = out / "mem.o"
+    run([cfg["gcc"], *cfg["cflags"], "-fno-builtin", "-c", LIB_DIR / "mem.c", "-o", mem_o])
+    objs.append(mem_o)
+
     # 3) TCC 源码
     # 显式指定 TCC target(不依赖 __loongarch__/__riscv 自动检测,
     # 防止 tcc.h 分支缺失或工具链宏异常导致编成错误架构)
@@ -1092,7 +1147,8 @@ def build_tcc(arch: str):
         if p.exists():
             h.update(file_sha256(p).encode())
     for src in (cfg["crt0"], cfg["runtime"], LIB_DIR / "string.c",
-                LIB_DIR / "thread.c", tcc_src / "include" / "tccdefs.h"):
+                LIB_DIR / "thread.c", LIB_DIR / "mem.c",
+                tcc_src / "include" / "tccdefs.h"):
         if Path(src).exists():
             h.update(file_sha256(src).encode())
     h.update(repr(cflags).encode())
@@ -1164,13 +1220,13 @@ def build_tcc_sys_files(arch: str, tcc_dir: Path, tcc_src: Path):
     # (printf 等是头内联; libc_extern 把公共 API 具现为真实符号,
     #  TCC 编译用户程序时对 static inline 生成外部引用, 靠它解析)
     for name, src in (("_syscall.o", cfg["runtime"]), ("_string.o", LIB_DIR / "string.c"),
-                      ("_thread.o", LIB_DIR / "thread.c")):
+                      ("_thread.o", LIB_DIR / "thread.c"), ("_mem.o", LIB_DIR / "mem.c")):
         run([cfg["gcc"], *cfg["cflags"], "-fno-builtin", "-c", src, "-o", sys_root / name])
     run([cfg["gcc"], *cfg["cflags"], "-fno-builtin", "-I", INCLUDE_DIR,
          "-c", tcc_dir / "libc_extern.c", "-o", sys_root / "_libc_extern.o"])
     run([cfg["ar"], "rcs", sys_root / "libc.a",
          sys_root / "_syscall.o", sys_root / "_string.o", sys_root / "_thread.o",
-         sys_root / "_libc_extern.o"])
+         sys_root / "_libc_extern.o", sys_root / "_mem.o"])
 
     # libtcc1.a: TCC 自身运行时(TCC 链接用户程序时用)
     libtcc1_o = sys_root / "libtcc1.o"

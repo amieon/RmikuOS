@@ -105,7 +105,7 @@ extern "C" {
 #define SYS_LINKAT                   96
 #define SYS_UMASK                    97
 #define SYS_GETPAGESIZE              98   
-#define SYS_GETTID                   99   /* 当前线程 id(填的是 99 那个空位) */
+#define SYS_GETTID                   99   
 
 
 
