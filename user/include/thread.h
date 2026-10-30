@@ -18,8 +18,11 @@ struct thread_stack_record {
     usize stack_size;
 };
 
-static struct thread_stack_record thread_stack_records[THREAD_MAX_RECORDS];
-static mutex_t thread_stack_lock = MUTEX_INIT;
+/* 表和锁必须跨 TU 唯一, 定义在 lib/thread.c。
+ * 头里写 static 的后果: 每个 TU 各得 12 KiB 数组 + 一把各管各的锁, 跨 TU 的
+ * create/join 查不到记录 -> thread_join 静默跳过 munmap, 每次泄漏 64 KiB 栈。 */
+extern struct thread_stack_record thread_stack_records[THREAD_MAX_RECORDS];
+extern mutex_t thread_stack_lock;
 
 /* 高级 thread_create/thread_join 会在外面自动管理 mmap 栈。 */
 static inline isize sys_thread_create_raw(
@@ -72,55 +75,18 @@ static inline void __thread_entry(void (*func)(void *), void *arg) {
     for (;;) {}
 }
 
-static inline int thread_stack_record_add(
+/* 实现在 lib/thread.c —— 和表放在同一个 TU, 不必每个 TU 重复 emit。 */
+int thread_stack_record_add(
     int tid,
     void *stack_base,
     usize stack_size
-) {
-    mutex_lock(&thread_stack_lock);
+);
 
-    for (int i = 0; i < THREAD_MAX_RECORDS; i++) {
-        if (!thread_stack_records[i].used) {
-            thread_stack_records[i].used = 1;
-            thread_stack_records[i].tid = tid;
-            thread_stack_records[i].stack_base = stack_base;
-            thread_stack_records[i].stack_size = stack_size;
-
-            mutex_unlock(&thread_stack_lock);
-            return 0;
-        }
-    }
-
-    mutex_unlock(&thread_stack_lock);
-    return -1;
-}
-
-static inline int thread_stack_record_take(
+int thread_stack_record_take(
     int tid,
     void **stack_base,
     usize *stack_size
-) {
-    mutex_lock(&thread_stack_lock);
-
-    for (int i = 0; i < THREAD_MAX_RECORDS; i++) {
-        if (thread_stack_records[i].used &&
-            thread_stack_records[i].tid == tid) {
-            *stack_base = thread_stack_records[i].stack_base;
-            *stack_size = thread_stack_records[i].stack_size;
-
-            thread_stack_records[i].used = 0;
-            thread_stack_records[i].tid = -1;
-            thread_stack_records[i].stack_base = 0;
-            thread_stack_records[i].stack_size = 0;
-
-            mutex_unlock(&thread_stack_lock);
-            return 0;
-        }
-    }
-
-    mutex_unlock(&thread_stack_lock);
-    return -1;
-}
+);
 
 static inline int gettid(void) {
     return (int)syscall3(SYS_GETTID, 0, 0, 0);

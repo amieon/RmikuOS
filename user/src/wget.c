@@ -40,6 +40,22 @@ static int parse_url(const char *url, char *ip, int *port, char *path) {
     return 1;
 }
 
+/* 从状态行取状态码, 形如 "HTTP/1.1 404 Not Found"。
+ * 不假定 HTTP 版本: 服务器即使收到 HTTP/1.0 请求, 也普遍回 HTTP/1.1,
+ * 写死 "HTTP/1.0 " 前缀会漏判错误码 -> 404 页面被当正文存盘, 而且返回 0 假装成功。 */
+static int parse_status(const char *s) {
+    if (strncmp(s, "HTTP/", 5) != 0) return -1;
+    while (*s && *s != ' ') s++;             /* 跳过版本号 */
+    while (*s == ' ') s++;
+    int code = 0, n = 0;
+    while (*s >= '0' && *s <= '9' && n < 3) {
+        code = code * 10 + (*s - '0');
+        s++;
+        n++;
+    }
+    return n == 3 ? code : -1;               /* 状态码必须是三位 */
+}
+
 int main(int argc, char **argv) {
     const char *ip, *path, *out;
     int port;
@@ -127,9 +143,20 @@ int main(int argc, char **argv) {
         return 1;
     }
     rbuf[hdr_end - 4] = '\0';          /* 状态行截断(分隔前) */
-    printf("wget: %s\n", rbuf);        /* 打印状态行如 "HTTP/1.0 200 OK" */
-    if (strncmp(rbuf, "HTTP/1.0 4", 10) == 0 || strncmp(rbuf, "HTTP/1.0 5", 10) == 0) {
-        printf("wget: server error, abort\n");
+    printf("wget: %s\n", rbuf);        /* 打印状态行如 "HTTP/1.1 200 OK" */
+
+    int status = parse_status(rbuf);
+    if (status < 0) {
+        printf("wget: bad status line\n");
+        return 1;
+    }
+    if (status >= 400) {
+        printf("wget: server error %d, abort\n", status);
+        return 1;
+    }
+    if (status >= 300) {
+        /* 不跟随 Location: 存下来的只会是重定向页面的 body, 不是目标内容 */
+        printf("wget: redirect %d not supported, abort\n", status);
         return 1;
     }
 
