@@ -56,13 +56,45 @@ ARCH_CFG="linux-generic64"
 if [ ! -f "$SRC/Configure" ]; then
   echo "[openssl] ✗ 源码不在 $SRC"
   echo "          git clone --depth 1 -b openssl-3.0 https://github.com/openssl/openssl.git user/openssl/src"
-  echo "          rm -rf user/openssl/src/.git user/openssl/src/test user/openssl/src/doc"
+  echo "          rm -rf user/openssl/src/.git   # 只删这个，别的目录一个都别删（原因见下）"
   exit 1
 fi
 
 # ---------------------------------------------------------------------------
+# 版本自报。整条路线（no-threads → crypto/threads_none.c、provider 能不能静态链）
+# 都是照 3.0 设计的，所以先把它打出来；不是 3.0.x 只警告不拦，但风险要说清。
+# ---------------------------------------------------------------------------
+openssl_version() {
+  local vf="$SRC/VERSION.dat" m n p
+  if [ -f "$vf" ]; then
+    m="$(sed -n 's/^MAJOR=//p' "$vf" | tr -d '"')"
+    n="$(sed -n 's/^MINOR=//p' "$vf" | tr -d '"')"
+    p="$(sed -n 's/^PATCH=//p' "$vf" | tr -d '"')"
+    echo "${m:-?}.${n:-?}.${p:-?}"
+  else
+    echo unknown
+  fi
+}
+
+SRC_VER="$(openssl_version)"
+echo "[openssl] 源码版本 $SRC_VER（$SRC）"
+case "$SRC_VER" in
+  3.0.*) : ;;
+  *) echo "[openssl] ! 不是 3.0.x。no-threads 在别的版本走的是另一套实现，"
+     echo "            且部分开关被改名/移除；真出问题优先换回 3.0："
+     echo "            git clone --depth 1 -b openssl-3.0 ... user/openssl/src" ;;
+esac
+
+# ---------------------------------------------------------------------------
 # 关掉的开关只有两类理由：**我们没有这个能力**，或者**它会引入我们测不了的分支**。
 # 每个都写明理由，以后想开一个先读一遍，别凭"反正 no-asm 也过了"去试。
+#
+# 注意两类**不存在**的开关（踩过）：
+#   · 算法级 no-aes / no-md5 / no-sha / no-hmac —— 3.x 把它们从 Configure 里删了，
+#     算法搬进了 provider，改 Configure 不影响编进去什么。想减体积用 no-legacy
+#     加运行期 provider 配置，不要在这里堆 no-xxx。
+#   · no-docs —— 3.0 的 @disablables 里没有它（文档早就改成单独构建），
+#     传了会被判 unsupported 直接 die。build_libs 本来也不生成 man 页。
 # ---------------------------------------------------------------------------
 CNF_OPTS=(
   no-asm       # perlasm 要 perl 现场生成 .s；纯 C 的 BN 慢但正确
@@ -73,10 +105,13 @@ CNF_OPTS=(
   no-engine    # engine 是 dlopen 的另一种形式
   no-async     # async 要线程/fiber
   no-tests     # 测试要 perl 驱动 + 几千个证书，跑不了
-  no-docs      # man 页没用
   no-legacy    # 少编一批老旧算法，省体积
   no-comp      # SSL 层压缩，要额外维护 zlib 绑定
 )
+
+# 这几个被 Configure 拒掉就不是"少个开关"的问题，而是源码形态不对（或版本不对），
+# 直接停 —— 自动裁剪只用来兜住可选开关，不能拿来蒙混过关。
+CRITICAL_OPTS=(no-asm no-threads no-shared no-dso no-module)
 
 # -I 顺序要紧：user/include 必须在工具链 sysroot 之前，否则 `#include <stdlib.h>`
 # 会命中 newlib/glibc 的声明，malloc 变成 extern 引用 → 链接到它们那套堆 → 跨库
@@ -93,25 +128,129 @@ mkdir -p "$BASE"
 # ---------------------------------------------------------------------------
 configure_openssl() {
   local sig
-  sig="$(printf '%s\n' "$ARCH_CFG" "${CNF_OPTS[@]}" "$CFLAGS_STR" "$CC" | sha256sum | cut -d' ' -f1)"
+  sig="$(printf '%s\n' "$SRC_VER" "$ARCH_CFG" "${CNF_OPTS[@]}" "$CFLAGS_STR" "$CC" | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/.cfg.sha256" ] && [ "$(cat "$OBJ/.cfg.sha256")" = "$sig" ]; then
     return 0
   fi
 
-  echo "[openssl] Configure（$ARCH，参数变化或首次构建）"
-  rm -rf "$OBJ"
-  mkdir -p "$OBJ"
-  (
-    cd "$OBJ" || exit 1
-    "$SRC/Configure" "$ARCH_CFG" "${CNF_OPTS[@]}" \
-      CC="$CC" AR="$AR" RANLIB="$RANLIB" NM="$NM" \
-      --prefix=/usr --openssldir=/etc/ssl \
-      CFLAGS="$CFLAGS_STR"
-  ) >"$BASE/configure.log" 2>&1
+  local log="$BASE/configure.log"
+  local -a opts=("${CNF_OPTS[@]}")
+  local attempt bad why b
+
+  # ---- 先查源码树完整性 --------------------------------------------------
+  # 坑一：**删源码目录 = 改构建配置**，不是省体积。
+  # 根 build.info 第一行就是
+  #   SUBDIRS=crypto ssl apps util tools fuzz providers doc
+  # Configure 从这个列表开始按 SUBDIRS 递归 push 子目录，再逐个用 Text::Template
+  # 读该目录的 build.info，读不到就
+  #   die "Something went wrong with <dir>/build.info: No such file or directory"
+  # fuzz / doc 前面**没有任何 IF 条件**，所以无条件要求存在 —— 3.0 也没有 no-docs
+  # 能跳过它们（传了反被判 unsupported，见文件头）。demos 根本不在 SUBDIRS 里，
+  # test 和 engines 是有条件的：
+  #   IF[!$disabled{tests}]            SUBDIRS=test     ← 我们传了 no-tests
+  #   IF[!$disabled{'deprecated-3.0'}] SUBDIRS=engines  ← 我们没关 deprecated
+  # 即：能安全删的只有 .git 和 demos；test 是因为 no-tests 才碰巧能删（耦合，哪天
+  # 开 tests 就炸）；doc / fuzz / engines 一个都不能动。省那 40MB 换一个
+  # "Configure 死在 build.info" 完全不合算 —— 删 .git 就够了。
+  local -a need=(crypto ssl apps util tools fuzz providers doc)
+  local -a noinfo=()
+  for b in "${need[@]}"; do
+    [ -f "$SRC/$b/build.info" ] || noinfo+=("$b/build.info")
+  done
+  if [ ${#noinfo[@]} -gt 0 ]; then
+    echo "[openssl] ✗ 源码树缺 build.info：${noinfo[*]}"
+    echo "          这些目录被根 build.info 的 SUBDIRS 无条件要求，删目录=Configure 必死。"
+    echo "          补回来（只删 .git，其余目录全留着）："
+    echo "          rm -rf user/openssl/src && git clone --depth 1 -b openssl-3.0 \\"
+    echo "            https://github.com/openssl/openssl.git user/openssl/src"
+    return 1
+  fi
+
+  # 坑二：Configure 里还有一段目录探测（3.0 至今都在）：
+  #   foreach (reverse sort('aes','aria','bf',...,'md5','sha','hmac','ripemd',...)) {
+  #       unshift @argvcopy, "no-$_" if ! -d catdir($srcdir, 'crypto', $_); }
+  # 也就是"crypto/ 下没这个目录 = 关掉这个算法"。这 22 个名字里，只有
+  # aes/md5/sha/hmac 四个没有对应的 no-X 条目（算法进了 provider），ripemd 是
+  # rmd160 的弃用别名 —— 于是"目录探测失败"最终表现为
+  #   Deprecated: no-ripemd   +   Unsupported: no-aes no-hmac no-md5 no-sha
+  # 和开关名写错长得一模一样。所以先自己查，把话讲清楚。
+  local -a miss=()
+  for b in aes md5 sha hmac ripemd; do
+    [ -d "$SRC/crypto/$b" ] || miss+=("crypto/$b")
+  done
+  if [ ${#miss[@]} -gt 0 ]; then
+    echo "[openssl] ✗ 源码树缺目录：${miss[*]}"
+    echo "          这五个是 Configure 目录探测里唯一会报错的名字，缺了必然死在 Configure。"
+    echo "          重新拉一份干净的（crypto/ 下任何目录都别动）："
+    echo "          rm -rf user/openssl/src && git clone --depth 1 -b openssl-3.0 \\"
+    echo "            https://github.com/openssl/openssl.git user/openssl/src"
+    return 1
+  fi
+
+  for attempt in 1 2 3; do
+    echo "[openssl] Configure（$ARCH，第 $attempt 次，共 ${#opts[@]} 个开关）"
+    rm -rf "$OBJ"
+    mkdir -p "$OBJ"
+    (
+      cd "$OBJ" || exit 1
+      "$SRC/Configure" "$ARCH_CFG" "${opts[@]}" \
+        CC="$CC" AR="$AR" RANLIB="$RANLIB" NM="$NM" \
+        --prefix=/usr --openssldir=/etc/ssl \
+        CFLAGS="$CFLAGS_STR"
+    ) >"$log" 2>&1
+
+    [ -f "$OBJ/Makefile" ] && break
+
+    # Configure 用 die 拒掉不认识的开关，并且一次只报一批；弃用别名只 warn。
+    mapfile -t bad < <(sed -n 's/^\*\*\*\*\* Unsupported options: *//p' "$log" \
+                       | tr ',' '\n' | tr -d ' \r' | grep -v '^$' | sort -u)
+    if [ ${#bad[@]} -eq 0 ]; then
+      echo "[openssl] ✗ Configure 失败（不是开关名的问题），日志 $log"
+      tail -20 "$log" | sed 's/^/          /'
+      return 1
+    fi
+
+    # 分清"我们传的"和"它自己补的"。后者剔不掉（下一轮它还会补），
+    # 所以不能靠重试 —— 那是死循环，正是上一版的表现。
+    local -a mine=() alien=()
+    for b in "${bad[@]}"; do
+      if printf '%s\n' "${opts[@]}" | grep -qx "$b"; then mine+=("$b"); else alien+=("$b"); fi
+    done
+
+    if [ ${#alien[@]} -gt 0 ]; then
+      echo "[openssl] ✗ Configure 自己补出来的开关：${alien[*]}"
+      echo "          它们不在脚本的开关表里 —— 来自上面说的 crypto/ 目录探测。"
+      echo "          目录明明在还报这个，说明它算出的 srcdir 不是 $SRC（srcdir 由"
+      echo "          Configure 用 dirname(\$0) 推，正常不会错）。把这个输出发我。"
+      grep -E '^\*\*\*\*\* (Deprecated|Unsupported)' "$log" | sed 's/^/          /'
+      return 1
+    fi
+
+    # 关键开关被拒 = 源码形态不对，停在这里比剔掉后编出一堆 pthread_* 引用强
+    for why in "${mine[@]}"; do
+      if printf '%s\n' "${CRITICAL_OPTS[@]}" | grep -qx "$why"; then
+        echo "[openssl] ✗ 关键开关 $why 不被这份源码接受（版本 $SRC_VER）"
+        echo "          这不是可选优化，缺了它整套构建前提不成立。换 3.0 的分支再试。"
+        return 1
+      fi
+    done
+
+    echo "[openssl]   这份源码不接受：${mine[*]} —— 剔掉重试"
+    local -a keep=()
+    local o
+    for o in "${opts[@]}"; do
+      printf '%s\n' "${mine[@]}" | grep -qx "$o" || keep+=("$o")
+    done
+    opts=("${keep[@]}")
+  done
+
+  if [ -f "$log" ] && grep -q '^\*\*\*\*\* Deprecated options:' "$log"; then
+    echo "[openssl]   弃用别名（只警告，不影响结果）：$(sed -n 's/^\*\*\*\*\* Deprecated options: *//p' "$log")"
+  fi
 
   if [ ! -f "$OBJ/Makefile" ]; then
-    echo "[openssl] ✗ Configure 失败，日志 $BASE/configure.log"
-    tail -20 "$BASE/configure.log" | sed 's/^/          /'
+    echo "[openssl] ✗ Configure 始终没产出 Makefile，日志 $log"
+    tail -20 "$log" | sed 's/^/          /'
     return 1
   fi
 
@@ -201,43 +340,84 @@ case "$STAGE" in
   probe)
     configure_openssl || exit 1
 
+    # 生成头先建出来。根 build.info 里有一长串
+    #   GENERATE[include/openssl/opensslv.h]=include/openssl/opensslv.h.in
+    # （crypto.h / ssl.h / asn1.h / x509.h / bn_conf.h ... 都是 .h.in 模板），
+    # 并且都登记在顶层 DEPEND[]（索引为空 = 无条件先建）里，落到 Makefile 就是
+    # GENERATED_MANDATORY，也就是目标 build_generated。
+    # Configure 只解析这些声明、写进 configdata.pm，**不生成文件**；文件由 make
+    # 跑 util/dofile.pl 产出到 $OBJ/include/openssl/。
+    # 少了这一步，任何 include <openssl/crypto.h> / <openssl/opensslv.h> 的 .c 都会
+    #   fatal error: openssl/opensslv.h: No such file or directory
+    # 看着像源码缺头，其实是漏了生成阶段（踩过）。
+    echo "[openssl] make build_generated（opensslv.h / crypto.h / ssl.h 等生成头）"
+    make -C "$OBJ" -j"$NPROC" build_generated >"$BASE/make_generated.log" 2>&1
+    if [ $? -ne 0 ] || [ ! -f "$OBJ/include/openssl/opensslv.h" ]; then
+      echo "[openssl] ✗ 生成头没出来，日志 $BASE/make_generated.log"
+      tail -15 "$BASE/make_generated.log" | sed 's/^/          /'
+      exit 1
+    fi
+
     # 挑 4 个文件：最底层的 mem、BN 核心、**熵源**（最担心的那条路）、时间。
-    # 熵源排在前面不是偶然：rand_unix.c 编译期就能看出它到底走 /dev/urandom 还是
-    # getrandom 分支，比运行到 openssl rand 才报错早得多。
+    # 熵源路径是 3.0 的：1.1.1 的 crypto/rand/rand_unix.c 在 3.0 已搬到
+    # providers/implementations/rands/seeding/ 下（crypto/rand/build.info 里只剩
+    # rand_lib / rand_pool / prov_seed 这些），照 1.1.1 写会得到假的"No such file"。
+    # 它编译期就决定走 getrandom 还是退化到 DEVRANDOM（/dev/urandom），比运行到
+    # openssl rand 才报错早得多 —— 刚加的 /dev/urandom 正好落在这条路上。
     #
     # 这里不用 `make <target>.o`：3.0 给每个目标加了 libcrypto-lib- 前缀
-    # （crypto/rand/libcrypto-lib-rand_unix.o），拼错就是"没有这个目标"，
-    # 白浪费一轮。直接调编译器，include 路径按 3.0 的标准给全。
+    # （providers/implementations/rands/seeding/libcrypto-lib-rand_unix.o），
+    # 拼错就是"没有这个目标"，白浪费一轮。直接调编译器，include 按 3.0 给全。
     INCS=(-I"$OBJ" -I"$OBJ/include" -I"$SRC" -I"$SRC/include" -I"$SRC/crypto"
           -I"$SRC/providers/common/include" -I"$SRC/providers/implementations/include")
 
     echo "[openssl] 探针编译（$ARCH）"
-    for f in crypto/rand/rand_unix.c crypto/mem.c crypto/bn/bn_add.c crypto/o_time.c; do
+    for f in providers/implementations/rands/seeding/rand_unix.c crypto/mem.c crypto/bn/bn_add.c crypto/o_time.c; do
       err="$BASE/probe_$(basename "$f").err"
       if "$CC" $CFLAGS_STR "${INCS[@]}" -c "$SRC/$f" -o "$BASE/probe_$(basename "${f%.c}").o" 2>"$err"; then
         echo "  ok   $f"
       else
-        n="$(grep -c 'error:' "$err" 2>/dev/null || echo 0)"
+        # grep -c 无匹配时也会打印 0 并返回 1，用 `|| echo 0` 会拼出 "0\n0"
+        n="$(grep -c 'error:' "$err" 2>/dev/null || true)"; n="${n:-0}"
         echo "  FAIL $f  ($n errors)"
         grep -E 'error:' "$err" | head -10 | sed 's/^/         /'
       fi
     done
 
+    # 熵源分支自报。这条路两个架构会分叉，光看"编译过了"看不出来：
+    # rand_unix.c 用 `#if defined(__linux) && defined(__NR_getrandom)` 决定调
+    # syscall(__NR_getrandom) 还是走 DEVRANDOM。riscv64-unknown-elf 是裸机 target，
+    # 不定义 __linux → 直接 errno=ENOSYS → 退化读 /dev/urandom；而
+    # loongarch64-unknown-linux-gnu 会定义 __linux，可能真去调 syscall()。
+    # 把最终生效的宏打出来，省得事后猜内核要不要加 getrandom。
+    echo
+    echo "[openssl] 熵源分支（预处理宏）"
+    "$CC" $CFLAGS_STR "${INCS[@]}" -E -dM \
+      "$SRC/providers/implementations/rands/seeding/rand_unix.c" 2>/dev/null \
+      | grep -E '^#define (OPENSSL_RAND_SEED_\w+|DEVRANDOM\w*|OPENSSL_SYS_UNIX|__NR_getrandom|__linux)' \
+      | sort | sed 's/^/      /'
+
     # 外部头混入检查：-H 列出所有实际被 include 的头，滤掉我们自己的和生成物，
     # 剩下的就是工具链 sysroot 里的。白名单只放编译器内建那几个（类型定义必须一致）。
     echo
     echo "[openssl] 检查有没有用到工具链 sysroot 的头（编译能过但 ABI 会错）"
-    "$CC" $CFLAGS_STR "${INCS[@]}" \
-      -H -fsyntax-only "$SRC/crypto/mem.c" 2>&1 \
-      | grep -E '^\.+ /' | sed 's/^\.* //' | sort -u \
-      | grep -vE "^($ROOT|$OBJ|$SRC)" \
-      | grep -vE '/(stddef|stdarg|stdbool|float|stdint|limits|stdatomic|iso646)\.h$' \
-      | sed 's/^/      /' >"$BASE/foreign_headers.txt"
-    if [ -s "$BASE/foreign_headers.txt" ]; then
-      echo "  ! 以下头来自工具链而非 user/include，逐个确认结构体布局是否一致："
-      cat "$BASE/foreign_headers.txt"
+    # 先确认这次 -fsyntax-only 本身通过了：编译失败时 -H 一条都不输出，谱系是空的，
+    # 会被判成"ok 全部头都来自 user/include" —— 假 ok 比不查更坏（踩过）。
+    if "$CC" $CFLAGS_STR "${INCS[@]}" -H -fsyntax-only "$SRC/crypto/mem.c" \
+         >"$BASE/hdr_include.txt" 2>&1; then
+      grep -E '^\.+ /' "$BASE/hdr_include.txt" | sed 's/^\.* //' | sort -u \
+        | grep -vE "^($ROOT|$OBJ|$SRC)" \
+        | grep -vE '/(stddef|stdarg|stdbool|float|stdint|limits|stdatomic|iso646)\.h$' \
+        >"$BASE/foreign_headers.txt"
+      if [ -s "$BASE/foreign_headers.txt" ]; then
+        echo "  ! 以下头来自工具链而非 user/include，逐个确认结构体布局是否一致："
+        sed 's/^/      /' "$BASE/foreign_headers.txt"
+      else
+        echo "  ok   全部头都来自 user/include 或 OpenSSL 自身"
+      fi
     else
-      echo "  ok   全部头都来自 user/include 或 OpenSSL 自身"
+      echo "  ✗ 参照翻译单元编译不过，头谱系没法判（这不是 ok，是没测）"
+      grep -E 'error:' "$BASE/hdr_include.txt" | head -8 | sed 's/^/      /'
     fi
     echo
     echo "[openssl] 日志: $BASE/probe_*.err"
@@ -254,7 +434,8 @@ case "$STAGE" in
         cp "$OBJ/$a" "$OUT/$a"
         echo "[openssl] ✓ $a $(wc -c <"$OUT/$a") bytes"
       else
-        echo "[openssl] ✗ 未产出 $a（错误数 $(grep -c 'error:' "$BASE/make_libs.log" 2>/dev/null || echo 0)）"
+        ne="$(grep -c 'error:' "$BASE/make_libs.log" 2>/dev/null || true)"; ne="${ne:-0}"
+        echo "[openssl] ✗ 未产出 $a（错误数 $ne）"
       fi
     done
     scan_undefined
@@ -272,17 +453,20 @@ case "$STAGE" in
     fi
 
     # libc 裸件照 git 那一套。只有 string.c 必须在场（errno 的唯一真定义 +
-    # memset/memcpy + isatty）；其余 libc 都在头里 inline 进去了。
-    echo "[openssl] 编 libc 裸件（crt0 / syscall / string）"
+    # memset/memcpy + isatty）；mem.c 提供堆状态（malloc_head / slab_freelist），
+    # 少了它就是 undefined reference —— libcrypto 处处 malloc，必然撞上。
+    echo "[openssl] 编 libc 裸件（crt0 / syscall / string / mem）"
     "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/crt0_$ARCH.S"    -o "$BASE/_crt0.o"    || exit 1
     "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/syscall_$ARCH.S" -o "$BASE/_syscall.o" || exit 1
     "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/string.c"        -o "$BASE/_string.o"  || exit 1
+    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
+      -I"$ROOT/user/include" -c "$ROOT/user/lib/mem.c"           -o "$BASE/_mem.o"     || exit 1
 
     LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"
-    LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_syscall.o"
+    LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o"
     LINK_FLAGS="$LINK_FLAGS -T $ROOT/user/linker-$ARCH.ld"
 
     rm -f "$OBJ/apps/openssl"
