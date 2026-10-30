@@ -13,6 +13,7 @@ pub mod fatfs;
 pub mod flag;
 pub mod rsext4fs;
 pub mod null;
+pub mod urandom;
 
 //pub mod initramfs;
 mod stdio;

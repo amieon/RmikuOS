@@ -35,11 +35,12 @@ pub fn null() -> FileRef {
 
 /// 绝对路径 → 内核内置设备节点（不是真文件系统里的东西）。
 ///
-/// 只列真正实现了的：`/dev/zero`、`/dev/tty` 都还没有，宁可让 open 报
-/// ENOENT，也不返回一个行为不对的东西。
+/// 这张表是 `fs::open` 唯一的内置设备入口，`/dev/null` 和 `/dev/urandom`
+/// 都从这里出。只列真正实现了的：`/dev/zero`、`/dev/tty` 都还没有，宁可让
 pub fn builtin_device(abs: &str) -> Option<FileRef> {
     match abs {
         "/dev/null" => Some(null()),
+        "/dev/urandom" => Some(super::urandom::urandom()),
         _ => None,
     }
 }

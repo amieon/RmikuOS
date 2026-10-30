@@ -23,8 +23,9 @@ pub const STAT_TYPE_SOCKET: u8 = 5;
 pub const STAT_TYPE_SYMLINK: u8 = 6;
 
 /// 字符设备的"次设备号"。值随手按 Linux 惯例取, 只要内核内不重复即可:
-/// /dev/null = makedev(1,3), 控制台 = makedev(5,0)。
+/// /dev/null = makedev(1,3), /dev/urandom = makedev(1,9), 控制台 = makedev(5,0)。
 pub const DEV_NULL: u32 = 0x0103;
+pub const DEV_URANDOM: u32 = 0x0109;
 pub const DEV_CONSOLE: u32 = 0x0500;
 
 // ===== 权限位(低 12 位) =====
