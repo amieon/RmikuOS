@@ -57,6 +57,11 @@ qemu_init() {
 
 # 生成 QEMU 启动命令(唯一真源: 三块盘的挂载顺序在此)
 # 顺序与 run.sh 一致: blk0=rootfs(只读) / blk1=FAT / blk2=可写数据盘
+# virtio-rng-pci 必须有: /dev/urandom 背后就是它, OpenSSL 的 RAND 只有这一个熵源。
+# 少了它 openssl rand / 需要密钥的命令会直接 "no seed source"; run.sh 一直有,
+# 这份以前漏了, 于是"手动能跑、CI 不能跑"。
+# 走 PCI 而不是 MMIO: riscv 的 virtio-mmio 地址是按 -device 顺序**反着分的**,
+# 再塞一个 mmio 设备会把 blk0/blk1/blk2 的地址整体挪位。
 qemu_make_cmd() {
   local arch="$1" data_img="$2"
   if [ "$arch" = "riscv64" ]; then
@@ -66,6 +71,7 @@ qemu_make_cmd() {
       -drive file=${ROOTFS_IMG},format=raw,if=none,id=blk0 -device virtio-blk-device,drive=blk0 \
       -drive file=${FAT_IMG},format=raw,if=none,id=blk1 -device virtio-blk-device,drive=blk1 \
       -drive file=${data_img},format=raw,if=none,id=blk2 -device virtio-blk-device,drive=blk2 \
+      -device virtio-rng-pci,disable-legacy=on \
       -netdev user,id=net0,hostfwd=tcp::8080-:8080,tftp=${REPO_ROOT}/tftpboot \
       -device virtio-net-pci,disable-legacy=on,netdev=net0,romfile= \
       -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap < ${IN_FIFO}"
@@ -76,6 +82,7 @@ qemu_make_cmd() {
       -drive file=${ROOTFS_IMG},format=raw,if=none,id=blk0 -device virtio-blk-pci,drive=blk0,disable-legacy=on \
       -drive file=${FAT_IMG},format=raw,if=none,id=blk1 -device virtio-blk-pci,drive=blk1,disable-legacy=on \
       -drive file=${data_img},format=raw,if=none,id=blk2 -device virtio-blk-pci,drive=blk2,disable-legacy=on \
+      -device virtio-rng-pci,disable-legacy=on \
       -netdev user,id=net0,hostfwd=tcp::8081-:8080,tftp=${REPO_ROOT}/tftpboot \
       -device virtio-net-pci,disable-legacy=on,netdev=net0,romfile= \
       -object filter-dump,id=f1,netdev=net0,file=/tmp/rmiku.pcap < ${IN_FIFO}"

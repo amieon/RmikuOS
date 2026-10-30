@@ -1024,6 +1024,42 @@ def build_git(arch: str):
     print(f"[user] git: git.elf {elf.stat().st_size} bytes -> /bin/git")
 
 
+# ==================== OpenSSL 构建 ====================
+
+def build_openssl(arch: str):
+    """编译 openssl 可执行文件 —— 放进 /bin/openssl。
+
+    和 git 一样，Configure 开关、CFLAGS、链接参数只在 scripts/openssl_build.sh
+    里写一份，这边只负责"调用 + 收产物"。增量由 OpenSSL 自己的 Makefile 提供
+    （configure_openssl 里按签名跳过重复 Configure，改了开关才 rm -rf 重配）。
+
+    只跑 bin 阶段：它会连带 make 出 libcrypto.a/libssl.a（apps/openssl 的依赖），
+    所以干净树上也能一次到底，不必先手工跑 lib。
+
+    失败**不中断整体构建**：openssl 是可选的，其余程序不该陪葬。
+    """
+    src = USER_DIR / "openssl" / "src"
+    if not (src / "Configure").exists():
+        print(f"[user] no openssl source at {src}, skip")
+        return
+
+    out_dir = BUILD_DIR / arch / "openssl"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    script = ROOT / "scripts" / "openssl_build.sh"
+
+    print(f"[user] openssl: 调用 {script.relative_to(ROOT)} {arch} bin")
+    proc = subprocess.run(["bash", str(script), arch, "bin"], cwd=str(ROOT))
+
+    elf = out_dir / "openssl.elf"
+    if proc.returncode != 0 or not elf.exists() or elf.stat().st_size == 0:
+        print("[user] openssl: ✗ 没编出来（其余程序照常构建）")
+        print(f"[user] openssl:   完整日志 {out_dir / 'make_bin.log'}")
+        print(f"[user] openssl:   单独重试: bash scripts/openssl_build.sh {arch} bin")
+        return
+
+    print(f"[user] openssl: openssl.elf {elf.stat().st_size} bytes -> /bin/openssl")
+
+
 # ==================== TCC 构建(从 user/tcc/build_tcc.py 融合) ====================
 
 def gen_tccdefs(src: Path, dst: Path):
@@ -1490,6 +1526,7 @@ def main():
         deploy_libz(args.arch, _libz)
     build_sqlite3(args.arch)
     build_git(args.arch)
+    build_openssl(args.arch)
     build_gcn(args.arch)
     build_java_projects(args.arch)
 

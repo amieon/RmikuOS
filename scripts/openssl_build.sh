@@ -455,6 +455,30 @@ configure_openssl() {
   echo "[openssl]   日志 $BASE/configure.log"
 
   ensure_generated || return 1
+  scrub_cnf_ex_libs
+}
+
+# ---------------------------------------------------------------------------
+# 清掉目标配置塞进来的尾巴库（-ldl 就在这里）。
+#
+# 3.0 的 unix-Makefile.tmpl 是这么串的：
+#   CNF_EX_LIBS = <target 的 ex_libs> <config 的 ex_libs>     ← 唯一直接来源
+#   EX_LIBS     = <config 的 LDLIBS>                          ← 我们是空串
+#   BIN_EX_LIBS = $(CNF_EX_LIBS) $(EX_LIBS)                   ← 程序链接规则的尾部
+# linux-generic64 的 ex_libs 写死了 "-ldl"，所以 -ldl 坐在 CNF_EX_LIBS 里。
+# **覆盖 EX_LIBS 是白费的**（那个变量本来就是空的），这是上一版踩的坑：
+# 日志里 "Makefile 原值：读不到" 其实就是空值，误判成"读不到"。
+#
+# no-dso / no-threads 只关 DSO 与线程的**功能实现**，不改这个字符串，
+# 所以只能自己清。清完 plain `make apps/openssl` 也能链（不依赖命令行覆盖）。
+# ---------------------------------------------------------------------------
+scrub_cnf_ex_libs() {
+  local mk="$OBJ/Makefile" old
+  [ -f "$mk" ] || return 1
+  old="$(sed -n 's/^CNF_EX_LIBS=//p' "$mk" | head -1 | sed 's/^ *//; s/ *$//')"
+  [ -n "$old" ] || return 0
+  sed -i 's/^CNF_EX_LIBS=.*/CNF_EX_LIBS=/' "$mk"
+  echo "[openssl]   CNF_EX_LIBS: \"$old\" → 清空（目标机没有 libdl/libpthread/libz）"
 }
 
 # ---------------------------------------------------------------------------
@@ -719,15 +743,23 @@ case "$STAGE" in
     LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"
     LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o"
     LINK_FLAGS="$LINK_FLAGS -T $ROOT/user/linker-$ARCH.ld"
-    # libcrypto 里有地方引用 __ctzdi2（RV64 基础 ISA 没有 ctz，Zbb 才有）→ 靠 libgcc
-    # 兜住。gcc 驱动即使带 -nostdlib 也会自动塞一份 -lgcc，但那次是在**所有 .o/.a
-    # 之前**，静态库只向后找定义，等于没生效。所以自己再补一份在尾部。
-    LINK_FLAGS="$LINK_FLAGS -lgcc"
+    # __ctzdi2 要 libgcc，位置见下面的 EX_LIBS 覆盖说明
+    # OpenSSL 的程序链接规则（unix-Makefile.tmpl 的 obj2bin）：
+    #   $(CC) $(BIN_CFLAGS) <linkflags>$(BIN_LDFLAGS) -o $bin $objs $linklibs$(BIN_EX_LIBS)
+    # 尾部是 $(BIN_EX_LIBS) = $(CNF_EX_LIBS) $(EX_LIBS)，所以：
+    # 1) -ldl 在 CNF_EX_LIBS 里（target 的 ex_libs 硬写），由 scrub_cnf_ex_libs 清掉；
+    #    这里再传一次空值做兜底（Configure 被跳过时 Makefile 可能还是旧的）。
+    # 2) -lgcc 塞进 EX_LIBS，落在 .a 之后。写进 LDFLAGS 无效（那里在最前面，
+    #    静态库只向后找定义），gcc 驱动自带的那份同样在最前面。
+    BIN_EX_LIBS="-lgcc"
+    old_ex="$(sed -n 's/^CNF_EX_LIBS=//p' "$OBJ/Makefile" 2>/dev/null | head -1 | sed 's/^ *//; s/ *$//')"
+    scrub_cnf_ex_libs
 
     rm -f "$OBJ/apps/openssl"
     echo "[openssl] make apps/openssl（-j$NPROC）"
-    make -C "$OBJ" -j"$NPROC" LDFLAGS="$LINK_FLAGS" apps/openssl \
-      2>&1 | tee "$BASE/make_bin.log" | tail -40
+    make -C "$OBJ" -j"$NPROC" LDFLAGS="$LINK_FLAGS" \
+      CNF_EX_LIBS="" EX_LIBS="$BIN_EX_LIBS" \
+      apps/openssl 2>&1 | tee "$BASE/make_bin.log" | tail -40
     echo
     echo "[openssl] 日志: $BASE/make_bin.log"
 
@@ -737,8 +769,21 @@ case "$STAGE" in
       echo "[openssl]   下一步在 guest 里先跑： openssl list -providers"
       echo "[openssl]   看不到 default 就别往下测了，任何算法都会说找不到"
     else
-      echo "[openssl] ✗ 链接失败（错误数 $(grep -c 'error:\|undefined reference' "$BASE/make_bin.log" 2>/dev/null || echo 0)）"
-      grep -E 'undefined reference|error:' "$BASE/make_bin.log" | head -20 | sed 's/^/      /'
+      echo "[openssl] ✗ 链接失败（错误数 $(grep -c 'error:\|undefined reference\|cannot find' "$BASE/make_bin.log" 2>/dev/null || echo 0)）"
+      grep -E 'undefined reference|error:|cannot find' "$BASE/make_bin.log" | head -20 | sed 's/^/      /'
+
+      # 先分清"缺库"和"缺符号"，两者处置完全相反：
+      #   缺库  = 命令行要一个目标机上不存在的 .so/.a，改 make 变量
+      #   缺符号 = 真缺实现，补 user/include/*.h
+      if grep -q 'cannot find -l' "$BASE/make_bin.log"; then
+        echo
+        echo "[openssl] 这是「找不到库」，不是 libc 缺口："
+        grep -o 'cannot find -l[A-Za-z0-9_+.-]*' "$BASE/make_bin.log" | sort -u | sed 's/^/        /'
+        echo "        CNF_EX_LIBS 已清空（Makefile 原值：${old_ex:-空}），EX_LIBS=$BIN_EX_LIBS"
+        echo "        若仍报，说明这个 -l 还来自别的变量。查生成 Makefile 里"
+        echo "        LIB_EX_LIBS / DSO_EX_LIBS / BIN_EX_LIBS / LDFLAGS 四个值。"
+      fi
+
       if grep -q 'wait_for_async\|fd_set\|FD_SET' "$BASE/make_bin.log"; then
         echo
         echo "[openssl] apps.c 的 wait_for_async 被编进来了。它的 guard 和 sys/select.h 的"
@@ -746,9 +791,19 @@ case "$STAGE" in
         grep -n -B6 'int wait_for_async' "$SRC/apps/lib/apps.c" 2>/dev/null | sed 's/^/      /'
         grep -n 'sys/select.h' "$SRC/apps/lib/apps.c" 2>/dev/null | sed 's/^/      /'
       fi
+
+      if grep -q 'undefined reference' "$BASE/make_bin.log"; then
+        echo
+        echo "[openssl] undefined reference = 真缺符号。去重后如下："
+        grep -o "undefined reference to [\`'][^']*'" "$BASE/make_bin.log" \
+          | sed "s/^undefined reference to [\`']//; s/'$//" | sort -u | head -30 | sed 's/^/        /'
+        echo
+        echo "        libgcc 已排在 .a 之后（EX_LIBS=$BIN_EX_LIBS），所以这里剩下的都是"
+        echo "        我方 libc 真缺，补进 user/include/*.h（header-only inline）。"
+      fi
+
       echo
-      echo "[openssl] 若是 undefined reference，把它和 undefined.txt 对一遍；"
-      echo "[openssl] 链接期的 -lgcc 缺口要手工加：make ... LDFLAGS=\"$LINK_FLAGS -lgcc\""
+      echo "[openssl] 完整日志：$BASE/make_bin.log"
       exit 1
     fi
     ;;

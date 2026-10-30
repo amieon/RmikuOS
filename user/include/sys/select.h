@@ -86,11 +86,16 @@ static inline int select(int nfds, fd_set *readfds, fd_set *writefds,
     }
 
     int rc = poll(pfd, (nfds_t)n, ms);
-    if (rc <= 0) return rc;      /* 0 = 超时；-1 = 错误 */
+    if (rc < 0) return -1;       /* errno 由 poll 设置 */
 
+    /* rc >= 0 时集合一律先清空，再按 revents 把就绪的位放回去。
+     * 超时（rc == 0）也必须清：Linux 内核就是这样写回的，而"留着入参原样返回"
+     * 会让调用方照着 FD_ISSET 判断时，把"一个 fd 都没就绪"误读成"这些 fd 都能读"
+     * —— select 返回 0 却被当成有数据，接下来 read 阻塞住，症状像丢事件。 */
     if (readfds)   FD_ZERO(readfds);
     if (writefds)  FD_ZERO(writefds);
     if (exceptfds) FD_ZERO(exceptfds);
+    if (rc == 0)   return 0;
 
     int ready = 0;
     for (int i = 0; i < n; i++) {

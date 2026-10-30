@@ -214,6 +214,25 @@ if [ -d "$GIT_TPL" ]; then
   fi
 fi
 
+# OpenSSL（专门构建目录 user/build/<arch>/openssl/）
+# 产物固定 openssl.elf -> /bin/openssl。同目录还有 libcrypto.a(8.9M)/libssl.a(1.4M)
+# 和几千个 .o —— 这里只挑 *.elf。内核里没有"-l 链接期"，那两个 .a 对 guest 没用，
+# 真要给 guest 里编译用再单独装（4M 的镜像不该背 10M 的静态库）。
+#
+# 运行时期待的三样，别处已经备好：
+#   /dev/urandom  kernel/src/fs/urandom.rs（RAND 的 DEVRANDOM 第一项，唯一熵源）
+#   /etc/ssl      OPENSSLDIR。没 openssl.cnf 时 OpenSSL 按"无配置"处理，不是错误
+#   /bin/sh       PATH 里有就行（-engine / CA 相关子命令才真的 fork）
+if [ -d "user/build/${ARCH}/openssl" ]; then
+  for f in user/build/${ARCH}/openssl/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/bin/$base"
+    echo "  [openssl] $base -> /bin/$base"
+  done
+  mkdir -p "$ROOT/etc/ssl"
+fi
+
 # Java 字节码（JVM 项目）
 for proj_dir in user/java/*; do
   [ -d "$proj_dir" ] || continue
