@@ -265,6 +265,89 @@ static inline char *strdup(const char *s) {
     return p;
 }
 
+/* ---------------------------------------------------------------------------
+ * 分词与拷贝族的边角（2026-10-31 补）
+ *
+ * strtok 是 OpenSSL apps/rehash.c:568 撞出来的。注意：GCC 14 起
+ * -Wimplicit-function-declaration 默认就是 **error**，所以 apps/ 这一层
+ * 缺一个函数就卡一个编不过，没有"只是警告"这回事。
+ * 同族的 strtok_r / strsep / strndup 与 memccpy / stpcpy 一起补齐 ——
+ * 都是纯字符串运算，不碰 syscall，风险最低。
+ * --------------------------------------------------------------------------- */
+
+/* memccpy：拷到 c 出现为止。返回值是 dest 里 c 之后那一个字节的地址，
+ * 没找到 c 返回 NULL —— **不能当"拷了多少字节"用**，这是它和 memcpy 最容易
+ * 搞混的地方（拷贝长度一律按 n 预留，返回值只用来判断"有没有遇到 c"）。 */
+static inline void *memccpy(void *dst, const void *src, int c, size_t n) {
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    for (size_t i = 0; i < n; i++) {
+        d[i] = s[i];
+        if (s[i] == (unsigned char)c) return d + i + 1;
+    }
+    return 0;
+}
+
+/* stpcpy：和 strcpy 一样连 '\0' 一起拷，但返回指向 dest 结尾 '\0' 的指针
+ * （连续拼接时省一次 strlen）。注意返回的是 dest + strlen(src)，不是 dest。 */
+static inline char *stpcpy(char *dst, const char *src) {
+    while ((*dst = *src) != '\0') { dst++; src++; }
+    return dst;
+}
+
+static inline char *strndup(const char *s, size_t maxlen) {
+    if (!s) return 0;
+    size_t n = strnlen(s, maxlen);
+    char *p = (char *)malloc(n + 1);
+    if (!p) return 0;
+    memcpy(p, s, n);
+    p[n] = '\0';
+    return p;
+}
+
+/* strtok：不可重入，状态放在函数内 static —— **每个 TU 一份**。
+ * 这和 glibc 的"进程内唯一状态"不同，但方向是更安全：两个 TU 交替分词不会互相
+ * 踩坏（POSIX 本来就把跨库交替调用列为未定义行为）。要在同一段代码里嵌套分词，
+ * 用 strtok_r。 */
+static inline char *strtok(char *s, const char *delim) {
+    static char *save = (char *)0;
+    if (s) save = s;
+    if (!save) return (char *)0;
+    save += strspn(save, delim);          /* 前导分隔符：连续的只算一个 */
+    if (*save == '\0') { save = (char *)0; return (char *)0; }
+    char *tok = save;
+    save += strcspn(save, delim);
+    if (*save != '\0') { *save = '\0'; save++; }
+    else save = (char *)0;                /* 已经到串尾，下次调用直接 NULL */
+    return tok;
+}
+
+/* strtok_r：可重入版，状态由调用方持有。saveptr 初值必须是 NULL 或有效串。 */
+static inline char *strtok_r(char *s, const char *delim, char **saveptr) {
+    if (!saveptr) return (char *)0;
+    char *p = (s != (char *)0) ? s : *saveptr;
+    if (!p) return (char *)0;
+    p += strspn(p, delim);
+    if (*p == '\0') { *saveptr = (char *)0; return (char *)0; }
+    char *tok = p;
+    p += strcspn(p, delim);
+    if (*p != '\0') { *p = '\0'; *saveptr = p + 1; }
+    else *saveptr = (char *)0;
+    return tok;
+}
+
+/* strsep：切分点和 strtok 不同 —— **空字段会返回成 ""**（"::" 给出一个空 token），
+ * 而 strtok 会把连续分隔符全吃掉。要保留字段个数的解析必须用 strsep。 */
+static inline char *strsep(char **stringp, const char *delim) {
+    if (!stringp) return (char *)0;
+    char *s = *stringp;
+    if (!s) return (char *)0;
+    char *p = s + strcspn(s, delim);
+    if (*p != '\0') { *p = '\0'; *stringp = p + 1; }
+    else *stringp = (char *)0;
+    return s;
+}
+
 #ifdef __cplusplus
 }
 #endif

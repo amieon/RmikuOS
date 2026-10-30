@@ -18,6 +18,10 @@
 #
 # 失败不中断：和 git 一样，OpenSSL 编不出来不该让别的用户程序一起废掉。
 set -uo pipefail
+# comm 要求两边都是**字节序**排序。locale 不是 C 时 sort 的序和 comm 期待的不一致，
+# comm 会打 "not in sorted order" 然后给出垃圾结果 —— 曾经让整个缺口清单变成
+# OpenSSL 自己的 AES_* / ASN1_*，白看半天。全局钉死。
+export LC_ALL=C
 
 ARCH="${1:-riscv64}"
 STAGE="${2:-lib}"
@@ -169,11 +173,139 @@ ensure_generated() {
 }
 
 # ---------------------------------------------------------------------------
+# libc 接口自检：在编译 OpenSSL 之前，先确认**我方** user/include 到底给了什么。
+#
+# 这条检查的动因是真实反复发生的事故：我们改好了头文件，用户机器上的副本没同步，
+# 于是错误以"OpenSSL 里某个 .c 报 implicit declaration"的形式出现 —— 看着像
+# OpenSSL 用了什么偏门接口，实际是自己这份 libc 头是旧的。例子：setbuf 补进
+# stdio.h 之后，因为库阶段立刻改成不编 apps/（唯一调用者是 apps/lib/apps.c），
+# 那个修复一直没被验证，直到 crypto/rand/randfile.c 第一次调它才炸。
+#
+# 做法：一行一个符号的 `(void)name;`。**不写调用**，因为这里只关心"声明在不在"，
+# 不关心签名 —— 写成 (void)符号 就不会被任何签名变化拖下水。
+# 类型则必须真声明（union 成员要求完整类型，bio_local.h 的 s_in6 就是这么炸的）。
+#
+# 只在"缺接口/不完整类型"这类错上硬停；其它原因（工具链或宿主差异）只警告不拦，
+# 免得自检本身变成新的假故障源。
+# ---------------------------------------------------------------------------
+check_libc_surface() {
+  local f="$BASE/libc_surface.c" log="$BASE/libc_surface.log"
+  cat >"$f" <<'EOPROBE'
+/* 由 openssl_build.sh 生成，不要手改。只做"我方 libc 提供哪些接口"的存在性检查：
+ * 某一行报错 = 这个符号缺失，报错信息里带名字。 */
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
+void rk_libc_surface(void)
+{
+    /* 类型：通用地址 union 要求每个成员都是完整类型 */
+    struct sockaddr_in v4; struct sockaddr_in6 v6; struct sockaddr_un un;
+    struct sockaddr_storage ss; struct in6_addr a6; struct addrinfo ai;
+    struct stat st; struct timeval tv; struct timespec ts; fd_set fds;
+    (void)v4; (void)v6; (void)un; (void)ss; (void)a6; (void)ai;
+    (void)st; (void)tv; (void)ts; (void)fds;
+
+    /* stdio */
+    (void)setbuf; (void)setvbuf; (void)fileno; (void)fdopen;
+    (void)fopen; (void)fclose; (void)fread; (void)fwrite;
+    (void)fgets; (void)fputs; (void)fputc; (void)fflush;
+    (void)fseek; (void)ftell; (void)ferror; (void)clearerr;
+    (void)snprintf; (void)sprintf; (void)sscanf;
+    (void)printf; (void)fprintf; (void)puts; (void)putchar;
+
+    /* stdlib / 字符串 */
+    (void)malloc; (void)calloc; (void)realloc; (void)free;
+    (void)qsort; (void)bsearch; (void)getenv; (void)abort;
+    (void)strtol; (void)strtoul; (void)strtod;
+    (void)memcpy; (void)memmove; (void)memset; (void)memcmp;
+    (void)memchr; (void)strlen; (void)strcmp; (void)strncmp;
+    (void)strcpy; (void)strncpy; (void)strcat; (void)strncat;
+    (void)strchr; (void)strrchr; (void)strstr; (void)strspn;
+    (void)strcspn; (void)strdup; (void)strcasecmp; (void)strncasecmp;
+    (void)strerror;
+
+    /* 文件 / 目录 / 进程 */
+    (void)open; (void)read; (void)write; (void)close; (void)lseek;
+    (void)access; (void)unlink; (void)getpid; (void)getuid; (void)chdir;
+    (void)fsync; (void)ftruncate; (void)dup; (void)dup2; (void)pipe;
+    (void)stat; (void)fstat; (void)lstat; (void)mkdir; (void)chmod;
+    (void)umask; (void)readlink; (void)symlink; (void)link;
+    (void)opendir; (void)readdir; (void)closedir;
+    (void)signal; (void)raise; (void)kill; (void)fork; (void)execve;
+    (void)execvp; (void)waitpid; (void)getcwd; (void)isatty;
+
+    /* socket / 网络 */
+    (void)socket; (void)bind; (void)listen; (void)accept; (void)connect;
+    (void)send; (void)recv; (void)sendto; (void)recvfrom;
+    (void)getsockname; (void)getpeername;
+    (void)setsockopt; (void)getsockopt; (void)shutdown;
+    (void)select; (void)poll; (void)FD_ZERO; (void)FD_SET; (void)FD_ISSET;
+    (void)MSG_PEEK; (void)SO_ERROR; (void)SO_TYPE; (void)SO_REUSEADDR;
+    (void)inet_ntoa; (void)inet_addr; (void)inet_pton; (void)inet_ntop;
+    (void)htons; (void)htonl; (void)ntohs; (void)ntohl;
+    (void)getaddrinfo; (void)freeaddrinfo; (void)getnameinfo;
+    (void)gai_strerror; (void)gethostbyname; (void)getservbyname;
+
+    /* 时间 */
+    (void)time; (void)clock; (void)mktime; (void)localtime; (void)localtime_r;
+    (void)gmtime_r; (void)gettimeofday; (void)clock_gettime; (void)nanosleep;
+    (void)sleep; (void)usleep; (void)strftime;
+}
+EOPROBE
+
+  if "$CC" $CFLAGS_STR -Werror=implicit-function-declaration -fsyntax-only "$f" >"$log" 2>&1; then
+    return 0
+  fi
+
+  # 只把"缺接口"当成硬错。别的失败（工具链/宿主差异，例如各家 size_t 定义不同、
+  # 与调用方同名 static 函数冲突）只提示，不拦构建 —— 那些真发生时会在具体
+  # .c 上直接报错，不需要这里代劳，代劳反而变成新的假故障源。
+  local miss other
+  miss="$(grep -E 'error:' "$log" \
+          | grep -E "implicit declaration|undeclared|incomplete type" \
+          | sed -E "s/^[^:]*: //" | sort -u)"
+  if [ -z "$miss" ]; then
+    echo "[openssl] ! libc 自检没过，但不是缺接口（见 $log），继续"
+    other="$(grep -E 'error:' "$log" | head -5 | sed -E "s/^[^:]*: //" | sort -u)"
+    printf '%s\n' "$other" | sed 's/^/          /'
+    return 0
+  fi
+
+  echo "[openssl] ✗ 我方 user/include 缺接口 —— 不是 OpenSSL 的问题，是这份 libc 头旧了"
+  printf '%s\n' "$miss" | sort -u | head -12 | sed 's/^/          /'
+  echo
+  echo "          这份清单来自 scripts/openssl_build.sh 的 check_libc_surface()。"
+  echo "          典型原因是\"我们改过 user/include，但你的工作树没同步\"（setbuf、"
+  echo "          MSG_PEEK、sockaddr_in6 都这么撞过）。把 $ROOT/user/include 整目录"
+  echo "          同步过来即可，不用动 OpenSSL 源码。"
+  return 1
+}
+
+# ---------------------------------------------------------------------------
 # Configure：幂等。参数或 CFLAGS 变了就整份重建（不是 make clean ——
 # configuration.h 变了必须重编全部 .o，而 make 不感知命令行变量变化，
 # 这条坑 git 那边已经踩过：改了 -std 但旧 .o 被静默复用）。
 # ---------------------------------------------------------------------------
 configure_openssl() {
+  # 先在"我们自己的头"这一层把话说清楚，别让缺接口以 OpenSSL 报错的形式出现。
+  check_libc_surface || return 1
+
   local sig
   sig="$(printf '%s\n' "$SRC_VER" "$ARCH_CFG" "${CNF_OPTS[@]}" "$CFLAGS_STR" "$CC" | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/.cfg.sha256" ] && [ "$(cat "$OBJ/.cfg.sha256")" = "$sig" ]; then
@@ -329,11 +461,53 @@ configure_openssl() {
 # 缺口扫描：这是整个脚本最有价值的一步。
 #
 # 为什么这份清单会这么干净：我们的 libc 是 header-only `static inline`，
-# OpenSSL 的 .c 一旦 include 到它，malloc/memcpy 就**内联进它自己的 .o**，
+# OpenSSL 的 .c 一旦 include 到它，malloc/strlen 就**内联进它自己的 .o**，
 # 根本不产生 extern 引用。所以 libcrypto.a 的 undefined 天然只包含"我们真没有的"。
 #
-# 于是可以一次拿全，不用撞一个补一个（git 那次是撞一个补一个，代价很大）。
+# 但有两类必须扣掉，否则清单会变成几千行垃圾（两类都真的踩过）：
+#   1. 我方**有实体定义**的符号：lib/string.c 的 memcpy/memset/isatty、
+#      lib/mem.c 的 malloc 家族。GCC 即使在 -fno-builtin 下也会为"结构体整体
+#      赋值/清零"生成 memcpy/memset 调用，这些引用本来就该由 lib/*.c 在链接期
+#      兜住 —— 不是缺口。手写白名单会过期（per-TU 堆那次就把 malloc 从"inline"
+#      变成了"实体定义"），所以直接拿 CC 编一遍 user/lib/*.c 再 nm。
+#   2. 排序必须是**字节序**（见文件头 LC_ALL=C）。否则 comm 打
+#      "not in sorted order" 并给出乱的结果：整份清单会变成 OpenSSL 自己的
+#      AES_* / ASN1_*，看着像"要补几百个加密函数"。
 # ---------------------------------------------------------------------------
+
+# 我方"非 inline、靠 lib/*.c + lib/*.S 在链接期提供"的符号。
+# .S 必须一起编：syscall3/syscall6/rk_sigreturn_trampoline 全在
+# syscall_$ARCH.S 里（头里只有声明），漏掉它们就会被当成"要补的缺口"。
+# 只编当前架构那一份，另一架构的 .S 拖进来会白给一堆同名符号。
+libc_out_of_line() {
+  local d="$BASE/libc_objs" ok=1 c
+  mkdir -p "$d"
+  for c in "$ROOT"/user/lib/*.c; do
+    "$CC" $CFLAGS_STR -I"$ROOT/user" -c "$c" -o "$d/$(basename "${c%.c}").o" 2>/dev/null || ok=0
+  done
+  if [ "$ok" != 1 ]; then
+    return 1
+  fi
+  for c in "$ROOT"/user/lib/*_"$ARCH".S; do
+    [ -f "$c" ] || continue
+    # .S 编不过是次要损失（退回"没过滤 .S"而已），别让它把整个过滤拖没
+    "$CC" $CFLAGS_STR -I"$ROOT/user" -c "$c" -o "$d/$(basename "${c%.S}").o" 2>/dev/null || true
+  done
+  "$NM" --defined-only "$d"/*.o 2>/dev/null | awk 'NF >= 3 {print $3}' | sort -u
+}
+
+# libgcc 辅助函数的形态：__<类型或操作><模式><宽度>，如 __ctzdi2 / __udivti3 /
+# __extendhfsf2 / __eqdf2。只认 *ti3 会漏掉 __ctzdi2 这类（RV64 基础 ISA 没有
+# ctz，必须调 libgcc），于是它被错报成"要补的 libc 函数"。
+GCC_RT_RE='^__(add|sub|mul|multi|div|udiv|mod|umod|neg|ashl|ashr|lshr|clz|ctz|ffs|popcount|parity|clrsb|bswap|cmp|eq|ne|lt|le|gt|ge|extend|trunc|fix|float)[a-z]*[0-9]{0,3}$|^__atomic_|^__sync_|^__stack_chk|^__gcc_|^__clear_cache$|^__enable_execute_stack$'
+
+# 头文件里以 static inline 形式给出的函数名（用来判断"头到底有没有生效"）
+libc_inline_names() {
+  grep -rhoE 'static +inline +[A-Za-z_][A-Za-z0-9_ ]*\**[ ]*[A-Za-z_][A-Za-z0-9_]*[ ]*\(' \
+    "$ROOT/user/include" 2>/dev/null \
+    | sed -E 's/.*[ *]([A-Za-z_][A-Za-z0-9_]*)[ ]*\($/\1/' | sort -u
+}
+
 scan_undefined() {
   local -a libs=()
   [ -f "$OBJ/libcrypto.a" ] && libs+=("$OBJ/libcrypto.a")
@@ -345,28 +519,47 @@ scan_undefined() {
 
   "$NM" -u "${libs[@]}" 2>/dev/null | awk '$1 == "U" {print $2}' | sort -u >"$BASE/u.txt"
   "$NM" --defined-only "${libs[@]}" 2>/dev/null | awk 'NF >= 3 {print $3}' | sort -u >"$BASE/d.txt"
-  comm -23 "$BASE/u.txt" "$BASE/d.txt" >"$BASE/undefined.txt"
+  # 两个 .a 内部消化不了的 = 真·外部依赖
+  comm -23 "$BASE/u.txt" "$BASE/d.txt" >"$BASE/ext.txt"
 
-  local total; total="$(wc -l <"$BASE/undefined.txt")"
-  echo
-  echo "[openssl] 外部依赖 $total 个 → $BASE/undefined.txt"
+  local total n_ool=0 n_miss=0
+  total="$(grep -c . "$BASE/ext.txt" || true)"
 
-  # ---- 第一类：本该被 inline 掉的。出现在这里 = 头文件没生效，不是"缺函数" ----
-  local leaked
-  leaked="$(grep -E '^(malloc|calloc|realloc|free|memcpy|memmove|memset|memcmp|strlen|strcmp|strncmp|strcpy|strncpy|strdup|snprintf|sprintf|printf|fprintf|abort|qsort|bsearch|time|getenv|isatty)$' \
-            "$BASE/undefined.txt" || true)"
-  if [ -n "$leaked" ]; then
-    echo
-    echo "  ✗ 这些符号我们有 inline 实现却出现在 extern 引用里："
-    printf '%s\n' "$leaked" | sed 's/^/      /'
-    echo "    → 不是缺函数，是头文件根本没被用上（-I 顺序 / -nostdinc）。"
-    echo "      这种状态下链接到的是工具链自带的那套 libc，跨库 free 会崩。先解决这个。"
+  # 扣掉我方实体定义（lib/*.c 在链接期兜住的那批）
+  if libc_out_of_line >"$BASE/ool.txt" && [ -s "$BASE/ool.txt" ]; then
+    comm -23 "$BASE/ext.txt" "$BASE/ool.txt"    >"$BASE/ext2.txt"
+    n_ool="$(comm -12 "$BASE/ext.txt" "$BASE/ool.txt" | grep -c . || true)"
+  else
+    echo "  ! user/lib/*.c 编不过，跳过\"实体定义\"过滤（清单里会出现 memcpy/malloc 之类误报）"
+    cp "$BASE/ext.txt" "$BASE/ext2.txt"
   fi
 
-  # ---- 第二类：gcc 运行时，链接加 -lgcc / 调整 CFLAGS 就好，不是 libc 的事 ----
+  # 头里声明了 inline、却没被内联进去 = 这个 TU 拿到的不是我们的头
+  libc_inline_names >"$BASE/inline_names.txt"
+  comm -12 "$BASE/ext2.txt" "$BASE/inline_names.txt" >"$BASE/leaked.txt"
+
+  # 真缺的 = 剩下的，去掉 gcc 运行时
+  comm -23 "$BASE/ext2.txt" "$BASE/leaked.txt" \
+    | grep -vE "$GCC_RT_RE" \
+    >"$BASE/undefined.txt" || true
+  n_miss="$(grep -c . "$BASE/undefined.txt" || true)"
+
+  echo
+  echo "[openssl] 外部依赖 $total 个 → 我方 lib/*.c|*.S 已提供 $n_ool 个，还剩 $n_miss 个"
+  echo "          明细：$BASE/undefined.txt"
+
+  # ---- 第一类：本该被 inline 掉的。出现在这里 = 头文件没生效，不是"缺函数" ----
+  if [ -s "$BASE/leaked.txt" ]; then
+    echo
+    echo "  ✗ user/include 里有 inline 实现，却没被内联进去（说明头没生效）："
+    sed 's/^/      /' "$BASE/leaked.txt"
+    echo "    → 这些 TU 拿到的不是我们的头（-I 顺序 / 系统头抢先）。"
+    echo "      编得过但 ABI 可能是工具链那套，必须先解决，别往后走。"
+  fi
+
+  # ---- 第二类：gcc 运行时，链接加 -lgcc 就好，不是 libc 的事 ----
   local rt
-  rt="$(grep -E '^__(udiv|umod|div|mod|mul|ashl|ashr|lshr)ti3$|^__atomic_|^__sync_|^__stack_chk|^__gcc_' \
-        "$BASE/undefined.txt" || true)"
+  rt="$(grep -E "$GCC_RT_RE" "$BASE/ext2.txt" || true)"
   if [ -n "$rt" ]; then
     echo
     echo "  · gcc 运行时（链接加 -lgcc；__stack_chk_* 说明 -fno-stack-protector 没生效）："
@@ -374,24 +567,25 @@ scan_undefined() {
   fi
 
   # ---- 第三类：真缺的 libc 函数 / crt 符号，要补进 user/include ----
-  local missing
-  missing="$(grep -vE '^(malloc|calloc|realloc|free|memcpy|memmove|memset|memcmp|strlen|strcmp|strncmp|strcpy|strncpy|strdup|snprintf|sprintf|printf|fprintf|abort|qsort|bsearch|time|getenv|isatty)$' \
-             "$BASE/undefined.txt" \
-           | grep -vE '^__(udiv|umod|div|mod|mul|ashl|ashr|lshr)ti3$|^__atomic_|^__sync_|^__stack_chk|^__gcc_' || true)"
-  if [ -n "$missing" ]; then
+  if [ "$n_miss" -gt 0 ]; then
     echo
-    echo "  → 需要我们补的（补进 user/include/*.h，header-only inline）："
-    printf '%s\n' "$missing" | sed 's/^/      /'
+    echo "  → 需要我们补的（$n_miss 个，补进 user/include/*.h，header-only inline）："
+    head -60 "$BASE/undefined.txt" | sed 's/^/      /'
+    [ "$n_miss" -gt 60 ] && echo "      ...（其余见 $BASE/undefined.txt）"
     echo
     echo "    补之前先想清楚每一类的归处："
     echo "      gettimeofday/clock_gettime → time.h 已有，可能只是没 include"
     echo "      open/read/write/lseek/stat → io.h / fs.h 已有"
     echo "      dlopen/dlsym/dlerror      → 不该出现，no-dso 应已剪掉"
     echo "      pthread_*                 → 不该出现，no-threads 应已剪掉"
+  else
+    echo
+    echo "  ✓ 除了 lib/*.c|*.S 与 libgcc，没有别的外部依赖 —— 库阶段的 libc 面已经够用。"
   fi
 
   echo
-  echo "[openssl] 提示：crt0 提供的 _start 等符号也会在这份清单里，链接时自然解决。"
+  echo "[openssl] 提示：上一步扣掉的是 user/lib 的实体定义；crt0 的 _start 之类的 crt 符号"
+  echo "          不在扫描范围内，链接时自然解决。下一步可以跑 bin 阶段（首次编 150+ builtin）。"
 }
 
 case "$STAGE" in
@@ -525,6 +719,10 @@ case "$STAGE" in
     LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"
     LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o"
     LINK_FLAGS="$LINK_FLAGS -T $ROOT/user/linker-$ARCH.ld"
+    # libcrypto 里有地方引用 __ctzdi2（RV64 基础 ISA 没有 ctz，Zbb 才有）→ 靠 libgcc
+    # 兜住。gcc 驱动即使带 -nostdlib 也会自动塞一份 -lgcc，但那次是在**所有 .o/.a
+    # 之前**，静态库只向后找定义，等于没生效。所以自己再补一份在尾部。
+    LINK_FLAGS="$LINK_FLAGS -lgcc"
 
     rm -f "$OBJ/apps/openssl"
     echo "[openssl] make apps/openssl（-j$NPROC）"

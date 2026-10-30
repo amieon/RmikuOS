@@ -91,14 +91,33 @@ static inline const char *gai_strerror(int err) {
     }
 }
 
+/* 老 gethostbyname 那套的错误码（glibc 也放在 <netdb.h> 里）。
+ * 没有真解析器，h_errno 永远是 NO_RECOVERY；声明成 static 是为了不产生
+ * "未定义符号"（每个翻译单元一份，反正是假值）。 */
+#ifndef HOST_NOT_FOUND
+#define HOST_NOT_FOUND 1
+#define TRY_AGAIN      2
+#define NO_RECOVERY    3
+#define NO_DATA        4
+#endif
+
+static int h_errno = 0;
+
 static inline struct hostent *gethostbyname(const char *name) {
     (void)name;
+    h_errno = NO_RECOVERY;
     return (struct hostent *)0;
 }
 
-/* 老 gethostbyname 那套的错误码。没有真解析器，值永远是 0；
- * 声明成 static 是为了不产生"未定义符号"（每个翻译单元一份，反正是假值）。 */
-static int h_errno = 0;
+/* 反向解析同样没有。必须把 h_errno 设成 NO_RECOVERY 而不是留 0：
+ * 调用方一般写 `p = gethostbyaddr(...); if (!p) switch (h_errno) ...`，
+ * 留 0 会让它把 "根本没有解析器" 误判成 "成功但没结果"。 */
+static inline struct hostent *gethostbyaddr(const void *addr, socklen_t len,
+                                           int type) {
+    (void)addr; (void)len; (void)type;
+    h_errno = NO_RECOVERY;
+    return (struct hostent *)0;
+}
 
 static inline const char *hstrerror(int err) {
     (void)err;
@@ -122,6 +141,25 @@ static inline struct servent *getservbyname(const char *name, const char *proto)
 static inline struct servent *getservbyport(int port, const char *proto) {
     (void)port; (void)proto;
     return (struct servent *)0;
+}
+
+/* 协议名（/etc/protocols）。同样没有这张表，明确返回 NULL。
+ * 注意返回 NULL 之后调用方一般会退回 IPPROTO_TCP 之类的默认值，
+ * 这比编一个 "tcp = 6" 的表更不容易骗人 —— 我们确实不知道。 */
+struct protoent {
+    char  *p_name;
+    char **p_aliases;
+    int    p_proto;
+};
+
+static inline struct protoent *getprotobyname(const char *name) {
+    (void)name;
+    return (struct protoent *)0;
+}
+
+static inline struct protoent *getprotobynumber(int proto) {
+    (void)proto;
+    return (struct protoent *)0;
 }
 
 /* getnameinfo：sockaddr -> "主机:端口" 字符串。

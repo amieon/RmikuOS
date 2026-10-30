@@ -19,9 +19,46 @@
 #define _INTTYPES_H
 
 #include <stdint.h>
+#include "stdlib.h"   /* strtoll/strtoull：inttypes 的转换函数建在它们之上 */
 
 typedef int64_t  intmax_t;
 typedef uint64_t uintmax_t;
+typedef struct { intmax_t quot, rem; } imaxdiv_t;
+
+/* C99 把这三个宏划给 <stdint.h>，gcc 自带的会定义，TCC 的不一定，兜底一份。
+ * 必须真的存在：OpenSSL apps/lib/opt.c 的 guard 就是 `defined(INTMAX_MAX)`，
+ * 少一个宏它整段 strtoimax 直接走 #else 的 opt_long fallback，函数补了也用不上。 */
+#ifndef INTMAX_MAX
+#define INTMAX_MAX  9223372036854775807LL
+#define INTMAX_MIN  (-INTMAX_MAX - 1LL)
+#define UINTMAX_MAX 18446744073709551615ULL
+#endif
+
+#define INTMAX_C(v)  v##LL
+#define UINTMAX_C(v) v##ULL
+
+/* ---- 转换 ---- */
+/* 注意：这里的 strtoimax/strtoumax 只是宽度别名（LP64 下 intmax_t 就是 long），
+ * 真正干活的 rk_strto_core 在 stdlib.h，溢出/endp 语义都在那边统一。 */
+static inline intmax_t strtoimax(const char *s, char **e, int b) {
+    return (intmax_t)strtoll(s, e, b);
+}
+
+static inline uintmax_t strtoumax(const char *s, char **e, int b) {
+    return (uintmax_t)strtoull(s, e, b);
+}
+
+/* ---- 绝对值 / 整除（C99 要求，缺了就是 imaxabs 隐式声明） ---- */
+static inline intmax_t imaxabs(intmax_t x) {
+    return x < 0 ? -x : x;
+}
+
+static inline imaxdiv_t imaxdiv(intmax_t num, intmax_t den) {
+    imaxdiv_t r;
+    r.quot = num / den;
+    r.rem  = num % den;
+    return r;
+}
 
 /* ---- 8 位 ---- */
 #define PRId8   "d"

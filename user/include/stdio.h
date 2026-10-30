@@ -647,6 +647,16 @@ static inline int setvbuf(FILE *fp, char *buf, int mode, size_t size) {
     return 0;
 }
 
+/* setbuf 是 setvbuf 的简化版（POSIX）：buf==NULL 关缓冲，否则用调用方的缓冲。
+ * 我们的 FILE 自带 buf[BUFSIZ]，没法接管外部缓冲，所以 buf!=NULL 时只切全缓冲
+ * 语义、**不**使用那块内存 —— 可见行为一致，但不能指望写进你的 buf。
+ * 实际调用几乎都是 setbuf(fp, NULL)（OpenSSL 的 unbuffer() 就是），这条等价。 */
+static inline void setbuf(FILE *fp, char *buf) {
+    if (!fp) return;
+    if (buf) setvbuf(fp, buf, _IOFBF, BUFSIZ);
+    else     setvbuf(fp, (char*)0, _IONBF, 0);
+}
+
 static inline int fileno(FILE *fp) {
     return fp ? fp->fd : -1;
 }

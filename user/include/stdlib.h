@@ -10,6 +10,7 @@
 #include "stdio.h"
 #include "env.h"      /* 真实 getenv/setenv: 基于 SYS_GETENV 系统调用 */
 #include "fs.h"       /* mkstemp/mkdtemp：POSIX 归 stdlib，实现在 fs.h */
+#include "errno.h"    /* strto* 的 EINVAL/ERANGE（io.h 已间接到，这里写明依赖） */
 
 /* ---- misc (inline) ---- */
 static inline void abort(void) {
@@ -37,52 +38,127 @@ static inline long long llabs(long long x) {
     return x < 0 ? -x : x;
 }
 
-static inline long strtol(const char *s, char **e, int b) {
-    long n = 0;
-    int sign = 1;
+/* ---- strto* 家族 --------------------------------------------------------
+ *
+ * 只有 64 位：项目仅支持 rv64/la64，long / long long / intmax_t 同宽，
+ * 所以下面用 1ULL<<63 这类字面量，不必到处 include <limits.h>。
+ *
+ * C99 有四条容易被忽略、而 OpenSSL apps/lib/opt.c 全部依赖的规则：
+ *   1. 一个数字都没转换到时不消费任何字符，*endp 指回**起点**（不是符号之后）。
+ *      opt_intmax 靠 `endp == value` 判非法，否则 "-iter -" 会被当成 0。
+ *   2. 溢出必须饱和到 LONG_MAX/LONG_MIN/ULONG_MAX 且 errno=ERANGE，不能静默回绕。
+ *      opt_uintmax 靠 `m == UINTMAX_MAX && errno == ERANGE` 拒收；回绕成 0
+ *      会被当成合法值（"0x10000000000000000" 曾静默得到 0）。
+ *   3. base=0 或 16 时 "0x" 后面没有十六进制数字，前缀不消费，endp 停在 'x'
+ *      （'0' 本身仍是合法数字，所以 endp 不是指回起点）。
+ *   4. base 不是 0 或 2..36 → errno=EINVAL，endp 指回起点。
+ *
+ * 旧实现三条全不满足，只是"能解析正常输入"。
+ */
 
-    while (*s == ' ' || *s == '\t' || *s == '\n') s++;
-    if (*s == '-')      { sign = -1; s++; }
+static inline int rk_is_xdigit(int c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+/* 解析核心：按 base b 累加到无符号 64 位，超过 limit 即饱和。
+ * is_signed 只用来定 limit（负数上限取 2^63，刚好容得下 LONG_MIN）。 */
+static inline unsigned long long rk_strto_core(const char *s, char **e, int b,
+                                               int is_signed,
+                                               int *neg_out, int *ovf_out)
+{
+    const char *start = s;
+    int neg = 0, any = 0, ovf = 0, dig;
+    unsigned long long acc = 0, limit;
+
+    *neg_out = 0;
+    *ovf_out = 0;
+
+    /* 完整六字符空白集：旧实现漏了 \r，CRLF 文本里 "123\r" 的 endp 会停在 \r，
+     * 调用方按"整串必须被消费"判断就会误判成非法输入。 */
+    while (*s == ' ' || *s == '\t' || *s == '\n' ||
+           *s == '\v' || *s == '\r' || *s == '\f')
+        s++;
+    if (*s == '-')      { neg = 1; s++; }
     else if (*s == '+') { s++; }
 
-    /* auto-detect base */
+    if (b != 0 && (b < 2 || b > 36)) {
+        errno = EINVAL;
+        if (e) *e = (char *)start;
+        return 0;
+    }
+
     if (b == 0) {
-        if (*s == '0') {
-            s++;
-            if (*s == 'x' || *s == 'X') { b = 16; s++; }
-            else                         { b = 8; }
+        if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X') && rk_is_xdigit(s[2])) {
+            b = 16;
+            s += 2;              /* 只有真跟着十六进制数字才吃掉 0x */
+        } else if (s[0] == '0') {
+            b = 8;               /* 不前进：让循环吃掉这个 '0'，纯 "0" 也算转换成功 */
         } else {
             b = 10;
         }
     } else if (b == 16) {
-        if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) s += 2;
+        if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X') && rk_is_xdigit(s[2]))
+            s += 2;
     }
+
+    if (!is_signed)  limit = (unsigned long long)-1;      /* ULONG_MAX */
+    else if (neg)    limit = 1ULL << 63;                  /* 2^63，容得下 LONG_MIN */
+    else             limit = (1ULL << 63) - 1ULL;         /* LONG_MAX */
 
     for (;;) {
-        int d;
-        if      (*s >= '0' && *s <= '9') d = *s - '0';
-        else if (*s >= 'a' && *s <= 'z') d = *s - 'a' + 10;
-        else if (*s >= 'A' && *s <= 'Z') d = *s - 'A' + 10;
+        if      (*s >= '0' && *s <= '9') dig = *s - '0';
+        else if (*s >= 'a' && *s <= 'z') dig = *s - 'a' + 10;
+        else if (*s >= 'A' && *s <= 'Z') dig = *s - 'A' + 10;
         else break;
-        if (d >= b) break;
-        n = n * b + d;
+        if (dig >= b) break;
         s++;
+        any = 1;
+        /* 先比后乘，别让 acc*b 自己溢出；溢出后继续吞数字，
+         * 这样 *endp 仍停在整串数字末尾（标准要求）。 */
+        if (acc > (limit - (unsigned long long)dig) / (unsigned long long)b) {
+            ovf = 1;
+            continue;
+        }
+        acc = acc * (unsigned long long)b + (unsigned long long)dig;
     }
-    if (e) *e = (char *)s;
-    return sign * n;
+
+    if (e) *e = (char *)(any ? s : start);
+    *neg_out = neg;
+    *ovf_out = ovf;
+    return acc;
 }
 
-static inline unsigned long strtoul(const char *s, char **e, int b) {
-    return (unsigned long)strtol(s, e, b);
-}
-
-/* LP64 下 long 与 long long 同宽, 直接转 */
 static inline long long strtoll(const char *s, char **e, int b) {
-    return (long long)strtol(s, e, b);
+    int neg, ovf;
+    unsigned long long v = rk_strto_core(s, e, b, 1, &neg, &ovf);
+
+    if (ovf) {
+        errno = ERANGE;
+        return neg ? (-(long long)((1ULL << 63) - 1ULL) - 1)   /* LONG_MIN */
+                   : (long long)((1ULL << 63) - 1ULL);        /* LONG_MAX */
+    }
+    /* 用无符号取负再转换，避免 -LONG_MIN 这种 UB */
+    return neg ? (long long)(0ULL - v) : (long long)v;
 }
 
 static inline unsigned long long strtoull(const char *s, char **e, int b) {
-    return (unsigned long long)strtoul(s, e, b);
+    int neg, ovf;
+    unsigned long long v = rk_strto_core(s, e, b, 0, &neg, &ovf);
+
+    if (ovf) {
+        errno = ERANGE;
+        return (unsigned long long)-1;
+    }
+    return neg ? (0ULL - v) : v;      /* "-1" → 全 1，C99 明文要求 */
+}
+
+/* LP64 下 long 与 long long 同宽，直接转 */
+static inline long strtol(const char *s, char **e, int b) {
+    return (long)strtoll(s, e, b);
+}
+
+static inline unsigned long strtoul(const char *s, char **e, int b) {
+    return (unsigned long)strtoull(s, e, b);
 }
 
 static inline long atol(const char *s) {

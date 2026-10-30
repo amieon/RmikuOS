@@ -16,6 +16,24 @@
 
 #include "../net.h"
 
+/*
+ * 为什么 socket 层要顺手带上 <sys/select.h>
+ *
+ * OpenSSL 的 include/internal/sockets.h 里，`#include <sys/select.h>` 只包在
+ * `#ifdef OPENSSL_SYS_AIX` 里（3.0 到 master 都是这样），可是 apps/lib/apps.c
+ * 的 wait_for_async() 直接用了 fd_set / FD_ZERO / openssl_fdset(=FD_SET) /
+ * select()。在 glibc 上它能编过，是因为 fd_set 经由我们复现不了的那条隐含链路
+ * 到达；在只认头文件字面约定的实现上就会炸成
+ *   "unknown type name 'fd_set'; did you mean 'sk_set'?"
+ * （2026-10-31 bin 阶段就撞在 apps.c:3117 上）。
+ *
+ * "选 socket 的 fd 集合"本来就是 socket 的配套动作，而 sockets.h 无论
+ * OPENSSL_SYS_UNIX 有没有定义都会包含 <sys/socket.h>，所以挂在这里是唯一
+ * 两条路都能走通的位置。glibc 没有这条包含，所以这是**有意的兼容性放宽**，
+ * 不是照抄：代价是 socket 用户多拿一个 256 位的 fd_set 类型和一个内联 select()。
+ */
+#include "select.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,6 +60,9 @@ struct sockaddr_storage {
 #define SHUT_RD   0
 #define SHUT_WR   1
 #define SHUT_RDWR 2
+
+/* recv/send 的 flags（MSG_PEEK、MSG_DONTWAIT 等）定义在 net.h，
+ * 和 recv/recvfrom 的声明放在一起 —— 只包含 net.h 的代码也必须能拿到。 */
 
 /*
  * shutdown(fd, how)：套接字半关闭（SHUT_WR 发 FIN，对端能读到 EOF）。
