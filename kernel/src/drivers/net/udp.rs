@@ -210,37 +210,58 @@ pub fn send_data(slot: usize, data: &[u8]) -> isize {
 /// 帧格式 [src_ip(4B) + src_port(2B) + data] 由上面的 input() 定义,
 /// 生产者/消费者同文件,改格式不用跨文件对账。
 pub fn recvfrom(slot: usize, buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
+    recvfrom_ex(slot, buf, false)
+}
+
+/// peek=true 时看队首但不弹出（MSG_PEEK）。
+///
+/// 数据报边界必须保住:peek 之后的下一次读要能拿到同一帧的完整内容,
+/// 所以这里只读 `front()`，不做任何 drain。
+pub fn recvfrom_ex(slot: usize, buf: &mut [u8], peek: bool) -> Option<(SocketAddr, usize)> {
     let mut table = SOCKET_TABLE.lock();
     match table.slots.get_mut(slot) {
         Some(Some(Socket::Udp(sock))) => {
-            let frame = sock.rx_queue.pop_front()?;
-            if frame.len() < 6 {
-                return None;
+            if peek {
+                split_frame(sock.rx_queue.front()?, buf)
+            } else {
+                split_frame(&sock.rx_queue.pop_front()?, buf)
             }
-            let src_ip = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
-            let src_port = u16::from_be_bytes([frame[4], frame[5]]);
-            let data = &frame[6..];
-            let len = data.len().min(buf.len());
-            buf[..len].copy_from_slice(&data[..len]);
-            Some((SocketAddr { ip: src_ip, port: src_port }, len))
         }
         _ => None,
     }
 }
 
+/// 帧 -> (来源地址, 数据长度)。借一段用，所以 peek 与消费两条路能共用。
+fn split_frame(frame: &[u8], buf: &mut [u8]) -> Option<(SocketAddr, usize)> {
+    if frame.len() < 6 {
+        return None;
+    }
+    let src_ip = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
+    let src_port = u16::from_be_bytes([frame[4], frame[5]]);
+    let data = &frame[6..];
+    let len = data.len().min(buf.len());
+    buf[..len].copy_from_slice(&data[..len]);
+    Some((SocketAddr { ip: src_ip, port: src_port }, len))
+}
+
 /// recv() 语义:与 recvfrom 同一数据源,只是不回填对端地址(对应 tcp::recv_data)。
 /// 已 connect 的 socket 由 input() 负责来源过滤。返回 n / 0(超时) / -1。
 pub fn recv_data(slot: usize, out: &mut [u8]) -> isize {
-    let mut spins = 0usize;
+    recv_data_ex(slot, out, false)
+}
+
+pub fn recv_data_ex(slot: usize, out: &mut [u8], peek: bool) -> isize {
+    /* 必须按时间算,不能数圈 */
+    let deadline = crate::timer::monotonic_us() + 2_000_000;
     loop {
         crate::drivers::net::maybe_poll();
-        if let Some((_src, n)) = recvfrom(slot, out) {
+        if let Some((_src, n)) = recvfrom_ex(slot, out, peek) {
             return n as isize;
         }
-        spins += 1;
-        if spins > 50_000_000 {
+        if crate::timer::monotonic_us() >= deadline {
             return 0; // 超时,语义同 recvfrom
         }
+        let _ = crate::task::sleep_current_and_run_next(1);
     }
 }
 

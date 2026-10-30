@@ -132,14 +132,45 @@ static inline int accept(int fd, struct sockaddr *addr, socklen_t *len) {
     return ret;
 }
 
+/* ---- recv/send 的 flags ----
+ *
+ * 数值照搬 asm-generic/socket.h
+ *
+ * 内核只接受 0 或 MSG_PEEK，传别的位返回 -EOPNOTSUPP，不静默忽略。
+ * 静默忽略 MSG_DONTWAIT 是最坏的情况：调用方等 EAGAIN，实际却阻塞到超时
+ * 拿到 0（recv 语义里 0 = 对端关闭），表现成"连接莫名断开"。
+ */
+#define MSG_OOB        0x1      /* 未实现（带外数据） */
+#define MSG_PEEK       0x2      /* ✓ 已实现 */
+#define MSG_DONTROUTE  0x4      /* 未实现 */
+#define MSG_CTRUNC     0x8      /* 只作 msghdr.msg_flags 输出位 */
+#define MSG_PROBE      0x10     /* 未实现 */
+#define MSG_TRUNC      0x20     /* 未实现 */
+#define MSG_DONTWAIT   0x40     /* 未实现：recv 均为阻塞或带超时 */
+#define MSG_EOR        0x80     /* 只作输出位 */
+#define MSG_WAITALL    0x100    /* 未实现 */
+#define MSG_FIN        0x200
+#define MSG_SYN        0x400
+#define MSG_CONFIRM    0x800
+#define MSG_RST        0x1000
+#define MSG_ERRQUEUE   0x2000   /* 未实现 */
+#define MSG_NOSIGNAL   0x4000   /* 未实现（send 本就不发 SIGPIPE，等价于恒真） */
+#define MSG_MORE       0x8000   /* 未实现 */
+#define MSG_WAITFORONE 0x10000
+#define MSG_BATCH      0x40000
+#define MSG_ZEROCOPY   0x4000000
+#define MSG_FASTOPEN   0x20000000
+#define MSG_CMSG_CLOEXEC 0x40000000
+
 /* ---- 收发 ---- */
+/* flags 目前只认 MSG_PEEK，其余位内核回 -EOPNOTSUPP（见 sys/socket.h 的说明）。
+ * 老代码传 0 不受影响：内核接受 0。 */
 static inline int send(int fd, const void *buf, int len, int flags) {
     (void)flags;
     return syscall3(SYS_NET_SEND, fd, (long)buf, len);
 }
 static inline int recv(int fd, void *buf, int len, int flags) {
-    (void)flags;
-    return syscall3(SYS_NET_RECV, fd, (long)buf, len);
+    return syscall6(SYS_NET_RECV, fd, (long)buf, len, (long)flags, 0, 0);
 }
 static inline int sendto(int fd, const void *buf, int len, int flags,
                          const struct sockaddr *dst, socklen_t dlen) {
@@ -152,8 +183,9 @@ static inline int sendto(int fd, const void *buf, int len, int flags,
 static inline int recvfrom(int fd, void *buf, int len, int flags,
                            struct sockaddr *src, socklen_t *slen) {
     struct net_peer p;
-    (void)flags; (void)slen;
-    int ret = syscall6(SYS_NET_RECVFROM, fd, (long)buf, len, (long)&p, 0, 0);
+    (void)slen;
+    int ret = syscall6(SYS_NET_RECVFROM, fd, (long)buf, len, (long)&p,
+                       (long)flags, 0);
     if (ret >= 0 && src) {
         /* 与 accept 相同:小端拼回主机序,再转网络序填 sockaddr_in */
         unsigned int ip = (unsigned)p.raw[0]

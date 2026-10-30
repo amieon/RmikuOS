@@ -374,6 +374,11 @@ pub const SO_REUSEADDR: usize = 2;
 pub const SO_TYPE: usize = 3;
 pub const SO_ERROR: usize = 4;
 
+/// recv 系列 flags 里唯一实现了的一位（值同 asm-generic/socket.h）。
+/// 其余位一律 EOPNOTSUPP:静默忽略 MSG_DONTWAIT 会把"非阻塞"变成"阻塞到超时",
+/// 那比报错难查得多。
+pub const MSG_PEEK: usize = 0x2;
+
 
 /// getsockname: 本端地址 = MY_IP + local_port(未绑定端口为 0)
 pub fn socket_getsockname(slot: usize) -> Option<SocketAddr> {

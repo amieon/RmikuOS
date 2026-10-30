@@ -56,6 +56,20 @@ static const char *test_cur_name = "test";
     printf("[FAIL] %s\n", msg); \
 } while (0)
 
+/*
+ * 跳过：依赖的外部条件没满足（没网、要宿主机配合跑 nc 等）。
+ *
+ * run_all 把退出码 77 识别为 SKIP 而不是 PASS —— 这个区分很重要：
+ * 没条件跑的测试若计进 PASS，汇总数字就是在撒谎。
+ * 只能在 main 里用（内部 return）。
+ */
+#define TEST_SKIP(reason) do { \
+    printf("[SKIP] %s\n", (reason)); \
+    printf("[TEST] %s done: %d passed, %d failed, skipped\n", \
+           test_cur_name, test_pass_count, test_fail_count); \
+    return 77; \
+} while (0)
+
 /* 比较宏全家桶:每个断言最多求值一次 actual/expect */
 #define CHECK_EQ(actual, expect, msg) do { \
     long a = (long)(actual); \

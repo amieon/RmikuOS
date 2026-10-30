@@ -6,7 +6,7 @@ use crate::drivers::net::socket::{self, SOCKET_TABLE, SocketAddr, SocketFile, re
 use crate::drivers::net::socket::SlotKind;
 use crate::drivers::net::{tcp, udp};
 use crate::task::{get_fd_flags_current, read_current_user_bytes, write_current_user_bytes};
-use super::errno::{EINVAL, ENOPROTOOPT, ENOTSOCK, EFAULT};
+use super::errno::{EINVAL, ENOPROTOOPT, ENOTSOCK, EFAULT, EOPNOTSUPP};
 
 fn get_slot_from_fd(fd: usize) -> isize{
     let mut slot = -1;
@@ -73,7 +73,23 @@ pub fn sys_net_sendto(fd: usize, buf: usize, len: usize, ip: usize, port: usize)
 ///   ② 等的时候是**空转**，一个 vCPU 被 100% 占满。TCG 多线程下宿主被这一个
 ///      线程拖慢，整个 guest（包括键盘回显）都跟着一顿一顿。
 /// 改成睡一个 tick 再回来看，等待期间 CPU 占用接近 0，也不影响键盘。
-pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> isize {
+/// recv/recvfrom 的 flags 解码。返回 Ok(peek) 或 Err(errno)。
+///
+/// 只认 MSG_PEEK，别的一位都不接受：`MSG_DONTWAIT` 若被静默忽略，
+/// 调用方以为拿到了 EAGAIN，实际却在这里阻塞到 2 秒超时返回 0（在 recv 语义里
+/// 0 等于对端关闭），错误会表现成"连接莫名断开"。宁可让它一开始就失败。
+fn recv_flags(flags: usize) -> Result<bool, isize> {
+    if flags & !socket::MSG_PEEK != 0 {
+        return Err(EOPNOTSUPP);
+    }
+    Ok(flags & socket::MSG_PEEK != 0)
+}
+
+pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize, flags: usize) -> isize {
+    let peek = match recv_flags(flags) {
+        Ok(p) => p,
+        Err(e) => return -e,
+    };
     let mut slot = get_slot_from_fd(fd);
     if slot < 0 {return -1;}
     let cap = maxlen.min(2048);
@@ -85,7 +101,7 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
     loop {
         crate::drivers::net::maybe_poll(); 
         let got = match socket::slot_kind(slot) {
-            Some(SlotKind::Udp) => udp::recvfrom(slot, &mut kbuf),
+            Some(SlotKind::Udp) => udp::recvfrom_ex(slot, &mut kbuf, peek),
             Some(SlotKind::Raw) => socket::socket_raw_recvfrom(slot, &mut kbuf),
             _ => None,
         };
@@ -175,15 +191,19 @@ pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
 }
 
 /// recv 返回 n / 0(EOF或超时) / -1
-pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize) -> isize {
+pub fn sys_net_recv(fd: usize, buf: usize, maxlen: usize, flags: usize) -> isize {
+    let peek = match recv_flags(flags) {
+        Ok(p) => p,
+        Err(e) => return -e,
+    };
     let mut slot = get_slot_from_fd(fd);
     if slot < 0 {return -1;}
     let mut kbuf = alloc::vec![0u8; maxlen.min(2048)];
     let slot = slot as usize;
     let n = match socket::slot_kind(slot) {
-        Some(SlotKind::Tcp) => tcp::recv_data(slot, &mut kbuf),
+        Some(SlotKind::Tcp) => tcp::recv_data_ex(slot, &mut kbuf, peek),
         // UDP 已 connect 的由 udp::input 负责来源过滤
-        Some(SlotKind::Udp) => udp::recv_data(slot, &mut kbuf),
+        Some(SlotKind::Udp) => udp::recv_data_ex(slot, &mut kbuf, peek),
         _ => -1,
     };
     if n <= 0 {

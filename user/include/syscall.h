@@ -105,7 +105,7 @@ extern "C" {
 #define SYS_LINKAT                   96
 #define SYS_UMASK                    97
 #define SYS_GETPAGESIZE              98   
-#define SYS_GETTID                   99 
+#define SYS_GETTID                   99   /* 当前线程 id(填的是 99 那个空位) */
 
 
 
@@ -139,6 +139,8 @@ extern "C" {
 #define SYS_GETITIMER                125 
 #define SYS_SETSID                   126
 #define SYS_GETRANDOM                127
+/* 网络组的续号：100-117 是 socket 全家，118-127 已被进程/信号/定时器占用，
+ * 不重排既有号（ABI），getsockopt 只能挂末尾。 */
 #define SYS_NET_GETSOCKOPT           128
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 

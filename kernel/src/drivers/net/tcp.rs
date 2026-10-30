@@ -936,6 +936,11 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
 }
 
 pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
+    recv_data_ex(fd, out, false)
+}
+
+/// peek=true 对应 MSG_PEEK：把数据抄给调用方但不消费。
+pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool) -> isize {
     loop {
         crate::drivers::net::poll();
         {
@@ -950,9 +955,12 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
                         out[..n].copy_from_slice(&chunk[..n]);
                         /* POSIX 语义: recv 只消费 n 字节, 剩余留在队列头,
                          * 下次 recv 继续读——否则整块弹出会让"小缓冲逐次读"的
-                         * 客户端(如 HTTP 头逐字节解析)丢数据。 */
-                        if chunk.len() > n {
+                         * 客户端(如 HTTP 头逐字节解析)丢数据。
+                         * peek 则一个字节都不消费,原块放回。 */
+                        if !peek && chunk.len() > n {
                             chunk.drain(..n);
+                        }
+                        if peek || chunk.len() > n {
                             t.rx_queue.push_front(chunk);
                         }
                         return n as isize;
@@ -968,6 +976,9 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
                 None => return -1,
             }
         }
+        /* 这里没有超时(阻塞 recv 语义),但必须让出 CPU:syscall 期间中断是关的,
+         * 该 hart 不可抢占,对端一直不发数据就等于整机卡死。 */
+        let _ = crate::task::sleep_current_and_run_next(1);
     }
 }
 
