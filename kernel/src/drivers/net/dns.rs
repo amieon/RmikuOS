@@ -281,10 +281,11 @@ pub fn resolve(name: &str) -> Option<u32> {
     log::info!("[dns] >>> query '{}' -> dns={}.{}.{}.{}", name, a, b, c, d);
 
     let mut buf = [0u8; 512];
-    let mut spins = 0usize;
     let mut sent = 1u32;
     udp::sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
 
+    let start = crate::timer::monotonic_us();
+    let mut last_resend = start;
     let result = loop {
         crate::drivers::net::poll();
         if let Some((src, n)) = udp::recvfrom(fd, &mut buf) {
@@ -307,16 +308,18 @@ pub fn resolve(name: &str) -> Option<u32> {
                 }
             }
         }
-        spins += 1;
-        if spins % 5_000_000 == 0 && sent < 4 {
+        let now = crate::timer::monotonic_us();
+        if sent < 4 && now - last_resend >= 1_000_000 {
             log::info!("[dns] resend #{} for '{}'", sent, name);
             udp::sendto(fd, SocketAddr { ip: server, port: DNS_PORT }, &query);
             sent += 1;
+            last_resend = now;
         }
-        if spins >= 20_000_000 {
+        if now - start >= 3_000_000 {
             log::warn!("[dns] timeout, give up on '{}'", name);
             break None;
         }
+        let _ = crate::task::sleep_current_and_run_next(1);
     };
 
     close_socket(fd);
@@ -360,7 +363,9 @@ pub fn resolve_many(names: &[&str]) -> Vec<Option<u32>> {
 
 
     let mut buf = [0u8; 512];
-    let mut spins = 0usize;
+    /* 同 resolve()：按时间等（批量给 4 秒），等的时候睡觉不空转 */
+    let start = crate::timer::monotonic_us();
+    let mut last_resend = start;
     while !pending.is_empty() {
         crate::drivers::net::poll();
         if let Some((src, n)) = udp::recvfrom(fd, &mut buf) {
@@ -387,8 +392,12 @@ pub fn resolve_many(names: &[&str]) -> Vec<Option<u32>> {
                 }
             }
         }
-        spins += 1;
-        if spins % 5_000_000 == 0 {
+        let now = crate::timer::monotonic_us();
+        if pending.is_empty() {
+            break;
+        }
+        if now - last_resend >= 1_000_000 {
+            last_resend = now;
             let mut to_resend: Vec<(u16, Vec<u8>)> = Vec::new();
             for (&id, &(_, ref q, sent)) in pending.iter() {
                 if sent < 4 {
@@ -403,10 +412,11 @@ pub fn resolve_many(names: &[&str]) -> Vec<Option<u32>> {
                 }
             }
         }
-        if spins >= 30_000_000 {
+        if now - start >= 4_000_000 {
             log::warn!("[dns] batch timeout, give up on {} names", pending.len());
             break;
         }
+        let _ = crate::task::sleep_current_and_run_next(1);
     }
 
     close_socket(fd);

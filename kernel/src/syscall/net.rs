@@ -70,8 +70,8 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
     if slot < 0 {return -1;}
     let cap = maxlen.min(2048);
     let mut kbuf = alloc::vec![0u8; cap];
-    let mut spins = 0usize;
     let slot = slot as usize;
+    let deadline = crate::timer::monotonic_us() + 2_000_000;
     loop {
         crate::drivers::net::maybe_poll(); 
         let got = match socket::slot_kind(slot) {
@@ -93,10 +93,11 @@ pub fn sys_net_recvfrom(fd: usize, buf: usize, maxlen: usize, info: usize) -> is
             }
             return n as isize;
         }
-        spins += 1;
-        if spins > 50_000_000 {
+        if crate::timer::monotonic_us() >= deadline {
             return 0; // 超时不是错误，用户态自己决定重试
         }
+        /* 睡而不是让出：让出等于"换个人继续空转"，整机还是满载。 */
+        let _ = crate::task::sleep_current_and_run_next(1);
     }
 }
 

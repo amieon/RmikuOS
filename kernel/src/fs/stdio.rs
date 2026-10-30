@@ -43,6 +43,9 @@ impl File for Stdin {
                 if let Some(c) = crate::io::uart::try_getchar_raw() {
                     break c;
                 }
+                /* 没键可读的空档顺便收个包：放在取键之后，这样网卡锁
+                 * 再忙也挡不住键盘采样（顺序反了就是这次卡登录的直接原因）。 */
+                crate::drivers::net::maybe_poll();
                 /* 这两个判断都要抢全局调度锁，别每轮都做：每 64 轮一次，
                  * 按键响应延迟仍是微秒级。 */
                 if spins & 0x3f == 0 {
@@ -114,7 +117,11 @@ impl File for Stdin {
                 buf[0] = if ch == b'\r' { b'\n' } else { ch };
                 1
             }
-            None => 0,
+            None => {
+                /* 只在取键落空时收包，理由同阻塞读：别让网卡锁挡住键盘 */
+                crate::drivers::net::maybe_poll();
+                0
+            }
         }
     }
 
