@@ -578,8 +578,16 @@ pub fn current_task_ppid() -> usize {
 }
 
 /// 读取当前进程的 4 个凭证(uid, euid, gid, egid)。
+///
+/// boot 阶段（`primary_init` 里读 `/var/lib/rtcstamp`、建 `/data` 目录）还没有
+/// current task。内核自己访问文件系统不属于任何进程，按 root 处理是唯一合理语义；
+/// 这里如果走 `current_tid()` 就会 panic —— 一旦 stamp 文件存在，开机恢复墙钟时
+/// `fs::open` → `check_open` → 这里，直接变成"开机只剩 boot.S 的 cCps 四个字符"。
 pub fn current_creds() -> (usize, usize, usize, usize) {
-    let tid = processor::current_tid();
+    let tid = match processor::current_tid_opt() {
+        Some(t) => t,
+        None => return (0, 0, 0, 0),
+    };
     let manager = lock_detect!(TASK_MANAGER);
     let pid = manager.pid_of_tid(tid);
     let p = manager.process(pid);
@@ -1157,7 +1165,13 @@ pub fn set_current_cwd(new_cwd: String) -> isize {
 }
 
 /// 当前进程的文件创建掩码。新建文件/目录时按 `mode & !umask` 收窄。
+///
+/// boot 阶段无 current task（见 `current_creds`），用默认的 022：
+/// 此时创建的是 `/data` 的骨架目录，权限本来就写死 0755。
 pub fn current_umask() -> u16 {
+    if processor::current_tid_opt().is_none() {
+        return 0o022;
+    }
     let pid = current_pid();
     let manager = lock_detect!(TASK_MANAGER);
     manager.process(pid).umask
@@ -2855,8 +2869,14 @@ pub fn dump_task_manager_lock_state() {
 }
 
 /// 读取当前进程的附加组列表, 返回 (groups, ngroups) 的副本。
+///
+/// boot 阶段无 current task 时返回空组（配合 `current_creds` 的 root 判定，
+/// 权限检查走 root 分支，不看附加组）。
 pub fn current_groups() -> ([usize; NGROUPS_MAX], usize) {
-    let tid = processor::current_tid();
+    let tid = match processor::current_tid_opt() {
+        Some(t) => t,
+        None => return ([0; NGROUPS_MAX], 0),
+    };
     let manager = lock_detect!(TASK_MANAGER);
     let pid = manager.pid_of_tid(tid);
     let p = manager.process(pid);
