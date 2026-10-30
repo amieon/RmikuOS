@@ -61,24 +61,29 @@ int main() {
     CHECK_EQ(tv.tv_sec, (long)t1, "gettimeofday 与 time() 一致");
     CHECK_EQ(ts.tv_sec, (long)t1, "clock_gettime(REALTIME) 与 time() 一致");
 
-    /* ---------- 3. 墙钟与单调钟同速率 ---------- */
-    isize mono0 = rk_get_time();
+    /* ---------- 3. 墙钟与单调钟同速率 ----------
+     * 单位陷阱：rk_get_time()（SYS_GET_TIME）返回的是**硬件裸计数器**，
+     * riscv 10MHz / loongarch 100MHz，不是秒。拿它当秒写"等 2 个单调秒"，
+     * 实际只等了 2 个 tick（几十纳秒），墙钟一步没走 → 这条断言必然 FAIL，
+     * 但 FAIL 的是测试不是内核。要比秒就必须用 get_time_us()（微秒）。 */
+    isize us0 = get_time_us();
     time_t wall0 = time(0);
-    while (rk_get_time() - mono0 < 2) {
-        /* 忙等 2 个单调秒：这里不能用 nanosleep，它本身就走单调钟 */
+    while (get_time_us() - us0 < 2000000) {
+        /* 忙等 2 个单调秒：不能用 nanosleep，它本身就走同一个钟 */
     }
-    isize dmono = rk_get_time() - mono0;
+    long dus = (long)(get_time_us() - us0);
+    long dsec = dus / 1000000L;
     time_t dwall = time(0) - wall0;
-    printf("[INFO] 2 秒窗口: 单调走了 %ld，墙钟走了 %ld\n",
-           (long)dmono, (long)dwall);
-    CHECK(dmono >= 2, "单调钟确实前进了至少 2 秒");
-    CHECK(dwall >= dmono - 1 && dwall <= dmono + 1,
+    printf("[INFO] 2 秒窗口: 单调走了 %ld us（%ld s），墙钟走了 %ld s\n",
+           dus, dsec, (long)dwall);
+    CHECK(dsec >= 2, "单调钟确实前进了至少 2 秒");
+    CHECK(dwall >= dsec - 1 && dwall <= dsec + 1,
           "墙钟与单调钟同速率（差 ≤1s；单位搞错会整倍数偏离）");
 
-    /* 单调钟不会因为校准而跳变：再校准一次，rk_get_time 不能受影响 */
-    isize mono_before = rk_get_time();
+    /* 单调钟不会因为校准而跳变：再校准一次，单调钟不能受影响 */
+    isize mono_before = get_time_us();
     set_wall_clock((usize)FIXED_US);
-    CHECK_GE(rk_get_time(), mono_before,
+    CHECK_GE(get_time_us(), mono_before,
              "重新校准墙钟不影响单调钟（两者锚点独立）");
 
     /* ---------- 4. stamp 写读一致 ---------- */

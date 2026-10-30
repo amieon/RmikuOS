@@ -10,7 +10,11 @@ static inline void rk_shutdown(void) {
     syscall3(SYS_SHUTDOWN, 0, 0, 0);
 }
 
-/* 单调秒（自启动起，不随 ntpdate 校准跳变）。要墙钟请用 get_epoch()。 */
+/* 单调**硬件计数器**（自启动起，不随 ntpdate 校准跳变）。
+ *
+ * 单位不是秒：riscv64 的 time CSR 跑 10MHz、loongarch 的 rdtime.d 跑 100MHz，
+ * 1 秒 = 一千万 / 一亿 次计数。把它当秒用是踩过的坑（nanosleep 因此睡 100ns
+ * 就返回）。要秒级时间请用下面的 get_time_us() 除以 1e6。 */
 static inline isize rk_get_time(void) {
     return syscall3(SYS_GET_TIME, 0, 0, 0);
 }

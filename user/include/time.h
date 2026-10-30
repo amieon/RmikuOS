@@ -89,23 +89,39 @@ static inline int gettimeofday(struct timeval *tv, struct timezone *tz) {
     return 0;
 }
 
+/* clock_gettime：REALTIME 走墙钟（校准前恒 0），其余走单调钟。
+ *
+ * get_time_us() 才是"微秒"。rk_get_time() 是**硬件裸计数器**（riscv 10MHz、
+ * loongarch 100MHz），直接塞进 tv_sec 会得到每秒跳一千万次的怪值 —— 单调钟
+ * 必须换单位后拆成 sec/nsec。 */
 static inline int clock_gettime(clockid_t clk, struct timespec *ts) {
-    /* REALTIME 要墙钟（校准前恒 0）；MONOTONIC 要 tick 计数，不能混。 */
-    time_t now = (clk == CLOCK_REALTIME) ? (time_t)get_epoch() : (time_t)rk_get_time();
-    if (ts) { ts->tv_sec = now; ts->tv_nsec = 0; }
+    if (clk == CLOCK_REALTIME) {
+        if (ts) { ts->tv_sec = (time_t)get_epoch(); ts->tv_nsec = 0; }
+        return 0;
+    }
+    long us = (long)get_time_us();
+    if (ts) {
+        ts->tv_sec  = (time_t)(us / 1000000L);
+        ts->tv_nsec = (us % 1000000L) * 1000L;
+    }
     return 0;
 }
 
 static inline int nanosleep(const struct timespec *req, struct timespec *rem) {
     if (!req) return 0;
-    long end = (long)rk_get_time() + (long)req->tv_sec;
-    while ((long)rk_get_time() < end) { /* busy spin */ }
+    /* 单位必须是微秒。用 rk_get_time() 加 tv_sec 等于"睡 tv_sec 个硬件 tick"，
+     * 在 riscv 上就是 100 纳秒 —— 所有 sleep 都变成立即返回。 */
+    long end = (long)get_time_us()
+             + (long)req->tv_sec * 1000000L
+             + (long)req->tv_nsec / 1000L;
+    while ((long)get_time_us() < end) { /* busy spin */ }
     return 0;
 }
 
 static inline int usleep(useconds_t us) {
-    long end = (long)rk_get_time() + (long)(us / 1000000UL);
-    while ((long)rk_get_time() < end) { /* busy spin */ }
+    /* 同上：原来写 us / 1000000，1 秒以内的参数直接除成 0，等于不睡。 */
+    long end = (long)get_time_us() + (long)us;
+    while ((long)get_time_us() < end) { /* busy spin */ }
     return 0;
 }
 
