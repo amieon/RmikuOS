@@ -324,7 +324,7 @@ impl File for SocketFile {
 
     fn read(&self, buf: &mut [u8]) -> isize {
         match slot_kind(self.slot) {
-            Some(SlotKind::Tcp) => tcp::recv_data(self.slot, buf),
+            Some(SlotKind::Tcp) => tcp::recv_data_ex(self.slot, buf, false, false),
             Some(SlotKind::Udp) => match udp::recvfrom(self.slot, buf) {
                 Some((addr, n)) => { udp_set_remote(self.slot, addr); n as isize }
                 None => 0, 
@@ -337,9 +337,26 @@ impl File for SocketFile {
         }
     }
 
+    /// 非阻塞读：没数据返回 -EAGAIN，不占着 hart 等。
+    /// sys_read 在 fd_flags 带 O_NONBLOCK 时走这里（curl 大量用 read 而非 recv）。
+    fn read_nonblock(&self, buf: &mut [u8]) -> isize {
+        match slot_kind(self.slot) {
+            Some(SlotKind::Tcp) => tcp::recv_data_ex(self.slot, buf, false, true),
+            Some(SlotKind::Udp) => match udp::recvfrom_ex(self.slot, buf, false) {
+                Some((_, n)) => n as isize,
+                None => -crate::syscall::errno::EAGAIN,
+            },
+            Some(SlotKind::Raw) => match socket_raw_recvfrom(self.slot, buf) {
+                Some((_, n)) => n as isize,
+                None => -crate::syscall::errno::EAGAIN,
+            },
+            None => -crate::syscall::errno::EBADF,
+        }
+    }
+
     fn write(&self, buf: &[u8]) -> isize {
         match slot_kind(self.slot) {
-            Some(SlotKind::Tcp) => tcp::send_data(self.slot, buf),
+            Some(SlotKind::Tcp) => tcp::send_data(self.slot, buf, false),
             Some(SlotKind::Udp) => udp::send_data(self.slot, buf),
             Some(SlotKind::Raw) => match raw_get_remote(self.slot) {
                 Some(ip) if socket_raw_sendto(self.slot, SocketAddr { ip, port: 0 }, buf) => {

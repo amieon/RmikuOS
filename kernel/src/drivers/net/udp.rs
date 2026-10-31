@@ -259,7 +259,8 @@ pub fn recv_data_ex(slot: usize, out: &mut [u8], peek: bool) -> isize {
             return n as isize;
         }
         if crate::timer::monotonic_us() >= deadline {
-            return 0; // 超时,语义同 recvfrom
+            /* 超时返回 -EAGAIN。recv 语义里 0 = 对端关闭/空包 */
+            return -crate::syscall::errno::EAGAIN;
         }
         let _ = crate::task::sleep_current_and_run_next(1);
     }

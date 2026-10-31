@@ -7,7 +7,7 @@ use crate::drivers::net::socket::{alloc_ephem_port, alloc_slot, release_slot, So
 use crate::fs::{POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT};
 use crate::println;
 use crate::sync::spin::Mutex;
-use crate::syscall::errno::{ECONNREFUSED, ECONNRESET};
+use crate::syscall::errno::{EAGAIN, ECONNREFUSED, ECONNRESET, EINPROGRESS, ETIMEDOUT};
 
 #[cfg(target_arch = "riscv64")]
 fn now_ms() -> u64 { (crate::timer::monotonic_time() / 10_000) as u64 }
@@ -29,6 +29,12 @@ const RTT_G_MS: u64 = 10;
 const MAX_RETRIES: u8 = 8;
 const TIME_WAIT_MS: u64 = 10_000;
 const MAX_PAYLOAD: usize = 1460;
+
+/// 阻塞 connect 的总超时。给 15 秒：够 SYN 重传打出两三轮（1s/2s/4s/8s 的
+/// RTO 退避），又不至于让一个不通的地址把调用方按住半分钟。
+/// 有 O_NONBLOCK 的调用方（libcurl 就是这样）根本走不到这里——它发完 SYN 就
+/// 拿到 -EINPROGRESS，超时由它自己的 deadline 管。
+const CONNECT_TIMEOUT_US: u64 = 15_000_000;
 
 // ---------- CUBIC 常量(RFC 9438) ----------
 const CWND_SCALE: u32 = 8;                    // 定点:1 段 = 8,便于表示 β 等小数
@@ -780,14 +786,26 @@ pub fn tick() {
 
 // ---------- 对外 API ----------
 
-pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
+/// connect(fd, ip, port, nonblock) -> 0 / -EINPROGRESS / -errno
+///
+/// `nonblock` 由 syscall 层从 fd_flags 的 O_NONBLOCK 读出来传进来。
+///
+/// 两种语义：
+///   - 阻塞：等握手结束。成功 0；对端 RST 给 -ECONNREFUSED；超时 -ETIMEDOUT。
+///   - 非阻塞：SYN 一出去就返回 -EINPROGRESS。握手结果稍后由
+///     poll(POLLOUT) 通知（见 poll_ready 的 SynSent 分支），成败读
+///     getsockopt(SO_ERROR)。**这是 POSIX 的语义，也是 libcurl 的唯一路径**：
+///     它的 Curl_nonblock_connect 把 socket 设成 O_NONBLOCK 再 connect，
+///     只看返回值是不是 EINPROGRESS。
+pub fn connect(fd: usize, ip: u32, port: u16, nonblock: bool) -> isize {
     {
         let mut table = SOCKET_TABLE.lock();
         // 先校验槽位/状态并看是否需要自动分配端口(不可变借用);
         // 分配器要传 &table,与下面的可变借用互斥,故拆成两段
         let need_port = match table.slots.get(fd).and_then(|s| s.as_ref()).and_then(as_tcp) {
             Some(t) if t.state == TcpState::Closed => t.local_port == 0,
-            _ => return -1,
+            // 已连接/正在握手时再 connect 是调用方的错，别当成"槽位不存在"
+            _ => return -crate::syscall::errno::EISCONN,
         };
         if need_port {
             // 统一走 socket 层分配器(49152+,带全表冲突检查),取代旧的 NEXT_EPHEM 盲递增
@@ -797,12 +815,12 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
                         t.local_port = p;
                     }
                 }
-                None => return -1,
+                None => return -crate::syscall::errno::EADDRINUSE,
             }
         }
         let t = match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
             Some(t) => t,
-            None => return -1,
+            None => return -crate::syscall::errno::EBADF,
         };
         let isn = next_isn();
         t.so_error = 0;                 // 新一次 connect：清掉上一次的失败原因
@@ -817,7 +835,15 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
         drop(table);
         send_segment(lp, SocketAddr { ip, port }, isn, 0, SYN, &[]);
     }
-    let mut spins = 0usize;
+    /* 非阻塞：SYN 已经上路，立刻把控制权还回去。此刻 socket 处于 SynSent，
+     * 调用方应当 poll(POLLOUT) 等握手结论，再 getsockopt(SO_ERROR) 取成败。 */
+    if nonblock {
+        return -EINPROGRESS;
+    }
+    /* 阻塞：按**时间**等，不按圈数。原来那个 `spins > 30_000_000` 有两层错，
+     * 和 recvfrom 当年被修掉的那个是同一类：① 圈数不等价于时间，同一个常数在
+     * TCG 上可能是几十秒、在真机上几毫秒；② 空转会把一个 hart 占满。 */
+    let deadline = crate::timer::monotonic_us() + CONNECT_TIMEOUT_US;
     loop {
         crate::drivers::net::poll();
         {
@@ -826,24 +852,32 @@ pub fn connect(fd: usize, ip: u32, port: u16) -> isize {
                 match t.state {
                     TcpState::Established => return 0,
                     TcpState::Closed => {
-                        // 记下失败原因给 getsockopt(SO_ERROR)。返回值仍按原来的 -1，
-                        // 不改动既有调用方的语义：这里只是"补上可查询的记录"。
                         // 收到 RST = 对端拒绝；否则是对端/链路把连接关了。
-                        t.so_error = if t.rst { ECONNREFUSED as i32 } else { ECONNRESET as i32 };
-                        return -1;
+                        // so_error 留给 getsockopt(SO_ERROR)，返回值同时带上同一个码。
+                        let e = if t.rst { ECONNREFUSED } else { ECONNRESET };
+                        t.so_error = e as i32;
+                        return -e;
                     }
                     _ => {}
                 }
             } else {
-                return -1;
+                return -crate::syscall::errno::EBADF;
             }
         }
-        spins += 1;
-        if spins > 30_000_000 {
-            close(fd);
+        if crate::timer::monotonic_us() >= deadline {
+            /* 超时后**不 close(fd)**：fd 仍归调用方，它要能 getsockopt 读到
+             * ETIMEDOUT 再自己 close。原实现直接 close 会让调用方拿着一个
+             * 已失效的 fd 继续操作，报出来的是莫名其妙的 EBADF。 */
+            let mut table = SOCKET_TABLE.lock();
+            if let Some(t) = table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
+                t.state = TcpState::Closed;
+                t.so_error = ETIMEDOUT as i32;
+            }
             log::info!("[tcp] connect timeout");
-            return -1;
+            return -ETIMEDOUT;
         }
+        /* 睡一个 tick 再回来看：让出 CPU 而不是换个人继续空转。 */
+        let _ = crate::task::sleep_current_and_run_next(1);
     }
 }
 
@@ -888,18 +922,28 @@ pub fn accept(fd: usize) -> Option<(usize, SocketAddr)> {
     }
 }
 
-pub fn send_data(fd: usize, data: &[u8]) -> isize {
-    let mut spins = 0usize;
+/// send_data(fd, data, nonblock) -> 已发送字节数 / -EAGAIN / -errno
+///
+/// 非阻塞语义：窗口满了立刻 -EAGAIN，让调用方去 poll(POLLOUT) 等，
+/// 而不是把它按在这里。libcurl 的 upload 路径就吃这个返回值。
+pub fn send_data(fd: usize, data: &[u8], nonblock: bool) -> isize {
+    /* 超时按时间算，不按圈数。原来 `spins > 50_000_000` 是 recvfrom 当年
+     * 被修掉的同一类错：同一个常数在 TCG 上是几十秒、真机上是几毫秒，
+     * 而且空转把一个 hart 占满。 */
+    let deadline = crate::timer::monotonic_us() + 5_000_000;
     loop {
         {
             let mut table = SOCKET_TABLE.lock();
             let t = match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
                 Some(t) => t,
-                None => return -1,
+                None => return -crate::syscall::errno::EBADF,
             };
             match t.state {
                 TcpState::Established | TcpState::CloseWait => {}
-                _ => return -1,
+                /* 还没建连就 send：ENOTCONN 比裸 -1 有用得多。curl 拿到它
+                 * 会走 "connection not established" 分支，拿到 -EPERM 只会
+                 * 一脸茫然。 */
+                _ => return -crate::syscall::errno::ENOTCONN,
             }
             // 有效发送窗口 = min(对端接收窗口, 拥塞窗口)。
             // cwnd 以段为单位管理,换算成字节再与在途量比较。
@@ -911,7 +955,7 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
                     .min(MAX_PAYLOAD)
                     .min(eff_wnd - in_flight);
                 if len == 0 {
-                    return -1;
+                    return -crate::syscall::errno::EINVAL;
                 }
                 let seq = t.snd_nxt;
                 t.snd_nxt = t.snd_nxt.wrapping_add(len as u32);
@@ -927,20 +971,24 @@ pub fn send_data(fd: usize, data: &[u8]) -> isize {
             }
             // 窗口满:解锁 poll,等 ACK 推进或 CUBIC 开窗
         }
-        crate::drivers::net::poll();
-        spins += 1;
-        if spins > 50_000_000 {
-            return -1;
+        if nonblock {
+            return -EAGAIN;
         }
+        crate::drivers::net::poll();
+        if crate::timer::monotonic_us() >= deadline {
+            return -ETIMEDOUT;
+        }
+        let _ = crate::task::sleep_current_and_run_next(1);
     }
 }
 
+/// 供 File::read 用的阻塞版本。调用方要 nonblock 就直接用 recv_data_ex。
 pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
-    recv_data_ex(fd, out, false)
+    recv_data_ex(fd, out, false, false)
 }
 
 /// peek=true 对应 MSG_PEEK：把数据抄给调用方但不消费。
-pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool) -> isize {
+pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool, nonblock: bool) -> isize {
     loop {
         crate::drivers::net::poll();
         {
@@ -949,7 +997,7 @@ pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool) -> isize {
                 Some(t) => {
                     if let Some(mut chunk) = t.rx_queue.pop_front() {
                         if chunk.is_empty() && t.rst {
-                            return -1;
+                            return -crate::syscall::errno::ECONNRESET;
                         }
                         let n = chunk.len().min(out.len());
                         out[..n].copy_from_slice(&chunk[..n]);
@@ -967,17 +1015,23 @@ pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool) -> isize {
                     }
                     if t.rx_shutdown { return 0; }
                     match t.state {
-                        TcpState::Closed => return if t.rst { -1 } else { 0 },
+                        TcpState::Closed => {
+                            return if t.rst { -crate::syscall::errno::ECONNRESET } else { 0 }
+                        }
                         TcpState::CloseWait | TcpState::Closing
                         | TcpState::LastAck | TcpState::TimeWait => return 0,
                         _ => {}
                     }
                 }
-                None => return -1,
+                None => return -crate::syscall::errno::EBADF,
             }
         }
-        /* 这里没有超时(阻塞 recv 语义),但必须让出 CPU:syscall 期间中断是关的,
-         * 该 hart 不可抢占,对端一直不发数据就等于整机卡死。 */
+        /* 没数据。非阻塞就立刻交代 -EAGAIN，别让调用方陪着等。 */
+        if nonblock {
+            return -EAGAIN;
+        }
+        /* 阻塞 recv: 这里没有超时(阻塞 recv 语义),但必须让出 CPU:syscall
+         * 期间中断是关的,该 hart 不可抢占,对端一直不发数据就等于整机卡死。 */
         let _ = crate::task::sleep_current_and_run_next(1);
     }
 }
@@ -992,7 +1046,7 @@ pub fn poll_ready(fd: usize, events: i16) -> i16 {
     };
 
     let mut revents = 0;
-    if t.rst {
+    if t.rst || t.so_error != 0 {
         revents |= POLLERR;
     }
 
@@ -1002,6 +1056,14 @@ pub fn poll_ready(fd: usize, events: i16) -> i16 {
             if t.rst {
                 revents |= POLLHUP;
             }
+            /* 连接失败（RST 或 connect 超时）后的 Closed 必须报 POLLOUT。
+             * POSIX：连接失败后 socket 是"可写"的，调用方正是靠 poll 等到
+             * POLLOUT 才去读 getsockopt(SO_ERROR)。不报的话 libcurl 会一直
+             * 等到自己的 CONNECTTIMEOUT，把"端口没人听、立刻被拒"错报成
+             * "连接超时" */
+            if events & POLLOUT != 0 && (t.rst || t.so_error != 0) {
+                revents |= POLLOUT;
+            }
         }
         TcpState::Listen => {
             if events & POLLIN != 0 && !t.accept_queue.is_empty() {
@@ -1009,7 +1071,9 @@ pub fn poll_ready(fd: usize, events: i16) -> i16 {
             }
         }
         TcpState::SynSent | TcpState::SynReceived => {
-            // 非阻塞 connect 尚未实现:握手中 neither readable nor writable。
+            /* 握手中：既不可读也不可写。是 POSIX 的规定 ——
+             * connect 完成前 socket 不可写，完成之后才转成 Established 或
+             * Closed+SO_ERROR，由上面两个分支报 POLLOUT。 */
         }
         TcpState::Established | TcpState::FinWait1 | TcpState::FinWait2
         | TcpState::CloseWait | TcpState::Closing | TcpState::LastAck
