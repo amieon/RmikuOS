@@ -86,10 +86,13 @@ static inline const struct sockaddr_in *rk_sockaddr_in(const struct sockaddr *ad
  * 这里必须也是 8 字节,否则越界踩栈。 */
 struct net_peer { unsigned char raw[8]; };
 
-/* ---- socket ---- */
+/* ---- socket ----
+ * 全部过 rk_sys_ret：内核返回的是 -errno（-EBADF/-ENOTSOCK/-EAFNOSUPPORT…），
+ * 裸透传会让调用方拿到 -9、-88 这种数字，而 errno 一直是旧值。curl 这类
+ * 靠 errno 分流的状态机必须看到 -1 + errno。 */
 static inline int socket(int domain, int type, int protocol) {
     (void)domain;   /* 只支持 AF_INET,内核暂不区分 */
-    return syscall3(SYS_NET_SOCKET0, type, protocol, 0);
+    return (int)rk_sys_ret(syscall3(SYS_NET_SOCKET0, type, protocol, 0));
 }
 static inline int socket_tcp(void)         { return socket(AF_INET, SOCK_STREAM, 0); }
 static inline int socket_udp(void)         { return socket(AF_INET, SOCK_DGRAM, 0); }
@@ -101,21 +104,23 @@ static inline int bind(int fd, const struct sockaddr *addr, socklen_t len) {
     (void)len;
     const struct sockaddr_in *in = rk_sockaddr_in(addr);
     if (!in) return -1;
-    return syscall3(SYS_NET_BIND, fd, ntohs(in->sin_port), 0);
+    return (int)rk_sys_ret(syscall3(SYS_NET_BIND, fd, ntohs(in->sin_port), 0));
 }
 static inline int listen(int fd, int backlog) {
-    return syscall3(SYS_NET_LISTEN, fd, backlog, 0);
+    return (int)rk_sys_ret(syscall3(SYS_NET_LISTEN, fd, backlog, 0));
 }
+
 static inline int connect(int fd, const struct sockaddr *addr, socklen_t len) {
     (void)len;
     const struct sockaddr_in *in = rk_sockaddr_in(addr);
     if (!in) return -1;
-    return syscall3(SYS_NET_CONNECT, fd, ntohl(in->sin_addr.s_addr), ntohs(in->sin_port));
+    return (int)rk_sys_ret(syscall3(SYS_NET_CONNECT, fd,
+                                    ntohl(in->sin_addr.s_addr), ntohs(in->sin_port)));
 }
 static inline int accept(int fd, struct sockaddr *addr, socklen_t *len) {
     struct net_peer p;
     (void)len;
-    int ret = syscall3(SYS_NET_ACCEPT, fd, (long)&p, 0);
+    int ret = (int)rk_sys_ret(syscall3(SYS_NET_ACCEPT, fd, (long)&p, 0));
     if (ret >= 0 && addr) {
         /* 内核写回主机序(to_ne_bytes,小端:低字节在前),按小端拼回再转网络序 */
         unsigned int ip = (unsigned)p.raw[0]
@@ -167,25 +172,26 @@ static inline int accept(int fd, struct sockaddr *addr, socklen_t *len) {
  * 老代码传 0 不受影响：内核接受 0。 */
 static inline int send(int fd, const void *buf, int len, int flags) {
     (void)flags;
-    return syscall3(SYS_NET_SEND, fd, (long)buf, len);
+    return (int)rk_sys_ret(syscall3(SYS_NET_SEND, fd, (long)buf, len));
 }
 static inline int recv(int fd, void *buf, int len, int flags) {
-    return syscall6(SYS_NET_RECV, fd, (long)buf, len, (long)flags, 0, 0);
+
+    return (int)rk_sys_ret(syscall6(SYS_NET_RECV, fd, (long)buf, len, (long)flags, 0, 0));
 }
 static inline int sendto(int fd, const void *buf, int len, int flags,
                          const struct sockaddr *dst, socklen_t dlen) {
     (void)flags; (void)dlen;
     const struct sockaddr_in *in = rk_sockaddr_in(dst);
     if (!in) return -1;
-    return syscall6(SYS_NET_SENDTO0, fd, (long)buf, len,
-                    ntohl(in->sin_addr.s_addr), ntohs(in->sin_port), 0);
+    return (int)rk_sys_ret(syscall6(SYS_NET_SENDTO0, fd, (long)buf, len,
+                                    ntohl(in->sin_addr.s_addr), ntohs(in->sin_port), 0));
 }
 static inline int recvfrom(int fd, void *buf, int len, int flags,
                            struct sockaddr *src, socklen_t *slen) {
     struct net_peer p;
     (void)slen;
-    int ret = syscall6(SYS_NET_RECVFROM, fd, (long)buf, len, (long)&p,
-                       (long)flags, 0);
+    int ret = (int)rk_sys_ret(syscall6(SYS_NET_RECVFROM, fd, (long)buf, len, (long)&p,
+                                       (long)flags, 0));
     if (ret >= 0 && src) {
         /* 与 accept 相同:小端拼回主机序,再转网络序填 sockaddr_in */
         unsigned int ip = (unsigned)p.raw[0]
@@ -204,7 +210,7 @@ static inline int recvfrom(int fd, void *buf, int len, int flags,
 
 /* 已经拿下 socket fd 与文件 fd 的统一 fd 表 */
 static inline int net_close(int fd) {
-    return syscall3(SYS_NET_CLOSE, fd, 0, 0);
+    return (int)rk_sys_ret(syscall3(SYS_NET_CLOSE, fd, 0, 0));
 }
 
 /* SYS_NET_SET_IP 的编号与内核一致 */
@@ -215,12 +221,14 @@ static inline unsigned int net_get_ip() {
     return (unsigned int)syscall3(SYS_NET_GET_IP, 0, 0, 0);
 }
 
-/* DNS 解析:"www.example.com" -> 主机序 IPv4;失败返回 0(0.0.0.0 视为失败) */
+/* DNS 解析:"www.example.com" -> 主机序 IPv4;失败返回 0(0.0.0.0 视为失败)
+ * 失败时 errno 会是 ENOENT（名字不存在）或 EINVAL（不是合法域名），
+ * 想区分"没这个域名"和"网络不通"的调用方读 errno。 */
 static inline unsigned int net_resolve(const char *name) {
     unsigned int n = 0;
     while (name[n]) n++;
-    long r = syscall3(SYS_NET_RESOLVE, (long)name, n, 0);
-    return r < 0 ? 0u : (unsigned int)r;   /* 内核失败返回 -1,别让它强转成 0xFFFFFFFF */
+    isize r = rk_sys_ret(syscall3(SYS_NET_RESOLVE, (long)name, n, 0));
+    return r < 0 ? 0u : (unsigned int)r;   /* 内核失败返回 -ENOENT,别让它强转成 0xFFFFFFFF */
 }
 
 static inline int net_resolve_many(const char *names[], unsigned long lens[],
