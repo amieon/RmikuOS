@@ -11,6 +11,7 @@
 #include "io.h"          /* read/write/close/open */
 #include "process.h"     /* getpid/fork/sleep/exit/waitpid/getuid */
 #include "time.h"        /* usleep/time */
+#include "sys/time.h"    /* setitimer/getitimer —— alarm() 建在它们上面 */
 #include "sys/types.h"
 #include "errno.h"
 #include "syscall.h"     /* SYS_GETPAGESIZE */
@@ -102,12 +103,25 @@ static inline long sysconf(int name) {
     }
 }
 
-/* alarm：内核没有"定时给进程发信号"的机制，这里只能不装。
- * 返回 0（= 没有未决闹钟）。依赖它的超时逻辑会退化成"永不超时"，
- * 而不是"立刻超时"——对 git 的 upload-pack/daemon 是可接受的退化。 */
+/* alarm(seconds)：setitimer(ITIMER_REAL) 的薄封装。 */
 static inline unsigned int alarm(unsigned int seconds) {
-    (void)seconds;
-    return 0;
+    struct itimerval it, old;
+
+    it.it_value.tv_sec     = (time_t)seconds;
+    it.it_value.tv_usec    = 0;
+    it.it_interval.tv_sec  = 0;          /* 一次性，不重复触发 */
+    it.it_interval.tv_usec = 0;
+
+    old.it_value.tv_sec     = 0;
+    old.it_value.tv_usec    = 0;
+    old.it_interval.tv_sec  = 0;
+    old.it_interval.tv_usec = 0;
+
+    if (setitimer(ITIMER_REAL, &it, &old) != 0) {
+        return 0;                        /* errno 已由 setitimer 置好 */
+    }
+    return (unsigned int)(old.it_value.tv_sec
+                          + (old.it_value.tv_usec > 0 ? 1 : 0));
 }
 
 /* getrandom：内核熵源（virtio-rng）的唯一出口。

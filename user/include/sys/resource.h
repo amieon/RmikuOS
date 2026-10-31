@@ -1,9 +1,10 @@
 #ifndef RMIKU_SYS_RESOURCE_H
 #define RMIKU_SYS_RESOURCE_H
 
-/* POSIX <sys/resource.h> —— 仅 shell.c 计时用（getrusage + struct rusage）。
- * RmikuOS 无 per-process CPU 记账, 诚实返回全 0（与 SQLite 官方
- * VxWorks 兜底 #define getrusage(A,B) memset(...) 行为一致）。 */
+/* POSIX <sys/resource.h> —— shell.c / sqlite3 计时用（getrusage + struct rusage）。
+ * RmikuOS 无 per-process CPU 记账。ru_utime 用单调钟填（不是 0）：
+ * 差分才等于"这段区间流逝的墙钟时间"，填 0 会让所有测速/计时算成 0。
+ * 详见 getrusage 里的说明。 */
 
 #include "types.h"
 /* 注意：这里必须是 "../time.h"。写成 "time.h" 会优先命中同目录的 sys/time.h，
@@ -69,8 +70,11 @@ struct rusage {
 static inline int getrusage(int who, struct rusage *usage) {
     (void)who;
     if (!usage) return -1;
-    usage->ru_utime.tv_sec = 0; usage->ru_utime.tv_usec = 0;
-    usage->ru_stime.tv_sec = 0; usage->ru_stime.tv_usec = 0;
+    long us = (long)get_time_us();
+    usage->ru_utime.tv_sec  = (time_t)(us / 1000000);
+    usage->ru_utime.tv_usec = us % 1000000;
+    usage->ru_stime.tv_sec  = 0;
+    usage->ru_stime.tv_usec = 0;
     return 0;
 }
 
