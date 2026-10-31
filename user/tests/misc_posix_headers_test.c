@@ -157,6 +157,19 @@ int main(void) {
     CHECK(strcmp(gai_strerror(EAI_FAIL), "non-recoverable failure") == 0,
           "gai_strerror 有对应文本");
 
+    /* 失败时 h_errno 必须是 NO_RECOVERY，不能留 0：
+     * `p = gethostbyname(...); if (!p) switch (h_errno)` 的调用方会把 0
+     * 当成"解析成功但没结果"，而不是"根本没有解析器"。 */
+    CHECK_EQ(h_errno, NO_RECOVERY, "gethostbyname 把 h_errno 设成 NO_RECOVERY");
+    int probe_addr = 0x7f000001;
+    CHECK(gethostbyaddr(&probe_addr, sizeof probe_addr, AF_INET) == 0,
+          "gethostbyaddr 返回 NULL");
+    CHECK_EQ(h_errno, NO_RECOVERY, "gethostbyaddr 也设 h_errno");
+    CHECK(getservbyname("https", "tcp") == 0, "getservbyname 明确失败");
+    CHECK(getprotobyname("tcp") == 0, "getprotobyname 明确失败");
+    CHECK(getprotobynumber(6) == 0, "getprotobynumber 明确失败");
+    CHECK(strcmp(hstrerror(h_errno), "no resolver") == 0, "hstrerror 有文本");
+
     /* ---------- 8. grp.h / syslog.h / alloca.h / sys/param.h ---------- */
     CHECK(getgrnam("root") == 0, "getgrnam 当前返回 NULL(未接账户库)");
     openlog("test", LOG_PID, LOG_USER);
@@ -218,7 +231,11 @@ int main(void) {
     CHECK_EQ(sysconf(12345), -1, "未知 sysconf 名字返回 -1");
     CHECK_EQ(errno, EINVAL, "未知 sysconf 名字置 EINVAL");
 
-    CHECK_EQ(alarm(5), 0, "alarm 无实现时返回 0(没有未决闹钟)");
+    /* alarm 现在是真的（setitimer(ITIMER_REAL) 封装），所以**不能在这里装闹钟**：
+     * 本测试没装 SIGALRM handler，默认动作是终止进程，5 秒后跑得慢一点就把自己
+     * 杀了 —— 症状是"测试莫名其妙 FAIL/消失"，极难定位。
+     * 这里只验"函数在、返回 0"，信号真到达的行为由 misc_alarm_test 端到端覆盖。 */
+    CHECK_EQ(alarm(0), 0, "alarm(0) 无未决闹钟时返回 0");
 
     /* ---------- 13. sigaction / sigset / sigprocmask ---------- */
     struct sigaction sa, old;
