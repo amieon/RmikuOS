@@ -34,8 +34,11 @@ typedef struct { intmax_t quot, rem; } imaxdiv_t;
 #define UINTMAX_MAX 18446744073709551615ULL
 #endif
 
+/* 同理：gcc 的 <stdint.h>（stdint-gcc.h 第 256/258 行）已经定义了这对宏， */
+#ifndef INTMAX_C
 #define INTMAX_C(v)  v##LL
 #define UINTMAX_C(v) v##ULL
+#endif
 
 /* ---- 转换 ---- */
 /* 注意：这里的 strtoimax/strtoumax 只是宽度别名（LP64 下 intmax_t 就是 long），
