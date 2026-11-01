@@ -950,8 +950,7 @@ pub fn listen(fd: usize, backlog: usize) -> isize {
     }
 }
 
-pub fn accept(fd: usize) -> Option<(usize, SocketAddr)> {
-    let mut spins = 0usize;
+pub fn accept(fd: usize, nonblock: bool) -> Result<(usize, SocketAddr), isize> {
     loop {
         crate::drivers::net::poll();
         {
@@ -961,18 +960,24 @@ pub fn accept(fd: usize) -> Option<(usize, SocketAddr)> {
                     if let Some(child) = l.accept_queue.pop_front() {
                         if let Some(Socket::Tcp(c)) = &table.slots[child] {
                             if let Some(r) = c.remote {
-                                return Some((child, r));
+                                return Ok((child, r));
                             }
                         }
                     }
                 }
-                _ => return None,
+                Some(_) => return Err(-crate::syscall::errno::EINVAL),
+                None => return Err(-crate::syscall::errno::EBADF),
             }
         }
-        spins += 1;
-        if spins > 100_000_000 {
-            return None;
+        if nonblock {
+            return Err(-EAGAIN);
         }
+        /* 睡之前先看信号：等到连接进来才发现有信号，等于让 handler 白等一轮。
+         * 和 pipe read 的做法一致。 */
+        if crate::task::signal_pending_now() {
+            return Err(-crate::syscall::errno::EINTR);
+        }
+        let _ = crate::task::sleep_current_and_run_next(1);
     }
 }
 
