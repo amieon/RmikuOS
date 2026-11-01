@@ -1598,6 +1598,9 @@ static int run_pipeline(char *line) {
                 quote = c;
             } else if (c == '\\' && line[i+1]) {
                 i++;
+            } else if (c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t')) {
+                line[i] = 0;
+                break;
             } else if (c == '|') {
                 line[i] = 0;
                 if (nseg >= MAX_SEGMENTS) {
