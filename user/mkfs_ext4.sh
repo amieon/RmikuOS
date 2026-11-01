@@ -222,6 +222,11 @@ fi
 # 运行时期待的三样，别处已经备好：
 #   /dev/urandom  kernel/src/fs/urandom.rs（RAND 的 DEVRANDOM 第一项，唯一熵源）
 #   /etc/ssl      OPENSSLDIR。没 openssl.cnf 时 OpenSSL 按"无配置"处理，不是错误
+#   /etc/ssl/cert.pem  CA bundle（随 overlay 一起进来）。名字不能改：
+#                 X509_get_default_cert_file() 硬编 OPENSSLDIR "/cert.pem"，
+#                 Debian 那个 ca-certificates.crt 的文件名 OpenSSL 不会去找。
+#                 只放单文件 bundle，不放 /etc/ssl/certs 目录形 —— 目录形靠 hash
+#                 命名链接，guest 里没有 c_rehash。
 #   /bin/sh       PATH 里有就行（-engine / CA 相关子命令才真的 fork）
 if [ -d "user/build/${ARCH}/openssl" ]; then
   for f in user/build/${ARCH}/openssl/*.elf; do
@@ -231,6 +236,70 @@ if [ -d "user/build/${ARCH}/openssl" ]; then
     echo "  [openssl] $base -> /bin/$base"
   done
   mkdir -p "$ROOT/etc/ssl"
+fi
+
+# curl（专门构建目录 user/build/<arch>/curl/）
+# 产物固定 curl.elf -> /bin/curl。同目录还有 libcurl.a（静态，guest 里用不上）。
+#
+# 运行时它依赖的两件事，openssl 那一段里已经备好了：
+#   /etc/ssl/cert.pem  —— configure 时 --with-ca-bundle=/etc/ssl/cert.pem 写死
+#   /bin/sh            —— curl 的 --engine 之类才 fork，普通请求不碰
+# 注意 curl 的 CA 路径是**编译期常量**（CURL_CA_BUNDLE），所以这个文件和
+# 构建时指的路径必须一致；临时换可以 export SSL_CERT_FILE=...
+if [ -d "user/build/${ARCH}/curl" ]; then
+  for f in user/build/${ARCH}/curl/*.elf; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .elf)"
+    cp "$f" "$ROOT/bin/$base"
+    echo "  [curl] $base -> /bin/$base"
+  done
+fi
+
+# CA bundle 兜底 + 构建期校验。
+# 优先级：仓库 overlay > $CA_BUNDLE > 宿主机系统 bundle。
+CA="$ROOT/etc/ssl/cert.pem"
+if [ ! -s "$CA" ]; then
+  mkdir -p "$ROOT/etc/ssl"
+  cands=()
+  [ -n "${CA_BUNDLE:-}" ] && cands+=("$CA_BUNDLE")
+  # 各发行版的"单文件 PEM bundle"
+  cands+=(
+    /etc/ssl/certs/ca-certificates.crt
+    /etc/pki/tls/certs/ca-bundle.crt
+    /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+    /etc/ssl/ca-bundle.pem
+    /etc/certs/ca-certificates.crt
+    /etc/ssl/cert.pem
+    /usr/local/etc/openssl/cert.pem
+    /opt/homebrew/etc/openssl/cert.pem
+  )
+  # 再问 openssl 自己的 OPENSSLDIR —— 发行版布局差得离谱，硬编列表总会漏。
+  if command -v openssl >/dev/null 2>&1; then
+    _d="$(openssl version -d 2>/dev/null | sed -n 's/^OPENSSLDIR: "\(.*\)"$/\1/p')"
+    if [ -n "$_d" ]; then
+      cands+=("$_d/cert.pem" "$_d/certs/ca-certificates.crt")
+    fi
+  fi
+  # Python 的 certifi：build.py 本来就依赖 python3，环境里顺手就有的概率不低。
+  if command -v python3 >/dev/null 2>&1; then
+    _p="$(python3 -c 'import certifi; print(certifi.where())' 2>/dev/null || true)"
+    if [ -n "$_p" ]; then
+      cands+=("$_p")
+    fi
+  fi
+  for cand in "${cands[@]}"; do
+    if [ -s "$cand" ]; then
+      cp "$cand" "$CA"
+      echo "  [ssl] overlay 没有 cert.pem，借用 $cand"
+      break
+    fi
+  done
+fi
+if [ -s "$CA" ]; then
+  echo "  [ssl] cert.pem $(wc -c <"$CA") bytes -> /etc/ssl/cert.pem"
+else
+  echo "  [ssl] ! 没有 CA bundle：guest 里 curl/openssl 会报 (77) error adding trust anchors" >&2
+  echo "  [ssl]   放一份到 user/rootfs/etc/ssl/cert.pem，或用 CA_BUNDLE=<文件> 指定" >&2
 fi
 
 # Java 字节码（JVM 项目）
@@ -259,6 +328,21 @@ find "$ROOT" -maxdepth 3 -print | sort
 # 全量打进 rootfs 后 32M 已不够,loongarch64 ELF 更大更容易爆盘)
 rm -f "$IMG"
 FS_SIZE_MB="${FS_SIZE_MB:-96}"
+
+# 容量预检。`mkfs.ext4 -d` 塞不下时报的是 "No space left on device"，
+# 完全看不出是"镜像给小了"还是"某个文件坏了"，而且它在几十行 find 输出之后
+# 才炸。这里先量一遍：超过 88% 提醒（ext4 自身还要吃元数据），真的塞不下就
+# 提前给出该调哪个变量。
+ROOT_MB="$(du -sm "$ROOT" | cut -f1)"
+echo "rootfs 用量: ${ROOT_MB}M / ${FS_SIZE_MB}M"
+if [ "$ROOT_MB" -ge "$FS_SIZE_MB" ]; then
+  echo "✗ rootfs 内容 ${ROOT_MB}M 已经超过镜像容量 ${FS_SIZE_MB}M" >&2
+  echo "  调大: FS_SIZE_MB=$(( (ROOT_MB / 16 + 2) * 16 )) ./user/mkfs_ext4.sh $ARCH" >&2
+  exit 1
+elif [ "$((ROOT_MB * 100 / FS_SIZE_MB))" -ge 88 ]; then
+  echo "! rootfs 已用 ${ROOT_MB}M / ${FS_SIZE_MB}M（≥88%，ext4 元数据可能不够）" >&2
+fi
+
 truncate -s "${FS_SIZE_MB}M" "$IMG"
 
 # -L 卷标是"约定式身份"：discover_disks 按超级块 s_volume_name 识别 rootfs
