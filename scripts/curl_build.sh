@@ -410,7 +410,13 @@ build_probe_lib() {
 
   rm -f "$PROBE_LIB"
   "$AR" rcs "$PROBE_LIB" "$obj" "$sobj" || return 1
-  PROBE_SIG="$(wc -l <"$names"):$(sha256sum "$PROBE_LIB" | cut -c1-16)"
+  # 签名取**符号名单**，不能取 libcprobe.a 的哈希：
+  # ar 把成员的 mtime 写进归档头，而这个 .o 每次现编，mtime 每次不同
+  # → 归档字节不同 → 哈希不同 → 签名永不稳定 → 每次运行都 `rm -rf $OBJ`
+  # → 上一轮的 lib/libcurl.la 被一起删掉 → bin 阶段 make 报
+  # "No rule to make target '../lib/libcurl.la'"（这个坑真踩过）。
+  # 名单本身才是"桩库变了没有"的真实语义。
+  PROBE_SIG="$(wc -l <"$names"):$(sha256sum <"$names" | cut -c1-16)"
   echo "[curl] 探测桩库：$(wc -l <"$names") 个符号 -> libcprobe.a"
   return 0
 }
@@ -558,6 +564,56 @@ dump_config_log() {
 }
 
 # ---------------------------------------------------------------------------
+# 平台补丁：把 configure 判不出来、但**我们确知为真**的事实写进 curl_config.h。
+#
+# 这不是"绕过检查"，是 curl 上游自己就有的机制 —— lib/setup-os400.h、
+# lib/setup-win32.h 是签入仓库的手写常量，压根不走 autoconf 探测。一个在
+# autoconf 眼里只是"generic unix ELF"的目标平台，只能走同一条路。
+#
+# HAVE_FCNTL_O_NONBLOCK 为什么必须手写：
+#   m4 里的 CURL_CHECK_FUNC_FCNTL 是四段串联：
+#       if fcntl can be linked        ← AC_LANG_FUNC_LINK_TRY
+#         → if fcntl is prototyped    ← AC_EGREP_CPP
+#           → if fcntl O_NONBLOCK is compilable
+#             → if fcntl usage allowed
+#   第一段的 conftest 是 `#include <assert.h>` + `char fcntl ();`。我们的
+#   fcntl() 是头文件里的 static inline **真原型**，只要任何一条 include 链
+#   把它带进 conftest，`char fcntl ();` 立刻 conflicting types。
+#   这条链既没有 ac_cv_* 可以预置（不是 AC_CACHE_CHECK），也没有
+#   ACTION-IF-CROSS-COMPILING 分支 —— 判成 no 之后 configure 一个字都不说，
+#   一路静默到 lib/curlx/nonblock.c 的
+#       #error "no non-blocking method was found/used/set"
+#
+#   而我们确实有：内核 sys_fcntl 支持 F_GETFL / F_SETFL，O_NONBLOCK 记进
+#   process.fd_flags，并在 connect / recv / send 三个入口真读取。
+#   所以直接声明，语义上是**如实**的，只是绕开了一条判不准的探测链。
+#
+# 只补这一条：HAVE_FCNTL 在 8.x 全树只用于 Amiga 分支的 #undef，没有消费者，
+# 补它等于凭空扩大语义面。
+# ---------------------------------------------------------------------------
+overlay_curl_config() {
+  local h="$OBJ/lib/curl_config.h"
+  [ -f "$h" ] || { echo "[curl] ✗ $h 不存在，configure 没产出配置头"; return 1; }
+  grep -q 'RK_PLATFORM_OVERRIDES' "$h" && return 0   # 幂等
+  cat >>"$h" <<'RKEOF'
+
+/* =====================================================================
+ * RmikuOS 平台补丁（本块由 scripts/curl_build.sh 追加，configure 不生成）
+ * 原因见脚本里 overlay_curl_config() 的注释；curl 上游对 OS/400、Win32
+ * 也是用签入仓库的 setup-*.h 手写这类常量，不走探测。
+ * ===================================================================== */
+#define RK_PLATFORM_OVERRIDES 1
+
+/* configure 的 fcntl 探测链在第一步就断（conftest 里 `char fcntl ();`
+ * 与我们头文件里的 static inline 真原型冲突），而且没有 cache 变量可覆盖。
+ * 本内核 sys_fcntl 支持 F_GETFL / F_SETFL，O_NONBLOCK 会被 connect、
+ * recv、send 三个入口真正读取，所以这里有 non-blocking 手段。 */
+#define HAVE_FCNTL_O_NONBLOCK 1
+RKEOF
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # configure 只在签名变化时重跑。签名里必须包含所有**会影响产物**的东西：
 # configure 参数、CFLAGS、CPPFLAGS、CC 路径、cache 变量、源码版本。
 # 少签一项的后果是"改了开关却没重配"，症状是行为诡异但不报错 —— openssl
@@ -580,6 +636,7 @@ configure_curl() {
          | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/config.h" ] && [ "$(cat "$OBJ/.cfg_sig" 2>/dev/null)" = "$sig" ]; then
     echo "[curl] configure 参数没变，复用 $OBJ"
+    overlay_curl_config || return 1
     return 0
   fi
   echo "[curl] configure（交叉目标 $CROSS_HOST）"
@@ -626,9 +683,31 @@ configure_curl() {
     echo "[curl] ! configure 报了未知选项（不会失败，但那个开关没生效）："
     grep -A1 "unrecognized options" "$BASE/configure.log" | head -8 | sed 's/^/      /'
   fi
+  overlay_curl_config || return 1
   echo "$sig" >"$OBJ/.cfg_sig"
   echo "[curl] ✓ configure 完成（日志 $BASE/configure.log）"
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# 从 autoconf 的 config.log 里挖出**某一条 check 的完整块**：
+# 链接/编译命令行 + 编译器原话 + 那个失败的 conftest 程序本身，一直挖到 result:。
+#
+# 必须读 $OBJ/config.log 而不是 $BASE/configure.log：
+# configure.log 只是 stdout 的转录，里面只有 "checking ... no" 几个字，
+# 一个字的真实原因都没有。之前就是读错了文件，于是告警块打出一堆
+# 与 fcntl 无关的后续检查行（看着像"失败原因"，其实全是噪声）。
+# ---------------------------------------------------------------------------
+dump_check_block() {
+  local key="$1" log="$OBJ/config.log" s
+  [ -f "$log" ] || { echo "            (没有 config.log)"; return 0; }
+  s="$(grep -n "checking $key" "$log" | head -1 | cut -d: -f1)"
+  if [ -z "${s:-}" ]; then
+    echo "            (config.log 里没有 \"checking $key\"，要么这条检查没跑，要么被 cache 掉了)"
+    return 0
+  fi
+  awk -v s="$s" 'NR>=s {print; if (NR>s && /^configure:[0-9]+: result:/) exit}' "$log" \
+    | cut -c1-150 | head -30 | sed 's/^/            /'
 }
 
 # ---------------------------------------------------------------------------
@@ -639,23 +718,42 @@ configure_curl() {
 dump_config() {
   echo
   echo "[curl] configure 的结论（只列会影响网络路径的）"
-  local keys="HAVE_GETADDRINFO HAVE_FCNTL_O_NONBLOCK HAVE_POLL HAVE_SELECT
-              HAVE_SYS_SELECT_H HAVE_SYS_POLL_H HAVE_POLL_H HAVE_NETDB_H
-              USE_THREADED_RESOLVER CURL_DISABLE_IPV6 USE_IPV6
-              HAVE_SOCKET HAVE_INET_PTON SIZEOF_CURL_OFF_T
-              HAVE_GETIFADDRS HAVE_SOCKETPAIR CURL_DISABLE_SOCKETPAIR"
-  local k v
+  local keys="HAVE_GETADDRINFO HAVE_GETADDRINFO_THREADSAFE
+              HAVE_FCNTL HAVE_FCNTL_H HAVE_FCNTL_O_NONBLOCK
+              HAVE_UNISTD_H HAVE_POLL HAVE_SYS_SELECT_H HAVE_SYS_POLL_H
+              HAVE_POLL_H HAVE_NETDB_H USE_IPV6
+              HAVE_SOCKET HAVE_GETIFADDRS HAVE_SOCKETPAIR
+              SIZEOF_CURL_OFF_T"
+  local k v lno mk tag
+  # 平台补丁块起始行：在它之后的 #define 是**我们**补的，不是 configure 判的。
+  # 不标出来的话，下一次看到 HAVE_FCNTL_O_NONBLOCK = 1 会误以为探测链通了。
+  mk="$(grep -n 'RK_PLATFORM_OVERRIDES' "$OBJ/lib/curl_config.h" 2>/dev/null | head -1 | cut -d: -f1)"
+  mk="${mk:-0}"
   for k in $keys; do
-    # 注意 AC_DEFINE 没命中时，config.h.in 里写的是 `/* #undef X */` —— **注释**，
-    # 不是 `#undef X`。所以旧版那个 "#undef" 分支是死代码，"什么都没打出来"
-    # 也分不清是"未定义"还是"这个宏根本不在 .in 里"。现在一律打出来，而且带值：
-    # SIZEOF_CURL_OFF_T 算成 4 还是 8，是判断 configure 有没有真的看到
-    # curl_off_t 的唯一依据（上一轮就因为只打了"定义"两个字，卡了一轮）。
-    v="$(sed -n "s/^#define $k[[:space:]]*//p" "$OBJ/lib/curl_config.h" 2>/dev/null | head -1)"
+    # 三种状态必须分开，混在一起就是上一轮误判的来源：
+    #   ① `#define X 1`        → 探测通过
+    #   ② `/* #undef X */`    → 探测过了，结论是 no       ← autoheader 的写法，是**注释**
+    #   ③ 两行都没有           → 这个版本的 curl 根本没有这个宏
+    # 旧版只判 ①，于是 ②③ 一律打成"(未定义)"。上一屏里 HAVE_SELECT /
+    # HAVE_INET_PTON / USE_THREADED_RESOLVER 全是在 ③（curl 8.x 里压根不存在
+    # 这几个宏），却被当成"我们缺"，白追一轮。
+    # 键名后面必须有空白或行尾，否则 HAVE_FCNTL 会去匹配 `#define HAVE_FCNTL_H 1`
+    # 那一行，打成 "HAVE_FCNTL = _H 1"（上一轮就是这个）。
+    lno="$(grep -nE "^#define[[:space:]]+$k([[:space:]]|\$)" "$OBJ/lib/curl_config.h" 2>/dev/null | head -1 | cut -d: -f1)"
+    v=""
+    if [ -n "$lno" ]; then
+      v="$(sed -n "${lno}p" "$OBJ/lib/curl_config.h" \
+            | sed -E "s/^#define[[:space:]]+$k//; s/^[[:space:]]+//; s/[[:space:]]+\$//")"
+      [ -n "$v" ] || v=1        # `#define X`（无值）在 C 里就等于 1
+    fi
+    tag=""
+    [ -n "$lno" ] && [ "$mk" -gt 0 ] && [ "$lno" -gt "$mk" ] && tag="   ← 本脚本补的"
     if [ -n "$v" ]; then
-      printf '        %-26s = %s\n' "$k" "$v"
+      printf '        %-26s = %s%s\n' "$k" "$v" "$tag"
+    elif grep -q "^/\* #undef $k \*/" "$OBJ/lib/curl_config.h" 2>/dev/null; then
+      printf '        %-26s = (探测过，结论 no)\n' "$k"
     else
-      printf '        %-26s = (未定义)\n' "$k"
+      printf '        %-26s = (本版本无此宏)\n' "$k"
     fi
   done
 
@@ -669,13 +767,30 @@ dump_config() {
   fi
   if ! grep -q '^#define HAVE_FCNTL_O_NONBLOCK' "$OBJ/lib/curl_config.h" 2>/dev/null; then
     echo
-    echo "[curl] ⚠ HAVE_FCNTL_O_NONBLOCK 没定义。curl_setup.h 里那个"
-    echo "          #error \"no non-blocking method\" 应该会直接拦住编译；"
-    echo "          如果居然编过了，说明它走了 ioctlsocket 分支（我们没有）。"
-    # cache 变量名猜错的话，configure 会照旧自己探一遍然后给 no，
-    # 而且**一点声音都没有**。把日志里那条 check 的原名打出来，好核对。
-    echo "          configure.log 里相关的检查（核对 CONFIGURE_CACHE 的名字对不对）："
-    grep -i "non-block\|O_NONBLOCK" "$BASE/configure.log" 2>/dev/null | head -4 | sed 's/^/            /'
+    echo "[curl] ⚠ HAVE_FCNTL_O_NONBLOCK 没定义 —— 平台补丁没落进 curl_config.h。"
+    echo "          它本该由 overlay_curl_config() 补上（见脚本里那段长注释）。"
+    echo "          可能的原因：\$OBJ 被清过但补丁没重跑 / 脚本没同步到目标机 /"
+    echo "          上游把这个宏改名了。"
+    echo "          没有它，lib/curlx/nonblock.c 会直接"
+    echo "          #error \"no non-blocking method was found/used/set\""
+  fi
+  # HAVE_FCNTL 仍然是 no：8.x 全树只有 Amiga 分支在 #undef 它，没有消费者，
+  # 所以不补。这里把探测断在哪一步挖出来，纯粹为了确认原因没变。
+  if ! grep -q '^#define HAVE_FCNTL ' "$OBJ/lib/curl_config.h" 2>/dev/null; then
+    echo
+    echo "[curl] 附：为什么 HAVE_FCNTL = no（不影响构建，只为留证据）"
+    dump_check_block "if fcntl can be linked"
+    # 最常见的成因：目标机上的 assert.h 还是旧版（include 了 stdio/stdlib）。
+    # autoconf 的 AC_LANG_FUNC_LINK_TRY 模板固定 `#include <assert.h>`，
+    # 旧版会顺着 stdlib.h → fs.h → fcntl.h 把真原型带进 conftest，
+    # 于是 `char fcntl ();` conflicting types。直接点出来，别再猜。
+    if grep -q 'include <stdio\.h>' "$ROOT/user/include/assert.h" 2>/dev/null; then
+      echo
+      echo "            ↑ 注意：$ROOT/user/include/assert.h 还是旧版"
+      echo "              （里面 include 了 <stdio.h>，会连带把 <stdlib.h> → fs.h →"
+      echo "              fcntl.h 整条链带进 conftest）。这大概率就是上面那条报错的原因："
+      echo "              该文件是空 include 版的话，conftest 里根本看不到 fcntl。"
+    fi
   fi
   echo
 }
@@ -709,13 +824,26 @@ scan_undefined() {
   done
   # libgcc 族（__ctzdi2 / __divdi3 之类由编译器运行时提供，不是 libc 缺口）
   "$NM" --defined-only "$("$CC" -print-libgcc-file-name)" 2>/dev/null | awk '{print $NF}' >>"$defs"
+  # libcurl.a **自己定义**的符号必须减掉，这是上一轮"缺口 952 个"的全部成因。
+  # 静态归档内部成员互相引用：bufq.c 定义 Curl_bufq_init，http.c 引用它，
+  # 于是 nm -u 把 Curl_bufq_* 这一大票"自己人"也列成未定义。不减去它们，
+  # 清单里 95% 是 Curl_* 内部符号，真正的 libc 缺口被埋在里面看不见。
+  # （同一个减法在 build_probe_lib 里也踩过一次，方向相反。）
+  "$NM" --defined-only "$lib" 2>/dev/null | awk 'NF==3{print $3}' >>"$defs"
   # libssl / libcrypto 提供的那部分（curl 静态链接要连它们）
   "$NM" --defined-only "$SSL_OUT/libssl.a"       2>/dev/null | awk 'NF==3{print $3}' >>"$defs"
   "$NM" --defined-only "$SSL_OUT/libcrypto.a"    2>/dev/null | awk 'NF==3{print $3}' >>"$defs"
 
   local undef="$BASE/_undef.txt" miss="$BASE/_missing.txt"
-  "$NM" --undefined-only "$lib" 2>/dev/null | awk '{print $NF}' \
-    | sed 's/^_*//' | sort -u >"$undef"
+  # 这里曾经是两个 bug 叠一起，直接把清单变成垃圾（缺口 201 个全是假的）：
+  #   ① `nm -u some.a` 对**每个归档成员**都打一行标题 `libcurl_la-altsvc.o:`，
+  #      它的 NF 是 1，`awk '{print $NF}'` 就拿这行标题当符号 → 200 来条 "缺口"。
+  #      加 $1 ~ /^[Uu]$/ 卡住：未定义行才是 `… U Curl_foo`（$1 恰是 U）。
+  #   ② `sed 's/^_*//'` 只作用在**未定义**这一侧，定义侧（libgcc 的 __ctzdi2、
+  #      我方的 __sync_lock_*）都带前缀 → 永远匹配不上，于是 ctzdi2 被报成缺口。
+  #      要么两边一起剥，要么都不剥；这里选都不剥（ELF 本来就不加下划线前缀）。
+  "$NM" --undefined-only "$lib" 2>/dev/null \
+    | awk '$1 ~ /^[UuWw]$/ {print $NF}' | sort -u >"$undef"
   sort -u "$defs" >"$BASE/_provided_sorted.txt"
 
   # 这里**故意不**去抓 user/include 里的 static inline 名字当"已定义"。
@@ -745,13 +873,17 @@ case "$STAGE" in
     configure_curl || exit 1
     dump_config
     echo "[curl] 编几个关键 TU（压头文件面，不做链接）"
-    # 选这四个是因为它们分别代表四类风险：
-    #   hostip4.c   —— getaddrinfo / sockaddr 布局 / AI_* 常量
+    # 选这几个是因为它们分别代表不同风险：
+    #   hostip4.c   —— getaddrinfo / sockaddr 布局 / PF_INET 这类常量
     #   connect.c   —— non-blocking connect 状态机、fcntl、SO_ERROR
-    #   curl_setup.h 的消费者
-    #   select.c    —— fd_set / poll 抽象，还有 "no non-blocking method" 的 #error
+    #   select.c    —— fd_set / poll 抽象
+    #   curlx/nonblock.c —— HAVE_FCNTL_O_NONBLOCK 的 #error 就住在这里
+    #                       （八百年没变过的写法：8.x 从 curl_setup.h 搬过来了，
+    #                        找不到那句 #error 时别以为它消失了）
+    #   vtls/openssl.c —— TLS 后端，最挑头文件
     probe_ok=0
-    for f in lib/vdns/hostip4.c lib/connect.c lib/select.c lib/vtls/openssl.c; do
+    for f in lib/vdns/hostip4.c lib/connect.c lib/select.c \
+             lib/curlx/nonblock.c lib/vtls/openssl.c; do
       [ -f "$SRC/$f" ] || { echo "  -  $f 不存在（版本差异，跳过）"; continue; }
       log="$BASE/probe_$(basename "${f%.c}").log"
       # -DHAVE_CONFIG_H 不能省，这是 lib 目录下编译的**前提**：
@@ -821,13 +953,37 @@ case "$STAGE" in
     LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o"
     LINK_FLAGS="$LINK_FLAGS -T $ROOT/user/linker-$ARCH.ld"
 
-    # 先让 make 编 .o（链接八成会失败，因为 libtool 不知道 -nostdlib），
-    # 然后自己拼链接命令。这样失败点唯一、可控。
-    echo "[curl] make -C src（只为了编出 .o）"
-    make -C "$OBJ/src" -j"$NPROC" LDFLAGS="$LINK_FLAGS" LIBS="-lgcc" \
-      2>&1 | tee "$BASE/make_src.log" | tail -20
+    # 只编 .o，不碰 curl 这个链接目标。
+    #
+    # 原来的写法是 `make -C src` 然后 `ls src/*.o`，两处都错：
+    #   ① make 一上来就为 `curl` 建依赖图，而它依赖 ../lib/libcurl.la（libtool
+    #      产物）。这个文件一旦不在，make 就报 "No rule to make target" 并**退出**，
+    #      只有恰好被 -j 抢先调度的十几个 .o 编了出来。上一轮就是 13 个，
+    #      于是链接期才报 `undefined reference to toolx_localtime`
+    #      —— 它住在 src/toolx/tool_time.c，压根没被编。
+    #   ② 就算编全了，`ls src/*.o` 也只覆盖顶层。src/toolx/ 是子目录
+    #      （automake 的 subdir-objects），.o 落在 src/toolx/curl-tool_time.o。
+    #      所以这个 glob 天生漏掉整个 toolx/。
+    #
+    # 现在把 curl_OBJECTS 从生成的 Makefile 里问出来，当**显式目标**交给 make：
+    # 只建对象、不建 curl，天然不会踩到那个 .la。--eval 用 `目标: ; 动作`
+    # 的单行形式，省掉 recipe 行必须打头的 TAB（脚本里塞真 TAB 太脆）。
+    src_goals="$(make -s -C "$OBJ/src" \
+                   --eval='print-curl-objects: ; @echo $(curl_OBJECTS)' \
+                   print-curl-objects 2>/dev/null)"
+    if [ -n "$src_goals" ]; then
+      echo "[curl] make -C src（只编 .o，$(printf '%s\n' $src_goals | wc -l) 个目标）"
+      # shellcheck disable=SC2086
+      make -C "$OBJ/src" -j"$NPROC" $src_goals 2>&1 | tee "$BASE/make_src.log" | tail -20
+    else
+      echo "[curl] ! 问不出 curl_OBJECTS（make 版本太老或 Makefile 结构不同），退回整目录 make"
+      : >"$OBJ/lib/libcurl.la"    # 让依赖图能解析；后面 libtool 自己的链接会失败，不管它
+      make -C "$OBJ/src" -j"$NPROC" LDFLAGS="$LINK_FLAGS" LIBS="-lgcc" \
+        2>&1 | tee "$BASE/make_src.log" | tail -20
+    fi
 
-    OBJS=$(ls "$OBJ"/src/*.o 2>/dev/null)
+    # 递归收 .o：src/toolx/ 这类子目录必须算进来，同时排除 libtool 的 .libs。
+    OBJS=$(find "$OBJ/src" -name '*.o' -not -path '*/.libs/*' | sort)
     if [ -z "$OBJS" ]; then
       echo "[curl] ✗ src 下一个 .o 都没编出来，先看 $BASE/make_src.log"
       grep -E 'error:' "$BASE/make_src.log" | head -10 | sed 's/^/      /'
@@ -845,6 +1001,20 @@ case "$STAGE" in
     if [ -s "$OUT/curl.elf" ]; then
       echo
       echo "[curl] ✓ curl.elf $(wc -c <"$OUT/curl.elf") bytes"
+      # 链接能过，本身就是「缺口 = 0」的权威证明：ld 不会放过任何一个未定义
+      # 符号。lib 阶段那份 scan_undefined 只是提前预警，会被 nm 的归档标题行带偏
+      # （见那边的注释），两份结论打架时以这里为准。
+      if "$NM" --undefined-only "$OUT/curl.elf" 2>/dev/null | grep -q .; then
+        echo "[curl] ! 静态二进制里还有未定义符号（异常，说明链接靠 -shared 之类蒙过去）："
+        "$NM" --undefined-only "$OUT/curl.elf" | head -10 | sed 's/^/      /'
+      fi
+      # 证物：OpenSSL 是不是真的链进了镜像，而不是 configure 嘴上说说。
+      # 只看 curl -V 会骗人（版本串是编译期字符串），符号表才认账。
+      if "$NM" "$OUT/curl.elf" 2>/dev/null | grep -qw 'SSL_CTX_new'; then
+        echo "[curl]   证物：符号表里有 SSL_CTX_new（OpenSSL 真链进去了）"
+      else
+        echo "[curl]   ! 符号表里没有 SSL_CTX_new —— TLS 后端可能没被编进来"
+      fi
       echo "[curl]   下一步在 guest 里先跑： curl -V"
       echo "[curl]   version 行里要看到 OpenSSL/3.0.23 和 libcurl/$CURL_VER"
     else
