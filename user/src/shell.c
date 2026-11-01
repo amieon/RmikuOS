@@ -930,10 +930,15 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
                 quote_type = 2;
                 i++;
                 while (line[i] && line[i] != '"') {
-                    if (line[i] == '\\') {
-                        i++;
-                        if (line[i]) {
-                            line[w++] = line[i];
+                    if (line[i] == '\\' && line[i+1]) {
+                        char nx = line[i+1];
+                        if (nx == '$' || nx == '`' || nx == '"' || nx == '\\') {
+                            line[w++] = nx;
+                            i += 2;
+                        } else if (nx == '\n') {
+                            i += 2;             /* 续行：连反斜杠带换行一起删掉 */
+                        } else {
+                            line[w++] = '\\';
                             i++;
                         }
                     } else {
