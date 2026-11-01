@@ -20,6 +20,20 @@ void exit(int code) {
     for (;;) {}
 }
 
+/* assert() 的落点。<assert.h> 里只剩一个声明，故意不 include 任何头，
+ * 原因写在 assert.h 顶部：它一拉 stdio.h/stdlib.h，autoconf 的
+ * `char fcntl ();` 探测模板就会和真原型撞成 conflicting types，
+ * configure 便判"没有 fcntl"，连带走不到 HAVE_FCNTL_O_NONBLOCK。
+ * 所以真正的 printf+abort 放在这里 —— 本文件本来就是"libc 的实体符号"落脚处。
+ */
+void __rk_assert_fail(const char *expr, const char *file, int line) __attribute__((weak));
+void __rk_assert_fail(const char *expr, const char *file, int line) {
+    fprintf(stderr, "Assertion failed: %s, file %s, line %d\n",
+            expr ? expr : "(null)", file ? file : "(null)", line);
+    fflush(stderr);
+    exit(134);
+}
+
 /* errno: POSIX 全局错误码(errno.h 已声明, 这里提供定义)。
  * weak: lua.c 等移植代码自带强定义时优先, 否则用这个(TCC 等)。 */
 int errno __attribute__((weak)) = 0;

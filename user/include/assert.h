@@ -3,14 +3,22 @@
 #ifndef _ASSERT_H
 #define _ASSERT_H
 
-#include <stdio.h>
-#include <stdlib.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void __rk_assert_fail(const char *expr, const char *file, int line);
+
+#ifdef __cplusplus
+}
+#endif
+
 #ifdef NDEBUG
-#define assert(expr) ((void)0)
+#define assert(...) ((void)0)
 #else
-#define assert(expr) \
-    ((expr) ? (void)0 : \
-     (printf("Assertion failed: %s, file %s, line %d\n", #expr, __FILE__, __LINE__), abort()))
+#define assert(...) \
+    ((__VA_ARGS__) ? (void)0 : __rk_assert_fail(#__VA_ARGS__, __FILE__, __LINE__))
 #endif
 
 #endif /* _ASSERT_H */
