@@ -191,8 +191,9 @@ pub fn sys_net_listen(fd: usize, backlog: usize) -> isize {
 pub fn sys_net_accept(fd: usize, info: usize) -> isize {
     let slot = get_slot_from_fd(fd);
     if slot < 0 { return slot; }
-    match tcp::accept(slot as usize) {
-        Some((child, remote)) => {
+    let nonblock = nonblock_flag(fd);
+    match tcp::accept(slot as usize, nonblock) {
+        Ok((child, remote)) => {
             let cfd = crate::task::alloc_fd_current(Arc::new(SocketFile { slot: child }));
             if cfd < 0 {
                 tcp::close(child);
@@ -211,10 +212,13 @@ pub fn sys_net_accept(fd: usize, info: usize) -> isize {
             }
             cfd
         }
-        /* tcp::accept 内部会一直等到有连接进来（阻塞），所以这里拿到 None
-         * 只可能是"这个槽位不是 Listen 状态"，不是"暂时没有连接"。
-         * 等真要做非阻塞 accept 时，得先把 tcp::accept 改成不循环。 */
-        None => -EINVAL,
+        /* tcp::accept 已经能区分"没有连接"和"fd 用错了"，这里原样传回：
+         *   -EAGAIN  非阻塞且暂时没有连接（调用方该去 poll）
+         *   -EINTR   阻塞时被信号打断（用户态该重试或退出）
+         *   -EINVAL  fd 不是 Listen 状态
+         *   -EBADF   监听 socket 已被关闭
+         * 以前一律压成 -EINVAL，非阻塞 accept 根本没法写。 */
+        Err(e) => e,
     }
 }
 
@@ -232,6 +236,18 @@ pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
     let nonblock = nonblock_flag(fd);
     match socket::slot_kind(slot) {
         Some(SlotKind::Tcp) => {
+            /* TCP 是一条**字节流**,没有"一条消息"的概念:write(16384) 必须
+             * 自己切成 1460 的段发出去,而不是回 -EMSGSIZE。
+             *
+             * 原来这里直接 `if len > 1460 { return -EMSGSIZE }`,等于把 MSS
+             * 暴露成了 syscall 的语义上限。小请求(< 1.4KB)看不出问题,
+             * 但 TLS 的写方向是按 record 走的:一个大 POST、或者 openssl 攒够
+             * 16KB 明文再成帧,write 就会拿到 EMSGSIZE —— curl/openssl 那边
+             * 表现成"写失败/连接中止",而 tcp-stat 里可能一个字节都没发,
+             * 非常难对上号。
+             *
+             * 部分写:只有第一段就失败才回错误,否则回已发字节数(合法的
+             * 短写,调用方会接着写剩下的)。UDP 下面单独分支,保留 -EMSGSIZE。 */
             let mut off = 0usize;
             while off < data.len() {
                 let end = (off + 1460).min(data.len());
