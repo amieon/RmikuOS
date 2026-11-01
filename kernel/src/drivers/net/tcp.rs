@@ -21,6 +21,17 @@ pub const RST: u8 = 0x04;
 pub const PSH: u8 = 0x08;
 pub const ACK: u8 = 0x10;
 
+/// 这个源地址是不是"不该对着它回 RST"的那种（RFC 1122 §4.2.3.1）：
+/// 有限广播、0.0.0.0（DHCP 之前）、组播 224/4，以及本网段的定向广播。
+/// 掩码按 /24，和 ip.rs 里 NETMASK 的约定保持一致（那边是私有常量）。
+fn is_bcast_like(ip: u32) -> bool {
+    const NETMASK: u32 = 0xFFFF_FF00;
+    ip == 0xFFFF_FFFF
+        || ip == 0
+        || (ip & 0xF000_0000) == 0xE000_0000
+        || ip == (my_ip() | !NETMASK)
+}
+
 // ---------- RTO 常量(RFC 6298 / Jacobson) ----------
 const INITIAL_RTO_MS: u64 = 1_000;
 const RTO_MIN_MS: u64 = 200;
@@ -124,7 +135,7 @@ pub struct TcpSocket {
     pub backlog: usize,
     pub parent: Option<usize>,
     pub rst: bool,
-    /// 上一次 connect 失败的原因，供 getsockopt(SO_ERROR) 读取（0 = 无错）。
+
     /// Linux 语义：读一次就清零，否则调用方会反复看到同一个旧错误。
     /// 我们的 connect 是阻塞的，失败时已直接返回 -1；这里记录是为了让
     /// "连接失败"在 socket 仍然存在时也能被查询到，而不是让 SO_ERROR 恒 0 说谎。
@@ -153,6 +164,10 @@ pub struct TcpSocket {
 
     pub rx_shutdown: bool,
     pub reuse_addr: bool,
+
+    pub rx_bytes: u64,
+    pub rx_segs: u32,
+    pub eof_logged: bool,
 }
 
 impl TcpSocket {
@@ -198,6 +213,9 @@ impl TcpSocket {
             stat_loss: 0,
             rx_shutdown: false,
             reuse_addr: false,
+            rx_bytes: 0,
+            rx_segs: 0,
+            eof_logged: false,
         }
     }
 }
@@ -554,7 +572,38 @@ pub fn input(segment: &[u8], src_ip: u32) {
     }
     let i = match idx {
         Some(i) => i,
-        None => return,
+        None => {
+            /* 没有任何 socket 认领这个段（典型场景：连到没人 listen 的端口）。
+             * RFC 793 要求这种段回 RST，否则发起方
+             * 只能靠自己的超时收场。回了 RST 之后同一条路径应当在毫秒级
+             * 变成 ECONNREFUSED。
+             *
+             * 两种情况不回：
+             *   · 对方发的就是 RST —— 回 RST 会打成乒乓；
+             *   · 源地址不是单播（广播/组播），见 ip.rs 的过滤。
+             * RFC 793 p.65 的两条分支：
+             *   带 ACK  → seq 取对端的 ack，不带 ACK 标志；
+             *   不带 ACK → seq=0，ACK 标志置位，ack = 对方 seq + 段长
+             *             （SYN/FIN 各占一个序号）。
+             */
+            if flags & RST == 0 && !is_bcast_like(src_ip) {
+                if flags & ACK != 0 {
+                    send_segment(dst_port, remote, ack, 0, RST, &[]);
+                } else {
+                    let seg_len = payload.len() as u32
+                        + u32::from(flags & SYN != 0)
+                        + u32::from(flags & FIN != 0);
+                    send_segment(dst_port, remote, 0, seq.wrapping_add(seg_len), RST | ACK, &[]);
+                }
+                log::info!(
+                    "[tcp] no socket for port {}, RST -> {}.{}.{}.{}:{}",
+                    dst_port,
+                    (src_ip >> 24) & 0xff, (src_ip >> 16) & 0xff,
+                    (src_ip >> 8) & 0xff, src_ip & 0xff, src_port
+                );
+            }
+            return;
+        }
     };
     let is_listener = matches!(&table.slots[i], Some(Socket::Tcp(t)) if t.state == TcpState::Listen);
     if is_listener {
@@ -651,6 +700,11 @@ pub fn input(segment: &[u8], src_ip: u32) {
                 | TcpState::CloseWait | TcpState::Closing | TcpState::LastAck => {
                     let mut ack_now = false;
                     if flags & SYN == 0 && (!payload.is_empty() || flags & FIN != 0) {
+                        // 线上计账:在 sr_input 之前,重复段/乱序段都算(那是"到没到")
+                        if !payload.is_empty() {
+                            t.rx_bytes += payload.len() as u64;
+                            t.rx_segs += 1;
+                        }
                         let fin_consumed = sr_input(t, seq, payload, flags & FIN != 0);
                         ack_now = true; // 数据/乱序/重复段都触发 ACK(重复 ACK 即对端 dup ACK 源)
                         if fin_consumed {
@@ -987,6 +1041,23 @@ pub fn recv_data(fd: usize, out: &mut [u8]) -> isize {
     recv_data_ex(fd, out, false, false)
 }
 
+/// recv 真要返回 0(EOF)时打一行诊断,每连接只打一次。
+///
+/// 这一行专门回答"数据到底有没有到内核":
+///   rx_bytes 已经是 0 → 对端一个字节都没发(或我们连 ACK 都没回);
+///   rx_bytes 上千而 queued=0 → 收到了但没交付,问题在 sr_input/recv
+///   这一侧,不在 TLS。curl 的 `unexpected eof while reading` 绝大多数是后者。
+fn eof_diag(fd: usize, t: &mut TcpSocket, why: &str) {
+    if t.eof_logged {
+        return;
+    }
+    t.eof_logged = true;
+    log::info!(
+        "[tcp-eof] fd={} why={} rx_bytes={} rx_segs={} queued={} ooo={} rcv_nxt={}",
+        fd, why, t.rx_bytes, t.rx_segs, t.rx_queue.len(), t.ooo.len(), t.rcv_nxt
+    );
+}
+
 /// peek=true 对应 MSG_PEEK：把数据抄给调用方但不消费。
 pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool, nonblock: bool) -> isize {
     loop {
@@ -999,27 +1070,39 @@ pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool, nonblock: bool) -> is
                         if chunk.is_empty() && t.rst {
                             return -crate::syscall::errno::ECONNRESET;
                         }
-                        let n = chunk.len().min(out.len());
+                        let total = chunk.len();
+                        let n = total.min(out.len());
                         out[..n].copy_from_slice(&chunk[..n]);
                         /* POSIX 语义: recv 只消费 n 字节, 剩余留在队列头,
                          * 下次 recv 继续读——否则整块弹出会让"小缓冲逐次读"的
                          * 客户端(如 HTTP 头逐字节解析)丢数据。
-                         * peek 则一个字节都不消费,原块放回。 */
-                        if !peek && chunk.len() > n {
+                         * peek 则一个字节都不消费,原块放回。
+                         */
+                        if peek {
+                            t.rx_queue.push_front(chunk);
+                        } else if total > n {
                             chunk.drain(..n);
-                        }
-                        if peek || chunk.len() > n {
                             t.rx_queue.push_front(chunk);
                         }
                         return n as isize;
                     }
-                    if t.rx_shutdown { return 0; }
+                    if t.rx_shutdown {
+                        eof_diag(fd, t, "shutdown");
+                        return 0;
+                    }
                     match t.state {
                         TcpState::Closed => {
-                            return if t.rst { -crate::syscall::errno::ECONNRESET } else { 0 }
+                            if t.rst {
+                                return -crate::syscall::errno::ECONNRESET;
+                            }
+                            eof_diag(fd, t, "closed");
+                            return 0;
                         }
                         TcpState::CloseWait | TcpState::Closing
-                        | TcpState::LastAck | TcpState::TimeWait => return 0,
+                        | TcpState::LastAck | TcpState::TimeWait => {
+                            eof_diag(fd, t, "peer-fin");
+                            return 0;
+                        }
                         _ => {}
                     }
                 }

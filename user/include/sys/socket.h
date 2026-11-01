@@ -48,6 +48,32 @@ extern "C" {
 #define AF_INET6  10
 #endif
 
+/*
+ * PF_* 是 AF_* 的同义名（POSIX：`PF_` 用于 socket() 的 domain，`AF_` 用于
+ * sockaddr 的 family；Linux 上两者数值相同，所以历来混用）。必须有：
+ * curl 的 hostip4.c 写的是 `hints.ai_family = PF_INET;`，只认 AF_ 的实现
+ * 直接 "PF_INET undeclared"。glibc 把这一整套都放在 <sys/socket.h> 里
+ * （PF_LOCAL/PF_FILE 也指向 AF_UNIX），这里照齐。
+ */
+#ifndef PF_UNSPEC
+#define PF_UNSPEC AF_UNSPEC
+#endif
+#ifndef PF_UNIX
+#define PF_UNIX   AF_UNIX
+#endif
+#ifndef PF_LOCAL
+#define PF_LOCAL  AF_UNIX      /* 同一个东西的另一个名字（BSD 叫 PF_LOCAL） */
+#endif
+#ifndef PF_FILE
+#define PF_FILE   AF_UNIX      /* 又一个是 SysV 的叫法 */
+#endif
+#ifndef PF_INET
+#define PF_INET   AF_INET      /* AF_INET 在 net.h（socket.h 单向依赖它） */
+#endif
+#ifndef PF_INET6
+#define PF_INET6  AF_INET6
+#endif
+
 #ifndef RK_SOCKADDR_STORAGE
 #define RK_SOCKADDR_STORAGE
 struct sockaddr_storage {

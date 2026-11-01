@@ -224,9 +224,6 @@ pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
     if len == 0 {
         return 0;
     }
-    if len > 1460 {
-        return -EMSGSIZE;
-    }
     let data = match read_current_user_bytes(buf, len) {
         Some(d) if d.len() == len => d,
         _ => return -EFAULT,
@@ -234,9 +231,27 @@ pub fn sys_net_send(fd: usize, buf: usize, len: usize) -> isize {
     let slot = slot as usize;
     let nonblock = nonblock_flag(fd);
     match socket::slot_kind(slot) {
-        Some(SlotKind::Tcp) => tcp::send_data(slot, &data, nonblock),
-        // UDP: 向 connect 记下的默认对端发送,未 connect 返回 -EDESTADDRREQ
-        Some(SlotKind::Udp) => udp::send_data(slot, &data),
+        Some(SlotKind::Tcp) => {
+            let mut off = 0usize;
+            while off < data.len() {
+                let end = (off + 1460).min(data.len());
+                let n = tcp::send_data(slot, &data[off..end], nonblock);
+                if n < 0 {
+                    return if off > 0 { off as isize } else { n };
+                }
+                if n == 0 {
+                    break;
+                }
+                off += n as usize;
+            }
+            off as isize
+        }
+        Some(SlotKind::Udp) => {
+            if len > 1460 {
+                return -EMSGSIZE; // 数据报不能切,超了就是调用方的错
+            }
+            udp::send_data(slot, &data)
+        }
         _ => -EOPNOTSUPP,
     }
 }

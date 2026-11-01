@@ -26,6 +26,10 @@ struct pollfd {
 };
 
 #define POLLIN   0x0001  /* 有数据可读,或读侧 EOF */
+#define POLLPRI  0x0002  /* 紧急/带外数据可读。**本内核从不上报这一位**
+                          * （TCP 带外数据未实现),但 POSIX 要求它存在:
+                          * 大量移植代码用 `#define POLLRDBAND POLLPRI` 做兜底,
+                          * 缺一个符号就整段编不过(curl 的 lib/select.h 就是这样)。 */
 #define POLLOUT  0x0004  /* 至少还能写入一个字节 */
 #define POLLERR  0x0008  /* 错误,不随 events 过滤 */
 #define POLLHUP  0x0010  /* 对端挂断,不随 events 过滤 */
