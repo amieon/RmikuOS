@@ -7,6 +7,7 @@ extern "C" {
 #include "io.h"
 #include "sys/types.h"   /* mode_t / uid_t / gid_t / time_t / off_t */
 #include "errno.h"       /* access() 失败时按 amode 粗设 errno */
+#include "fcntl.h"       /* fcntl()：POSIX 把它归在 <fcntl.h>，本文件只是转手 */
 #include "process.h"
 
 /* 
@@ -526,30 +527,10 @@ static inline isize remove_recursive(const char *path) {
     return remove_recursive2(path, strlen(path));
 }
 
-/* fcntl 必须是变参：POSIX 里 F_GETFL / F_GETFD 这类"查询"命令只传两个参数，
- * 而 F_SETFL / F_SETFD / F_DUPFD 带第三个。固定三参版本会让
- *     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
- * 这种写法直接编不过（内层只给了两个实参）—— zlib 的 gzlib.c 就是这么写的。
- *
- * 只有查询类命令才跳过 va_arg。新增查询类命令时必须加进下面这个白名单，
- * 否则会读到栈上的垃圾当 arg（变参函数编译器不检查实参个数）。
- * 曾经漏过一次：加了 F_GETFD 之后 git 的 `fcntl(fd, F_GETFD)` 读到垃圾，
- * 于是 `flags | FD_CLOEXEC` 变成一个乱七八糟的值。 */
-static inline int fcntl(int fd, int cmd, ...) {
-    va_list ap;
-    int arg = 0;
-    switch (cmd) {
-    case F_GETFL:
-    case F_GETFD:
-        break;                     /* 查询类：没有第三个实参 */
-    default:
-        va_start(ap, cmd);
-        arg = va_arg(ap, int);
-        va_end(ap);
-        break;
-    }
-    return (int)rk_sys_ret(syscall3(SYS_FCNTL, (usize)fd, (usize)cmd, (usize)arg));
-}
+/* fcntl() 已搬到 <fcntl.h>（POSIX 规定的归属），本文件通过顶部 include 拿到它。
+ * 搬家的原因写在 fcntl.h 里：只包含 <fcntl.h> 的移植代码（curl 的探测、
+ * sqlite3、tcc）拿不到 fs.h 里的这个声明，会判成"没有 fcntl"。
+ * 老代码只 include fs.h 的，行为不变。 */
 
 static inline off_t lseek(int fd, off_t offset, int whence) {
     return (off_t)rk_sys_ret(syscall3(SYS_LSEEK, (usize)fd, (usize)offset, (usize)whence));
