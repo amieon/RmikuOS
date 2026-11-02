@@ -1,7 +1,12 @@
 #include "user.h"
 
-#define LINE_SIZE 128
-#define MAX_ARGC  16
+
+#define LINE_SIZE 512
+#define MAX_ARGC  32
+
+#if MAX_ARGC > EXEC_MAX_ARGS
+#error "MAX_ARGC must not exceed EXEC_MAX_ARGS (exec ABI limit)"
+#endif
 #define HISTORY_MAX 16
 #define MAX_DIRS 8
 #define DIR_LEN 64
@@ -29,6 +34,247 @@ static int var_pool_idx = 0;
 
 /* 最近一条前台命令的退出码，供 $? 展开使用（与 bash 语义一致）。 */
 static int g_last_exit = 0;
+
+#define CTL_BREAK     300
+#define CTL_CONTINUE  301
+#define CTL_MAX       299
+
+/* 循环嵌套层数：break/continue 在循环外要报错，而不是静默返回 300 */
+static int g_loop_depth = 0;
+
+enum {
+    KW_IF = 0, KW_FOR, KW_WHILE, KW_UNTIL, KW_CASE,
+    KW_FI, KW_DONE, KW_ESAC,
+    KW_THEN, KW_ELSE, KW_ELIF, KW_DO, KW_IN,
+    KW_N
+};
+
+/* d > 0：开启一层；d < 0：闭合一层；d == 0：不改变深度 */
+static const struct { const char *w; int d; } kwtab[KW_N] = {
+    {"if", 1}, {"for", 1}, {"while", 1}, {"until", 1}, {"case", 1},
+    {"fi", -1}, {"done", -1}, {"esac", -1},
+    {"then", 0}, {"else", 0}, {"elif", 0}, {"do", 0}, {"in", 0},
+};
+
+static int is_word_sep(char c) {
+    return c == 0 || c == ' ' || c == '\t' || c == '\n' ||
+           c == ';' || c == '&' || c == '|' || c == '(' || c == ')' ||
+           c == '{' || c == '}' || c == '<' || c == '>';
+}
+
+/* p 处是否正好是关键字 kw（只验右边界，左边界由调用方的"命令位置"保证） */
+static char *kw_at(const char *p, const char *kw) {
+    int n = 0;
+    while (kw[n]) n++;
+    for (int i = 0; i < n; i++)
+        if (p[i] != kw[i]) return 0;
+    if (!is_word_sep(p[n])) return 0;
+    return (char *)p + n;
+}
+
+/* p 处是哪个关键字，返回下标或 -1；*len 回填词长 */
+static int kw_lookup(const char *p, int *len) {
+    for (int k = 0; k < KW_N; k++) {
+        char *e = kw_at(p, kwtab[k].w);
+        if (e) {
+            if (len) *len = (int)(e - p);
+            return k;
+        }
+    }
+    return -1;
+}
+
+/* 扫描整串，返回"还剩几层没闭合"。> 0 说明这行还没写完。
+ *
+ * 这一个函数同时解决两件事：交互式输入的多行续读（提示符 > ），以及
+ * source 脚本里跨行的 if/for。不需要完整语法分析 —— 只要关键字配对。 */
+static int compound_depth(const char *s) {
+    int depth = 0, at_cmd = 1;
+    char quote = 0;
+    int i = 0;
+    while (s[i]) {
+        char c = s[i];
+        if (quote) {
+            if (c == '\\' && quote == '"' && s[i+1]) { i += 2; continue; }
+            if (c == quote) quote = 0;
+            i++; continue;
+        }
+        if (c == '\\' && s[i+1]) { i += 2; continue; }
+        if (c == '"' || c == '\'') { quote = c; at_cmd = 0; i++; continue; }
+        if (c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\t')) {
+            while (s[i] && s[i] != '\n') i++;
+            continue;
+        }
+        if (c == ' ' || c == '\t' || c == '\n') { i++; continue; }
+        if (c == ';' || c == '|' || c == '&') { at_cmd = 1; i++; continue; }
+
+        /* 只在**命令位置**认关键字：`echo if` 里的 if 只是参数，
+         * 若把它算成开括号，输入就会一直等 `>` 等不到头。 */
+        if (at_cmd) {
+            int wl = 0;
+            int k = kw_lookup(s + i, &wl);
+            if (k >= 0) {
+                if (kwtab[k].d < 0) { if (depth > 0) depth--; }
+                else depth += kwtab[k].d;
+                if (depth < 0) depth = 0;
+                at_cmd = (k == KW_FOR) ? 0 : 1;   /* for 后面是变量名 */
+                i += wl;
+                continue;
+            }
+        }
+        at_cmd = 0;
+        i++;
+    }
+    return depth;
+}
+
+/* 裁掉"词首 #"到行尾的注释（引号内的不算）。
+ *
+ * 复合命令必须先裁剪再分析：`for i in 1 2; do # 数一下` 里的 # 如果留到
+ * find_kw0，会让它一路扫到串尾都找不到 done，报 "missing done" ——
+ * 一条完全正确的循环被行尾注释带崩。 */
+static void strip_comment(char *s) {
+    char quote = 0;
+    for (int i = 0; s[i]; i++) {
+        char c = s[i];
+        if (quote) {
+            if (c == '\\' && quote == '"' && s[i+1]) { i++; continue; }
+            if (c == quote) quote = 0;
+            continue;
+        }
+        if (c == '\\' && s[i+1]) { i++; continue; }
+        if (c == '"' || c == '\'') { quote = c; continue; }
+        if (c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\t')) {
+            s[i] = 0;
+            return;
+        }
+    }
+}
+
+/* 语句分隔符 */
+#define SEP_SEMI 1
+#define SEP_AND  2      /* && */
+#define SEP_OR   3      /* || */
+#define SEP_BG   4      /* 单个 & */
+
+struct sep { int pos; int len; int kind; };
+
+/* 收集相对深度 0 的语句分隔符。复合命令体内部的分号不在其列 ——
+ * 这正是 `if a; then b; fi && c` 能正确分层的前提。 */
+static int scan_seps(const char *s, struct sep *out, int max) {
+    int n = 0, depth = 0, at_cmd = 1;
+    char quote = 0;
+    int i = 0;
+    while (s[i]) {
+        char c = s[i];
+        if (quote) {
+            if (c == '\\' && quote == '"' && s[i+1]) { i += 2; continue; }
+            if (c == quote) quote = 0;
+            i++; continue;
+        }
+        if (c == '\\' && s[i+1]) { i += 2; continue; }
+        if (c == '"' || c == '\'') { quote = c; at_cmd = 0; i++; continue; }
+        if (c == ' ' || c == '\t' || c == '\n') { i++; continue; }
+
+        if (at_cmd) {
+            int wl = 0;
+            int k = kw_lookup(s + i, &wl);
+            if (k >= 0) {
+                /* 关键字只在这时才算关键字。这一条让 `for i in if` 里的
+                 * if 不会被当成开括号 —— 变量名里出现关键字是合法的。 */
+                depth += kwtab[k].d;
+                if (depth < 0) depth = 0;
+                /* for 后面是变量名，不是命令位置 */
+                at_cmd = (k == KW_FOR) ? 0 : 1;
+                i += wl;
+                continue;
+            }
+        }
+
+        if (c == ';') {
+            if (depth == 0 && n < max) { out[n].pos = i; out[n].len = 1; out[n].kind = SEP_SEMI; n++; }
+            at_cmd = 1; i++; continue;
+        }
+        if (c == '&') {
+            /* `2>&1` / `>&2` 里的 & 属于 fd 复制，不是后台分隔符。
+             * 之前这里无条件当 SEP_BG，`cmd 2>&1` 就被切成 "cmd 2>" 和 "1"
+             * 两段，前一段的 `>` 没有目标 → "syntax error in redirection"。
+             * POSIX 要求 `>&` 紧邻，所以只看紧前一个字符就够。 */
+            if (i > 0 && (s[i-1] == '>' || s[i-1] == '<')) { i++; continue; }
+            if (s[i+1] == '&') {
+                if (depth == 0 && n < max) { out[n].pos = i; out[n].len = 2; out[n].kind = SEP_AND; n++; }
+                i += 2;
+            } else {
+                if (depth == 0 && n < max) { out[n].pos = i; out[n].len = 1; out[n].kind = SEP_BG; n++; }
+                i++;
+            }
+            at_cmd = 1; continue;
+        }
+        if (c == '|') {
+            if (s[i+1] == '|') {
+                if (depth == 0 && n < max) { out[n].pos = i; out[n].len = 2; out[n].kind = SEP_OR; n++; }
+                i += 2;
+            } else {
+                i++;        /* 单管道交给 run_pipeline */
+            }
+            at_cmd = 1; continue;
+        }
+        at_cmd = 0;
+        i++;
+    }
+    return n;
+}
+
+/* 在 s 里找相对深度 0 的指定关键字，返回位置，*id 回填下标。
+ *
+ * 闭合关键字（fi/done/esac）要先看深度：深度为 0 时它闭合的才是
+ * "本层"。否则 `if a; then if b; then c; fi; fi` 里第一个 fi 会被外层
+ * 认领，内层 if 就永远少一个结尾。 */
+static char *find_kw0(char *s, const int *ids, int nids, int *id) {
+    int depth = 0, at_cmd = 1;
+    char quote = 0;
+    int i = 0;
+    while (s[i]) {
+        char c = s[i];
+        if (quote) {
+            if (c == '\\' && quote == '"' && s[i+1]) { i += 2; continue; }
+            if (c == quote) quote = 0;
+            i++; continue;
+        }
+        if (c == '\\' && s[i+1]) { i += 2; continue; }
+        if (c == '"' || c == '\'') { quote = c; at_cmd = 0; i++; continue; }
+        if (c == ' ' || c == '\t' || c == '\n') { i++; continue; }
+        if (c == '#' && (i == 0 || is_word_sep(s[i-1]))) { break; }
+        if (c == ';' || c == '|' || c == '&') { at_cmd = 1; i++; continue; }
+
+        if (at_cmd) {
+            int wl = 0;
+            int k = kw_lookup(s + i, &wl);
+            if (k >= 0) {
+                if (kwtab[k].d < 0) {
+                    if (depth == 0) {
+                        for (int t = 0; t < nids; t++)
+                            if (ids[t] == k) { *id = k; return s + i; }
+                        return 0;       /* 括号不配对 */
+                    }
+                    depth--;
+                } else if (kwtab[k].d > 0) {
+                    depth++;
+                } else if (depth == 0) {
+                    for (int t = 0; t < nids; t++)
+                        if (ids[t] == k) { *id = k; return s + i; }
+                }
+                at_cmd = (k == KW_FOR) ? 0 : 1;
+                i += wl;
+                continue;
+            }
+        }
+        at_cmd = 0;
+        i++;
+    }
+    return 0;
+}
+
 
 struct job {
     int used;
@@ -743,6 +989,38 @@ static int read_line(const char *prompt, char *buf, int max_len) {
         if (ch == '\r') ch = '\n';
 
         if (ch == '\n') {
+            /* POSIX 行续：行尾**奇数个**反斜杠（即不是 `\\` 转义出来的字面反斜杠）
+             * 表示这一行还没完，把下一行接上来。
+             *
+             * 没有这个，粘贴带续行的命令会被拆成两条独立命令行：curl 那条就报
+             * `option : blank argument where content is expected` —— 而人看到的是
+             * "命令跑了一下然后报了个莫名其妙的错"，很难想到是分词层。
+             * 奇数才续行，是为了让 `echo a\\` 仍然以一个字面反斜杠结尾。 */
+            int bs = 0;
+            while (bs < len && buf[len - 1 - bs] == '\\') bs++;
+            if (len > 0 && (bs & 1)) {
+                len--;
+                cursor = len;
+                buf[len] = 0;
+                fputs("\n> ", stdout);
+                fflush(stdout);
+                continue;
+            }
+            /* 复合命令还没闭合（if..fi / for..done）：换行不能算结束。
+             * 把换行就地改成 ';' 接下一行，`for i in a b` + 回车 + `do`
+             * 就拼成 `for i in a b;do`，与单行写法完全等价。 */
+            if (len > 0 && compound_depth(buf) > 0) {
+                if (len < max_len - 2) {
+                    buf[len++] = ';';
+                    buf[len] = 0;
+                    cursor = len;
+                    fputs("\n> ", stdout);
+                    fflush(stdout);
+                    continue;
+                }
+                /* 这一行已经塞满：不再接，交给 exec 报语法错，别静默吞掉 */
+                buf[len] = 0;
+            }
             fputs("\n", stdout);
             break;
         }
@@ -912,7 +1190,9 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
         while (line[i] == ' ' || line[i] == '\t') i++;
         if (!line[i]) break;
         if (line[i] == '#') break;
-        if (argc >= max_argc) break;
+        /* 超限必须报错，不能 break：静默截断会让命令带着一半参数被执行，
+         * 症状是"参数明明给了却没生效"，而错误信息一个字都没有。 */
+        if (argc >= max_argc) return -1;
 
         argv[argc] = &line[i];
         int w = i;
@@ -1480,23 +1760,80 @@ static int run_external(int argc, char *argv[], int background) {
 }
 
 /* ---- 管道 & 重定向 ---- */
+/* 一条重定向操作。按记录顺序左到右应用，这是 POSIX 的硬性规定，也是
+ * `2>&1 >f` 和 `>f 2>&1` 结果不同的唯一来源：
+ *   2>&1 >f   stderr 复制的是重定向前的 stdout（通常是终端），stdout 去 f
+ *   >f 2>&1   stdout 先去 f，stderr 再复制 stdout → 两个都进 f
+ * 用"字段式"（outfile/errfile/err_to_out）表达不了这个差别，必须留序列。 */
+struct redir_op {
+    int  fd;           /* 被重定向的 fd：0/1/2 */
+    int  dup_from;     /* >=0 表示 dup2(from, fd)；-1 表示打开 name */
+    int  append;
+    char name[256];
+};
+
+#define MAX_REDIRS 8
+#define MAX_ASSIGNS 8
+
+/* 前缀赋值 `VAR=v cmd` 的载体。name/val 都指向 argv 里的副本（就地切分），
+ * 所以生命周期跟 argv 一样长，不需要额外拷贝。 */
+struct assign_kv {
+    char *name;
+    char *val;
+};
+
 struct segment {
     char *cmd_str;
-    char  infile[LINE_SIZE];
-    char  outfile[LINE_SIZE];
-    int   append;
+    struct redir_op ops[MAX_REDIRS];
+    int  nops;
+    struct assign_kv assigns[MAX_ASSIGNS];
+    int  nassigns;
 };
+
+/* `NAME=VALUE` 且 NAME 是合法标识符。注意只认词首：`a=b` 是赋值，
+ * `./a=b` 和 `x/a=b` 是文件名。 */
+static int is_assign_word(const char *s) {
+    if (!s || !*s) return 0;
+    if (!((*s >= 'A' && *s <= 'Z') || (*s >= 'a' && *s <= 'z') || *s == '_'))
+        return 0;
+    const char *p = s + 1;
+    while ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+           (*p >= '0' && *p <= '9') || *p == '_') p++;
+    return *p == '=';
+}
+
+/* 就地切分成两段，返回 name，val 由出参带回。调用方必须保证 s 可写。 */
+static char *split_assign(char *s, char **val) {
+    char *eq = s;
+    while (*eq && *eq != '=') eq++;
+    *eq = 0;
+    *val = eq + 1;
+    return s;
+}
 
 static char *skip_spaces(char *p) {
     while (*p == ' ' || *p == '\t') p++;
     return p;
 }
 
+/* 把 "2>" 里的那个 "2" 从已写入的 cmd_str 里抹掉，并返回 fd 编号。
+ * 必须紧邻且在词首：`a1>f` 里的 1 是文件名的一部分（a1），不是 fd。 */
+static int eat_fd_prefix(char *buf, int *w, int dflt) {
+    int b = *w;
+    while (b > 0 && buf[b - 1] >= '0' && buf[b - 1] <= '9') b--;
+    if (b == *w) return dflt;
+    if (b > 0 && buf[b - 1] != ' ' && buf[b - 1] != '\t') return dflt;
+    int v = 0;
+    for (int q = b; q < *w; q++) v = v * 10 + (buf[q] - '0');
+    if (v < 0 || v > 2) return dflt;   /* 只支持 0/1/2，别的当普通数字 */
+    *w = b;
+    return v;
+}
+
 static int parse_redirect(char *seg_str, struct segment *out) {
-    out->cmd_str   = seg_str;
-    out->infile[0]  = 0;
-    out->outfile[0] = 0;
-    out->append     = 0;
+    out->cmd_str = seg_str;
+    out->nops    = 0;
+    out->nassigns = 0;
 
     int i = 0;
     int w = 0;
@@ -1523,31 +1860,52 @@ static int parse_redirect(char *seg_str, struct segment *out) {
         }
         if (c == '>' || c == '<') {
             int is_output = (c == '>');
+            int fd = eat_fd_prefix(seg_str, &w, is_output ? 1 : 0);
             int append = 0;
             i++;
             if (is_output && seg_str[i] == '>') {
                 append = 1;
                 i++;
             }
+
+            if (out->nops >= MAX_REDIRS) return -1;
+
+            /* >&N / <&N：fd 复制。这是 `2>&1` 的落点 —— 之前 `&` 在
+             * scan_seps 里就被当成后台符号切掉了，压根走不到这里。 */
+            if (seg_str[i] == '&') {
+                i++;
+                if (seg_str[i] < '0' || seg_str[i] > '9') return -1;
+                int src = 0;
+                while (seg_str[i] >= '0' && seg_str[i] <= '9') {
+                    src = src * 10 + (seg_str[i] - '0');
+                    i++;
+                }
+                if (src < 0 || src > 2) return -1;
+                struct redir_op *op = &out->ops[out->nops++];
+                op->fd = fd;
+                op->dup_from = src;
+                op->append = 0;
+                op->name[0] = 0;
+                continue;
+            }
+
             i = (int)(skip_spaces(seg_str + i) - seg_str);
             if (seg_str[i] == 0 ||
                 seg_str[i] == '>' || seg_str[i] == '<' || seg_str[i] == '|') {
                 return -1;
             }
-            char target[LINE_SIZE];
+            struct redir_op *op = &out->ops[out->nops++];
+            op->fd = fd;
+            op->dup_from = -1;
+            op->append = append;
             int t = 0;
             while (seg_str[i] && seg_str[i] != ' ' && seg_str[i] != '\t' &&
                    seg_str[i] != '>' && seg_str[i] != '<' && seg_str[i] != '|') {
-                if (t < LINE_SIZE - 1) target[t++] = seg_str[i];
+                if (t < (int)sizeof(op->name) - 1) op->name[t++] = seg_str[i];
                 i++;
             }
-            target[t] = 0;
-            if (is_output) {
-                copy_str(out->outfile, target, LINE_SIZE);
-                out->append = append;
-            } else {
-                copy_str(out->infile, target, LINE_SIZE);
-            }
+            op->name[t] = 0;
+            if (t == 0) return -1;
             continue;
         }
         seg_str[w++] = seg_str[i++];
@@ -1556,29 +1914,51 @@ static int parse_redirect(char *seg_str, struct segment *out) {
     return 0;
 }
 
-static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[]) {
-    if (seg->infile[0]) {
-        isize fd = open(seg->infile, O_RDONLY);
-        if (fd < 0) {
-            printf("cannot open %s for input\n", seg->infile);
-            exit(1);
+/* 按记录顺序应用重定向。返回 -1 表示打开失败（调用方决定怎么退出）。
+ * 拆出来是为了能在宿主上直接验证 fd 指向 —— 这段逻辑的正确性完全取决于
+ * "顺序"，只看代码很容易看错。 */
+static int apply_redirects(struct segment *seg) {
+    for (int k = 0; k < seg->nops; k++) {
+        struct redir_op *op = &seg->ops[k];
+
+        if (op->dup_from >= 0) {
+            if (op->dup_from != op->fd && dup2(op->dup_from, op->fd) < 0) {
+                printf("cannot dup fd %d -> %d\n", op->dup_from, op->fd);
+                return -1;
+            }
+            continue;
         }
-        dup2(fd, 0);
-        close(fd);
-    }
-    if (seg->outfile[0]) {
-        isize fd;
-        if (seg->append)
-            fd = open(seg->outfile, O_CREAT | O_APPEND | O_WRONLY, 0644);
+
+        int flags;
+        if (op->fd == 0)
+            flags = O_RDONLY;
+        else if (op->append)
+            flags = O_CREAT | O_APPEND | O_WRONLY;
         else
-            fd = open(seg->outfile, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+            flags = O_CREAT | O_TRUNC | O_WRONLY;
+
+        isize fd = open(op->name, flags, 0644);
         if (fd < 0) {
-            printf("cannot open %s for output\n", seg->outfile);
-            exit(1);
+            printf("cannot open %s\n", op->name);
+            return -1;
         }
-        dup2(fd, 1);
-        close(fd);
+        if (fd != op->fd) {
+            dup2(fd, op->fd);
+            close(fd);
+        }
     }
+    return 0;
+}
+
+static void apply_redirect_and_exec(struct segment *seg, int argc, char *argv[]) {
+    /* 前缀赋值只活在这个子进程里，exec 之前设好就行 —— 这正是
+     * `VAR=v cmd | other` 里赋值不泄漏给 other 的原因。 */
+    for (int k = 0; k < seg->nassigns; k++)
+        setenv_s(seg->assigns[k].name, seg->assigns[k].val, 1);
+
+    /* 严格按解析顺序应用：`2>&1 >f` 的 stderr 指向**重定向前**的 stdout，
+     * `>f 2>&1` 的两个都进 f。位置一换语义就变，所以这里不能分组优化。 */
+    if (apply_redirects(seg) < 0) exit(1);
     run_exec(argc, argv);
     exit(1);
 }
@@ -1633,6 +2013,10 @@ static int run_pipeline(char *line) {
         int q0[MAX_ARGC];
         char *a0[MAX_ARGC];
         int ac0 = parse_args(segs[s].cmd_str, a0, MAX_ARGC, q0);
+        if (ac0 < 0) {
+            printf("shell: too many arguments (max %d)\n", MAX_ARGC);
+            return 1;
+        }
         if (ac0 == 0) {
             fputs("syntax error: empty command\n", stdout);
             return 1;
@@ -1651,6 +2035,29 @@ static int run_pipeline(char *line) {
             seg_argv[s][k] = pipeline_arg_strs[s][k];
         }
         for (int k = 0; k < eac && k < MAX_ARGC; k++) seg_quoted[s][k] = vq[k];
+
+        /* 前缀赋值 `VAR=v cmd | ...`：赋值只作用于**本段**。
+         * 切的是 pipeline_arg_strs 里的副本，就地写 \0 不会影响别的段。 */
+        int np = 0;
+        while (np < eac && is_assign_word(seg_argv[s][np])) np++;
+        if (np > MAX_ASSIGNS) {
+            printf("shell: too many assignments (max %d)\n", MAX_ASSIGNS);
+            return 1;
+        }
+        for (int k = 0; k < np; k++) {
+            char *av;
+            segs[s].assigns[k].name = split_assign(seg_argv[s][k], &av);
+            segs[s].assigns[k].val  = av;
+        }
+        segs[s].nassigns = np;
+        if (np > 0) {
+            if (eac == np) {
+                fputs("syntax error: empty command\n", stdout);
+                return 1;
+            }
+            for (int k = 0; k < eac - np; k++) seg_argv[s][k] = seg_argv[s][np + k];
+            seg_argc[s] = eac - np;
+        }
     }
 
     int prev_read = -1;
@@ -1750,6 +2157,52 @@ static int has_pipe_or_redirect(const char *s) {
 static int builtin_source(const char *path);
 static int execute_line(char *line);
 
+/* 分派体：前缀赋值剥离后，真正按命令名执行。独立成函数是为了让
+ * `VAR=v cmd` 能在**同一进程**里设置环境、递归调用、再恢复。 */
+static int run_dispatch(int argc, char **argv, int background) {
+    if (streq(argv[0], "help")) { print_help(); return 0; }
+    if (streq(argv[0], "exit")) { fputs("bye\n", stdout); exit(0); }
+    if (streq(argv[0], "export")) { return builtin_export(argc, argv); }
+    if (streq(argv[0], "env")) { return builtin_env(argc, argv); }
+    if (streq(argv[0], "unset")) { return builtin_unset(argc, argv); }
+    if (streq(argv[0], "pwd")) { return builtin_pwd(); }
+    if (streq(argv[0], "cd")) { return builtin_cd(argc, argv); }
+    if (streq(argv[0], "mkdir")) { return builtin_mkdir(argc, argv); }
+    if (streq(argv[0], "touch")) { return builtin_create(argc, argv); }
+    if (streq(argv[0], "rm")) { return builtin_rm(argc, argv); }
+    if (streq(argv[0], "rmdir")) { return builtin_rmdir(argc, argv); }
+    if (streq(argv[0], "whoami")) { return builtin_whoami(); }
+    if (streq(argv[0], "chmod")) { return builtin_chmod(argc, argv); }
+    if (streq(argv[0], "chown")) { return builtin_chown(argc, argv); }
+    if (streq(argv[0], "rename") || streq(argv[0], "mv")) { return builtin_rename(argc, argv); }
+    if (streq(argv[0], "jobs")) { print_jobs(); return 0; }
+    if (streq(argv[0], "fg")) { return builtin_fg(argc, argv); }
+    if (streq(argv[0], "bg")) { return builtin_bg(argc, argv); }
+    if (streq(argv[0], "clear")) { builtin_clear(); return 0; }
+    if (streq(argv[0], "source") || streq(argv[0], ".")) {
+        if (argc < 2) {
+            fputs("source: missing file operand\n", stdout);
+            return 1;
+        }
+        return builtin_source(argv[1]);
+    }
+    if (streq(argv[0], "shutdown")) { fputs("bye bye~\n", stdout); rk_shutdown(); return 0; }
+
+    /* break / continue：**必须同进程**。走 fork 的话退出码被 wait 截成 8 位，
+     * 300/301 变成 44/45，循环根本认不出来，症状是"break 执行了但一直在循环"。 */
+    if (streq(argv[0], "break") || streq(argv[0], "continue")) {
+        if (g_loop_depth <= 0) {
+            fputs("shell: ", stdout);
+            fputs(argv[0], stdout);
+            fputs(": only meaningful in a loop\n", stdout);
+            return 0;
+        }
+        return streq(argv[0], "break") ? CTL_BREAK : CTL_CONTINUE;
+    }
+
+    return run_external(argc, argv, background);
+}
+
 /* ---- 单命令执行（含内置命令、通配展开、后台） ---- */
 static int run_node(char *cmd, int background) {
     if (has_pipe_or_redirect(cmd)) {
@@ -1759,6 +2212,10 @@ static int run_node(char *cmd, int background) {
     int quoted[MAX_ARGC];
     char *argv[MAX_ARGC];
     int argc = parse_args(cmd, argv, MAX_ARGC, quoted);
+    if (argc < 0) {
+        printf("shell: too many arguments (max %d)\n", MAX_ARGC);
+        return 2;
+    }
     if (argc == 0) return 0;
 
     /* 变量展开：$VAR / ${VAR}（引号内保护的 token 跳过）。
@@ -1775,35 +2232,46 @@ static int run_node(char *cmd, int background) {
     char *exp_argv[MAX_ARGC];
     int exp_argc = expand_args(var_argc, var_argv, exp_argv, var_quoted);
 
-    if (streq(exp_argv[0], "help")) { print_help(); return 0; }
-    if (streq(exp_argv[0], "exit")) { fputs("bye\n", stdout); exit(0); }
-    if (streq(exp_argv[0], "export")) { return builtin_export(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "env")) { return builtin_env(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "unset")) { return builtin_unset(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "pwd")) { return builtin_pwd(); }
-    if (streq(exp_argv[0], "cd")) { return builtin_cd(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "mkdir")) { return builtin_mkdir(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "touch")) { return builtin_create(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "rm")) { return builtin_rm(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "rmdir")) { return builtin_rmdir(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "whoami")) { return builtin_whoami(); }
-    if (streq(exp_argv[0], "chmod")) { return builtin_chmod(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "chown")) { return builtin_chown(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "rename") || streq(exp_argv[0], "mv")) { return builtin_rename(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "jobs")) { print_jobs(); return 0; }
-    if (streq(exp_argv[0], "fg")) { return builtin_fg(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "bg")) { return builtin_bg(exp_argc, exp_argv); }
-    if (streq(exp_argv[0], "clear")) { builtin_clear(); return 0; }
-    if (streq(exp_argv[0], "source") || streq(exp_argv[0], ".")) {
-        if (exp_argc < 2) {
-            fputs("source: missing file operand\n", stdout);
-            return 1;
+    /* ---- 前缀赋值 `VAR=v cmd` 与裸赋值 `VAR=v` ---- */
+    int npre = 0;
+    while (npre < exp_argc && is_assign_word(exp_argv[npre])) npre++;
+    if (npre > 0 && npre == exp_argc) {
+        /* 整条只有赋值：永久写进环境，不执行命令（POSIX） */
+        for (int i = 0; i < npre; i++) {
+            char *v;
+            char *n = split_assign(exp_argv[i], &v);
+            setenv_s(n, v, 1);
         }
-        return builtin_source(exp_argv[1]);
+        return 0;
     }
-    if (streq(exp_argv[0], "shutdown")) { fputs("bye bye~\n", stdout); rk_shutdown(); return 0; }
+    if (npre > MAX_ASSIGNS) {
+        printf("shell: too many assignments (max %d)\n", MAX_ASSIGNS);
+        return 2;
+    }
+    if (npre > 0) {
+        /* 有命令：临时设置，执行完原样恢复。
+         * getenv 返回的是静态缓冲，必须先拷走 —— 下一次 getenv 会覆盖它。 */
+        char *names[MAX_ASSIGNS];
+        char  oldv[MAX_ASSIGNS][256];
+        int   had[MAX_ASSIGNS];
+        for (int i = 0; i < npre; i++) {
+            char *v;
+            names[i] = split_assign(exp_argv[i], &v);
+            const char *old = getenv(names[i]);
+            had[i] = (old != 0);
+            oldv[i][0] = 0;
+            if (old) copy_str(oldv[i], old, sizeof(oldv[i]));
+            setenv_s(names[i], v, 1);
+        }
+        int rc = run_dispatch(exp_argc - npre, exp_argv + npre, background);
+        for (int i = 0; i < npre; i++) {
+            if (had[i]) setenv_s(names[i], oldv[i], 1);
+            else unsetenv_s(names[i]);
+        }
+        return rc;
+    }
 
-    return run_external(exp_argc, exp_argv, background);
+    return run_dispatch(exp_argc, exp_argv, background);
 }
 
 /* ---- 命令替换 $() / 反引号 ---- */
@@ -1918,123 +2386,264 @@ static void expand_cmdsub(char *line) {
     copy_str(line, out, LINE_SIZE);
 }
 
-/* 执行一行输入（处理 ; 和 && || 逻辑链） */
+/* 复合命令执行层
+ *
+ * 分层（自下而上）：
+ *   run_node     一条原子命令（内置 + 外部 + 管道 + 重定向）
+ *   run_command  识别 if / for / while / until，否则转 run_node
+ *   exec_and_or  按深度 0 的 && / || 串起来
+ *   exec_list    按深度 0 的 ; / & 串起来          <- 递归点
+ */
+
+static char *skip_ws(char *p) {
+    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+    return p;
+}
+
+static int exec_and_or(char *stmt, int bg);
+static int run_command(char *cmd, int bg);
+
+/* 执行一个 list。复合命令的 body 也走这里，形成递归。 */
+static int exec_list(char *line) {
+    strip_comment(line);
+    expand_cmdsub(line);
+
+    struct sep seps[32];
+    int n = scan_seps(line, seps, 32);
+
+    int last = 0;
+    int s = 0;
+    for (int k = 0; k < n; k++) {
+        /* && / || 属于下一层，这里只切 ; 和 & */
+        if (seps[k].kind == SEP_AND || seps[k].kind == SEP_OR) continue;
+        int bg = (seps[k].kind == SEP_BG);
+        line[seps[k].pos] = 0;
+        char *seg = skip_ws(line + s);
+        if (*seg) {
+            last = exec_and_or(seg, bg);
+            if (last > CTL_MAX) return last;   /* break/continue 立刻上抛 */
+        }
+        s = seps[k].pos + seps[k].len;
+    }
+    char *tail = skip_ws(line + s);
+    if (*tail) last = exec_and_or(tail, 0);
+    return last;
+}
+
+/* 一段内按深度 0 的 && / || 串起来。整段只有一个分隔符时就是普通的一条命令。 */
+static int exec_and_or(char *stmt, int bg) {
+    struct sep seps[16];
+    int n = scan_seps(stmt, seps, 16);
+
+    int last = 0;
+    int s = 0;
+    int op = 0;
+    for (int k = 0; k < n; k++) {
+        if (seps[k].kind != SEP_AND && seps[k].kind != SEP_OR) continue;
+        stmt[seps[k].pos] = 0;
+        char *seg = skip_ws(stmt + s);
+        int run = 1;
+        if (op == SEP_AND && last != 0) run = 0;
+        if (op == SEP_OR  && last == 0) run = 0;
+        if (run && *seg) {
+            last = run_command(seg, 0);
+            if (last > CTL_MAX) return last;
+            g_last_exit = last;
+        }
+        op = seps[k].kind;
+        s = seps[k].pos + seps[k].len;
+    }
+
+    char *tail = skip_ws(stmt + s);
+    int run = 1;
+    if (op == SEP_AND && last != 0) run = 0;
+    if (op == SEP_OR  && last == 0) run = 0;
+    if (run && *tail) {
+        last = run_command(tail, bg);
+        if (last > CTL_MAX) return last;
+        g_last_exit = last;
+    }
+    return last;
+}
+
+static int run_if(char *p) {
+    for (int guard = 0; guard < 32; guard++) {
+        int tids[1] = { KW_THEN };
+        int id = -1;
+        char *then = find_kw0(p, tids, 1, &id);
+        if (!then) { fputs("shell: if: missing then\n", stdout); return 2; }
+        *then = 0;
+
+        int st = exec_list(p);              /* 条件（可含 && / || / 管道） */
+
+        char *body = skip_ws(then + 4);
+        int bids[3] = { KW_ELIF, KW_ELSE, KW_FI };
+        int bid = -1;
+        char *next = find_kw0(body, bids, 3, &bid);
+        if (!next) { fputs("shell: if: missing fi\n", stdout); return 2; }
+        *next = 0;
+
+        if (st == 0) return exec_list(body);    /* break/continue 透传 */
+
+        if (bid == KW_ELIF) { p = next + 4; continue; }   /* <- elif 的全部增量 */
+        if (bid == KW_ELSE) {
+            char *eb = skip_ws(next + 4);
+            int fids[1] = { KW_FI };
+            int fid = -1;
+            char *fi = find_kw0(eb, fids, 1, &fid);
+            if (!fi) { fputs("shell: if: missing fi\n", stdout); return 2; }
+            *fi = 0;
+            return exec_list(eb);
+        }
+        /* 没有 else 且条件为假：POSIX 规定 if 整体返回 0，不是条件的返回码。
+         * 返回 st 会让 `if grep x f; then ...; fi; echo $?` 打印 1。 */
+        return 0;
+    }
+    fputs("shell: if: too many elif\n", stdout);
+    return 2;
+}
+
+static int run_for(char *p) {
+    p = skip_ws(p);
+    char *name = p;
+    while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != ';') p++;
+    if (p == name) { fputs("shell: for: missing loop variable\n", stdout); return 2; }
+
+    char vname[64];
+    int nl = (int)(p - name);
+    if (nl > 63) nl = 63;
+    for (int i = 0; i < nl; i++) vname[i] = name[i];
+    vname[nl] = 0;
+
+    char *rest = (*p) ? p + 1 : p;
+    rest = skip_ws(rest);
+
+    char *words = 0;
+    if (kw_at(rest, "in")) {
+        words = skip_ws(rest + 2);
+    }
+
+    int dids[1] = { KW_DO };
+    int did = -1;
+    char *do_kw = find_kw0(words ? words : rest, dids, 1, &did);
+    if (!do_kw) { fputs("shell: for: missing do\n", stdout); return 2; }
+    *do_kw = 0;
+
+    char *body = do_kw + 2;
+    int d2ids[1] = { KW_DONE };
+    int d2id = -1;
+    char *done_kw = find_kw0(body, d2ids, 1, &d2id);
+    if (!done_kw) { fputs("shell: for: missing done\n", stdout); return 2; }
+    *done_kw = 0;
+
+    /* words 必须在循环**开始前**一次性展开（POSIX）：body 里若 cd 或建了
+     * 文件，glob 结果不该跟着变。而且要复制一份 —— 展开池是全局静态的，
+     * body 执行一次就把它清空了。 */
+    char wcopy[MAX_ARGC][LINE_SIZE];
+    int wc = 0;
+    if (words) {
+        char *e = do_kw - 1;
+        while (e >= words && (*e == ' ' || *e == '\t' || *e == '\n' || *e == ';')) *e-- = 0;
+        char *wargv[MAX_ARGC];
+        int wq[MAX_ARGC];
+        int wa = parse_args(words, wargv, MAX_ARGC, wq);
+        if (wa < 0) {
+            printf("shell: for: too many words (max %d)\n", MAX_ARGC);
+            return 2;
+        }
+        /* 变量展开要在 glob 之前，和 run_node 里的顺序一致 —— 少了这一步，
+         * `for i in $LIST` 只会迭代一次，元素是字面量 "$LIST"。 */
+        char *vargv[MAX_ARGC];
+        int vq[MAX_ARGC];
+        int va = expand_variables(wa, wargv, wq, vargv, vq);
+        char *exp[MAX_ARGC];
+        int ec = expand_args(va, vargv, exp, vq);
+        for (int i = 0; i < ec && wc < MAX_ARGC; i++) {
+            copy_str(wcopy[wc], exp[i], LINE_SIZE);
+            wc++;
+        }
+    }
+
+    int st = 0;
+    g_loop_depth++;
+    for (int i = 0; i < wc; i++) {
+        setenv_s(vname, wcopy[i], 1);
+        /* 每轮必须复制 body：run_node / run_pipeline 都是**原地**写 \0，
+         * 不复制的话第二轮开始命令名就消失了（第一轮正常、第二轮空跑）。 */
+        char bcopy[LINE_SIZE];
+        copy_str(bcopy, body, LINE_SIZE);
+        st = exec_list(bcopy);
+        if (st == CTL_BREAK)    { st = 0; break; }
+        if (st == CTL_CONTINUE) { st = 0; continue; }
+    }
+    g_loop_depth--;
+    return st;
+}
+
+static int run_while(char *p, int until) {
+    int dids[1] = { KW_DO };
+    int did = -1;
+    char *do_kw = find_kw0(p, dids, 1, &did);
+    if (!do_kw) { fputs("shell: while: missing do\n", stdout); return 2; }
+    *do_kw = 0;
+
+    char *cond = p;
+    char *body = do_kw + 2;
+    int d2ids[1] = { KW_DONE };
+    int d2id = -1;
+    char *done_kw = find_kw0(body, d2ids, 1, &d2id);
+    if (!done_kw) { fputs("shell: while: missing done\n", stdout); return 2; }
+    *done_kw = 0;
+
+    int st = 0;
+    g_loop_depth++;
+    for (;;) {
+        char ccopy[LINE_SIZE];
+        copy_str(ccopy, cond, LINE_SIZE);
+        int c = exec_list(ccopy);
+        int go = until ? (c != 0) : (c == 0);
+        if (!go) break;
+
+        char bcopy[LINE_SIZE];
+        copy_str(bcopy, body, LINE_SIZE);
+        st = exec_list(bcopy);
+        if (st == CTL_BREAK)    { st = 0; break; }
+        if (st == CTL_CONTINUE) { st = 0; continue; }
+    }
+    g_loop_depth--;
+    return st;
+}
+
+static int run_command(char *cmd, int bg) {
+    if (!*cmd) return 0;
+    if (kw_at(cmd, "if"))    return run_if(cmd + 2);
+    if (kw_at(cmd, "for"))   return run_for(cmd + 3);
+    if (kw_at(cmd, "while")) return run_while(cmd + 5, 0);
+    if (kw_at(cmd, "until")) return run_while(cmd + 5, 1);
+
+    /* 落单的关键字当命令名交给 run_node 会变成 "if: not found"，
+     * 这种报错会让人以为是 PATH 问题。 */
+    {
+        static const char *const stray[] = { "fi", "done", "then", "else", "elif", "do", "esac" };
+        for (int i = 0; i < 7; i++) {
+            if (kw_at(cmd, stray[i])) {
+                fputs("shell: syntax error near unexpected `", stdout);
+                fputs(stray[i], stdout);
+                fputs("'\n", stdout);
+                return 2;
+            }
+        }
+    }
+    return run_node(cmd, bg);
+}
+
+/* 对外的入口。break/continue 漏到最外层说明写错了（run_node 已报错），
+ * 这里夹掉，免得 $? 变成 300 这种不可能的值。 */
 static int execute_line(char *line) {
-    int last_status = 0;
-
-    expand_cmdsub(line);   /* 命令替换必须在语句/逻辑分割之前完成 */
-
-    /* 按 ; 分割语句 */
-    char line_copy[LINE_SIZE];
-    copy_str(line_copy, line, LINE_SIZE);
-
-    char *stmts[16];
-    int nstmt = 0;
-    int quote = 0;
-    char *start = line_copy;
-
-    for (int i = 0; line_copy[i] && nstmt < 16; i++) {
-        if (line_copy[i] == '\"' || line_copy[i] == '\'') {
-            if (!quote) quote = line_copy[i];
-            else if (quote == line_copy[i]) quote = 0;
-        } else if (!quote && line_copy[i] == ';') {
-            line_copy[i] = 0;
-            while (*start == ' ' || *start == '\t') start++;
-            if (*start) stmts[nstmt++] = start;
-            start = line_copy + i + 1;
-        }
-    }
-    while (*start == ' ' || *start == '\t') start++;
-    if (*start && nstmt < 16) stmts[nstmt++] = start;
-
-    /* 逐条语句执行 */
-    for (int s = 0; s < nstmt; s++) {
-        /* 按 && / || 分割逻辑节点 */
-        struct logic_node { char *cmd; int op; int bg; };
-        struct logic_node nodes[16];
-        int nnode = 0;
-
-        char *p = stmts[s];
-        char *seg_start = p;
-        quote = 0;
-
-        for (int i = 0; p[i] && nnode < 16; i++) {
-            if (p[i] == '\"' || p[i] == '\'') {
-                if (!quote) quote = p[i];
-                else if (quote == p[i]) quote = 0;
-                continue;
-            }
-            if (quote) continue;
-
-            if (p[i] == '&' && p[i+1] == '&') {
-                p[i] = 0;
-                int bg = 0;
-                char *end = p + i - 1;
-                while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                    *end = 0; end--;
-                }
-                if (end >= seg_start && *end == '&') {
-                    bg = 1; *end = 0; end--;
-                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                        *end = 0; end--;
-                    }
-                }
-                while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
-                nodes[nnode].cmd = seg_start;
-                nodes[nnode].op = 1; /* AND */
-                nodes[nnode].bg = bg;
-                nnode++; i++; seg_start = p + i + 1;
-            } else if (p[i] == '|' && p[i+1] == '|') {
-                p[i] = 0;
-                int bg = 0;
-                char *end = p + i - 1;
-                while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                    *end = 0; end--;
-                }
-                if (end >= seg_start && *end == '&') {
-                    bg = 1; *end = 0; end--;
-                    while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                        *end = 0; end--;
-                    }
-                }
-                while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
-                nodes[nnode].cmd = seg_start;
-                nodes[nnode].op = 2; /* OR */
-                nodes[nnode].bg = bg;
-                nnode++; i++; seg_start = p + i + 1;
-            }
-        }
-
-        if (nnode < 16 && *seg_start) {
-            int bg = 0;
-            char *end = seg_start + strlen_(seg_start) - 1;
-            while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                *end = 0; end--;
-            }
-            if (end >= seg_start && *end == '&') {
-                bg = 1; *end = 0; end--;
-                while (end > seg_start && (*end == ' ' || *end == '\t')) {
-                    *end = 0; end--;
-                }
-            }
-            while (*seg_start == ' ' || *seg_start == '\t') seg_start++;
-            nodes[nnode].cmd = seg_start;
-            nodes[nnode].op = 0;
-            nodes[nnode].bg = bg;
-            nnode++;
-        }
-
-        for (int i = 0; i < nnode; i++) {
-            if (i > 0) {
-                if (nodes[i-1].op == 1 && last_status != 0) continue;
-                if (nodes[i-1].op == 2 && last_status == 0) continue;
-            }
-            last_status = run_node(nodes[i].cmd, nodes[i].bg);
-            g_last_exit = last_status;   /* 供 $? 展开使用 */
-        }
-    }
-
-    return last_status;
+    int st = exec_list(line);
+    if (st > CTL_MAX) st = 0;
+    g_last_exit = st;
+    return st;
 }
 
 static int builtin_source(const char *path) {
@@ -2059,8 +2668,14 @@ static int builtin_source(const char *path) {
     int last_status = 0;
     int i = 0;
 
+    /* 跨行累积：脚本里写成多行的 if/for 必须拼成一条语句才能执行，
+     * 否则 `for i in 1 2` 那行会被单独执行掉（报 missing do）。 */
+    char acc[LINE_SIZE];
+    int alen = 0;
+    acc[0] = 0;
+
     while (i < total) {
-        /* 收集一行，处理续行 \ */
+        /* 收集一个物理行，处理续行 \ */
         char line[LINE_SIZE];
         int len = 0;
 
@@ -2079,13 +2694,25 @@ static int builtin_source(const char *path) {
         }
         line[len] = 0;
 
-        /* 跳过空行和注释 */
+        /* 空行和纯注释行：不影响深度，也不参与拼接 */
         char *p = line;
         while (*p == ' ' || *p == '\t') p++;
         if (*p == 0 || *p == '#') continue;
 
-        last_status = execute_line(line);
+        /* 拼到 acc 上，中间补 ';' */
+        if (alen > 0 && alen < LINE_SIZE - 2) acc[alen++] = ';';
+        for (int t = 0; t < len && alen < LINE_SIZE - 1; t++) acc[alen++] = line[t];
+        acc[alen] = 0;
+
+        if (compound_depth(acc) > 0) continue;      /* 还没闭合，继续读 */
+
+        last_status = execute_line(acc);
+        alen = 0;
+        acc[0] = 0;
     }
+    /* 收尾时仍未闭合：执行它，让 shell 报 missing done/fi，
+     * 总比静默丢掉一半脚本好。 */
+    if (alen > 0) last_status = execute_line(acc);
 
     return last_status;
 }
@@ -2134,7 +2761,6 @@ int main(int argc, char *argv[]) {
             last_stamp = (unsigned long)now;
         }
 
-        set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];
