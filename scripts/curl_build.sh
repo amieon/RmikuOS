@@ -610,6 +610,36 @@ overlay_curl_config() {
  * 本内核 sys_fcntl 支持 F_GETFL / F_SETFL，O_NONBLOCK 会被 connect、
  * recv、send 三个入口真正读取，所以这里有 non-blocking 手段。 */
 #define HAVE_FCNTL_O_NONBLOCK 1
+
+/* ---------------------------------------------------------------------
+ * 默认信任锚只走 hash-dir 目录，绝不给 bundle。
+ *
+ * lib/url.c 的 Curl_init_userdefined() 里，CURL_CA_BUNDLE 和 CURL_CA_PATH
+ * 是**两个独立的 #if**（不是老版本那种"两个都空才填默认值"）：谁被定义，
+ * 谁就写进 set->str[STRING_SSL_CAFILE / STRING_SSL_CAPATH]。
+ *
+ * 一旦 CAFILE 有值，vtls/openssl.c 的 ossl_load_trust_anchors 就会
+ *   X509_STORE_load_file(store, cafile) + X509_STORE_load_path(store, capath)
+ * 把整份 bundle 塞进 X509_STORE。建链时每一层都要在这 N 张里找 issuer，
+ * 于是 time_appconnect 从 ~1.9s 涨到 ~7.4s。实测同一轮（k=1.99s）：
+ *   默认（CAFILE/CAPATH 都空 → CURL_CA_FALLBACK 的 set_default_paths）
+ *                                                     def = 7.49s
+ *   --cacert first.pem --capath /etc/ssl/certs          one = 1.88s
+ * 只给 CAPATH 时 store 里 0 张，X509_LOOKUP_hash_dir 按 issuer 的 subject
+ * hash 直接开那 2~4 个文件（by_dir.c: lstat("<dir>/<hash>.0") 后加载）。
+ *
+ * configure 的 --with-ca-path=/etc/ssl/certs 在 curl 8.23-DEV 上**没有**
+ * 产出这个宏（curl_config.h 里查不到），于是两个都空 → 落到 CURL_CA_FALLBACK
+ * → X509_STORE_set_default_paths() → OPENSSLDIR/cert.pem 整份进来，hash-dir
+ * 白配。所以这里显式补，并强制 undef 掉可能存在的 CURL_CA_BUNDLE。
+ *
+ * /etc/ssl/certs 由 user/mkfs_ext4.sh 从 cert.pem 拆成 <subject-hash>.<n>。
+ * 想显式用整份 bundle 仍然可以：curl --cacert /etc/ssl/cert.pem（慢，但可用）。
+ * --------------------------------------------------------------------- */
+#ifndef CURL_CA_PATH
+#define CURL_CA_PATH "/etc/ssl/certs"
+#endif
+#undef CURL_CA_BUNDLE
 RKEOF
   return 0
 }
@@ -637,10 +667,16 @@ configure_curl() {
                | LC_ALL=C sort -z | xargs -0 cat; } 2>/dev/null \
             | sha256sum | cut -d' ' -f1)"
   fi
+  # overlay 补丁的**内容**也要进签名：它直接改写 curl_config.h，而 curl_config.h
+  # 是 configure 的产物、不参与 autotools 的依赖检查。改了补丁却不重配，
+  # 症状是"补丁写了、curl_config.h 里没有、行为一点没变"，且完全没有声音。
+  # declare -f 拿到函数源码文本，改一个字哈希就变 → rm -rf $OBJ 重建。
+  local ovsig
+  ovsig="$(declare -f overlay_curl_config | sha256sum | cut -d' ' -f1)"
   local sig
   sig="$(printf '%s\n' "$CURL_VER" "$CROSS_HOST" "${FEATURE_OPTS[@]}" "${PROTO_OPTS[@]}" \
                      "${CONFIGURE_CACHE[@]}" "$CFLAGS_STR" "$CPPFLAGS_STR" "$LD_FLAGS_STR" \
-                     "$PROBE_SIG" "$CC" "ABI=$abi" \
+                     "$PROBE_SIG" "$CC" "ABI=$abi" "OVERLAY=$ovsig" \
          | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/config.h" ] && [ "$(cat "$OBJ/.cfg_sig" 2>/dev/null)" = "$sig" ]; then
     echo "[curl] configure 参数没变，复用 $OBJ"
