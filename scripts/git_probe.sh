@@ -127,14 +127,19 @@ if [ "$STAGE" = "lib" ] || [ "$STAGE" = "bin" ]; then
   # run-command.o 的字符串常量里。改了却不重编，旧 .o 会静默带着旧路径 ——
   # 和当初 -std 变了 make 不感知是同一个坑。
   #
-  # 我们的头文件同样进快照。理论上 make 的 .depend 会跟踪 -I 目录下的头，
-  # 但 libc 是 header-only（static inline），改了 include/*.h 等于改了源码：
+  # 我们的头文件同样进快照（include 递归，子目录头也编进 .o）。理论上 make 的
+  # .depend 会跟踪 -I 目录下的头，但 libc 是 header-only（static inline），
+  # 改了 include/**/*.h 等于改了源码：
   # 一旦 .d 没覆盖到（或 .o 比头新一个时间戳误差），就会跑出"改了库但行为没变"
   # 的幽灵 bug —— perror 那次就是这样，输出还是旧的 "error"。
   # 头文件变更频率极低，宁可全量重编一次，也不要静默复用旧 .o。
-  INC_SIG="$(cat "$ROOT"/user/include/*.h "$ROOT"/user/zlib/*.h 2>/dev/null \
+  INC_SIG="$( { LC_ALL=C find "$ROOT/user/include" "$ROOT/user/zlib" -name '*.h' -print0 \
+                  | LC_ALL=C sort -z | xargs -0 cat; } 2>/dev/null \
              | sha256sum | cut -d' ' -f1)"
+  # 再并上 build.py 算的统一 ABI 哈希（它额外覆盖 lib/*.c、crt0、链接脚本，
+  # 而这些正是 string.o 之类被一起链进去的东西）。
   CFLAGS_SIG="$(printf '%s\n' "${CFLAGS[@]}" "SHELL_PATH=$SHELL_PATH" "INC=$INC_SIG" \
+                "ABI=${RMIKU_LIBC_ABI:-none}" \
                 | sha256sum | cut -d' ' -f1)"
   CFLAGS_SNAP="$OUT/cflags.sha256"
   if [ -f "$CFLAGS_SNAP" ] && [ "$(cat "$CFLAGS_SNAP")" != "$CFLAGS_SIG" ]; then

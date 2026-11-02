@@ -89,28 +89,44 @@ ARCH_CONFIG = {
 
 # ==================== 缓存工具 ====================
 
-# ==================== 缓存工具 ====================
+# libc ABI 指纹按 arch 记一份：同一次构建里文件不会变，而 build_one 每个源文件
+# 都要问一次（几百次 × 上百个头文件），重算纯属浪费。
+_ABI_MEMO: dict = {}
+
 
 def shared_deps_hash(arch: str) -> str:
     """
-    计算所有共享依赖的联合 hash。
-    任何一个文件变动 → 所有用户态二进制缓存失效。
+    所有共享依赖的联合 hash，即"libc 的 ABI 指纹"。
+    任何一个文件变动 → 所有用户态二进制 + git/openssl/curl 全部重建。
+
     覆盖:
-      - include/ 下所有头文件 (user.h 等)
+      - include/ 下**递归**所有头文件（arpa/ net/ netinet/ sys/ stdimpl/ 也在内）
+      - zlib/*.h（git 编译时 -I user/zlib）
       - lib/ 下 string.c, thread.c, mem.c, cpp_runtime.cpp, crt0, runtime syscall
       - 链接脚本
       - user/cpp_runtime/ 下头文件 (C++ 项目用)
+
+    libc 是 header-only（static inline），改头等于改源码；结构体布局变了还复用
+    旧 .o 就是"编译过、语义错"。所以这里一律全量失效，不做细粒度。
     """
+    if arch in _ABI_MEMO:
+        return _ABI_MEMO[arch]
+
     cfg = ARCH_CONFIG[arch]
     h = hashlib.sha256()
 
     dep_paths = []
 
-    # 1) 公共头文件
+    # 1) 公共头文件（必须递归：netinet/tcp.h 这种改了同样会编进 .o）
     if INCLUDE_DIR.exists():
-        dep_paths += sorted(INCLUDE_DIR.glob("*.h"))
+        dep_paths += sorted(INCLUDE_DIR.rglob("*.h"))
 
-    # 2) 公共 C/C++ 库源文件
+    # 2) zlib 头
+    zlib_dir = USER_DIR / "zlib"
+    if zlib_dir.exists():
+        dep_paths += sorted(zlib_dir.glob("*.h"))
+
+    # 3) 公共 C/C++ 库源文件
     if LIB_DIR.exists():
         for pat in ("*.c", "*.cpp", "*.S", "*.h"):
             dep_paths += sorted(LIB_DIR.glob(pat))
@@ -139,7 +155,8 @@ def shared_deps_hash(arch: str) -> str:
             seen.add(rp)
             h.update(file_sha256(p).encode())
 
-    return h.hexdigest()
+    _ABI_MEMO[arch] = h.hexdigest()
+    return _ABI_MEMO[arch]
 
 def load_cache():
     if CACHE_FILE.exists():
@@ -986,78 +1003,96 @@ def zlib_libs(arch: str):
     return [str(libz)] if libz.exists() else []
 
 
-# ==================== git 构建 ====================
+# ==================== vendored 大件: git / openssl / curl ====================
 
-def build_git(arch: str):
-    """编译 git 可执行文件 —— 放进 /bin/git，guest 里直接 `git init` 就能玩。
+# 三者的共性：上游源码 + 我们自己的构建脚本，产物落在 build/<arch>/<name>/。
+# 编译期把 user/include 里的 inline 实现和**结构体布局**抄进了自己的 .o，
+# 所以 libc 头一改三件全得重编（openssl 那次 FILE.buf 错位就是漏了这步）。
+#
+# 增量分两层，都不省：
+#   1) 这里：libc ABI 哈希 + 构建脚本自身哈希 都没变、产物在 → 跳过脚本。
+#      脚本也是"会影响产物的输入"，改了 NO_* 列表却不重编同样是静默复用旧 .o。
+#   2) 脚本内部：各自还有更细的签名（Configure 参数 / CFLAGS / 桩库符号名单），
+#      变了就 rm -rf 自己的 obj 目录整份重建。
+# 上层跳过只省时间，正确性由下层保底。
 
-    分工刻意拆开：NO_* 列表、编译开关、链接参数**只在 scripts/git_probe.sh 里写一份**，
-    三个阶段（probe / lib / bin）共用。这边只负责"按需调用 + 收产物"，
-    免得改个 -DNO_XXX 要在两个文件里同步。
+def _external_lib(arch: str, name: str, marker: str, script_name: str,
+                  elf_name: str, log_name: str, deps=()) -> str:
+    """编一个 vendored 大件，返回本次缓存键（供下游当依赖传进来）。
 
-    不自己做缓存：make 面对 git 的几百个 .o 本来就有增量能力，
-    比按文件 hash 算一遍（四千多个源文件）又快又准。
-    唯一例外是 CFLAGS 变化——make 不感知命令行变量变化，旧的 .o 会被静默复用，
-    所以 git_probe.sh 里按 CFLAGS 内容存了一份快照，变了就自动 clean。
-
-    失败**不中断整体构建**：git 是可选的，其余程序不该因为它编不过就一起废掉。
+    失败**不中断整体构建**：三件都是可选的，其余程序不该陪葬。失败时同时清掉
+    缓存条目 —— 否则旧 ELF 会被下次 cache hit 当成新的用。
     """
-    src = USER_DIR / "git" / "src"
-    if not (src / "git.c").exists():
-        print(f"[user] no git source at {src}, skip")
-        return
+    src_dir = USER_DIR / name / "src"
+    if not (src_dir / marker).exists():
+        print(f"[user] {name}: no source at {src_dir}, skip")
+        return ""
 
-    out_dir = BUILD_DIR / arch / "git"
+    script = ROOT / "scripts" / script_name
+    if not script.exists():
+        print(f"[user] {name}: 缺构建脚本 {script}, skip")
+        return ""
+
+    out_dir = BUILD_DIR / arch / name
     out_dir.mkdir(parents=True, exist_ok=True)
-    script = ROOT / "scripts" / "git_probe.sh"
+    elf = out_dir / elf_name
 
-    print(f"[user] git: 调用 {script.relative_to(ROOT)} {arch} bin")
-    proc = subprocess.run(["bash", str(script), arch, "bin"], cwd=str(ROOT))
+    abi = shared_deps_hash(arch)
+    key = hashlib.sha256("\n".join(
+        [arch, name, abi, file_sha256(script), *deps]).encode()).hexdigest()
 
-    elf = out_dir / "git.elf"
+    prev = get_arch_cache(arch).get("external", {}).get(name, {})
+    if prev.get("key") == key and elf.exists() and elf.stat().st_size > 0:
+        print(f"[user] {name}: cache hit（ABI/脚本未变，{elf.stat().st_size} bytes）")
+        return key
+
+    if prev.get("abi") and prev["abi"] != abi:
+        print(f"[user] {name}: libc ABI 变了 → 全量重编")
+    elif prev:
+        print(f"[user] {name}: 脚本或上游依赖变了 → 全量重编")
+
+    # RMIKU_LIBC_ABI 让脚本内部的签名与这里认同一份 ABI，免得两套算法各算各的
+    env = os.environ.copy()
+    env["RMIKU_LIBC_ABI"] = abi
+    print(f"[user] {name}: 调用 scripts/{script_name} {arch} bin")
+    proc = subprocess.run(["bash", str(script), arch, "bin"], cwd=str(ROOT), env=env)
+
     if proc.returncode != 0 or not elf.exists() or elf.stat().st_size == 0:
-        print(f"[user] git: ✗ 没编出来（其余程序照常构建）")
-        print(f"[user] git:   完整日志 {out_dir / 'make_git.log'}")
-        print(f"[user] git:   单独重试: bash scripts/git_probe.sh {arch} bin")
-        return
+        print(f"[user] {name}: ✗ 没编出来（其余程序照常构建）")
+        print(f"[user] {name}:   完整日志 {out_dir / log_name}")
+        print(f"[user] {name}:   单独重试: bash scripts/{script_name} {arch} bin")
+        arch_cache = get_arch_cache(arch)
+        arch_cache.setdefault("external", {}).pop(name, None)
+        put_arch_cache(arch, arch_cache)
+        return key
 
-    print(f"[user] git: git.elf {elf.stat().st_size} bytes -> /bin/git")
+    print(f"[user] {name}: {elf_name} {elf.stat().st_size} bytes -> /bin/{name}")
+    arch_cache = get_arch_cache(arch)
+    arch_cache.setdefault("external", {})[name] = {"key": key, "abi": abi}
+    put_arch_cache(arch, arch_cache)
+    return key
 
 
-# ==================== OpenSSL 构建 ====================
+def build_git(arch: str) -> str:
+    """git → /bin/git。NO_* 列表与编译开关只在 scripts/git_probe.sh 写一份。"""
+    return _external_lib(arch, "git", "git.c", "git_probe.sh",
+                         "git.elf", "make_git.log")
 
-def build_openssl(arch: str):
-    """编译 openssl 可执行文件 —— 放进 /bin/openssl。
 
-    和 git 一样，Configure 开关、CFLAGS、链接参数只在 scripts/openssl_build.sh
-    里写一份，这边只负责"调用 + 收产物"。增量由 OpenSSL 自己的 Makefile 提供
-    （configure_openssl 里按签名跳过重复 Configure，改了开关才 rm -rf 重配）。
+def build_openssl(arch: str) -> str:
+    """openssl → /bin/openssl，连带产出 libcrypto.a / libssl.a（curl 的硬前置）。"""
+    return _external_lib(arch, "openssl", "Configure", "openssl_build.sh",
+                         "openssl.elf", "make_bin.log")
 
-    只跑 bin 阶段：它会连带 make 出 libcrypto.a/libssl.a（apps/openssl 的依赖），
-    所以干净树上也能一次到底，不必先手工跑 lib。
 
-    失败**不中断整体构建**：openssl 是可选的，其余程序不该陪葬。
+def build_curl(arch: str, openssl_key: str = "") -> str:
+    """curl → /bin/curl。
+
+    静态链接 openssl 的 libcrypto.a / libssl.a，所以 openssl 一重建就必须重链 ——
+    把它的缓存键当依赖塞进签名里，openssl 变了 curl 自动跟着重来。
     """
-    src = USER_DIR / "openssl" / "src"
-    if not (src / "Configure").exists():
-        print(f"[user] no openssl source at {src}, skip")
-        return
-
-    out_dir = BUILD_DIR / arch / "openssl"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    script = ROOT / "scripts" / "openssl_build.sh"
-
-    print(f"[user] openssl: 调用 {script.relative_to(ROOT)} {arch} bin")
-    proc = subprocess.run(["bash", str(script), arch, "bin"], cwd=str(ROOT))
-
-    elf = out_dir / "openssl.elf"
-    if proc.returncode != 0 or not elf.exists() or elf.stat().st_size == 0:
-        print("[user] openssl: ✗ 没编出来（其余程序照常构建）")
-        print(f"[user] openssl:   完整日志 {out_dir / 'make_bin.log'}")
-        print(f"[user] openssl:   单独重试: bash scripts/openssl_build.sh {arch} bin")
-        return
-
-    print(f"[user] openssl: openssl.elf {elf.stat().st_size} bytes -> /bin/openssl")
+    return _external_lib(arch, "curl", "configure", "curl_build.sh",
+                         "curl.elf", "link.log", deps=(openssl_key,))
 
 
 # ==================== TCC 构建(从 user/tcc/build_tcc.py 融合) ====================
@@ -1526,7 +1561,8 @@ def main():
         deploy_libz(args.arch, _libz)
     build_sqlite3(args.arch)
     build_git(args.arch)
-    build_openssl(args.arch)
+    _ssl_key = build_openssl(args.arch)
+    build_curl(args.arch, _ssl_key)
     build_gcn(args.arch)
     build_java_projects(args.arch)
 

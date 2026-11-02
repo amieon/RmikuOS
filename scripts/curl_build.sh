@@ -130,7 +130,8 @@ FEATURE_OPTS=(
   --without-libidn2
   --without-libpsl
   --without-libssh2
-  --with-ca-bundle=/etc/ssl/cert.pem
+  --without-ca-bundle
+  --with-ca-path=/etc/ssl/certs
 )
 
 # ---- configure cache 变量 --------------------------------------------------
@@ -615,7 +616,7 @@ RKEOF
 
 # ---------------------------------------------------------------------------
 # configure 只在签名变化时重跑。签名里必须包含所有**会影响产物**的东西：
-# configure 参数、CFLAGS、CPPFLAGS、CC 路径、cache 变量、源码版本。
+# configure 参数、CFLAGS、CPPFLAGS、CC 路径、cache 变量、源码版本、libc ABI。
 # 少签一项的后果是"改了开关却没重配"，症状是行为诡异但不报错 —— openssl
 # 那边靠 Configure 自己 rm -rf，autotools 没有这个保护，只能自己算。
 # ---------------------------------------------------------------------------
@@ -629,10 +630,17 @@ configure_curl() {
   build_probe_lib || return 1
   stage_ssl || return 1
   probe_ssl_link || return 1
+  local abi="${RMIKU_LIBC_ABI:-}"
+  if [ -z "$abi" ]; then
+    # 直接跑本脚本（绕过 build.py）时的兜底：自己算一份，保证行为一致
+    abi="$( { LC_ALL=C find "$ROOT/user/include" -name '*.h' -print0 \
+               | LC_ALL=C sort -z | xargs -0 cat; } 2>/dev/null \
+            | sha256sum | cut -d' ' -f1)"
+  fi
   local sig
   sig="$(printf '%s\n' "$CURL_VER" "$CROSS_HOST" "${FEATURE_OPTS[@]}" "${PROTO_OPTS[@]}" \
                      "${CONFIGURE_CACHE[@]}" "$CFLAGS_STR" "$CPPFLAGS_STR" "$LD_FLAGS_STR" \
-                     "$PROBE_SIG" "$CC" \
+                     "$PROBE_SIG" "$CC" "ABI=$abi" \
          | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/config.h" ] && [ "$(cat "$OBJ/.cfg_sig" 2>/dev/null)" = "$sig" ]; then
     echo "[curl] configure 参数没变，复用 $OBJ"
@@ -868,6 +876,27 @@ scan_undefined() {
 }
 
 # ---------------------------------------------------------------------------
+# 编 libcurl.a（lib 阶段的全部内容）。抽成函数是因为 bin 阶段也要能用：
+
+build_libcurl() {
+  echo "[curl] make -C lib（-j$NPROC，只编 libcurl.a）"
+  make -C "$OBJ/lib" -j"$NPROC" 2>&1 | tee "$BASE/make_lib.log" | tail -30
+  echo
+  echo "[curl] 日志: $BASE/make_lib.log"
+  if [ -f "$OBJ/lib/.libs/libcurl.a" ]; then
+    mkdir -p "$OUT"
+    cp "$OBJ/lib/.libs/libcurl.a" "$OUT/libcurl.a"
+    echo "[curl] ✓ libcurl.a $(wc -c <"$OUT/libcurl.a") bytes"
+    scan_undefined
+    return 0
+  fi
+  echo "[curl] ✗ 未产出 libcurl.a —— 错误按句子归并："
+  sed -n -e 's/.*: fatal error: //p' -e 's/.*: error: //p' "$BASE/make_lib.log" \
+    | sort | uniq -c | sort -rn | head -20 | sed 's/^/      /'
+  return 1
+}
+
+# ---------------------------------------------------------------------------
 case "$STAGE" in
   probe)
     configure_curl || exit 1
@@ -917,29 +946,18 @@ case "$STAGE" in
   lib)
     configure_curl || exit 1
     dump_config
-    echo "[curl] make -C lib（-j$NPROC，只编 libcurl.a）"
-    make -C "$OBJ/lib" -j"$NPROC" 2>&1 | tee "$BASE/make_lib.log" | tail -30
-    echo
-    echo "[curl] 日志: $BASE/make_lib.log"
-    if [ -f "$OBJ/lib/.libs/libcurl.a" ]; then
-      mkdir -p "$OUT"
-      cp "$OBJ/lib/.libs/libcurl.a" "$OUT/libcurl.a"
-      echo "[curl] ✓ libcurl.a $(wc -c <"$OUT/libcurl.a") bytes"
-      scan_undefined
-    else
-      echo "[curl] ✗ 未产出 libcurl.a —— 错误按句子归并："
-      sed -n -e 's/.*: fatal error: //p' -e 's/.*: error: //p' "$BASE/make_lib.log" \
-        | sort | uniq -c | sort -rn | head -20 | sed 's/^/      /'
-      exit 1
-    fi
+    build_libcurl || exit 1
     ;;
 
   bin)
     configure_curl || exit 1
-    [ -f "$OUT/libcurl.a" ] || {
-      echo "[curl] 还没有 libcurl.a，先跑 lib 阶段"
-      exit 1
-    }
+    # 干净树上 .a 不存在是正常起点，不是错误：自己补编一遍。
+    # 配置变更时 configure_curl 已经 `rm -rf $OBJ`，所以 .a 也随之消失，
+    # 这条路径顺便把"改了开关但 .a 是旧的"也堵住了。
+    if [ ! -f "$OUT/libcurl.a" ]; then
+      echo "[curl] $OUT/libcurl.a 不存在（干净树或刚重配过），先编 lib"
+      build_libcurl || exit 1
+    fi
 
     # libc 裸件，和 openssl 的 bin 阶段完全同一套。
     echo "[curl] 编 libc 裸件（crt0 / syscall / string / mem）"

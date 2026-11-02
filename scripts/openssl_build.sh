@@ -137,7 +137,11 @@ CRITICAL_OPTS=(no-asm no-threads no-shared no-dso no-module)
 # 只是 warning）。所以"少一个原型"当场就拦住构建，这是好事 —— 缺口立刻可见，
 # 不用等链接期的 undefined reference。别用 -Wno-implicit-function-declaration
 # 把它糊过去，那等于把"缺声明"重新变成"运行期随机崩"。
-CFLAGS_STR="-std=gnu11 ${ARCHFLAGS[*]} -O2 -ffreestanding -fno-builtin -fno-stack-protector -I$ROOT/user/include"
+# -O3 而不是 -O2：OpenSSL 自己的 Configurations 默认就是 -O3（我们整串覆盖了它）。
+# 差别全在 BN 上 —— RSA 验签是 bn_mul_mont 的密集小循环，-O3 的展开能吃到 10~25%。
+# no-asm 也不能去掉：riscv64 在 OpenSSL 3.0/3.2/3.5 的 crypto/bn/asm 下**根本没有**
+# mont 汇编（查过 raw URL，3.2 和 3.5 都是 404），纯 C 是唯一路径。
+CFLAGS_STR="-std=gnu11 ${ARCHFLAGS[*]} -O3 -ffreestanding -fno-builtin -fno-stack-protector -I$ROOT/user/include"
 
 mkdir -p "$BASE"
 
@@ -306,8 +310,27 @@ configure_openssl() {
   # 先在"我们自己的头"这一层把话说清楚，别让缺接口以 OpenSSL 报错的形式出现。
   check_libc_surface || return 1
 
+  # libc 头的**内容**必须进签名，理由不是洁癖而是一次真实事故：
+  #   OpenSSL 3.0 的 Makefile **不做头依赖追踪**（没有 -MD/.deps，depend 要手动
+  #   跑），所以改 user/include 后 apps/*.o 仍是旧的。而 FILE 里 `buf[BUFSIZ]`
+  #   正好夹在 `fd` 和 `pos/end/flags` 之间 —— BUFSIZ 从 512 提到 4096，旧 .o
+  #   读 fp->flags 就错位，fwrite 认为"这个流不可写"直接返回 0：openssl 一个字
+  #   都不输出、退出码 0，不崩不报错。对照 curl 没事，是因为 autotools 用 -MD
+  #   把用户头也写进了 .deps/*.Plo，会自动重编。
+  # 代价：任何 libc 头改动都触发一次完整 OpenSSL 重编（分钟级）。这是对的 ——
+  # 结构体布局变了却复用 .o，就是"编译过、语义错"的温床。
+  local hdr_sig
+  if [ -n "${RMIKU_LIBC_ABI:-}" ]; then
+    # build.py 算的统一 ABI（include 全递归 + lib/*.c + crt0 + runtime + 链接脚本），
+    # 覆盖面比下面的 find 大，直接用它 —— 免得两套算法各算各的、互相不同步。
+    hdr_sig="$RMIKU_LIBC_ABI"
+  else
+    hdr_sig="$(LC_ALL=C find "$ROOT/user/include" -name '*.h' -print0 \
+               | LC_ALL=C sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -d' ' -f1)"
+  fi
+
   local sig
-  sig="$(printf '%s\n' "$SRC_VER" "$ARCH_CFG" "${CNF_OPTS[@]}" "$CFLAGS_STR" "$CC" | sha256sum | cut -d' ' -f1)"
+  sig="$(printf '%s\n' "$SRC_VER" "$ARCH_CFG" "${CNF_OPTS[@]}" "$CFLAGS_STR" "$CC" "$hdr_sig" | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/.cfg.sha256" ] && [ "$(cat "$OBJ/.cfg.sha256")" = "$sig" ]; then
     ensure_generated || return 1      # 生成头可能被 distclean/手删过
     return 0
@@ -657,12 +680,29 @@ case "$STAGE" in
 
     # 外部头混入检查：-H 列出所有实际被 include 的头，滤掉我们自己的和生成物，
     # 剩下的就是工具链 sysroot 里的。白名单只放编译器内建那几个（类型定义必须一致）。
+    #
+    # **一个 TU 看不全**：以前只查 crypto/mem.c，它不 include <sys/shm.h>，于是
+    # 这里打出"ok 全部头都来自 user/include"，转头 lib 阶段就被 rand_unix.c 的
+    # shm.h 打脸（glibc 版 `typedef __pid_t pid_t` 撞 user/include/sys/types.h 的
+    # `typedef long pid_t`，龙芯上 only）。改成对几个"系统头大户"取并集，
+    # 哪个 TU 编不过就当场说明它的谱系没进来 —— 别让覆盖不足伪装成全绿。
     echo
     echo "[openssl] 检查有没有用到工具链 sysroot 的头（编译能过但 ABI 会错）"
-    # 先确认这次 -fsyntax-only 本身通过了：编译失败时 -H 一条都不输出，谱系是空的，
-    # 会被判成"ok 全部头都来自 user/include" —— 假 ok 比不查更坏（踩过）。
-    if "$CC" $CFLAGS_STR "${INCS[@]}" -H -fsyntax-only "$SRC/crypto/mem.c" \
-         >"$BASE/hdr_include.txt" 2>&1; then
+    : >"$BASE/hdr_include.txt"
+    hdr_ok=0
+    hdr_tus=""
+    for f in crypto/mem.c crypto/bio/bss_dgram.c crypto/o_time.c \
+             providers/implementations/rands/seeding/rand_unix.c; do
+      if "$CC" $CFLAGS_STR "${INCS[@]}" -H -fsyntax-only "$SRC/$f" \
+           >>"$BASE/hdr_include.txt" 2>&1; then
+        hdr_ok=$((hdr_ok + 1))
+        hdr_tus="$hdr_tus $f"
+      else
+        echo "  ! $f 编不过，它的头谱系没进统计"
+      fi
+    done
+    if [ "$hdr_ok" -gt 0 ]; then
+      echo "  参照翻译单元（$hdr_ok 个）：$hdr_tus"
       grep -E '^\.+ /' "$BASE/hdr_include.txt" | sed 's/^\.* //' | sort -u \
         | grep -vE "^($ROOT|$OBJ|$SRC)" \
         | grep -vE '/(stddef|stdarg|stdbool|float|stdint|limits|stdatomic|iso646)\.h$' \
@@ -674,7 +714,7 @@ case "$STAGE" in
         echo "  ok   全部头都来自 user/include 或 OpenSSL 自身"
       fi
     else
-      echo "  ✗ 参照翻译单元编译不过，头谱系没法判（这不是 ok，是没测）"
+      echo "  ✗ 参照翻译单元全部编不过，头谱系没法判（这不是 ok，是没测）"
       grep -E 'error:' "$BASE/hdr_include.txt" | head -8 | sed 's/^/      /'
     fi
     echo
@@ -701,6 +741,24 @@ case "$STAGE" in
       echo "          文件里重复，这里只列一次 + 出现次数，方便一次看全）："
       sed -n -e 's/.*: fatal error: //p' -e 's/.*: error: //p' "$BASE/make_libs.log" \
         | sort | uniq -c | sort -rn | head -20 | sed 's/^/      /'
+
+      # 看到 "conflicting types for 'xxx'" 别急着怀疑 OpenSSL：多半是我们没提供某个
+      # 系统头，编译器掉头去工具链 sysroot 拿了 glibc 版本，两套 typedef 打架。
+      # loongarch64-unknown-linux-gnu 带完整 sysroot（/opt/cross-tools/target），
+      # riscv64-unknown-elf 是裸机 target 没有 —— 所以同一份源码只在龙芯上炸。
+      # 这里把证据摆出来，省得每次都要从头猜"到底谁定义了两次 pid_t"。
+      SYSROOT="$("$CC" -print-sysroot 2>/dev/null || true)"
+      if [ -n "$SYSROOT" ] && [ "$SYSROOT" != "/" ] && [ "$SYSROOT" != "=" ] \
+         && grep -q "$SYSROOT/usr/include/" "$BASE/make_libs.log"; then
+        echo
+        echo "      ! 日志里出现了工具链 sysroot 的头（$SYSROOT），这不是 OpenSSL 的锅："
+        echo "        user/include 里没有它，编译器就去目标系统找 glibc 版本了。"
+        echo "        命中的头："
+        grep -o "$SYSROOT/usr/include/[^ :'\"]*\.h" "$BASE/make_libs.log" \
+          | sort -u | head -10 | sed 's/^/          /'
+        echo "        处置：在 user/include 下补同名头。用不到符号的补空壳并写清原因；"
+        echo "        真要用的先在内核加 syscall 语义组 —— 别照抄 glibc 的结构体布局。"
+      fi
     fi
     echo
     echo "[openssl] 日志: $BASE/make_libs.log"
@@ -722,22 +780,23 @@ case "$STAGE" in
 
   bin)
     configure_openssl || exit 1
+    # 不硬性要求 .a 先存在：apps/openssl 依赖 libcrypto.a/libssl.a，make 会顺带
+    # 编出来。原来这里直接 exit 1，导致 build.py 在干净树上跑到 bin 就失败。
     if [ ! -f "$OBJ/libcrypto.a" ] || [ ! -f "$OBJ/libssl.a" ]; then
-      echo "[openssl] ✗ 缺 .a，先跑: bash $0 $ARCH lib"
-      exit 1
+      echo "[openssl] 还没有 .a，make 会顺带编（首次会久一些；缺口扫描建议随后跑 lib 阶段）"
     fi
 
     # libc 裸件照 git 那一套。只有 string.c 必须在场（errno 的唯一真定义 +
     # memset/memcpy + isatty）；mem.c 提供堆状态（malloc_head / slab_freelist），
     # 少了它就是 undefined reference —— libcrypto 处处 malloc，必然撞上。
     echo "[openssl] 编 libc 裸件（crt0 / syscall / string / mem）"
-    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
+    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/crt0_$ARCH.S"    -o "$BASE/_crt0.o"    || exit 1
-    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
+    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/syscall_$ARCH.S" -o "$BASE/_syscall.o" || exit 1
-    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
+    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/string.c"        -o "$BASE/_string.o"  || exit 1
-    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
+    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/mem.c"           -o "$BASE/_mem.o"     || exit 1
 
     LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"

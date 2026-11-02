@@ -225,8 +225,10 @@ fi
 #   /etc/ssl/cert.pem  CA bundle（随 overlay 一起进来）。名字不能改：
 #                 X509_get_default_cert_file() 硬编 OPENSSLDIR "/cert.pem"，
 #                 Debian 那个 ca-certificates.crt 的文件名 OpenSSL 不会去找。
-#                 只放单文件 bundle，不放 /etc/ssl/certs 目录形 —— 目录形靠 hash
-#                 命名链接，guest 里没有 c_rehash。
+#   /etc/ssl/certs/    hash-dir 形，mkfs 从上面那份 bundle 拆出来（见 [ssl] hash-dir）。
+#                 单文件 bundle 是"能用但慢"：X509_STORE 里塞 145 张，每建一层链
+#                 都要线性遍历全部候选。两条路并存 —— `curl --cacert cert.pem` 走 bundle，
+#                 `curl --capath /etc/ssl/certs` 走 hash-dir。
 #   /bin/sh       PATH 里有就行（-engine / CA 相关子命令才真的 fork）
 if [ -d "user/build/${ARCH}/openssl" ]; then
   for f in user/build/${ARCH}/openssl/*.elf; do
@@ -300,6 +302,53 @@ if [ -s "$CA" ]; then
 else
   echo "  [ssl] ! 没有 CA bundle：guest 里 curl/openssl 会报 (77) error adding trust anchors" >&2
   echo "  [ssl]   放一份到 user/rootfs/etc/ssl/cert.pem，或用 CA_BUNDLE=<文件> 指定" >&2
+fi
+
+# 把 bundle 拆成 /etc/ssl/certs/<subject-hash>.<n> —— hash-dir 形。
+#
+# 为什么值得拆：`--cacert cert.pem` 是把 145 张全塞进 X509_STORE，之后
+# X509_STORE_CTX_get1_issuer 每建一层链都要线性遍历这堆候选做 X509_check_issued
+# → X509_NAME_cmp，而首次比较会触发 x509_name_canon（ASN.1 解码 → 转 UTF-8 →
+# 压空格转小写 → 重新编码）。实测 4 层 × 145 张吃掉 5 秒，占整次 TLS 握手的 2/3
+# （对照：store 145 张 13.1s vs 1 张 8.2s，差值全在这）。
+# hash-dir 不遍历：X509_LOOKUP_hash_dir 拿 issuer 的 subject hash 直接开那一个
+# 文件，4 跳链只读 4 张。
+
+mkdir -p "$ROOT/etc/ssl/certs"
+if [ -s "$CA" ] && command -v openssl >/dev/null 2>&1; then
+  set +e
+  CERTS="$ROOT/etc/ssl/certs"
+  rm -rf "$CERTS"
+  mkdir -p "$CERTS"
+  _tmp="$(mktemp -d | tr '\\' '/')"
+  awk -v d="$_tmp" '
+    /-----BEGIN CERTIFICATE-----/ { n++; f = d "/c" n ".pem"; inblk = 1 }
+    inblk { print > f }
+    /-----END CERTIFICATE-----/ { inblk = 0; close(f) }
+  ' "$CA"
+  _n=0
+  _dup=0
+  _bad=0
+  for f in "$_tmp"/c*.pem; do
+    [ -s "$f" ] || continue
+    h="$(openssl x509 -hash -noout -in "$f" 2>/dev/null)"
+    if [ -z "$h" ]; then
+      _bad=$((_bad + 1))
+      continue
+    fi
+    i=0
+    while [ -e "$CERTS/$h.$i" ]; do i=$((i + 1)); done
+    if [ "$i" -gt 0 ]; then _dup=$((_dup + 1)); fi
+    mv "$f" "$CERTS/$h.$i"
+    _n=$((_n + 1))
+  done
+  rm -rf "$_tmp"
+  if [ "$_n" -gt 0 ]; then
+    echo "  [ssl] hash-dir: $_n 张 -> /etc/ssl/certs（$_dup 个 subject 撞名已顺延编号，$_bad 张解析失败已跳过）"
+  else
+    echo "  [ssl] ! hash-dir 拆分失败（cert.pem 仍未动，--cacert 可用，--capath 不可用）" >&2
+  fi
+  set -e
 fi
 
 # Java 字节码（JVM 项目）
