@@ -10,9 +10,11 @@ int main(int argc, char **argv) {
     int pid = fork();
     if (pid == 0) {
         struct exec_args args;
+        /* 截断 = 子进程收到错的参数且毫无提示，宁可明确失败 */
         int n = argc - 1;
         if (n > EXEC_MAX_ARGS) {
-            n = EXEC_MAX_ARGS;
+            printf("too many arguments (max %d)\n", EXEC_MAX_ARGS);
+            exit(125);
         }
         args.argc = (usize)n;
         for (int i = 0; i < EXEC_MAX_ARGS; i++) {
