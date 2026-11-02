@@ -89,17 +89,49 @@ __attribute__((weak)) int isatty(int fd) {
     return 0;
 }
 
+
 void *memset(void *s, int c, unsigned long n) {
     unsigned char *p = (unsigned char *)s;
+    unsigned char b = (unsigned char)c;
+
+    while (n && ((unsigned long)p & 7)) {
+        *p++ = b;
+        n--;
+    }
+    if (n >= 8) {
+        unsigned long v = 0x0101010101010101UL * (unsigned long)b;
+        unsigned long *pw = (unsigned long *)p;
+        while (n >= 8) {
+            *pw++ = v;
+            n -= 8;
+        }
+        p = (unsigned char *)pw;
+    }
     while (n--) {
-        *p++ = (unsigned char)c;
+        *p++ = b;
     }
     return s;
 }
 
 void *memcpy(void *dst, const void *src, unsigned long n) {
-    char *d = (char *)dst;
-    const char *s = (const char *)src;
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+
+    while (n && ((unsigned long)d & 7)) {
+        *d++ = *s++;
+        n--;
+    }
+    /* 目的对齐后，源也必须对齐才能按字搬；否则整个尾部退回逐字节 */
+    if (n >= 8 && ((unsigned long)s & 7) == 0) {
+        unsigned long *dw = (unsigned long *)d;
+        const unsigned long *sw = (const unsigned long *)s;
+        while (n >= 8) {
+            *dw++ = *sw++;
+            n -= 8;
+        }
+        d = (unsigned char *)dw;
+        s = (const unsigned char *)sw;
+    }
     while (n--) {
         *d++ = *s++;
     }
