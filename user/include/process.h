@@ -129,7 +129,8 @@ static inline __attribute__((noreturn)) void exit(int code) {
 
 /* ---- exec ---- */
 
-#define EXEC_MAX_ARGS 8
+
+#define EXEC_MAX_ARGS 64
 
 struct user_arg {
     const char *ptr;
@@ -164,11 +165,11 @@ static inline isize exec(const char *path) {
 }
 
 /* ---- POSIX exec 家族 ----
- * 内核的 SYS_EXEC 只接收 (path, struct exec_args*)，argv 上限 EXEC_MAX_ARGS=8。
+ * 内核的 SYS_EXEC 只接收 (path, struct exec_args*)，argv 上限 EXEC_MAX_ARGS=64。
  * 所以 execv/execvp 在用户态把 char *const argv[] 转成 exec_args。
  *
  * 三个必须知道的边界：
- *   1. 超过 8 个参数 → E2BIG（不是截断！截断会让子进程收到错的参数）
+ *   1. 超过 64 个参数 → E2BIG（不是截断！截断会让子进程收到错的参数）
  *   2. execve 的 envp 没有内核通道 → 用户态先把本进程环境表换成 envp 再 exec
  *      （见下方 execve；"KEY=VALUE" 覆盖、"裸 KEY" 删除）
  *   3. exec* 成功不返回；返回就一定是失败 */

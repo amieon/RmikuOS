@@ -10,7 +10,14 @@ extern "C" {
 #define SEEK_SET   0
 #define SEEK_CUR   1
 #define SEEK_END   2
-#define BUFSIZ     512
+/* 512 → 4096：CA bundle 287KB 按 512 字节读就是 560 次 read() 系统调用。
+ * 这个值只影响 read() 的次数（同样受终端行缓冲约束，不影响交互）。 */
+#define BUFSIZ     4096
+
+/* 只声明不 include：file.h 被 stdio.h 到处包含，拉进 string.h 会经 fs.h 带进
+ * process.h 的 inline exit()，与 lib/string.c 里给 crt0 的 weak exit 撞重定义
+ * （这个坑在 string.c 上踩过一次）。 */
+void *memcpy(void *dst, const void *src, unsigned long n);
 
 #define _F_READ    0x01
 #define _F_WRITE   0x02
@@ -155,14 +162,55 @@ static inline int fgetc(FILE* fp) {
 #define putc(c, fp)   fputc((c), (fp))
 
 static inline size_t fread(void* ptr, size_t size, size_t nmemb, FILE* fp) {
-    if (!fp || !(fp->flags & _F_READ)) return 0;
+    if (!fp || !(fp->flags & _F_READ) || size == 0) return 0;
+
     char* dst = (char*)ptr;
     size_t total = size * nmemb;
     size_t got = 0;
+    if (total == 0) return 0;
+
+    /* 原来是"逐字节 fgetc 到目标"，于是 OpenSSL 读 287KB 的 CA bundle 就是
+     * 28 万次逐字节调用。改成批搬 + 大块直读，语义不变（返回值仍是完整项数）。 */
+    if (fp->ungetc != -1) {
+        dst[got++] = (char)fp->ungetc;
+        fp->ungetc = -1;
+    }
+
+    /* 1) 先把缓冲区里已有的搬走（memcpy，不逐字节） */
+    if (!(fp->flags & _F_UNBUF)) {
+        size_t avail = (size_t)(fp->end - fp->pos);
+        size_t want = total - got;
+        size_t take = (avail < want) ? avail : want;
+        if (take) {
+            memcpy(dst + got, fp->buf + fp->pos, take);
+            fp->pos += (int)take;
+            got += take;
+        }
+    }
+
+    /* 2) 剩余部分。剩得多就一次 read() 直接落到目标缓冲，省掉中转拷贝；
+     *    剩得少就照常填缓冲 —— 多余的字节留在缓冲区里，后面的 fgetc/fseek
+     *    才看得到（这是 fread 不能随便多读的语义约束）。 */
     while (got < total) {
-        int c = fgetc(fp);
-        if (c == EOF) break;
-        dst[got++] = (char)c;
+        if (fp->flags & (_F_EOF | _F_ERR)) break;
+
+        size_t want = total - got;
+        if ((fp->flags & _F_UNBUF) || want >= BUFSIZ) {
+            isize n = read(fp->fd, dst + got, want);
+            if (n < 0) { fp->flags |= _F_ERR; break; }
+            if (n == 0) { fp->flags |= _F_EOF; break; }
+            got += (size_t)n;
+        } else {
+            isize n = read(fp->fd, (char*)fp->buf, BUFSIZ);
+            if (n < 0) { fp->flags |= _F_ERR; break; }
+            if (n == 0) { fp->flags |= _F_EOF; break; }
+            fp->pos = 0;
+            fp->end = (int)n;
+            size_t take = ((size_t)n < want) ? (size_t)n : want;
+            memcpy(dst + got, fp->buf, take);
+            fp->pos = (int)take;
+            got += take;
+        }
     }
     return got / size;
 }
