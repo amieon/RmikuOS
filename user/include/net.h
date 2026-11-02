@@ -334,13 +334,26 @@ static inline int net_setsockopt(int fd, int optname, int optval) {
  *     不假装成功 —— git 的 enable_keepalive 只在失败时打一条 error 日志，
  *     不会因此中断连接，所以诚实拒绝是安全的。
  * optlen 小于 sizeof(int) 时按 0 处理（调用方没给值就别猜）。 */
+/* 同 netinet/tcp.h 的值。这里不 include 那个头：只想要 POSIX setsockopt 的
+ * TU 不该为此多拉一个文件（也是为了让本头保持自足）。 */
+#ifndef TCP_NODELAY
+#define TCP_NODELAY 1
+#endif
+
 static inline int setsockopt(int fd, int level, int optname,
                             const void *optval, socklen_t optlen) {
+    int on = (optval && optlen >= (socklen_t)sizeof(int)) ? *(const int *)optval : 0;
+
+    if (level == IPPROTO_TCP && optname == TCP_NODELAY) {
+        if (on) return 0;
+        errno = ENOPROTOOPT;
+        return -1;
+    }
+
     if (level != SOL_SOCKET) {
         errno = ENOPROTOOPT;
         return -1;
     }
-    int on = (optval && optlen >= (socklen_t)sizeof(int)) ? *(const int *)optval : 0;
     if (optname == SO_REUSEADDR) {
         return net_setsockopt(fd, SO_REUSEADDR, on);
     }

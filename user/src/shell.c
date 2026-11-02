@@ -1,9 +1,16 @@
 #include "user.h"
 
-
+/* 512 而不是 128：`for i in 1 2 3 4 5; do curl ...; done` 这类命令行
+ * 拼起来轻松过 300 字符，128 会让粘贴在多行处被**截断**（超出的部分留在
+ * stdin，下一条命令读到垃圾）。用户栈 512KB，栈上最大的单个对象也只有
+ * MAX_MATCHES*LINE_SIZE = 16KB，撑得住。 */
 #define LINE_SIZE 512
+/* 不能大于 process.h 的 EXEC_MAX_ARGS（内核会 E2BIG），16 又太少：
+ * `curl -k --cacert ... -w ... -o ... -s URL` 就 10 个了。 */
 #define MAX_ARGC  32
 
+/* exec 的 ABI 上限见 process.h。两者一旦漂移，超限的命令会在内核里拿到
+ * E2BIG（errno 7），而 shell 这边看起来一切正常 —— 编译期就挡住。 */
 #if MAX_ARGC > EXEC_MAX_ARGS
 #error "MAX_ARGC must not exceed EXEC_MAX_ARGS (exec ABI limit)"
 #endif
@@ -35,6 +42,17 @@ static int var_pool_idx = 0;
 /* 最近一条前台命令的退出码，供 $? 展开使用（与 bash 语义一致）。 */
 static int g_last_exit = 0;
 
+/* ===================================================================
+ * 复合命令的"词法层"：关键字表 + 深度扫描
+ *
+ * shell 没有运算符优先级、没有类型、没有表达式树，所以这里不需要
+ * 任何编译原理的手段 —— 只需要知道"当前在几层 if/for 里面"。
+ * 语句切分、关键字配对、未闭合检测都靠这一套。
+ * =================================================================== */
+
+/* 控制流穿透值。真退出码只有 0..255（wait 会截断成 8 位），所以 300+
+ * 不会和真命令的退出码撞车 —— 也正因为如此，break/continue 必须是
+ * **同进程**的内置命令，fork 出去就传不回来了。 */
 #define CTL_BREAK     300
 #define CTL_CONTINUE  301
 #define CTL_MAX       299
@@ -159,7 +177,7 @@ static void strip_comment(char *s) {
 
 struct sep { int pos; int len; int kind; };
 
-/* 收集相对深度 0 的语句分隔符。复合命令体内部的分号不在其列 ——
+/* 收集**相对深度 0** 的语句分隔符。复合命令体内部的分号不在其列 ——
  * 这正是 `if a; then b; fi && c` 能正确分层的前提。 */
 static int scan_seps(const char *s, struct sep *out, int max) {
     int n = 0, depth = 0, at_cmd = 1;
@@ -225,9 +243,9 @@ static int scan_seps(const char *s, struct sep *out, int max) {
     return n;
 }
 
-/* 在 s 里找相对深度 0 的指定关键字，返回位置，*id 回填下标。
+/* 在 s 里找**相对深度 0** 的指定关键字，返回位置，*id 回填下标。
  *
- * 闭合关键字（fi/done/esac）要先看深度：深度为 0 时它闭合的才是
+ * 闭合关键字（fi/done/esac）要**先看深度**：深度为 0 时它闭合的才是
  * "本层"。否则 `if a; then if b; then c; fi; fi` 里第一个 fi 会被外层
  * 认领，内层 if 就永远少一个结尾。 */
 static char *find_kw0(char *s, const int *ids, int nids, int *id) {
@@ -1211,6 +1229,14 @@ static int parse_args(char *line, char *argv[], int max_argc, int quoted[]) {
                 i++;
                 while (line[i] && line[i] != '"') {
                     if (line[i] == '\\' && line[i+1]) {
+                        /* POSIX: 双引号内只有 \$ \` \" \\ 和续行有转义作用，
+                         * 其余一律**保留反斜杠**原样交给命令自己解释。
+                         *
+                         * 原来这里无条件吞掉反斜杠，于是
+                         *   curl -w "%{http_code} %{time_total}\n" url
+                         * 传给 curl 的是 ...total}n —— 少一个换行，输出全糊在
+                         * 一行上。printf/sed/awk 的格式串全中同一枪，而且症状
+                         * 是"格式没生效"，很少有人会怀疑到 shell 分词头上。 */
                         char nx = line[i+1];
                         if (nx == '$' || nx == '`' || nx == '"' || nx == '\\') {
                             line[w++] = nx;
@@ -1691,6 +1717,27 @@ static void run_exec(int argc, char *argv[]){
     report_exec_failure(argv[0], err);
 }
 
+/* 子进程被信号打死时给一句话。没有这个，崩溃和"跑完但没输出"在终端上
+ * 完全一样 —— 排查时最贵的就是这种沉默。
+ * 只负责提示，**不改 $?**（$? 仍是 128+sig）。 */
+static void report_signal(int status) {
+    if (WIFEXITED(status)) return;
+    int sig = WTERMSIG(status);
+    const char *msg = 0;
+    switch (sig) {
+        case 7:  msg = "Bus error";                 break;
+        case 4:  msg = "Illegal instruction";       break;
+        case 6:  msg = "Aborted";                   break;
+        case 8:  msg = "Floating point exception";  break;
+        case 9:  msg = "Killed";                    break;
+        case 11: msg = "Segmentation fault";        break;
+        case 15: msg = "Terminated";                break;
+        default: break;
+    }
+    if (msg) printf("%s\n", msg);
+    else     printf("Killed by signal %d\n", sig);
+}
+
 static int run_external(int argc, char *argv[], int background) {
     /* Refresh PATH each time before running an external command. */
     load_search_dirs();
@@ -1751,6 +1798,7 @@ static int run_external(int argc, char *argv[], int background) {
         /* $? 的约定（与 bash 一致）：正常退出取退出码，被信号杀死取 128+sig。
          * 内核给的是 POSIX wait status，"压平"这一步只发生在 shell 这里 ——
          * 不能把压平后的值当成 waitpid 的返回值去理解。 */
+        report_signal(status);
         return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
     } else {
         set_echo(0);
@@ -1760,9 +1808,9 @@ static int run_external(int argc, char *argv[], int background) {
 }
 
 /* ---- 管道 & 重定向 ---- */
-/* 一条重定向操作。按记录顺序左到右应用，这是 POSIX 的硬性规定，也是
+/* 一条重定向操作。**按记录顺序左到右应用**，这是 POSIX 的硬性规定，也是
  * `2>&1 >f` 和 `>f 2>&1` 结果不同的唯一来源：
- *   2>&1 >f   stderr 复制的是重定向前的 stdout（通常是终端），stdout 去 f
+ *   2>&1 >f   stderr 复制的是**重定向前的** stdout（通常是终端），stdout 去 f
  *   >f 2>&1   stdout 先去 f，stderr 再复制 stdout → 两个都进 f
  * 用"字段式"（outfile/errfile/err_to_out）表达不了这个差别，必须留序列。 */
 struct redir_op {
@@ -1790,7 +1838,7 @@ struct segment {
     int  nassigns;
 };
 
-/* `NAME=VALUE` 且 NAME 是合法标识符。注意只认词首：`a=b` 是赋值，
+/* `NAME=VALUE` 且 NAME 是合法标识符。注意只认**词首**：`a=b` 是赋值，
  * `./a=b` 和 `x/a=b` 是文件名。 */
 static int is_assign_word(const char *s) {
     if (!s || !*s) return 0;
@@ -1817,7 +1865,7 @@ static char *skip_spaces(char *p) {
 }
 
 /* 把 "2>" 里的那个 "2" 从已写入的 cmd_str 里抹掉，并返回 fd 编号。
- * 必须紧邻且在词首：`a1>f` 里的 1 是文件名的一部分（a1），不是 fd。 */
+ * 必须**紧邻**且在词首：`a1>f` 里的 1 是文件名的一部分（a1），不是 fd。 */
 static int eat_fd_prefix(char *buf, int *w, int dflt) {
     int b = *w;
     while (b > 0 && buf[b - 1] >= '0' && buf[b - 1] <= '9') b--;
@@ -1984,6 +2032,16 @@ static int run_pipeline(char *line) {
             } else if (c == '\\' && line[i+1]) {
                 i++;
             } else if (c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t')) {
+                /* 注释必须在**切分管道/解析重定向之前**剥掉。
+                 *
+                 * 原来只在 parse_args 里认 `#`,那已经是切完段之后了:
+                 *   curl -v http://10.0.2.2:8080/   # 应该秒回 refused, RST ->
+                 * 这一行里注释中的 `>` 会被 parse_redirect 当成重定向符,
+                 * 直接报 "syntax error in redirection" —— 一条正确的命令被
+                 * 行尾注释带崩,排查时会以为是命令本身错。
+                 *
+                 * 只认"词首"的 `#`(行首或前面是空白),所以 `a#b` 仍是普通词,
+                 * 与 POSIX 一致。 */
                 line[i] = 0;
                 break;
             } else if (c == '|') {
@@ -2008,7 +2066,6 @@ static int run_pipeline(char *line) {
     static char *seg_argv[MAX_SEGMENTS][MAX_ARGC];
     static char pipeline_arg_strs[MAX_SEGMENTS][MAX_ARGC][LINE_SIZE];
     int seg_argc[MAX_SEGMENTS];
-    int seg_quoted[MAX_SEGMENTS][MAX_ARGC];
     for (int s = 0; s < nseg; s++) {
         int q0[MAX_ARGC];
         char *a0[MAX_ARGC];
@@ -2034,7 +2091,6 @@ static int run_pipeline(char *line) {
             copy_str(pipeline_arg_strs[s][k], ea[k], LINE_SIZE);
             seg_argv[s][k] = pipeline_arg_strs[s][k];
         }
-        for (int k = 0; k < eac && k < MAX_ARGC; k++) seg_quoted[s][k] = vq[k];
 
         /* 前缀赋值 `VAR=v cmd | ...`：赋值只作用于**本段**。
          * 切的是 pipeline_arg_strs 里的副本，就地写 \0 不会影响别的段。 */
@@ -2122,6 +2178,7 @@ static int run_pipeline(char *line) {
         }
         if (i == npid - 1) {
             /* 同上一处：$? = 退出码，或 128 + 信号号 */
+            report_signal(status);
             last_status = WIFEXITED(status) ? WEXITSTATUS(status)
                                             : 128 + WTERMSIG(status);
         }
@@ -2386,14 +2443,18 @@ static void expand_cmdsub(char *line) {
     copy_str(line, out, LINE_SIZE);
 }
 
-/* 复合命令执行层
+/* ===================================================================
+ * 复合命令执行层
  *
  * 分层（自下而上）：
- *   run_node     一条原子命令（内置 + 外部 + 管道 + 重定向）
+ *   run_node     一条**原子**命令（内置 + 外部 + 管道 + 重定向）
  *   run_command  识别 if / for / while / until，否则转 run_node
  *   exec_and_or  按深度 0 的 && / || 串起来
  *   exec_list    按深度 0 的 ; / & 串起来          <- 递归点
- */
+ *
+ * 复合命令的 body 用 exec_list 递归执行，所以"解析"就是"找配对关键字 +
+ * 递归调用"，不存在 AST，也不需要编译原理。
+ * =================================================================== */
 
 static char *skip_ws(char *p) {
     while (*p == ' ' || *p == '\t' || *p == '\n') p++;
@@ -2761,6 +2822,7 @@ int main(int argc, char *argv[]) {
             last_stamp = (unsigned long)now;
         }
 
+        set_my_tickets(1);
         reap_jobs();
 
         char cwd_buf[128];
