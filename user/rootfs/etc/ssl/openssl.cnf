@@ -1,0 +1,42 @@
+# RmikuOS 系统级 OpenSSL 配置（OPENSSLDIR = /etc/ssl，libcrypto 启动时自动加载）
+#
+# 存在的唯一目的：**让客户端优先拿到 RSA 证书链，而不是 ECDSA 的**。
+#
+# 为什么：
+#   example.com 的默认链全是 ECC（Cloudflare TLS Issuing ECC CA 3 →
+#   SSL.com TLS Transit ECC CA R2 → SSL.com TLS ECC Root CA 2022），
+#   验一次链要做 3 次 ECDSA 验签。ECDSA 验签 = 两个标量乘 = 几千次 256/384 位
+#   有限域运算，而 RSA-2048 验签（e=65537）= 16 次平方 + 1 次乘 = 17 次模乘。
+#   在本机（无汇编、纯 C、跑在 TCG 上）实测：完整校验 8.64s vs 不校验 1.56s，
+#   那 7 秒几乎全是 ECDSA 验签，而服务端的 TLS1.3 握手期限是 15.11s（从 SYN 起算）
+#   —— 余量只剩 43%，boot 一慢就超时掉成 "Empty reply"。
+#
+# 机制：
+#   TLS1.3 里客户端用 signature_algorithms 扩展告诉服务端"我能验哪些签名"，
+#   服务端从里面挑证书链。Cloudflare/nginx 都是"客户端支持 ECC 就发 ECC 链"，
+#   所以**只把 ECDSA 从列表里删掉**才能拿到 RSA 链（把 ECDSA 放最后没用，
+#   服务端按自己的偏好挑，不按客户端的顺序）。
+#
+# 代价（要记住）：
+#   1. ECDSA-only 的站点会握手失败（"no shared signature algorithm"）。
+#      主流站点都同时有 RSA 和 ECDSA 证书，但确实存在只有 ECC 的配置。
+#   2. 遇到这种站点时，用环境变量临时回到 OpenSSL 默认行为：
+#         OPENSSL_CONF=/dev/null curl https://<ecc-only-site>/
+#
+# 验证方法（profile 用）：
+#   curl -k        -w "%{time_appconnect}\n" https://example.com   # 只有握手
+#   curl --cacert /etc/ssl/cert.pem -w "%{time_appconnect}\n" ...  # 握手+验链
+#   两者之差 = 验签成本。改成 RSA 链后这个差值应该从 7s 掉到几十毫秒级。
+
+openssl_conf = rmiku_init
+
+[rmiku_init]
+ssl_conf = rmiku_ssl
+
+[rmiku_ssl]
+system_default = rmiku_default
+
+[rmiku_default]
+# 顺序：TLS1.3 的 RSA-PSS（服务端证书是 RSA 时的标准选择）→ TLS1.2 的 RSA PKCS#1
+# → RSA-PSS-only 证书（罕见，留着不影响）→ 故意**不放** ecdsa_* 。
+SignatureAlgorithms = rsa_pss_rsae_sha256:rsa_pkcs1_sha256:rsa_pss_pss_sha256
