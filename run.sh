@@ -143,6 +143,9 @@ if [ ! -f "$KERNEL_ELF" ]; then
 fi
 
 
+TCG_THREAD="${TCG_THREAD:-multi}"
+SMP_N="${SMP_N:-8}"
+
 DATA_IMG="target/data-${ARCH}.img"
 if [ ! -f "$DATA_IMG" ]; then
   echo "=== 创建可写数据盘 $DATA_IMG (待内核首次挂载时格式化) ==="
@@ -154,8 +157,8 @@ case "$ARCH" in
     QEMU_ARGS=(
       -machine virt
       -cpu rv64
-      -accel tcg,thread=multi
-      -smp 8,cores=8,threads=1,sockets=1
+      -accel "tcg,thread=$TCG_THREAD"
+      -smp "$SMP_N,cores=$SMP_N,threads=1,sockets=1"
       -m 1G
       -nographic
       -kernel "$KERNEL_ELF"
@@ -176,8 +179,8 @@ case "$ARCH" in
       -machine virt
       -cpu la464
       -m 2G
-      -accel tcg,thread=multi
-      -smp 8,cores=8,threads=1,sockets=1
+      -accel "tcg,thread=$TCG_THREAD"
+      -smp "$SMP_N,cores=$SMP_N,threads=1,sockets=1"
       -nographic
       -kernel "$KERNEL_ELF"
       -drive "file=target/fs-loongarch64.img,format=raw,if=none,id=blk0"
