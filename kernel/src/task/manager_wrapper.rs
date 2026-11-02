@@ -627,7 +627,9 @@ pub fn wake_sleeping_tasks() {
     ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
 }
 
-const EXEC_MAX_ARGS: usize = 8;
+
+const EXEC_MAX_ARGS: usize = 64;
+const EXEC_MAX_ARG_LEN: usize = 4096;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -908,14 +910,21 @@ fn read_exec_args(
     for i in 0..raw.argc {
         let arg = raw.argv[i];
 
-        if arg.ptr == 0 || arg.len > 256 {
+        if arg.ptr == 0 {
+            log::info!("[exec] bad argv[{}]: null ptr", i);
+            return Err(crate::syscall::errno::EFAULT);
+        }
+
+        /* 太长按 POSIX 报 E2BIG（execve 的错误表里没有 EINVAL，
+         * 之前给 EINVAL 会让调用方以为是"参数内容非法"去改参数）。 */
+        if arg.len > EXEC_MAX_ARG_LEN {
             log::info!(
-                "[exec] bad argv[{}]: ptr={:#x} len={}",
+                "[exec] argv[{}] too long: len={} (limit {})",
                 i,
-                arg.ptr,
                 arg.len,
+                EXEC_MAX_ARG_LEN,
             );
-            return Err(crate::syscall::errno::EINVAL);
+            return Err(crate::syscall::errno::E2BIG);
         }
 
         let mut data = crate::task::read_current_user_bytes(arg.ptr, arg.len)
