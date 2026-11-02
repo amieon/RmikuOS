@@ -250,7 +250,7 @@ fn dump_stats(fd: usize, t: &mut TcpSocket, why: &str) {
         return; // 未建连(listen/半开/SYN 失败)或已 dump 过
     }
     let dur = now_ms().saturating_sub(t.stat_start_ms);
-    println!(
+    log::info!(
         "[tcp-stat] fd={} dur_ms={} bytes={} segs={} rtx_rto={} rtx_fast={} loss={} end={}",
         fd, dur, t.stat_bytes, t.stat_segs, t.stat_rtx_rto, t.stat_rtx_fast, t.stat_loss, why
     );
@@ -684,7 +684,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                         send_segment(lp, r, sn, rn, ACK, &[]);
                         t.state = TcpState::Established;
                         t.stat_start_ms = now_ms();
-                        println!("[tcp] fd {} established", i);
+                        log::info!("[tcp] fd {} established", i);
                     }
                 }
                 TcpState::SynReceived => {
@@ -693,7 +693,7 @@ pub fn input(segment: &[u8], src_ip: u32) {
                         t.state = TcpState::Established;
                         t.stat_start_ms = now_ms();
                         push_accept = t.parent.map(|p| (p, i));
-                        println!("[tcp] fd {} accepted (passive open)", i);
+                        log::info!("[tcp] fd {} accepted (passive open)", i);
                     }
                 }
                 TcpState::Established | TcpState::FinWait1 | TcpState::FinWait2
