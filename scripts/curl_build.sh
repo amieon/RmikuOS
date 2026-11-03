@@ -620,18 +620,26 @@ overlay_curl_config() {
  *
  * 一旦 CAFILE 有值，vtls/openssl.c 的 ossl_load_trust_anchors 就会
  *   X509_STORE_load_file(store, cafile) + X509_STORE_load_path(store, capath)
- * 把整份 bundle 塞进 X509_STORE。建链时每一层都要在这 N 张里找 issuer，
- * 于是 time_appconnect 从 ~1.9s 涨到 ~7.4s。实测同一轮（k=1.99s）：
+ * 把整份 bundle 塞进 X509_STORE，于是 time_appconnect 从 ~1.9s 涨到 ~7.4s。
+ * 那几秒到底花在"逐张解析装载"（PEM→DER→d2i→add_cert）还是"建链时线性扫
+ * store->objs"，**还没拆开测**，两说都站得住；能确定的只有总量随张数走。
+ * 实测同一轮（k=1.99s）：
  *   默认（CAFILE/CAPATH 都空 → CURL_CA_FALLBACK 的 set_default_paths）
  *                                                     def = 7.49s
  *   --cacert first.pem --capath /etc/ssl/certs          one = 1.88s
  * 只给 CAPATH 时 store 里 0 张，X509_LOOKUP_hash_dir 按 issuer 的 subject
  * hash 直接开那 2~4 个文件（by_dir.c: lstat("<dir>/<hash>.0") 后加载）。
  *
- * configure 的 --with-ca-path=/etc/ssl/certs 在 curl 8.23-DEV 上**没有**
- * 产出这个宏（curl_config.h 里查不到），于是两个都空 → 落到 CURL_CA_FALLBACK
- * → X509_STORE_set_default_paths() → OPENSSLDIR/cert.pem 整份进来，hash-dir
- * 白配。所以这里显式补，并强制 undef 掉可能存在的 CURL_CA_BUNDLE。
+ * 一个**不能再拿来当证据**的对照：`-k` 时 ossl_populate_x509_store 在
+ *   if(!conn_config->verifypeer) return CURLE_OK;
+ * 就早退了，bundle 一个字节都不读。所以"-k --cacert 只比 -k 慢 0.28s"证明
+ * 不了"加载便宜"—— 那条路根本没进加载，0.28s 是噪声。
+ *
+ * configure 的 --with-ca-path=/etc/ssl/certs：带 --with-ca-bundle 的那版配置
+ * 里 curl_config.h 并没有 CURL_CA_PATH（两个默认值都空 → 掉进 CURL_CA_FALLBACK
+ * → set_default_paths 把 OPENSSLDIR/cert.pem 整份装进来）；改成
+ * --without-ca-bundle + --with-ca-path 之后 configure 自己写出了这一行。
+ * 下面这块 #ifndef 是兜底 —— 上游 m4 反复变，宏不能再丢第二次。
  *
  * /etc/ssl/certs 由 user/mkfs_ext4.sh 从 cert.pem 拆成 <subject-hash>.<n>。
  * 想显式用整份 bundle 仍然可以：curl --cacert /etc/ssl/cert.pem（慢，但可用）。

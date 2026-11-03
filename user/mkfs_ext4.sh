@@ -226,9 +226,9 @@ fi
 #                 X509_get_default_cert_file() 硬编 OPENSSLDIR "/cert.pem"，
 #                 Debian 那个 ca-certificates.crt 的文件名 OpenSSL 不会去找。
 #   /etc/ssl/certs/    hash-dir 形，mkfs 从上面那份 bundle 拆出来（见 [ssl] hash-dir）。
-#                 单文件 bundle 是"能用但慢"：X509_STORE 里塞 145 张，每建一层链
-#                 都要线性遍历全部候选。两条路并存 —— `curl --cacert cert.pem` 走 bundle，
-#                 `curl --capath /etc/ssl/certs` 走 hash-dir。
+#                 单文件 bundle 是"能用但慢"：X509_STORE 里塞 145 张，解析装载和
+#                 建链候选扫描都要为它们付钱（哪一头为主尚未拆分）。两条路并存 ——
+#                 `curl --cacert cert.pem` 走 bundle，`curl --capath /etc/ssl/certs` 走 hash-dir。
 #   /bin/sh       PATH 里有就行（-engine / CA 相关子命令才真的 fork）
 if [ -d "user/build/${ARCH}/openssl" ]; then
   for f in user/build/${ARCH}/openssl/*.elf; do
@@ -306,13 +306,23 @@ fi
 
 # 把 bundle 拆成 /etc/ssl/certs/<subject-hash>.<n> —— hash-dir 形。
 #
-# 为什么值得拆：`--cacert cert.pem` 是把 145 张全塞进 X509_STORE，之后
-# X509_STORE_CTX_get1_issuer 每建一层链都要线性遍历这堆候选做 X509_check_issued
-# → X509_NAME_cmp，而首次比较会触发 x509_name_canon（ASN.1 解码 → 转 UTF-8 →
-# 压空格转小写 → 重新编码）。实测 4 层 × 145 张吃掉 5 秒，占整次 TLS 握手的 2/3
-# （对照：store 145 张 13.1s vs 1 张 8.2s，差值全在这）。
-# hash-dir 不遍历：X509_LOOKUP_hash_dir 拿 issuer 的 subject hash 直接开那一个
-# 文件，4 跳链只读 4 张。
+# 为什么值得拆：`--cacert cert.pem` 把 145 张全塞进 X509_STORE，之后每次验证
+# 都要为这 145 张付钱，至少两处：① 逐张 PEM 解码 + ASN.1 d2i + add_cert；
+# ② X509_STORE_CTX_get1_issuer 线性扫 store->objs 做 X509_check_issued（store
+# 本身没有 subject-hash 索引，哈希只在下面 by_dir 那条路上有）。
+# hash-dir 把两头一起省掉：X509_LOOKUP_hash_dir 拿 issuer 的 subject hash 直接
+# 开那一个文件，4 跳链只解析 4 张、也只扫 4 张。
+#
+# 懒加载这件事当初被怀疑过 —— 怕 OpenSSL 3.0 的 X509_STORE_load_path（curl 在
+# HAVE_OPENSSL3 下用它，不是老的 load_locations）会 readdir 遍历整个目录，那样
+# 拆了也白拆。实测否掉了，同一宿主同一轮、扣掉 `curl -k` 基线后的纯 CA 成本：
+#
+#     --cacert cert.pem（145 张）        3.41s
+#     --capath /etc/ssl/certs（145 个）  0.47~0.56s   ← 三轮 0.466/0.488/0.561
+#
+# 7.6 倍。默认路径（CURL_CA_PATH 已编进 curl）整条 3.09~3.18s，基线 2.57~2.72s。
+# 所以剩下的 ~0.5s 是 hash-dir 首次 open 两三个文件 + 解析根证书的固有成本，
+# 不是"没拆干净"。
 
 mkdir -p "$ROOT/etc/ssl/certs"
 if [ -s "$CA" ] && command -v openssl >/dev/null 2>&1; then

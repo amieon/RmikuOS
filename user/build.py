@@ -259,7 +259,13 @@ def build_one(arch: str, source: Path, app_id: int, category):
     h.update(file_sha256(source).encode())
     for hdr in sorted(source.parent.glob("*.h")):
         h.update(file_sha256(hdr).encode())
-    h.update(shared_deps_hash(arch).encode()) 
+    h.update(shared_deps_hash(arch).encode())
+    # 编译器和编译开关也算输入。上一版只签源文件，于是改 ARCH_CONFIG 里的
+    # cflags（比如给某个架构加 -O2）或换编译器路径时，全部程序静默复用旧 ELF
+    # —— 跟"头文件不进 key"是同一类坑，只是更隐蔽：源文件一个字节都没变。
+    cfg = ARCH_CONFIG[arch]
+    h.update(" ".join([cfg["gcc"], cfg["gxx"],
+                       *cfg["cflags"], *cfg["cxxflags"]]).encode())
     current_hash = h.hexdigest()
 
 
