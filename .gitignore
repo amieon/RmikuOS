@@ -9,3 +9,6 @@
 cross-tools/
 
 /tmp
+/scripts/libtests/.build
+/scripts/shell_lang/*.exe
+/scripts/shell_lang/_*.inc
