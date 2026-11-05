@@ -29,21 +29,32 @@ pub fn init() {
     }
 }
 
-pub fn poll() {
+
+const RX_DRAIN_MAX: usize = 64;
+
+
+pub fn poll() -> usize {
     let mut buf = [0u8; 2048];
-    let n = {
-        let mut guard = lock_detect!(NET);
-        guard.as_mut().map(|net| net.poll_rx(&mut buf)).unwrap_or(0)
-    };
-    if n > 0 {
-        //println!("[net] RX {} bytes", n);  // 确认收到包
-        let hdr_len = core::mem::size_of::<VirtioNetHdr>() as usize;
+    let hdr_len = core::mem::size_of::<VirtioNetHdr>() as usize;
+    let mut got = 0usize;
+
+    while got < RX_DRAIN_MAX {
+        let n = {
+            let mut guard = lock_detect!(NET);
+            guard.as_mut().map(|net| net.poll_rx(&mut buf)).unwrap_or(0)
+        };
+        if n == 0 {
+            break;
+        }
+        got += 1;
         if n > hdr_len {
             eth::input(&buf[hdr_len..n]);
         }
     }
+
     tcp::tick();
-    dhcp::tick(); 
+    dhcp::tick();
+    got
 }
 /// 供 UDP/IP 层发送时获取网卡引用（调用者已持有锁或确保单核执行）
 pub fn with_net<F, R>(f: F) -> R
@@ -58,6 +69,23 @@ where
 
 pub fn on_timer_tick() {
     NET_POLL_PENDING.store(true, Ordering::Relaxed); 
+}
+
+
+static PUMPING: AtomicBool = AtomicBool::new(false);
+
+pub fn pump_console() {
+    if PUMPING.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let ready = {
+        let guard = lock_detect!(NET);
+        guard.is_some()
+    };
+    if ready {
+        poll();
+    }
+    PUMPING.store(false, Ordering::Relaxed);
 }
 
 pub fn maybe_poll() {

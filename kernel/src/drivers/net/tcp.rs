@@ -257,6 +257,24 @@ fn dump_stats(fd: usize, t: &mut TcpSocket, why: &str) {
     t.stat_start_ms = 0; // 防后续路径(tick/close)重复 dump
 }
 
+/// 把一段顺序数据放进接收队列。
+///
+/// 能和队尾接上就直接 extend：一个 1440 字节段一个 Vec 的话，1.8 MB 的 pack
+/// 要分配一千二百多个 Vec，而且 recv 每次只交出一段 —— 用户态（OpenSSL 的
+/// SSL_read）得多跑一千多次 syscall 才读得完。合并之后一次 recv 就能把整个
+/// 队列交出去。
+///
+/// 空 Vec 是"EOF / RST 标记"（别处专门 push 的空块），绝不能往里塞数据。
+fn rx_push(t: &mut TcpSocket, data: &[u8]) {
+    if let Some(last) = t.rx_queue.back_mut() {
+        if !last.is_empty() {
+            last.extend_from_slice(data);
+            return;
+        }
+    }
+    t.rx_queue.push_back(data.to_vec());
+}
+
 /// SR 接收:乱序段进缓存而不是丢弃,洞补上后顺序交付。
 /// 返回 true = 本次消耗了一个 FIN(调用方需做状态转移)。
 /// 教学简化:不考虑序号绕回;重叠段裁前缀;缓存超 OOO_CAP 才丢弃。
@@ -281,7 +299,7 @@ fn sr_input(t: &mut TcpSocket, seq: u32, payload: &[u8], fin: bool) -> bool {
         // 按序到达:直接交付
         if !payload.is_empty() {
             t.rcv_nxt = t.rcv_nxt.wrapping_add(payload.len() as u32);
-            t.rx_queue.push_back(payload.to_vec());
+            rx_push(t, payload);
         }
         if fin {
             t.rcv_nxt = t.rcv_nxt.wrapping_add(1);
@@ -303,7 +321,7 @@ fn sr_input(t: &mut TcpSocket, seq: u32, payload: &[u8], fin: bool) -> bool {
                 data = data.split_off(skip);
             }
             t.rcv_nxt = t.rcv_nxt.wrapping_add(data.len() as u32);
-            t.rx_queue.push_back(data);
+            rx_push(t, &data);
             if f {
                 t.rcv_nxt = t.rcv_nxt.wrapping_add(1);
                 fin_consumed = true;
@@ -990,6 +1008,7 @@ pub fn send_data(fd: usize, data: &[u8], nonblock: bool) -> isize {
      * 被修掉的同一类错：同一个常数在 TCG 上是几十秒、真机上是几毫秒，
      * 而且空转把一个 hart 占满。 */
     let deadline = crate::timer::monotonic_us() + 5_000_000;
+    let mut spins = 0u32;
     loop {
         {
             let mut table = SOCKET_TABLE.lock();
@@ -1033,11 +1052,20 @@ pub fn send_data(fd: usize, data: &[u8], nonblock: bool) -> isize {
         if nonblock {
             return -EAGAIN;
         }
-        crate::drivers::net::poll();
+        /* 窗口满时等的是"对端的 ACK"，而 ACK 就在网卡里。poll 只要捞到包
+         * 就立刻重试，不必先睡一个 tick —— 每次白睡 1ms，一个满窗口 16KB
+         * 就只能按每毫秒 16KB 推进。64 轮上限防止对端一直发数据把我们
+         * 钉在这条循环里。 */
+        let got = crate::drivers::net::poll();
         if crate::timer::monotonic_us() >= deadline {
             return -ETIMEDOUT;
         }
-        let _ = crate::task::sleep_current_and_run_next(1);
+        if got == 0 || spins >= 64 {
+            spins = 0;
+            let _ = crate::task::sleep_current_and_run_next(1);
+        } else {
+            spins += 1;
+        }
     }
 }
 
@@ -1065,8 +1093,9 @@ fn eof_diag(fd: usize, t: &mut TcpSocket, why: &str) {
 
 /// peek=true 对应 MSG_PEEK：把数据抄给调用方但不消费。
 pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool, nonblock: bool) -> isize {
+    let mut spins = 0u32;
     loop {
-        crate::drivers::net::poll();
+        let got = crate::drivers::net::poll();
         {
             let mut table = SOCKET_TABLE.lock();
             match table.slots.get_mut(fd).and_then(|s| s.as_mut()).and_then(as_tcp_mut) {
@@ -1119,8 +1148,19 @@ pub fn recv_data_ex(fd: usize, out: &mut [u8], peek: bool, nonblock: bool) -> is
             return -EAGAIN;
         }
         /* 阻塞 recv: 这里没有超时(阻塞 recv 语义),但必须让出 CPU:syscall
-         * 期间中断是关的,该 hart 不可抢占,对端一直不发数据就等于整机卡死。 */
-        let _ = crate::task::sleep_current_and_run_next(1);
+         * 期间中断是关的,该 hart 不可抢占,对端一直不发数据就等于整机卡死。
+         *
+         * 但"让出"不等于"睡满一个 tick"。poll() 捞到了包却没轮到本 fd 的数据
+         * （乱序段、或者别的连接在刷），说明进度在推进，再搜一轮就行；只有
+         * 网卡队列真空了才值得睡。原来无条件 sleep(1)，每个包都要白等 1ms。
+         * 上限 64 轮是给"别的连接持续占着流量"留的活路，免得这条循环不还 CPU。
+         */
+        if got == 0 || spins >= 64 {
+            spins = 0;
+            let _ = crate::task::sleep_current_and_run_next(1);
+        } else {
+            spins += 1;
+        }
     }
 }
 
