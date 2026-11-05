@@ -624,6 +624,28 @@ impl Inode for Ext4RwInode {
         }
     }
 
+
+    fn remove_recursive(&self, name: &str) -> isize {
+        let child = match self.lookup(name) {
+            Some(inode) => inode,
+            None => return -1,
+        };
+        if child.is_dir() {
+            for ent in child.getdents() {
+                let len = core::cmp::min(ent.name_len as usize, ent.name.len());
+                let Ok(cname) = core::str::from_utf8(&ent.name[..len]) else {
+                    return -1;
+                };
+                if child.remove_recursive(cname) != 0 {
+                    return -1;
+                }
+            }
+            self.rmdir(name)
+        } else {
+            self.unlink(name)
+        }
+    }
+
     fn chmod(&self, mode: u16) -> isize {
         let Ok(perm) = FilePermissions::new(mode) else { return -1 };
         let update = InodeMetadataUpdate {
