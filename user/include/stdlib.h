@@ -288,26 +288,38 @@ static inline void *bsearch(const void *key, const void *base, size_t nmemb, siz
 static inline void _qswap(char *a, char *b, size_t s) {
     while(s--){char t=*a;*a++=*b;*b++=t;}
 }
+
+static inline void _qmedian(char *b, size_t n, size_t s,
+                            int (*c)(const void*, const void*)) {
+    char *a = b, *m = b + (n/2)*s, *z = b + (n-1)*s;
+    if (c(a, m) > 0) _qswap(a, m, s);
+    if (c(a, z) > 0) _qswap(a, z, s);
+    if (c(m, z) > 0) _qswap(m, z, s);
+    _qswap(a, m, s);
+}
+static inline void _qinsert(char *b, size_t n, size_t s,
+                            int (*c)(const void*, const void*)) {
+    for(size_t i=1;i<n;i++)
+        for(size_t j=i;j>0&&c(b+(j-1)*s,b+j*s)>0;j--)
+            _qswap(b+(j-1)*s,b+j*s,s);
+}
 static inline void _qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*), size_t th) {
     if(n<=1)return;
-    if(n<=th){
-        for(size_t i=1;i<n;i++)
-            for(size_t j=i;j>0&&c(b+(j-1)*s,b+j*s)>0;j--)
-                _qswap((char *)b+(j-1)*s,(char *)b+j*s,s);
-        return;
-    }
-    char *p=(char *)b, *l=(char *)b, *r=(char *)b+(n-1)*s;
-    _qswap(p+(n/2)*s,r,s);
+    if(n<=th){ _qinsert((char *)b,n,s,c); return; }
+    char *base = (char *)b;
+    _qmedian(base,n,s,c);
+    char *lo = base, *hi = base+(n-1)*s;
+    char *i = lo, *j = hi+s;
     for(;;){
-        do l+=s; while(l<=r&&c(l,p)<0);
-        do r-=s; while(r>=l&&c(r,p)>0);
-        if(l>=r)break;
-        _qswap(l,r,s);
+        do i+=s; while(i<=hi&&c(i,lo)<0);
+        do j-=s; while(j>lo&&c(j,lo)>0);
+        if(i>=j)break;
+        _qswap(i,j,s);
     }
-    _qswap(p,r,s);
-    size_t rn=((char *)b+n*s-r)/s;
-    _qsort(b,(r-(char *)b)/s,s,c,th);
-    _qsort(r+s,rn-1,s,c,th);
+    _qswap(lo,j,s);                       /* pivot 归位到 j */
+    size_t left = (size_t)(j-base)/s;
+    _qsort(base,left,s,c,th);             /* [base, j) 都 <= pivot */
+    _qsort(j+s,n-left-1,s,c,th);          /* (j, end) 都 >= pivot */
 }
 static inline void qsort(void *b, size_t n, size_t s, int (*c)(const void*,const void*)) {
     _qsort(b,n,s,c,16);
