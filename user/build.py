@@ -1023,11 +1023,20 @@ def zlib_libs(arch: str):
 # 上层跳过只省时间，正确性由下层保底。
 
 def _external_lib(arch: str, name: str, marker: str, script_name: str,
-                  elf_name: str, log_name: str, deps=()) -> str:
+                  elf_name: str, log_name: str, deps=(), also=(),
+                  stages=("bin",)) -> str:
     """编一个 vendored 大件，返回本次缓存键（供下游当依赖传进来）。
 
     失败**不中断整体构建**：三件都是可选的，其余程序不该陪葬。失败时同时清掉
     缓存条目 —— 否则旧 ELF 会被下次 cache hit 当成新的用。
+
+    stages 是脚本的阶段列表（脚本自己按 lib / bin 分入口）。历史上这里写死
+    "bin"，而 openssl 的 libcrypto.a / libssl.a 只有 lib 阶段保证落盘 ——
+    于是"openssl 编好了、curl 却找不到静态库"会互相卡死。所以阶段要能传进来；
+    默认 ("bin",) 保持原有行为，只有 openssl 用 ("lib", "bin")。
+
+    列表里**最后**一个阶段是判成功的那一步（要产出 elf_name），前面的阶段
+    只看返回码：lib 阶段不产 elf，失败也让 bin 去报真正的错，别在这里抢戏。
     """
     src_dir = USER_DIR / name / "src"
     if not (src_dir / marker).exists():
@@ -1043,13 +1052,29 @@ def _external_lib(arch: str, name: str, marker: str, script_name: str,
     out_dir.mkdir(parents=True, exist_ok=True)
     elf = out_dir / elf_name
 
+    # 阶段列表先定型，cache 命中与成功判定都要看"最后一步是不是 bin"：
+    # 只有 bin 阶段该产 elf，--stages=lib（只要 .a）时没有 elf 是正常的。
+    stages = tuple(stages) or ("bin",)
+    last = stages[-1]
+    expects_elf = last == "bin"
+
     abi = shared_deps_hash(arch)
+    # stages 必须进签名：--stages=lib 只刷新 .a、不动 elf，若和 lib,bin 共用 key，
+    # 下一次带 bin 跑就会 cache hit 用上**旧的** openssl.elf —— "改了没生效"。
     key = hashlib.sha256("\n".join(
-        [arch, name, abi, file_sha256(script), *deps]).encode()).hexdigest()
+        [arch, name, abi, file_sha256(script), *stages, *deps]).encode()).hexdigest()
 
     prev = get_arch_cache(arch).get("external", {}).get(name, {})
-    if prev.get("key") == key and elf.exists() and elf.stat().st_size > 0:
-        print(f"[user] {name}: cache hit（ABI/脚本未变，{elf.stat().st_size} bytes）")
+    # also=() 是"同一个脚本还会产出别的文件"的必检清单。典型是 git 的
+    # git-remote-https.elf：脚本判定 https 开不开看的是 libcurl.a 在不在，
+    # 而 libcurl.a 可能晚于 git 出现 —— 只看 git.elf 的话，那个回合编出来的
+    # NO_CURL 版本会被永久 cache hit，https 永远"配了但不生效"。
+    extra_ok = all((out_dir / x).exists() and (out_dir / x).stat().st_size > 0
+                   for x in also)
+    elf_ok = (not expects_elf) or (elf.exists() and elf.stat().st_size > 0)
+    if prev.get("key") == key and elf_ok and extra_ok:
+        tail = f"，{elf.stat().st_size} bytes" if expects_elf else ""
+        print(f"[user] {name}: cache hit（ABI/脚本未变{tail}）")
         return key
 
     if prev.get("abi") and prev["abi"] != abi:
@@ -1060,35 +1085,95 @@ def _external_lib(arch: str, name: str, marker: str, script_name: str,
     # RMIKU_LIBC_ABI 让脚本内部的签名与这里认同一份 ABI，免得两套算法各算各的
     env = os.environ.copy()
     env["RMIKU_LIBC_ABI"] = abi
-    print(f"[user] {name}: 调用 scripts/{script_name} {arch} bin")
-    proc = subprocess.run(["bash", str(script), arch, "bin"], cwd=str(ROOT), env=env)
 
-    if proc.returncode != 0 or not elf.exists() or elf.stat().st_size == 0:
+    for st in stages[:-1]:
+        # 中间阶段不看返回码，但也不吞输出 —— 缺口扫描、缺头告警都在它的 stdout 里。
+        print(f"[user] {name}: 调用 scripts/{script_name} {arch} {st}")
+        subprocess.run(["bash", str(script), arch, st], cwd=str(ROOT), env=env)
+
+    print(f"[user] {name}: 调用 scripts/{script_name} {arch} {last}")
+    proc = subprocess.run(["bash", str(script), arch, last], cwd=str(ROOT), env=env)
+
+    # 只有最后一步是 bin 才该有 elf。--stages=lib（只要 .a，不链程序）是合法
+    # 用法，那种情况下"没 elf"不是失败。
+    # 注意不能用上面那个 elf_ok：那是**跑之前**的快照，首次构建时必然为 False，
+    # 编译成功了也会被误判成失败。
+    if proc.returncode != 0 or (expects_elf and not (
+            elf.exists() and elf.stat().st_size > 0)):
         print(f"[user] {name}: ✗ 没编出来（其余程序照常构建）")
         print(f"[user] {name}:   完整日志 {out_dir / log_name}")
-        print(f"[user] {name}:   单独重试: bash scripts/{script_name} {arch} bin")
+        print(f"[user] {name}:   单独重试: bash scripts/{script_name} {arch} {last}")
+        if len(stages) > 1:
+            print(f"[user] {name}:   完整阶段: {', '.join(stages)}"
+                  f"（前几个阶段的输出在上面，日志各自的 *.log）")
         arch_cache = get_arch_cache(arch)
         arch_cache.setdefault("external", {}).pop(name, None)
         put_arch_cache(arch, arch_cache)
         return key
 
-    print(f"[user] {name}: {elf_name} {elf.stat().st_size} bytes -> /bin/{name}")
+    # 主产物编出来了，但 also 里的副产物没有 —— 脚本自己只在告警后继续（比如
+    # git 的 helper 链接失败时 git 本体仍可用），绝不能当成功缓存下来：
+    # 一缓存，下次 cache hit，副产物永远不会再尝试生成，"配了 https 但永远
+    # 不生效"。症状是 `git clone https://` 报 'remote-https' is not a git command。
+    missing = [x for x in also if not (out_dir / x).is_file()
+               or (out_dir / x).stat().st_size == 0]
+    if missing:
+        print(f"[user] {name}: ⚠ 主产物在，但缺副产物 {' '.join(missing)}")
+        print(f"[user] {name}:   完整日志 {out_dir / log_name}"
+              f"（git 的 helper 另有 make_helper.log）")
+        print(f"[user] {name}:   不写缓存，下次构建会重试")
+        arch_cache = get_arch_cache(arch)
+        arch_cache.setdefault("external", {}).pop(name, None)
+        put_arch_cache(arch, arch_cache)
+        return key
+
+    if expects_elf:
+        print(f"[user] {name}: {elf_name} {elf.stat().st_size} bytes -> /bin/{name}")
+    else:
+        # --stages=lib：没有 elf 可报，就把落下来的 .a 报出来，否则这一段全静默。
+        got = [x for x in also if (out_dir / x).is_file()]
+        print(f"[user] {name}: 只跑到 {last}，产物 {' '.join(got) if got else '（无）'}")
     arch_cache = get_arch_cache(arch)
     arch_cache.setdefault("external", {})[name] = {"key": key, "abi": abi}
     put_arch_cache(arch, arch_cache)
     return key
 
 
-def build_git(arch: str) -> str:
-    """git → /bin/git。NO_* 列表与编译开关只在 scripts/git_probe.sh 写一份。"""
+def build_git(arch: str, curl_key: str = "") -> str:
+    """git → /bin/git，有 libcurl.a 时连带 /bin/git-remote-https。
+
+    https 是把 libcurl.a **静态链进** git 的，所以 curl 一重建（改 CA 路径、
+    换 OpenSSL、改头文件），git 里那份就必须跟着重链 —— 否则同一台机器上
+    curl 和 git 对同一份信任锚会给出不同行为，还极难查。把 curl 的缓存键
+    当依赖塞进签名就是为这个。
+
+    also= 里那个 helper 是另一半：脚本按"libcurl.a 在不在"决定开不开 https，
+    而 libcurl.a 可能比 git.elf 晚出现。只认 git.elf 的话，先编出来的 NO_CURL
+    版本会一直 cache hit，"配了 https 但永远不生效"。
+    """
+    libcurl = BUILD_DIR / arch / "curl" / "libcurl.a"
     return _external_lib(arch, "git", "git.c", "git_probe.sh",
-                         "git.elf", "make_git.log")
+                         "git.elf", "make_git.log",
+                         deps=(curl_key,) if curl_key else (),
+                         also=("git-remote-https.elf",) if libcurl.exists() else ())
 
 
-def build_openssl(arch: str) -> str:
-    """openssl → /bin/openssl，连带产出 libcrypto.a / libssl.a（curl 的硬前置）。"""
+def build_openssl(arch: str, stages=("lib", "bin")) -> str:
+    """openssl → /bin/openssl，连带产出 libcrypto.a / libssl.a（curl 的硬前置）。
+
+    also= 里那两个 .a 是**下游的硬前置**，不能只看 openssl.elf：只跑 bin 阶段
+    时它们曾经不被落到 OUT（只有 lib 阶段落），于是 openssl cache hit、curl 却
+    报"找不到 OpenSSL 静态库"，两者互相卡住。现在 bin 阶段也会落，这里再用
+    cache-hit 条件兜一层。
+
+    stages 默认 ("lib", "bin") 是双保险：lib 阶段保证 .a 一定落盘（哪怕脚本的
+    bin 阶段是旧版、不落 .a），bin 阶段负责链 openssl.elf 并报真正的链接错误。
+    嫌 lib 的缺口扫描吵就 --stages=bin，但那时 .a 只能靠 bin 阶段落。
+    """
     return _external_lib(arch, "openssl", "Configure", "openssl_build.sh",
-                         "openssl.elf", "make_bin.log")
+                         "openssl.elf", "make_bin.log",
+                         also=("libcrypto.a", "libssl.a"),
+                         stages=stages)
 
 
 def build_curl(arch: str, openssl_key: str = "") -> str:
@@ -1098,7 +1183,8 @@ def build_curl(arch: str, openssl_key: str = "") -> str:
     把它的缓存键当依赖塞进签名里，openssl 变了 curl 自动跟着重来。
     """
     return _external_lib(arch, "curl", "configure", "curl_build.sh",
-                         "curl.elf", "link.log", deps=(openssl_key,))
+                         "curl.elf", "link.log", deps=(openssl_key,),
+                         also=("libcurl.a",))
 
 
 # ==================== TCC 构建(从 user/tcc/build_tcc.py 融合) ====================
@@ -1526,7 +1612,19 @@ def main():
     parser.add_argument("arch", choices=ARCH_CONFIG.keys())
     parser.add_argument("--objdump", action="store_true", help="print objdump for each app")
     parser.add_argument("--clean", action="store_true", help="force full rebuild (delete cache)")
+    parser.add_argument("--stages", default="lib,bin",
+                        help="vendored 大件（目前只有 openssl）跑哪些脚本阶段，"
+                             "逗号分隔，可选 lib,bin / bin （默认 lib,bin）")
     args = parser.parse_args()
+
+    # 阶段列表在别处也要用（只对 openssl 生效，curl/git 的脚本只有 bin 有意义）。
+    # 打错一个字母如果静默变成"什么都不跑"，表现就是"编过了但产物没了"，最难查。
+    stages = tuple(s.strip() for s in args.stages.split(",") if s.strip())
+    bad = [s for s in stages if s not in ("lib", "bin")]
+    if bad or not stages:
+        print(f"[user] --stages 不认识: {args.stages}（可选 lib,bin / bin）",
+              file=sys.stderr)
+        sys.exit(2)
 
     if args.clean:
         if CACHE_FILE.exists():
@@ -1566,9 +1664,14 @@ def main():
     if _libz.exists():
         deploy_libz(args.arch, _libz)
     build_sqlite3(args.arch)
-    build_git(args.arch)
-    _ssl_key = build_openssl(args.arch)
-    build_curl(args.arch, _ssl_key)
+    # 顺序是有依赖的：openssl → curl → git。
+    # git 要 https 就得链 libcurl.a，libcurl.a 又静态依赖 libssl/libcrypto；
+    # 而 git_probe.sh 判断"curl 能不能用"就是看 libcurl.a 在不在。
+    # 反过来先编 git，干净树上第一次必然编成 NO_CURL 版，要跑第二遍才生效 ——
+    # 这种"配好了但没生效"以前在别的地方踩过，宁可把顺序钉死。
+    _ssl_key = build_openssl(args.arch, stages=stages)
+    _curl_key = build_curl(args.arch, _ssl_key)
+    build_git(args.arch, _curl_key)
     build_gcn(args.arch)
     build_java_projects(args.arch)
 
