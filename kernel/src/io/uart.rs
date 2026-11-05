@@ -87,6 +87,27 @@ pub fn putchar_raw(ch: u8) {
     UART_LOCK.unlock();
 }
 
+pub fn write_bytes_raw(buf: &[u8]) {
+    const CHUNK: usize = 16;
+    let uart = uart_base();
+    let mut off = 0usize;
+    while off < buf.len() {
+        let end = (off + CHUNK).min(buf.len());
+        UART_LOCK.lock();
+        for &ch in &buf[off..end] {
+            unsafe {
+                while read_volatile(uart.add(UART_LSR)) & UART_LSR_THRE == 0 {}
+                write_volatile(uart.add(UART_THR), ch);
+            }
+        }
+        UART_LOCK.unlock();
+        off = end;
+        if off < buf.len() {
+            crate::drivers::net::pump_console();
+        }
+    }
+}
+
 pub fn puts_raw(s: &str) {
     // puts_raw 不再单独加锁，改为逐个字符调用 putchar_raw（它内部加锁）
     // 这样 puts_raw 不会被其他 hart 插入，保持整行原子性

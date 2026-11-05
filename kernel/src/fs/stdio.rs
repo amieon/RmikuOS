@@ -144,10 +144,7 @@ impl File for Stdout {
     }
 
     fn write(&self, buf: &[u8]) -> isize {
-        for &ch in buf {
-            crate::io::uart::putchar_raw(ch);
-        }
-
+        crate::io::uart::write_bytes_raw(buf);
         buf.len() as isize
     }
     fn stat(&self) -> Stat {
