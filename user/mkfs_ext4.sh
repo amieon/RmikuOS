@@ -174,8 +174,8 @@ fi
 
 # git 的"独立命令"形态：file:// / git:// / ssh:// 传输时，客户端要反向 fork
 # 一个服务端，命令名是 `git-receive-pack`(push) / `git-upload-pack`(fetch)。
-# 注意它不是 `git receive-pack` —— connect.c 是拼出 `git-receive-pack '<path>'`
-# 丢给 shell 做 PATH 查找，所以这两个名字必须各自有一个可执行文件。
+# 注意它不是 `git receive-pack` —— connect.c 拼出来的 argv[0] 就是这个带横线的
+# 名字，直接 execve；内核 sys_exec 对不含 '/' 的名字补 /bin/，所以 /bin 下有就行。
 # 为什么是 cp 而不是 ln：镜像走 mke2fs -d，它按文件逐个写 inode，不保留宿主上
 # 的硬链接关系，ln 出来的两个目录项最后还是两份数据。既然都是两份，就别装。
 if [ -x "$ROOT/bin/git" ]; then
@@ -183,6 +183,20 @@ if [ -x "$ROOT/bin/git" ]; then
     cp "$ROOT/bin/git" "$ROOT/bin/$alias"
     echo "  [git] git -> /bin/$alias"
   done
+fi
+
+# https 的 helper 不在这段里，也不能照上面那样 cp /bin/git —— 它是另一个
+# 独立链接出来的程序（remote-curl.o + http.o + http-walker.o），由上面那个
+# *.elf 循环按 git-remote-https.elf 的名字铺进来。做成 git 的副本的症状是：
+# 有 https 配置，但 clone 时报 "not a git command" 或认不出协议。
+[ -x "$ROOT/bin/git-remote-https" ] && echo "  [git] git-remote-https -> /bin/git-remote-https（https 传输）"
+# 缺了不算致命（file:// 与 git:// 照旧），但必须出声：症状是 guest 里
+# `git clone https://…` 打出 `git: 'remote-https' is not a git command.` ——
+# 那是 /bin/git 找不到 dashed external，跟证书、网络一点关系都没有。
+if [ -x "$ROOT/bin/git" ] && [ ! -x "$ROOT/bin/git-remote-https" ]; then
+  echo "  [git] ⚠ 缺 git-remote-https：git 能用但没有 https 传输"
+  echo "        看 user/build/${ARCH}/git/make_helper.log，或直接重编："
+  echo "        bash scripts/git_probe.sh ${ARCH} bin"
 fi
 
 # /bin/sh：git 的 SHELL_PATH 编死成它，且不能改成 /bin/shell。
