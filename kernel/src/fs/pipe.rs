@@ -1,13 +1,15 @@
 use core::isize;
 
 use crate::sync::spin::Mutex;
-use crate::task::{block_current_on_pipe_read,block_current_on_pipe_write};
 use crate::task::{wake_pipe_writers,wake_pipe_readers};
 
-pub const PIPE_BUF_SIZE: usize = 512;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+
+pub const PIPE_BUF_SIZE: usize = 16 * 1024;
 
 pub struct Pipe {
-    pub buf: [u8; PIPE_BUF_SIZE], 
+    pub buf: Vec<u8>,
     pub head: usize,
     pub tail: usize,
     pub len: usize,
@@ -17,8 +19,10 @@ pub struct Pipe {
 
 impl Pipe {
     pub fn new() -> Self{
+        let mut buf = Vec::with_capacity(PIPE_BUF_SIZE);
+        buf.resize(PIPE_BUF_SIZE, 0);
         Pipe {
-            buf: [0u8; PIPE_BUF_SIZE],
+            buf,
             head: 0,
             tail: 0,
             len: 0,
@@ -30,8 +34,6 @@ impl Pipe {
 
 pub struct PipeReadEnd  { pub inner: Arc<Mutex<Pipe>> }
 pub struct PipeWriteEnd { pub inner: Arc<Mutex<Pipe>> }
-
-use alloc::sync::Arc;
 
 use super::file::{File, FileRef, PipeCloseKind, POLLERR, POLLIN, POLLOUT};
 use super::stat::*;
@@ -97,7 +99,11 @@ impl File for PipeReadEnd {
             if crate::task::signal_pending_now() {
                 return -crate::syscall::errno::EINTR;
             }
-            block_current_on_pipe_read();
+            /* 不用 block_current_on_pipe_read()：drop(pipe) 到把线程登记成
+             * Blocking 之间有窗口，writer 恰好在窗口里 wake_pipe_readers()
+             * 的话这次唤醒就丢了，reader 永久睡死。改成定时让出，条件一律在下一轮循环
+             * 重查，不依赖唤醒送没送到（和 TCP 的 recv_data_ex 同一套做法）。 */
+            let _ = crate::task::sleep_current_and_run_next(1);
         }
     }
     fn write(&self, _buf: &[u8]) -> isize {
@@ -178,8 +184,9 @@ impl File for PipeWriteEnd {
                 wake_pipe_readers();
                 return count as isize;
             }
-            drop(pipe);              
-            block_current_on_pipe_write();
+            drop(pipe);
+            /* 同 read 侧：定时让出 + 下一轮重查，避免丢唤醒后永久睡死。 */
+            let _ = crate::task::sleep_current_and_run_next(1);
         }
     }
 }
