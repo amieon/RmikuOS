@@ -100,39 +100,74 @@ static void print_long(const char *name, const char *full_path, struct stat *st)
     fputs("\n", stdout);
 }
 
-int main(int argc, char *argv[]) {
-    int long_fmt = 0;
-    const char *path = ".";
+/* 短格式一行: 类型 大小 名字 */
+static void print_short(const char *name, const struct stat *st) {
+    switch (stat_type_of(st->st_mode)) {
+        case STAT_TYPE_DIR:     fputs("dir     ", stdout); break;
+        case STAT_TYPE_FILE:    fputs("file    ", stdout); break;
+        case STAT_TYPE_SYMLINK: fputs("link    ", stdout); break;
+        case STAT_TYPE_CHAR:    fputs("char    ", stdout); break;
+        default:                fputs("unknown ", stdout); break;
+    }
+    printf("%lu ", (unsigned long)st->st_size);
+    fputs(name, stdout);
+    if (S_ISDIR(st->st_mode)) {
+        fputs("/", stdout);
+    }
+    fputs("\n", stdout);
+}
 
-    for (int i = 1; i < argc; i++) {
-        if (argv[i][0] == '-' && argv[i][1] != '\0') {
-            if (argv[i][1] == 'l') long_fmt = 1;
-        } else {
-            path = argv[i];
-        }
+/* 处理一个操作数: 非目录打印该条目自身, 目录则列 children。 */
+static int list_one(const char *path, int long_fmt, int show_header) {
+    struct stat self;
+
+    if (lstat(path, &self) < 0) {
+        fputs("ls: cannot stat ", stdout);
+        fputs(path, stdout);
+        fputs(": ", stdout);
+        fputs(strerror(errno), stdout);
+        fputs("\n", stdout);
+        fflush(stdout);
+        return -1;
+    }
+
+    if (!S_ISDIR(self.st_mode)) {
+        if (long_fmt) print_long(path, path, &self);
+        else print_short(path, &self);
+        fflush(stdout);
+        return 0;
+    }
+
+    if (show_header) {
+        fputs(path, stdout);
+        fputs(":\n", stdout);
     }
 
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
         fputs("ls: cannot open ", stdout);
         fputs(path, stdout);
+        fputs(": ", stdout);
+        fputs(strerror(errno), stdout);
         fputs("\n", stdout);
         fflush(stdout);
-        return 1;
+        return -1;
     }
 
     struct dirent entries[8];
+    int rc = 0;
 
     while (1) {
         isize n = getdents(fd, entries, sizeof(entries));
 
         if (n < 0) {
-            fputs("ls: not a directory: ", stdout);
+            fputs("ls: read directory failed: ", stdout);
             fputs(path, stdout);
+            fputs(": ", stdout);
+            fputs(strerror(errno), stdout);
             fputs("\n", stdout);
-            fflush(stdout);
-            close(fd);
-            return 1;
+            rc = -1;
+            break;
         }
 
         if (n == 0) {
@@ -155,39 +190,41 @@ int main(int argc, char *argv[]) {
                 fputs("?       ", stdout);
                 fputs(name, stdout);
                 fputs("\n", stdout);
-                fflush(stdout);
                 continue;
             }
 
-            if (long_fmt) {
-                print_long(name, full_path, &st);
-                continue;
-            }
-
-            if (stat_type_of(st.st_mode) == STAT_TYPE_DIR) {
-                fputs("dir     ", stdout);
-            } else if (stat_type_of(st.st_mode) == STAT_TYPE_FILE) {
-                fputs("file    ", stdout);
-            } else if (stat_type_of(st.st_mode) == STAT_TYPE_SYMLINK) {
-                fputs("link    ", stdout);
-            } else if (stat_type_of(st.st_mode) == STAT_TYPE_CHAR) {
-                fputs("char    ", stdout);
-            } else {
-                fputs("unknown ", stdout);
-            }
-
-            printf("%d", st.st_size);
-            fputs(" ", stdout);
-
-            fputs(name, stdout);
-            if (stat_type_of(st.st_mode) == STAT_TYPE_DIR) {
-                fputs("/", stdout);
-            }
-            fputs("\n", stdout);
-            fflush(stdout);
+            if (long_fmt) print_long(name, full_path, &st);
+            else print_short(name, &st);
         }
+
+        fflush(stdout);
     }
 
     close(fd);
-    return 0;
+    return rc;
+}
+
+#define MAX_LS_PATHS 32
+
+int main(int argc, char *argv[]) {
+    int long_fmt = 0;
+    const char *paths[MAX_LS_PATHS];
+    int npaths = 0;
+
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' && argv[i][1] != '\0') {
+            /* 目前只认 -l; getdents 不返回 . / .., 所以 -a 天然等价 */
+            if (argv[i][1] == 'l') long_fmt = 1;
+        } else if (npaths < MAX_LS_PATHS) {
+            paths[npaths++] = argv[i];
+        }
+    }
+
+    if (npaths == 0) paths[npaths++] = ".";
+
+    int status = 0;
+    for (int i = 0; i < npaths; i++) {
+        if (list_one(paths[i], long_fmt, npaths > 1) < 0) status = 1;
+    }
+    return status;
 }
