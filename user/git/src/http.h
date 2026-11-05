@@ -49,7 +49,7 @@
  * CURLOPT_USE_SSL was known as CURLOPT_FTP_SSL up to 7.16.4,
  * and the constants were known as CURLFTPSSL_*
 */
-#if !defined(CURLOPT_USE_SSL) && defined(CURLOPT_FTP_SSL)
+#if LIBCURL_VERSION_NUM < 0x071604
 #define CURLOPT_USE_SSL CURLOPT_FTP_SSL
 #define CURLUSESSL_TRY CURLFTPSSL_TRY
 #endif
