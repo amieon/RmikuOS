@@ -7,6 +7,12 @@ extern "C" {
 #include "types.h"
 #include "string.h"
 #include "errno.h"    /* putenv 失败要置 EINVAL */
+#include "mem.h"      /* malloc/free：重建 environ 要放一张堆上的新表 */
+
+/* crt0 把 exec 时的 envp(a2) 存进这个全局，之后再没人动过 —— 它只是启动
+ * 快照。而 setenv/unsetenv/clearenv 走 syscall 只改内核里的进程环境表，
+ * 两者会分叉。glibc 的 setenv 会同步维护 environ，这里得自己补上 */
+extern char **environ;
 
 /* 取环境变量到调用方提供的缓冲。
  * 返回变量值长度（不含结尾 NUL），不存在返回 -1。
@@ -26,15 +32,59 @@ static inline char *getenv(const char *key) {
     return __getenv_buf;
 }
 
+/* 枚举环境变量。buf 填入 "KEY=VALUE\0..."，返回总字节数（每串各带结尾 NUL；
+ * 空表返回 0）。buf=0 时仅探测所需大小。 */
+static inline isize listenv(char *buf, usize buf_len) {
+    return syscall3(SYS_LISTENV, (usize)buf, buf_len, 0);
+}
+
+/* 让 environ 追上内核环境表：全量重建，不做增量增删。
+ *
+ * 为什么全量：overwrite=0 时内核可能「成功但没改」、putenv 有裸 KEY 形式、
+ * clearenv 一次清空 —— 每个入口各自判断该增/改/删哪一条，漏一个就静默
+ * 分叉。拿 listenv() 的结果当唯一真相就没有这些分支。
+ *
+ * blob / tab 故意不释放：prep_childenv() 会把 environ 里的字符串指针存进
+ * string_list 再拿去 execve，释放旧表 = 悬空指针；POSIX 也允许调用方持有
+ * 环境串指针。每次 setenv 泄漏量级是环境总字节数（KB 级），进程退出即回收。
+ */
+static inline void rk_env_sync(void) {
+    isize need = listenv(0, 0);
+    if (need < 0) return;                       /* 内核出错：保持旧 environ */
+    usize cap = (usize)need + 1;                /* 空表也得有一个终止 NUL */
+    char *blob = (char *)malloc(cap);
+    if (!blob) return;
+    blob[0] = '\0';
+    blob[need] = '\0';                         /* 遍历到最后一串之后要看见 0 */
+    if (need > 0) {
+        isize got = listenv(blob, (usize)need);
+        /* 两次调用之间表长大了：内核因 buf_len 不够什么都没写，放弃这轮，
+         * 别拿未初始化的 blob 去建表。下一次 setenv 会重试。 */
+        if (got < 0 || got > need) { free(blob); return; }
+    }
+    usize n = 0;
+    for (char *p = blob; *p; p += strlen(p) + 1) n++;
+    char **tab = (char **)malloc((n + 1) * sizeof(char *));
+    if (!tab) { free(blob); return; }
+    usize i = 0;
+    for (char *p = blob; *p; p += strlen(p) + 1) tab[i++] = p;
+    tab[n] = 0;
+    environ = tab;
+}
+
 /* 长度式底层接口。**故意不叫 setenv**：POSIX 的 setenv 是
  * (name, value, overwrite) 三参 + int 返回，名字占住就没有 POSIX 版本了。
  * 自造标识符一律加 rk_ 前缀。 */
 static inline isize rk_setenv_len(const char *key, usize key_len, const char *val, usize val_len, usize overwrite) {
-    return syscall6(SYS_SETENV, (usize)key, key_len, (usize)val, val_len, overwrite, 0);
+    isize r = syscall6(SYS_SETENV, (usize)key, key_len, (usize)val, val_len, overwrite, 0);
+    if (r >= 0) rk_env_sync();
+    return r;
 }
 
 static inline isize rk_unsetenv_len(const char *key, usize key_len) {
-    return syscall3(SYS_UNSETENV, (usize)key, key_len, 0);
+    isize r = syscall3(SYS_UNSETENV, (usize)key, key_len, 0);
+    if (r >= 0) rk_env_sync();
+    return r;
 }
 
 /* 便捷包装：名字/值按 strlen 算长度。返回 0 成功，负值为 -errno。 */
@@ -65,13 +115,9 @@ static inline int unsetenv(const char *name) {
 
 /* 清空全部环境变量。返回 0。 */
 static inline isize clearenv(void) {
-    return syscall3(SYS_CLEARENV, 0, 0, 0);
-}
-
-/* 枚举环境变量。buf 填入 "KEY=VALUE\0..."，返回总字节数（含结尾 NUL）。
- * buf=0 时返回所需大小。 */
-static inline isize listenv(char *buf, usize buf_len) {
-    return syscall3(SYS_LISTENV, (usize)buf, buf_len, 0);
+    isize r = syscall3(SYS_CLEARENV, 0, 0, 0);
+    if (r >= 0) rk_env_sync();
+    return r;
 }
 
 
