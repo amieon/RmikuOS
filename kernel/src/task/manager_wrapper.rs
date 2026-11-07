@@ -158,6 +158,7 @@ pub fn run_tasks() -> ! {
                 let mut returned_status = None;
                 let mut exited_pid = None;
                 let mut exited_tid = None;
+                let mut deferred_wake = false;
 
                 if let Some(thread) = manager.try_thread_mut(tid) {
                     let pid = thread.pid;
@@ -166,13 +167,22 @@ pub fn run_tasks() -> ! {
                     if thread.running_on == Some(hart) {
                         thread.running_on = None;
                     } else {
-                        // log::error!(
-                        //     "[sched] hart {} back from tid {}, but running_on={:?}",
-                        //     hart,
-                        //     tid,
-                        //     thread.running_on,
-                        // );
+                        /* 理论上不该出现：本 hart 切回来的线程，running_on 却
+                         * 指着别的核。出现即说明调度状态已被并发破坏——留证
+                         * 据再清，配合 panic.rs 的 backtrace 追凶手。 */
+                        log::warn!(
+                            "[sched] hart {} back from tid {}, but running_on={:?} (foreign owner)",
+                            hart,
+                            tid,
+                            thread.running_on,
+                        );
                         thread.running_on = None;
+                    }
+
+                    /* 切出已完成、归属已释放：补完窗口内挂账的跨核操作
+                     * （事件唤醒 / SIGCONT 恢复）。 */
+                    if thread.wake_pending || thread.cont_pending {
+                        deferred_wake = true;
                     }
 
                     returned_status = Some(status);
@@ -180,6 +190,12 @@ pub fn run_tasks() -> ! {
                     if matches!(status, ThreadStatus::Zombie | ThreadStatus::Dead) {
                         exited_pid = Some(pid);
                         exited_tid = Some(tid);
+                    }
+                }
+
+                if deferred_wake {
+                    if manager.complete_deferred_wake(tid) {
+                        need_ipi = true;
                     }
                 }
 

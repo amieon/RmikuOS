@@ -41,6 +41,13 @@ pub struct ThreadControlBlock {
     
     pub tid: Tid,
     pub running_on: Option<usize>,
+
+    /* 属主核仍在切出途中时收到了跨核唤醒：先记账不置 Ready，
+     * 由属主核 run_tasks 的 back-from 补真正的唤醒。 */
+    pub wake_pending: bool,
+    
+    /* 同窗口内收到 SIGCONT：保持 Stopped 挂账，back-from 补恢复。 */
+    pub cont_pending: bool,
     pub pid: Pid,
 
     pub kernel_stack: KernelStack,
@@ -78,6 +85,8 @@ impl ThreadControlBlock {
         Self {
             tid,
             running_on: None,
+            wake_pending: false,
+            cont_pending: false,
             pid,
 
             kernel_stack,
@@ -124,6 +133,8 @@ impl ThreadControlBlock {
         Self {
             tid,
             running_on: None,
+            wake_pending: false,
+            cont_pending: false,
             pid,
 
             kernel_stack,

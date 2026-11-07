@@ -198,6 +198,17 @@ impl TaskManager {
             return;
         }
 
+        /* 不变式：Ready 线程必然不在任何核上（只有 prepare_thread 会设
+         * running_on，且同锁内立刻把状态改成 Running）。Ready+running_on
+         * 意味着调度状态已被并发破坏 */
+        if let Some(owner) = self.thread(tid).running_on {
+            panic!(
+                "[sched] enqueue tid {} status=Ready but running_on=Some({})",
+                tid,
+                owner
+            );
+        }
+
         if !self.process(pid).ready_threads.contains(&tid) {
             self.process_mut(pid).ready_threads.push(tid);
         }
@@ -436,6 +447,18 @@ impl TaskManager {
 
     pub fn mark_thread_ready(&mut self, tid: Tid) -> bool {
         let pid = self.thread(tid).pid;
+
+        {
+            let thread = self.thread_mut(tid);
+            if thread.status == ThreadStatus::Blocking && thread.running_on.is_some() {
+                /* 与 wake_blocked_thread 同理：属主核切出窗口内收到
+                 * 跨核唤醒（SIGCONT/kill 等）。挂账推迟，等属主核
+                 * back-from 清归属后由 wake_blocked_thread 补完。 */
+                thread.wake_pending = true;
+                return true;
+            }
+        }
+
         let was_blocking;
         let should_enqueue = {
             let thread = self.thread_mut(tid);
@@ -561,7 +584,12 @@ impl TaskManager {
             );
             thread.status = ThreadStatus::Blocking;
             thread.block_reason = reason;
-            thread.running_on = None;
+            /* running_on 必须保留到属主核 __switch 切出、run_tasks 的
+             * back-from 才清。这里提前清的话，放锁到 __switch 之间
+             * 别的核可以唤醒并 prepare 同一个线程——task_cx 被两核
+             * 同时读写（双跑），上下文踩坏后表现为野 PC / 栈破坏 /
+             * 非法原子 ordering panic。跨核唤醒方看到归属未释放时
+             * 会挂 wake_pending 推迟，见 wake_blocked_thread。 */
             r
         };
 
@@ -711,6 +739,15 @@ impl TaskManager {
             if thread.status != ThreadStatus::Blocking {
                 return false;
             }
+            /* 属主核还在 block→放锁→__switch 的切出窗口里：现在置
+             * Ready 会让其他核的 picker（按 status 扫描）把一个
+             * task_cx 尚未保存完的线程捞起双跑。挂账，等属主核
+             * run_tasks back-from 清完 running_on 再调一次本函数
+             * 补真正的唤醒。返回 true：唤醒已被受理。 */
+            if thread.running_on.is_some() {
+                thread.wake_pending = true;
+                return true;
+            }
             let was_sleep = matches!(thread.block_reason, BlockReason::Sleep { .. });
             thread.status = ThreadStatus::Ready;
             thread.block_reason = BlockReason::None;
@@ -745,6 +782,56 @@ impl TaskManager {
         }
     }
 
+    /// 属主核 back-from（切出完成、running_on 已清）后补完挂账的跨核操作。
+    /// - wake_pending：切出窗口内等待的事件到了（pipe 数据 / 定时器 / 信号）。
+    ///   Blocking → 真正唤醒入队；Stopped → 保持停止、清掉等待原因
+    ///   （事件已到，SIGCONT 恢复时直接回 Ready，与"先唤醒后被停"的
+    ///   既有语义一致）。
+    /// - cont_pending：切出窗口内收到 SIGCONT。Stopped 且无等待原因 →
+    ///   恢复为 Ready 入队。
+    /// 返回是否把线程变得可调度（供调用方决定 IPI）。
+    pub fn complete_deferred_wake(&mut self, tid: Tid) -> bool {
+        let (do_wake, do_cont) = {
+            let thread = self.thread_mut(tid);
+            let (w, c) = (thread.wake_pending, thread.cont_pending);
+            thread.wake_pending = false;
+            thread.cont_pending = false;
+            (w, c)
+        };
+        if !do_wake && !do_cont {
+            return false;
+        }
+
+        if do_wake
+            && self
+                .try_thread(tid)
+                .map_or(false, |t| t.status == ThreadStatus::Stopped)
+        {
+            if let Some(thread) = self.try_thread_mut(tid) {
+                thread.block_reason = BlockReason::None;
+            }
+        }
+
+        if do_cont {
+            let can_resume = self.try_thread(tid).map_or(false, |t| {
+                t.status == ThreadStatus::Stopped && t.block_reason == BlockReason::None
+            });
+            if can_resume {
+                let pid = self.thread(tid).pid;
+                if let Some(thread) = self.try_thread_mut(tid) {
+                    thread.status = ThreadStatus::Ready;
+                }
+                self.process_mut(pid).runnable_count += 1;
+                self.enqueue_ready_thread(tid);
+                return true;
+            }
+        }
+
+        if do_wake {
+            return self.wake_blocked_thread(tid);
+        }
+        false
+    }
 
     pub fn process_is_zombie(&self, pid: Pid) -> bool {
         let Some(process) = self.try_process(pid) else {
@@ -985,6 +1072,12 @@ pub fn continue_process(&mut self, pid: Pid) -> bool {
         }
         if thread.block_reason != BlockReason::None {
             thread.status = ThreadStatus::Blocking;
+        } else if thread.running_on.is_some() {
+            /* 属主核切出窗口内收到 SIGCONT：现在置 Ready 会被其他核
+             * prepare（重复调度 guard panic，schedlab 的老 panic 就是
+             * 这个形状）。保持 Stopped 挂账，属主核 back-from 的
+             * complete_deferred_wake 补恢复。 */
+            thread.cont_pending = true;
         } else {
             thread.status = ThreadStatus::Ready;
             to_ready.push(tid);
