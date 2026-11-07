@@ -59,8 +59,8 @@ typedef struct timezone {
 typedef int clockid_t;
 
 /* clock_gettime 的时钟源。值跟 Linux 对齐（可移植代码会直接写死 1 = MONOTONIC）。
- * 本内核只有一个 tick 计数器，下面几个 id 在实现里都落到同一处：
- * REALTIME 走 get_epoch()（校准前恒 0），其余走 rk_get_time()（单调）。 */
+ * REALTIME 走墙钟（get_epoch_us()，开机由 RTC / stamp / ntpdate 校准）；
+ * 其余走单调钟 get_time_us()（微秒）。 */
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME            0
 #define CLOCK_MONOTONIC           1
@@ -70,7 +70,7 @@ typedef int clockid_t;
 
 
 static inline time_t time(time_t *t) {
-    /* 墙钟秒(epoch): 校准(ntpdate)后为真值, 否则 0 */
+    /* 墙钟秒(epoch): 开机 RTC / stamp / ntpdate 任一成功即为真值, 全失败为 0 */
     time_t now = (time_t)get_epoch();
     if (t) *t = now;
     return now;
@@ -82,21 +82,30 @@ static inline clock_t clock(void) {
     return (clock_t)rk_get_time();
 }
 
+/* 墙钟时间戳由 get_epoch_us() 一次返回总微秒，秒和小数同一次读数；
+ * gettimeofday / clock_gettime(REALTIME) 都从这里拆，整秒边界不会错位。 */
 static inline int gettimeofday(struct timeval *tv, struct timezone *tz) {
-    time_t now = (time_t)get_epoch();
-    if (tv) { tv->tv_sec = now; tv->tv_usec = 0; }
+    isize us = get_epoch_us();
+    if (tv) {
+        tv->tv_sec  = (time_t)(us / 1000000);
+        tv->tv_usec = (long)(us % 1000000);
+    }
     if (tz) { tz->tz_minuteswest = 0; tz->tz_dsttime = 0; }
     return 0;
 }
 
-/* clock_gettime：REALTIME 走墙钟（校准前恒 0），其余走单调钟。
+/* clock_gettime：REALTIME 走墙钟，其余走单调钟。
  *
  * get_time_us() 才是"微秒"。rk_get_time() 是**硬件裸计数器**（riscv 10MHz、
  * loongarch 100MHz），直接塞进 tv_sec 会得到每秒跳一千万次的怪值 —— 单调钟
  * 必须换单位后拆成 sec/nsec。 */
 static inline int clock_gettime(clockid_t clk, struct timespec *ts) {
     if (clk == CLOCK_REALTIME) {
-        if (ts) { ts->tv_sec = (time_t)get_epoch(); ts->tv_nsec = 0; }
+        if (ts) {
+            isize us = get_epoch_us();
+            ts->tv_sec  = (time_t)(us / 1000000);
+            ts->tv_nsec = (long)((us % 1000000) * 1000);
+        }
         return 0;
     }
     long us = (long)get_time_us();

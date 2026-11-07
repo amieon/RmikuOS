@@ -92,9 +92,14 @@ pub fn sys_set_wall_clock(epoch_us: usize) -> isize {
     0
 }
 
-/// 墙钟秒(epoch)。未校准(  跑 ntpdate)返回 0。
+/// 墙钟秒(epoch)。开机 RTC / stamp / ntpdate 三条来源都没成时返回 0。
 pub fn sys_get_epoch() -> isize {
     crate::timer::now_secs() as isize
+}
+
+/// 墙钟时间戳(epoch 微秒)。三条来源都没成时返回 0。
+pub fn sys_get_epoch_us() -> isize {
+    crate::timer::now_us() as isize
 }
 
 /// mprotect(addr, len, prot): 修改已有映射的页权限(TCC tccrun JIT 需要)。

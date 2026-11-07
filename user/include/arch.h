@@ -30,9 +30,16 @@ static inline isize get_time_us(void) {
     return syscall3(SYS_GET_TIME_US, 0, 0, 0);
 }
 
-/* 墙钟秒(epoch, 1970 起)。未跑 ntpdate 校准前返回 0。 */
+/* 墙钟秒(epoch, 1970 起)。开机 RTC / stamp / ntpdate 三条来源全失败时为 0。 */
 static inline isize get_epoch(void) {
     return syscall3(SYS_GET_EPOCH, 0, 0, 0);
+}
+
+/* 墙钟时间戳：epoch **微秒**。一次 syscall 拿全，秒和小数同一次读数，
+ * gettimeofday / clock_gettime(REALTIME) 都从它拆。三条来源全失败时为 0。
+ * 别拿 get_epoch() 的秒 + get_time_us() 的小数拼：相位不同，整秒会跳 ±1s。 */
+static inline isize get_epoch_us(void) {
+    return syscall3(SYS_GET_EPOCH_US, 0, 0, 0);
 }
 
 static inline isize hartid(){
@@ -40,7 +47,8 @@ static inline isize hartid(){
 }
 
 /* 校准内核墙钟: epoch_us = 此刻的绝对 Unix 时间(微秒)。
- * ntpdate 联网取时后调用; 之后 time()/stat 时间戳由内核单调累加。 */
+ * 开机 `drivers::rtc` / stamp 兜底 / login 后台 `ntpdate -b` 都会调；
+ * 之后 time()/stat 时间戳由内核按 monotonic_us() 单调累加。 */
 static inline isize set_wall_clock(usize epoch_us) {
     return syscall3(SYS_SET_WALL_CLOCK, epoch_us, 0, 0);
 }

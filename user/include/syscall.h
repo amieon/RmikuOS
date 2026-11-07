@@ -142,6 +142,8 @@ extern "C" {
 /* 网络组的续号：100-117 是 socket 全家，118-127 已被进程/信号/定时器占用，
  * 不重排既有号（ABI），getsockopt 只能挂末尾。 */
 #define SYS_NET_GETSOCKOPT           128
+/* 墙钟时间戳(epoch 微秒)。接在末尾，不重排 0-128 既有号。 */
+#define SYS_GET_EPOCH_US             129
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);

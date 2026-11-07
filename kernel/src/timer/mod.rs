@@ -36,9 +36,13 @@ pub fn monotonic_us() -> u64 {
     (monotonic_time() as u64) * 1_000_000 / (TIME_FREQ as u64)
 }
 
-/* ---- 墙钟(网络同步时间, 见 ntpdate) ----
- * WALL_BASE: 校准时刻的绝对 epoch 微秒; WALL_TICKS: 校准时刻的单调微秒。
- * 未校准(WALL_BASE==0)时 now_secs() 返回 0。 */
+/* 墙钟(epoch 微秒)
+ * 开机按顺序有三条来源，后者成功会覆盖前者：
+ * drivers::rtc::init() 读硬件 RTC（QEMU 有；真机 riscv 板上没有这段 MMIO）
+ * drivers::rtc::stamp::restore() 读 /var/lib/rtcstamp（fake-hwclock 兜底）
+ * login 后台跑 `ntpdate -b`，成功还会回写 stamp
+ * WALL_BASE: 校准时刻的 epoch 微秒; WALL_TICKS: 校准时刻的 monotonic_us。
+ * 三条都没成(WALL_BASE==0)时 now_us()/now_secs() 返回 0。 */
 static WALL_BASE: AtomicU64 = AtomicU64::new(0);
 static WALL_TICKS: AtomicU64 = AtomicU64::new(0);
 
@@ -48,16 +52,24 @@ pub fn set_wall_clock(epoch_us: u64) {
     WALL_TICKS.store(monotonic_us(), Ordering::Relaxed);
 }
 
-/// 当前墙钟秒(epoch)。未校准返回 0。
-/// 注: Stat 时间戳(方案 C)即将使用; 在此之前仅 ntpdate 校准, 无调用点。
-pub fn now_secs() -> u64 {
+/// 当前墙钟时间戳(epoch 微秒)。未校准返回 0。
+///
+/// 一次读齐 BASE/TICKS/monotonic 后返回总微秒：用户态拿这个数自己拆秒与
+/// 小数，秒边界不会错位。若拆成"get_epoch() 的秒 + get_time_us() 的小数"，
+/// 两个源相位不同，拼出来会在整秒处跳 ±1s。
+pub fn now_us() -> u64 {
     let base = WALL_BASE.load(Ordering::Relaxed);
     if base == 0 {
         return 0;
     }
     let t0 = WALL_TICKS.load(Ordering::Relaxed);
     let us = monotonic_us();
-    (base + us.saturating_sub(t0)) / 1_000_000
+    base.saturating_add(us.saturating_sub(t0))
+}
+
+/// 当前墙钟秒(epoch)。未校准返回 0。stat / mtime 走这里。
+pub fn now_secs() -> u64 {
+    now_us() / 1_000_000
 }
 
 pub fn monotonic_time() -> usize {

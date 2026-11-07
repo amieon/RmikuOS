@@ -53,13 +53,40 @@ int main() {
     CHECK(t1 >= (time_t)FIXED_EPOCH && t1 <= (time_t)FIXED_EPOCH + 1,
           "校准后 time() == 设定值（±1s，只可能差在秒边界）");
 
-    /* 三个入口路由同一个值：谁跑偏了这里就会露出来 */
+    /* 三个入口路由同一个值：谁跑偏了这里就会露出来。
+     * 现在秒和小数来自同一次 get_epoch_us() 读数，与 time() 之间可能刚好跨
+     * 过整秒边界，所以放 ±1s 容差，不再要求字节级相等。 */
     struct timeval tv;
     struct timespec ts;
     gettimeofday(&tv, 0);
     clock_gettime(CLOCK_REALTIME, &ts);
-    CHECK_EQ(tv.tv_sec, (long)t1, "gettimeofday 与 time() 一致");
-    CHECK_EQ(ts.tv_sec, (long)t1, "clock_gettime(REALTIME) 与 time() 一致");
+    CHECK(tv.tv_sec >= t1 - 1 && tv.tv_sec <= t1 + 1,
+          "gettimeofday 与 time() 一致（±1s）");
+    CHECK(ts.tv_sec >= t1 - 1 && ts.tv_sec <= t1 + 1,
+          "clock_gettime(REALTIME) 与 time() 一致（±1s）");
+
+    /* ---------- 2b. 亚秒精度回归 ----------
+     * 曾经 gettimeofday 把 tv_usec 写死 0、clock_gettime(REALTIME) 把
+     * tv_nsec 写死 0，sqlite3 .timer / git / 第三方探测求差只看得到 0 或
+     * 整秒跳。现在墙钟时间戳由 get_epoch_us() 一次返回总微秒，3ms 窗口内
+     * 必须真的前进 —— 只有秒分辨率的话下面第一条必然 FAIL。 */
+    isize eu0 = get_epoch_us();
+    isize mono0 = get_time_us();
+    while (get_time_us() - mono0 < 3000) {
+        /* 忙等 3 个单调毫秒：不能用 nanosleep，它本身就走同一个钟 */
+    }
+    isize eu1 = get_epoch_us();
+    printf("[INFO] 3ms 窗口: epoch_us %ld -> %ld (差 %ld)\n",
+           (long)eu0, (long)eu1, (long)(eu1 - eu0));
+    CHECK(eu1 > eu0 && eu1 - eu0 < 1000000,
+          "墙钟时间戳以微秒前进（不是整秒跳）");
+    CHECK(eu0 / 1000000 >= (isize)t1 - 1,
+          "get_epoch_us() 拆出的秒与 time() 同秒");
+
+    gettimeofday(&tv, 0);
+    clock_gettime(CLOCK_REALTIME, &ts);
+    CHECK(tv.tv_usec >= 0 && tv.tv_usec < 1000000, "tv_usec 落在 [0,1e6)");
+    CHECK(ts.tv_nsec >= 0 && ts.tv_nsec < 1000000000L, "tv_nsec 落在 [0,1e9)");
 
     /* ---------- 3. 墙钟与单调钟同速率 ----------
      * 单位陷阱：rk_get_time()（SYS_GET_TIME）返回的是**硬件裸计数器**，

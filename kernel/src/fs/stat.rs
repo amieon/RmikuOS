@@ -6,7 +6,7 @@ pub struct Stat {
     pub uid: u32,
     pub gid: u32,
     pub size: usize,
-    /// 最后修改时间(epoch 秒)。未校准墙钟(未跑 ntpdate)时为 0。
+    /// 最后修改时间(epoch 秒)。开机 RTC / stamp / ntpdate 全没成时为 0。
     /// 复用原 reserved[4], 保持 32 字节布局不变。
     pub mtime: u32,
     /// 字符设备的次设备号(仅 STAT_TYPE_CHAR 有意义)。占原 reserved 尾部 4 字节,
