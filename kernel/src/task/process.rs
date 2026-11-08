@@ -440,6 +440,25 @@ impl ProcessControlBlock {
             return;
         }
 
+        if end == self.mmap_next {
+            self.mmap_next = start;
+            // 前面紧邻的空洞一并吸进尾部, 尾部永远是一整段, 不产生碎片。
+            loop {
+                match self
+                    .mmap_free_ranges
+                    .iter()
+                    .position(|r| r.end == self.mmap_next)
+                {
+                    Some(i) => {
+                        let r = self.mmap_free_ranges.remove(i);
+                        self.mmap_next = r.start;
+                    }
+                    None => break,
+                }
+            }
+            return;
+        }
+
         self.mmap_free_ranges.push(MmapFreeRange {
             start,
             end,
