@@ -498,6 +498,7 @@ def _build_cpp_real(arch, source, app_id, category, out_dir, stem, elf_path):
         link_cmd.append(str(thread_obj))
     if has_mem:
         link_cmd.append(str(mem_obj))
+    link_cmd.append("-lgcc")  
     link_cmd.extend(["-o", str(elf)])
     run(link_cmd)
     data = elf.read_bytes()
@@ -686,6 +687,7 @@ def build_project_dir(arch: str, src_dir: Path, out_dir: Path, is_cpp: bool = Fa
              "-Wl,--build-id=none", *cfg["ldflags"],
              "-T", str(cfg["linker"]),
              *link_objs,
+             *(["-lgcc"] if is_cpp else []), 
              "-o", str(elf)])
 
         data = elf.read_bytes()

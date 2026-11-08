@@ -12,8 +12,24 @@ FILE _stdin  = {0, {0}, 0, 0, _F_READ, -1};
 FILE _stdout = {1, {0}, 0, 0, _F_WRITE, -1};
 FILE _stderr = {2, {0}, 0, 0, _F_WRITE | _F_UNBUF, -1};
 
+/* C++ 退出钩子: cpp_runtime.cpp 提供强定义(逆序跑 __cxa_atexit 表)。
+ * 这里只作 weak 声明不定义 —— 纯 C 程序解析成 0 会跳过, 也避免同 TU
+ * 的 weak 空实现被内联、把强定义架空。 */
+extern void __rk_run_cxa_dtors(void) __attribute__((weak));
+
+/* .fini_array 边界由 linker script 的 PROVIDE_HIDDEN 给出;
+ * 没有条目时 start == end, 循环 0 次。 */
+extern void (*__fini_array_start[])(void);
+extern void (*__fini_array_end[])(void);
+
 void exit(int code) __attribute__((weak));
 void exit(int code) {
+    /* C++ 析构: 先逆序跑 __cxa_atexit 登记, 再逆序跑 .fini_array。
+     * 放在 fflush 之前, 析构里的 printf 才会一起被冲出去。 */
+    if (__rk_run_cxa_dtors) __rk_run_cxa_dtors();
+    long n = __fini_array_end - __fini_array_start;
+    while (n > 0) __fini_array_start[--n]();
+
     fflush(stdout);
     fflush(stderr);
     syscall3(SYS_EXIT, (usize)code, 0, 0);
@@ -32,6 +48,16 @@ void __rk_assert_fail(const char *expr, const char *file, int line) {
             expr ? expr : "(null)", file ? file : "(null)", line);
     fflush(stderr);
     exit(134);
+}
+
+/* C++ 纯虚调用落点(cpp_runtime.cpp 的 __cxa_pure_virtual 转过来)。
+ * 原来是 while(1){} —— 无输出、占满一个核、看起来像程序卡死。
+ * 这里直接 syscall 退出而不走 exit(): 对象状态已坏, 不该再跑析构。 */
+void __rk_pure_virtual_fail(void) {
+    fprintf(stderr, "pure virtual method called\n");
+    fflush(stderr);
+    syscall3(SYS_EXIT, 134, 0, 0);
+    for (;;) {}
 }
 
 /* errno: POSIX 全局错误码(errno.h 已声明, 这里提供定义)。

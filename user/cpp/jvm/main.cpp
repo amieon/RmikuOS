@@ -8,13 +8,8 @@
 #include "lock.h"
 #include "aot.h"
 
-extern "C" {
-    void* __dso_handle = nullptr;
-    int __cxa_atexit(void (*destructor)(void*), void* arg, void* dso) {
-        (void)destructor; (void)arg; (void)dso;
-        return 0;  // 直接忽略析构，裸机进程结束直接回收
-    }
-}
+/* __dso_handle / __cxa_atexit 由 user/lib/cpp_runtime.cpp 统一提供,
+ * 这里不再手糊空实现, 否则会覆盖真正的析构登记。 */
 
 static const int MAX_CLASSES = 32;
 static ClassFile g_class_storage[MAX_CLASSES];

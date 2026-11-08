@@ -8,12 +8,24 @@ _start:
     la      t0, environ
     sd      a2, 0(t0)
 
+    /* C++ 全局对象构造: 正序遍历 .init_array。
+     * 用 s0/s1(callee-saved), ctor 不会破坏循环变量; t0-t2 会被 ctor 改。 */
+    la      s0, __init_array_start
+    la      s1, __init_array_end
+.Linit_loop:
+    bgeu    s0, s1, .Linit_done
+    ld      t2, 0(s0)
+    addi    s0, s0, 8
+    jalr    ra, 0(t2)
+    j       .Linit_loop
+.Linit_done:
+
     call main
 
-    /* exit(code): 冲刷标准流缓冲后 syscall 退出(短输出无换行不丢) */
+    /* exit(code): 跑 C++ 析构 + 冲刷标准流缓冲后 syscall 退出 */
     call exit
-1:
-    j 1b
+.Lhang:
+    j .Lhang
 
     .section .data
     .global environ
