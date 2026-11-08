@@ -93,10 +93,7 @@ static inline int gettid(void) {
 }
 
 static inline int thread_create(void (*func)(void *), void *arg) {
-    void *stack_base = mmap(
-        THREAD_STACK_SIZE,
-        PROT_READ | PROT_WRITE
-    );
+    void *stack_base = rk_anon_mmap(THREAD_STACK_SIZE, PROT_READ | PROT_WRITE);
 
     if ((isize)stack_base < 0) {
         return -1;

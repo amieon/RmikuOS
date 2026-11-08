@@ -1,0 +1,12 @@
+#pragma once
+
+/* 裸机 <new>: 第三方 C++ 库常为 placement new 包含 <new>。
+ * 系统版 <new> 会带出 <bits/move.h> -> <type_traits>, 而我们的
+ * user/include/type_traits 是手搓子集, 会被 libstdc++ 内部头反过来用,
+ * 报 'std::is_lvalue_reference is not a member of std' 一类错。
+ * 这里只声明 placement new/delete, 不引入 libstdc++ 头链。
+ * 普通 operator new/delete 由 user/lib/cpp_runtime.cpp 提供。 */
+inline void* operator new(__SIZE_TYPE__, void* p) noexcept { return p; }
+inline void* operator new[](__SIZE_TYPE__, void* p) noexcept { return p; }
+inline void  operator delete(void*, void*) noexcept {}
+inline void  operator delete[](void*, void*) noexcept {}

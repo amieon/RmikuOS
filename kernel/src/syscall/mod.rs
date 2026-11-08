@@ -175,7 +175,7 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_THREAD_CREATE => thread::sys_thread_create(args[0], args[1], args[2], args[3]),
         SYSCALL_THREAD_EXIT => thread::sys_thread_exit(args[0] as i32),
         SYSCALL_THREAD_JOIN => thread::sys_sthread_join(args[0], args[1]),
-        SYSCALL_MMAP => process::sys_mmap(args[0],args[1]),
+        SYSCALL_MMAP => process::sys_mmap(args[0], args[1], args[2], args[3], args[4], args[5]),
         SYSCALL_MUNMAP => process::sys_munmap(args[0], args[1]),
         SYSCALL_SET_THREAD_TICKETS => thread::sys_set_thread_tickets(args[0], args[1]),
         SYSCALL_SET_PROCESS_TICKETS => process::sys_set_process_tickets(args[0], args[1]),

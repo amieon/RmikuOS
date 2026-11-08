@@ -1552,10 +1552,76 @@ pub fn mprotect_current(addr: usize, len: usize, prot: usize) -> isize {
     }
 }
 
-pub fn mmap_current(len: usize, prot: usize) -> isize {
+
+pub fn mmap_current(
+    addr: usize,
+    len: usize,
+    prot: usize,
+    flags: usize,
+    fd: usize,
+    offset: usize,
+) -> isize {
+    use crate::mm::config::PAGE_SIZE;
+    use crate::mm::{MapArea, MapType, VirtAddr, VirtPageNum};
+    use crate::syscall::errno::{EACCES, EBADF, EINVAL, EIO, ENODEV, ENOMEM};
+    use crate::task::process::{
+        MAP_ANONYMOUS, MAP_FIXED, MAP_PRIVATE, MAP_SHARED, PROT_WRITE,
+    };
+
+    
+    if len == 0 {
+        return -EINVAL;
+    }
     let perm = match mmap_prot_to_perm(prot) {
         Some(perm) => perm,
-        None => return -1,
+        None => return -EINVAL,
+    };
+    if flags & MAP_FIXED != 0 {
+        return -EINVAL;
+    }
+    let known_flags = MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS;
+    if flags & !known_flags != 0 {
+        return -EINVAL;
+    }
+    let sharing = flags & (MAP_SHARED | MAP_PRIVATE);
+    if sharing != MAP_SHARED && sharing != MAP_PRIVATE {
+        return -EINVAL;
+    }
+    let anonymous = flags & MAP_ANONYMOUS != 0;
+    if !anonymous {
+        /* offset 必须是页大小的整数倍，且不能让 offset+len 溢出。 */
+        if offset > isize::MAX as usize || offset % PAGE_SIZE != 0 {
+            return -EINVAL;
+        }
+        if offset.checked_add(len).is_none() {
+            return -EINVAL;
+        }
+    }
+    /* hint 不是命令：内核自己从 mmap_next / free list 挑地址。 */
+    let _ = addr;
+
+    /* 取 FileRef 必须在拿 TASK_MANAGER 之前：current_file 自己要拿这把锁。 */
+    let file = if anonymous {
+        None
+    } else {
+        if (fd as isize) < 0 {
+            return -EBADF;
+        }
+        let f = match crate::task::current_file(fd) {
+            Some(f) => f,
+            None => return -EBADF,
+        };
+        if !f.readable() {
+            return -EACCES;
+        }
+        /* pipe/socket/目录没有线性的文件内容可映射，入口就拒掉。 */
+        if f.stat().file_type != crate::fs::stat::STAT_TYPE_FILE {
+            return -ENODEV;
+        }
+        if prot & PROT_WRITE != 0 && sharing == MAP_SHARED && !f.writable() {
+            return -EACCES;
+        }
+        Some(f)
     };
 
     let (pid, start, end) = {
@@ -1567,27 +1633,30 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
 
             match process.alloc_mmap_range(len) {
                 Some(range) => range,
-                None => return -1,
+                None => return -ENOMEM,
             }
         };
 
         {
             let process = manager.process_mut(pid);
 
-            process.user_space.insert_area(crate::mm::MapArea::new(
-                crate::mm::VirtAddr(start),
-                crate::mm::VirtAddr(end),
-                crate::mm::MapType::Framed,
+            process.user_space.insert_area(MapArea::new(
+                VirtAddr(start),
+                VirtAddr(end),
+                MapType::Framed,
                 perm,
             ));
 
-            let start_vpn = crate::mm::VirtAddr(start).floor();
-            let end_vpn = crate::mm::VirtAddr(end).ceil();
+            let start_vpn = VirtAddr(start).floor();
+            let end_vpn = VirtAddr(end).ceil();
 
+            /* 逐页校验页表 + eager 读入。FrameTracker::new 会把物理页清零，
+             * 所以 read_at 读不满一页时(EOF)尾部天然是 0，符合 POSIX。 */
+            let mut file_off = offset;
             for vpn_id in start_vpn.0..end_vpn.0 {
-                let vpn = crate::mm::VirtPageNum(vpn_id);
+                let vpn = VirtPageNum(vpn_id);
 
-                if process.user_space.translate(vpn).is_none() {
+                let Some(pte) = process.user_space.translate(vpn) else {
                     log::error!(
                         "[mmap] verify failed: pid={} start={:#x} end={:#x} missing vpn={:?}",
                         pid,
@@ -1595,15 +1664,31 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
                         end,
                         vpn,
                     );
+                    process.user_space.remove_area(VirtAddr(start), VirtAddr(end));
+                    process.dealloc_mmap_range(start, end);
+                    return -ENOMEM;
+                };
 
-                    return -1;
+                if let Some(f) = file.as_ref() {
+                    let page = pte.ppn().bytes_array();
+                    if f.read_at(&mut page[..], file_off) < 0 {
+                        log::error!("[mmap] read_at failed: off={:#x}", file_off);
+                        process.user_space.remove_area(VirtAddr(start), VirtAddr(end));
+                        process.dealloc_mmap_range(start, end);
+                        return -EIO;
+                    }
                 }
+                file_off = file_off.saturating_add(PAGE_SIZE);
             }
 
             process.mmap_areas.push(crate::task::process::MmapArea {
                 start,
                 end,
                 prot,
+                flags,
+                offset,
+                length: len,
+                file: file.clone(),
             });
         }
 
@@ -1624,10 +1709,13 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
      */
 
     log::info!(
-        "[mmap] pid={} len={} prot={:#x} => {:#x}..{:#x}",
+        "[mmap] pid={} len={} prot={:#x} flags={:#x} fd={} off={:#x} => {:#x}..{:#x}",
         pid,
         len,
         prot,
+        flags,
+        fd,
+        offset,
         start,
         end,
     );
@@ -1636,16 +1724,21 @@ pub fn mmap_current(len: usize, prot: usize) -> isize {
 }
 
 pub fn munmap_current(addr: usize, len: usize) -> isize {
+    use crate::mm::config::PAGE_SIZE;
+    use crate::mm::{VirtAddr, VirtPageNum};
+    use crate::syscall::errno::EINVAL;
+    use crate::task::process::{MAP_SHARED, PROT_WRITE};
+
     if addr == 0 || len == 0 {
-        return -1;
+        return -EINVAL;
     }
 
-    let start = crate::mm::align_down(addr, crate::mm::config::PAGE_SIZE);
-    let len = crate::mm::align_up(len, crate::mm::config::PAGE_SIZE);
+    let start = crate::mm::align_down(addr, PAGE_SIZE);
+    let len = crate::mm::align_up(len, PAGE_SIZE);
 
     let end = match start.checked_add(len) {
         Some(end) => end,
-        None => return -1,
+        None => return -EINVAL,
     };
 
     let mut manager = lock_detect!(TASK_MANAGER);
@@ -1659,16 +1752,53 @@ pub fn munmap_current(addr: usize, len: usize) -> isize {
             .iter()
             .position(|area| area.start == start && area.end == end)
         else {
-            return -1;
+            return -EINVAL;
         };
+
+        let area = process.mmap_areas[index].clone();
+
+        /* MAP_SHARED + 可写：必须在 unmap 释放物理页之前把内容写回，
+         * 否则页面一释放数据就没了。只写回 [offset, offset+length) 且不超过
+         * 原文件大小 —— 否则一次只读 mmap 也会悄悄把文件撑大。 */
+        if area.flags & MAP_SHARED != 0 && area.prot & PROT_WRITE != 0 {
+            if let Some(f) = area.file.as_ref() {
+                if f.writable() {
+                    let file_size = f.stat().size;
+                    let mut left = area
+                        .length
+                        .min(file_size.saturating_sub(area.offset));
+                    let mut file_off = area.offset;
+                    let start_vpn = VirtAddr(start).floor();
+                    let end_vpn = VirtAddr(end).ceil();
+
+                    for vpn_id in start_vpn.0..end_vpn.0 {
+                        if left == 0 {
+                            break;
+                        }
+                        let vpn = VirtPageNum(vpn_id);
+                        let Some(pte) = process.user_space.translate(vpn) else {
+                            break;
+                        };
+                        let page = pte.ppn().bytes_array();
+                        let n = left.min(PAGE_SIZE);
+                        if f.write_at(&page[..n], file_off) < 0 {
+                            log::warn!(
+                                "[munmap] MAP_SHARED writeback failed: off={:#x}",
+                                file_off,
+                            );
+                            break;
+                        }
+                        left -= n;
+                        file_off += n;
+                    }
+                }
+            }
+        }
 
         process.mmap_areas.remove(index);
 
-        if !process.user_space.remove_area(
-            crate::mm::VirtAddr(start),
-            crate::mm::VirtAddr(end),
-        ) {
-            return -1;
+        if !process.user_space.remove_area(VirtAddr(start), VirtAddr(end)) {
+            return -EINVAL;
         }
         process.dealloc_mmap_range(start, end);
     }

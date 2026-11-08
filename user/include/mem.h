@@ -5,6 +5,8 @@ extern "C" {
 
 #include "syscall.h"
 #include "lock.h"
+#include "errno.h"
+#include "sys/types.h"   /* off_t：mmap 的 offset 参数 */
 
 /* ---- 内存保护标志(唯一定义点) ---- */
 #define PROT_NONE  0
@@ -13,14 +15,9 @@ extern "C" {
 #define PROT_EXEC  4
 
 /* ---- 映射标志 ----
- * 内核只做匿名映射（没有 file-backed mmap），MAP_* 对内核本身没意义，
- * 但必须在这里定义，理由有点绕：
- *   1. 可移植代码（git 的 compat/mmap.c，NO_MMAP 路径）要拿 flags 跟
- *      MAP_PRIVATE 比一下才肯继续；
- *   2. 我们值钱的地方是"只要 PROT_* 可见，MAP_* 就该同样可见"，而 PROT_*
- *      就在这个头里；可 git 在 NO_MMAP 下**不会** include <sys/mman.h>
- *      （它以为平台会从别处给），于是只能落在这里。
- * 数值照 Linux，方便对照。 */
+ * 数值照 Linux，和 kernel/src/task/process.rs 的 MAP_* 必须同步。
+ * PROT_ 和 MAP_ 系列宏都放在这个头里：git 的 NO_MMAP 路径不 include <sys/mman.h>，
+ * 但会经由 <stdlib.h> 拉到本头，所以这些宏得在这里可见。 */
 #define MAP_SHARED    0x01
 #define MAP_PRIVATE   0x02
 #define MAP_FIXED     0x10
@@ -28,20 +25,37 @@ extern "C" {
 #define MAP_ANON      MAP_ANONYMOUS
 #define MAP_FAILED    ((void *)-1)
 
-/* ---- mmap / munmap ---- */
-static inline void *mmap(usize len, usize prot) {
-    isize ret = syscall3(SYS_MMAP, len, prot, 0);
-    if (ret < 0) return (void *)-1;
-    return (void *)ret;
+/* ---- mmap / munmap ---- 
+ * addr 是 hint：不带 MAP_FIXED 时内核一律忽略，返回值才是真地址。
+ */
+static inline void *mmap(void *addr, usize length, int prot, int flags,
+                         int fd, off_t offset) {
+    isize r = syscall6(SYS_MMAP,
+        (usize)addr, length, (usize)prot, (usize)flags,
+        (usize)(isize)fd, (usize)(isize)offset);
+    if (r < 0 && r >= -4095) {
+        errno = (int)(-r);
+        return MAP_FAILED;
+    }
+    return (void *)r;
+}
+
+/* 内部快捷方式：匿名私有映射。用自己的名字，不占 POSIX 名字。 */
+static inline void *rk_anon_mmap(usize len, int prot) {
+    return mmap(0, len, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
 
 static inline int munmap(void *addr, usize len) {
-    return syscall3(SYS_MUNMAP, (usize)addr, len, 0);
+    isize r = syscall3(SYS_MUNMAP, (usize)addr, len, 0);
+    if (r < 0 && r >= -4095) { errno = (int)(-r); return -1; }
+    return (int)r;
 }
 
 /* mprotect: 修改已有映射的页权限(TCC tccrun 的 JIT 需要, W->X 切换) */
 static inline int mprotect(void *addr, usize len, int prot) {
-    return syscall3(SYS_MPROTECT, (usize)addr, len, (usize)prot);
+    isize r = syscall3(SYS_MPROTECT, (usize)addr, len, (usize)prot);
+    if (r < 0 && r >= -4095) { errno = (int)(-r); return -1; }
+    return (int)r;
 }
 
 
@@ -112,7 +126,7 @@ static inline void slab_refill(int sc) {
     if (chunk_size < unit * 8) chunk_size = unit * 8;
     chunk_size = malloc_align_up(chunk_size, MALLOC_PAGE_SIZE);
 
-    void *chunk = mmap(chunk_size, PROT_READ | PROT_WRITE);
+    void *chunk = rk_anon_mmap(chunk_size, PROT_READ | PROT_WRITE);
     if ((isize)chunk < 0) return;
 
     char *p = (char *)chunk;
@@ -181,7 +195,7 @@ static inline malloc_block_t *malloc_request_chunk(usize size) {
     usize total = size + header;
     if (total < MALLOC_CHUNK_SIZE) total = MALLOC_CHUNK_SIZE;
     total = malloc_align_up(total, MALLOC_PAGE_SIZE);
-    void *mem = mmap(total, PROT_READ | PROT_WRITE);
+    void *mem = rk_anon_mmap(total, PROT_READ | PROT_WRITE);
     if ((isize)mem < 0) return 0;
     malloc_block_t *block = (malloc_block_t *)mem;
     block->size = total - header;

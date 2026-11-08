@@ -32,8 +32,15 @@ pub fn sys_exec(path_ptr: usize, path_len: usize, args_ptr: usize) -> isize {
     crate::task::exec_current(path_ptr, path_len, args_ptr)
 }
 
-pub fn sys_mmap(len: usize, prot: usize) -> isize {
-    crate::task::mmap_current(len, prot)
+pub fn sys_mmap(
+    addr: usize,
+    len: usize,
+    prot: usize,
+    flags: usize,
+    fd: usize,
+    offset: usize,
+) -> isize {
+    crate::task::mmap_current(addr, len, prot, flags, fd, offset)
 }
 
 

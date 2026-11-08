@@ -356,11 +356,22 @@ impl ProcessControlBlock {
 }
 
 
-#[derive(Clone, Copy, Debug)]
+/* 不能 derive Debug：FileRef = Arc<dyn File>，dyn File 没有实现 Debug。
+ * MmapArea 没有任何 {:?} 用法，去掉即可。 */
+#[derive(Clone)]
 pub struct MmapArea {
     pub start: usize,
     pub end: usize,
     pub prot: usize,
+    pub flags: usize,
+    /// 建映射时的文件偏移（页对齐）。匿名映射为 0。
+    pub offset: usize,
+    /// 用户请求的原始长度（未页对齐），MAP_SHARED 回写时不能把补零的尾巴写出去。
+    pub length: usize,
+    /// 文件映射持有 FileRef：fd 关掉后映射仍可用，fd 只是取得它的凭据。
+    /// 匿名映射为 None。fork 时 Vec<MmapArea>::clone() 会 clone Arc，父子共享
+    /// 同一 file 对象（与 Linux 的 struct file 引用计数的道理一致）。
+    pub file: Option<FileRef>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -375,6 +386,13 @@ pub const USER_MMAP_TOP: usize = 0x7000_0000;
 pub const PROT_READ: usize = 1;
 pub const PROT_WRITE: usize = 2;
 pub const PROT_EXEC: usize = 4;
+
+/* MAP_*：必须与 user/include/mem.h 的数值一一对应。
+ * MAP_FIXED 本版不实现（见 mmap_current），但常量要有，才能在入口明确拒绝。 */
+pub const MAP_SHARED: usize = 0x01;
+pub const MAP_PRIVATE: usize = 0x02;
+pub const MAP_FIXED: usize = 0x10;
+pub const MAP_ANONYMOUS: usize = 0x20;
 
 impl ProcessControlBlock {
     pub fn alloc_mmap_range(&mut self, len: usize) -> Option<(usize, usize)> {
