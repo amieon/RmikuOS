@@ -69,6 +69,45 @@ impl MemorySet {
         true
     }
 
+    /// MAP_FIXED 覆盖 [start,end)：把相交的 MapArea 拆成保留的左段和右段，
+    /// 中间部分解除页表映射并释放物理帧。保留段的 PTE 和物理帧原封不动，
+    /// 所以覆盖一个预留块的后半段时，前半段已有的数据不会丢。
+    pub fn split_unmap(&mut self, start: VirtAddr, end: VirtAddr) {
+        let s = start.floor().0;
+        let e = end.ceil().0;
+        let mut pt = lock_detect!(self.page_table);
+        let old = core::mem::take(&mut self.areas);
+        let mut kept = Vec::new();
+        let mut tails = Vec::new();
+
+        for mut area in old {
+            let os = area.start_vpn().0;
+            let oe = area.end_vpn().0;
+            if e <= os || s >= oe {
+                kept.push(area);
+                continue;
+            }
+            assert!(
+                area.is_framed(),
+                "split_unmap: non-framed area overlaps the mmap range"
+            );
+            if e < oe {
+                tails.push(area.split_off(VirtPageNum(e)));
+            }
+            let cs = s.max(os);
+            if cs > os {
+                area.truncate(&mut *pt, VirtPageNum(cs));
+                kept.push(area);
+            } else {
+                // 整条被覆盖：unmap 清 PTE 并 clear data_frames（drop 即 dealloc）。
+                area.unmap(&mut *pt);
+            }
+        }
+
+        kept.extend(tails);
+        self.areas = kept;
+    }
+
     /// mprotect: [start, end) 所在 Area 的权限并重映射页表。找不到映射返回 false。
     pub fn change_permission(
         &mut self,

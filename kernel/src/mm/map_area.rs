@@ -161,6 +161,36 @@ impl MapArea {
         page_table.map(vpn, ppn, map_perm_to_pte_flags(self.permission));
     }
 
+    /// 从 at 处把右半段切成一条新 MapArea（连它拥有的物理帧一起带走），
+    /// self 保留左半段。只动元数据，不碰页表：两边的 PTE 都还有效。
+    pub fn split_off(&mut self, at: VirtPageNum) -> Self {
+        let os = self.vpn_range.get_start().0;
+        let oe = self.vpn_range.get_end().0;
+        assert!(at.0 > os && at.0 < oe, "split_off: out of range");
+        let tail_frames = self.data_frames.split_off(at.0 - os);
+        self.vpn_range = VPNRange::new(VirtPageNum(os), at);
+        Self {
+            vpn_range: VPNRange::new(at, VirtPageNum(oe)),
+            map_type: self.map_type,
+            permission: self.permission,
+            data_frames: tail_frames,
+        }
+    }
+
+    /// 截掉 [new_end, old_end)：解除页表映射并释放对应物理帧。
+    /// 只用于 Framed 区（mmap 区全是 Framed，内核区不走这里）。
+    pub fn truncate(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        let os = self.vpn_range.get_start().0;
+        let oe = self.vpn_range.get_end().0;
+        let ne = new_end.0;
+        assert!(ne >= os && ne <= oe, "truncate: out of range");
+        for vpn in ne..oe {
+            page_table.unmap(VirtPageNum(vpn));
+        }
+        self.data_frames.truncate(ne - os);
+        self.vpn_range = VPNRange::new(VirtPageNum(os), new_end);
+    }
+
 
 }
 

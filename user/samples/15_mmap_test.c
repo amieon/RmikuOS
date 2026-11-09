@@ -3,7 +3,7 @@
 int main(int argc, char *argv[]) {
     puts("mmap_test start\n");
 
-    char *p = mmap(4096, PROT_READ | PROT_WRITE);
+    char *p = rk_anon_mmap(4096, PROT_READ | PROT_WRITE);
 
     if ((isize)p < 0) {
         puts("mmap failed\n");

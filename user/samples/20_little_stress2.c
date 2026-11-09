@@ -145,7 +145,7 @@ static int do_file_read_probe(int child_id, int tid, int round) {
         return -1;
     }
 
-    char *buf = (char *)mmap(FILE_BUF_SIZE, PROT_READ | PROT_WRITE);
+    char *buf = (char *)rk_anon_mmap(FILE_BUF_SIZE, PROT_READ | PROT_WRITE);
 
     if ((isize)buf < 0) {
         close(fd);
@@ -198,7 +198,7 @@ static void worker(void *raw) {
             int pages = 1 + ((child_id + tid + r + a) % 4);
             lens[a] = (usize)pages * PAGE_SIZE;
 
-            areas[a] = (char *)mmap(lens[a], PROT_READ | PROT_WRITE);
+            areas[a] = (char *)rk_anon_mmap(lens[a], PROT_READ | PROT_WRITE);
 
             if ((isize)areas[a] < 0) {
                 thread_errors[tid]++;
@@ -288,7 +288,7 @@ static int child_main(int child_id) {
 
     for (int r = 0; r < ROUNDS; r++) {
         usize len = (usize)(1 + ((child_id + r) % 5)) * PAGE_SIZE;
-        char *p = (char *)mmap(len, PROT_READ | PROT_WRITE);
+        char *p = (char *)rk_anon_mmap(len, PROT_READ | PROT_WRITE);
 
         if ((isize)p < 0) {
             log4("[child main mmap fail]", child_id, r, 0, getpid());

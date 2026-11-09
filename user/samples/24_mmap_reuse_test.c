@@ -10,9 +10,9 @@
 int main() {
     puts("mmap_reuse_test start\n");
 
-    char *a = (char *)mmap(PAGE, PROT_READ | PROT_WRITE);
-    char *b = (char *)mmap(PAGE, PROT_READ | PROT_WRITE);
-    char *c = (char *)mmap(PAGE, PROT_READ | PROT_WRITE);
+    char *a = (char *)rk_anon_mmap(PAGE, PROT_READ | PROT_WRITE);
+    char *b = (char *)rk_anon_mmap(PAGE, PROT_READ | PROT_WRITE);
+    char *c = (char *)rk_anon_mmap(PAGE, PROT_READ | PROT_WRITE);
 
     if ((isize)a < 0 || (isize)b < 0 || (isize)c < 0) {
         puts("FAIL: initial mmap\n");
@@ -28,7 +28,7 @@ int main() {
         return 1;
     }
 
-    char *d = (char *)mmap(PAGE, PROT_READ | PROT_WRITE);
+    char *d = (char *)rk_anon_mmap(PAGE, PROT_READ | PROT_WRITE);
 
     if ((isize)d < 0) {
         puts("FAIL: mmap d\n");

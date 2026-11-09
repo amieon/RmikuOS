@@ -387,12 +387,12 @@ pub const PROT_READ: usize = 1;
 pub const PROT_WRITE: usize = 2;
 pub const PROT_EXEC: usize = 4;
 
-/* MAP_*：必须与 user/include/mem.h 的数值一一对应。
- * MAP_FIXED 本版不实现（见 mmap_current），但常量要有，才能在入口明确拒绝。 */
+/* MAP_*：必须与 user/include/mem.h 的数值一一对应。*/
 pub const MAP_SHARED: usize = 0x01;
 pub const MAP_PRIVATE: usize = 0x02;
 pub const MAP_FIXED: usize = 0x10;
 pub const MAP_ANONYMOUS: usize = 0x20;
+pub const MAP_FIXED_NOREPLACE: usize = 0x10_0000;
 
 impl ProcessControlBlock {
     pub fn alloc_mmap_range(&mut self, len: usize) -> Option<(usize, usize)> {
@@ -453,11 +453,103 @@ impl ProcessControlBlock {
         Some((start, end))
     }
 
+    /// 固定地址占用：把 [addr, addr+len) 从 free list 里挖掉，必要时推进
+    /// bump 水位。活映射的覆盖不归这里管，由 mmap_current 先查
+    /// mmap_overlaps 并调用 split_mmap_areas / split_unmap。
+    pub fn alloc_mmap_range_at(
+        &mut self,
+        addr: usize,
+        len: usize,
+    ) -> Option<(usize, usize)> {
+        let len = crate::mm::align_up(len, crate::mm::config::PAGE_SIZE);
+        let end = addr.checked_add(len)?;
+
+        if addr == 0
+            || addr % crate::mm::config::PAGE_SIZE != 0
+            || addr < USER_MMAP_BASE
+            || end > USER_MMAP_TOP
+        {
+            return None;
+        }
+
+        // 与 [addr,end) 相交的洞切掉相交部分，留下左右两截。
+        let old = core::mem::take(&mut self.mmap_free_ranges);
+        let mut kept = Vec::new();
+        for r in old {
+            if end <= r.start || addr >= r.end {
+                kept.push(r);
+                continue;
+            }
+            if r.start < addr {
+                kept.push(MmapFreeRange { start: r.start, end: addr });
+            }
+            if end < r.end {
+                kept.push(MmapFreeRange { start: end, end: r.end });
+            }
+        }
+        self.mmap_free_ranges = kept;
+
+        // 越过 bump 水位时，[mmap_next, addr) 从未分配过、也不在 free list 里，
+        // 不记账就会永久丢失这段地址。
+        if end > self.mmap_next {
+            if addr > self.mmap_next {
+                self.mmap_free_ranges.push(MmapFreeRange {
+                    start: self.mmap_next,
+                    end: addr,
+                });
+            }
+            self.mmap_next = end;
+        }
+
+        Some((addr, end))
+    }
+
+    pub fn mmap_overlaps(&self, start: usize, end: usize) -> bool {
+        self.mmap_areas
+            .iter()
+            .any(|a| a.start < end && start < a.end)
+    }
+
+    /// 覆盖 [start,end) 后，把相交的 MmapArea 拆成保留的左段/右段。
+    /// 边界与 MemorySet::split_unmap 一致，两套账不能各拆各的。
+    pub fn split_mmap_areas(&mut self, start: usize, end: usize) {
+        let old = core::mem::take(&mut self.mmap_areas);
+        let mut kept = Vec::new();
+        for a in old {
+            if end <= a.start || start >= a.end {
+                kept.push(a);
+                continue;
+            }
+            let s = start.max(a.start);
+            let e = end.min(a.end);
+            if a.start < s {
+                let mut left = a.clone();
+                left.end = s;
+                left.length = left.length.min(s - a.start);
+                kept.push(left);
+            }
+            if e < a.end {
+                let mut right = a.clone();
+                let delta = e - a.start;
+                right.start = e;
+                right.offset = a.offset.saturating_add(delta);
+                right.length = a.length.saturating_sub(delta);
+                kept.push(right);
+            }
+        }
+        self.mmap_areas = kept;
+    }
+
     pub fn dealloc_mmap_range(&mut self, start: usize, end: usize) {
         if start >= end {
             return;
         }
 
+        // 调用方(munmap_current)保证 start/end 页对齐且精确匹配一段活映射。
+        // 释放紧贴 bump 水位的尾部时必须回退 mmap_next: [mmap_next, USER_MMAP_TOP)
+        // 从未分配过、也没进 free list, 只 push 这段会把一整片连续空闲拆成
+        // "表里的小洞 + 无人认领的尾部", 大请求随后在 alloc_mmap_range 的
+        // end > USER_MMAP_TOP 处误判为地址空间耗尽。
         if end == self.mmap_next {
             self.mmap_next = start;
             // 前面紧邻的空洞一并吸进尾部, 尾部永远是一整段, 不产生碎片。

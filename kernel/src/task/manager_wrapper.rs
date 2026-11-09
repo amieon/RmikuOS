@@ -1563,9 +1563,10 @@ pub fn mmap_current(
 ) -> isize {
     use crate::mm::config::PAGE_SIZE;
     use crate::mm::{MapArea, MapType, VirtAddr, VirtPageNum};
-    use crate::syscall::errno::{EACCES, EBADF, EINVAL, EIO, ENODEV, ENOMEM};
+    use crate::syscall::errno::{EACCES, EBADF, EEXIST, EINVAL, EIO, ENODEV, ENOMEM};
     use crate::task::process::{
-        MAP_ANONYMOUS, MAP_FIXED, MAP_PRIVATE, MAP_SHARED, PROT_WRITE,
+        MAP_ANONYMOUS, MAP_FIXED, MAP_FIXED_NOREPLACE, MAP_PRIVATE, MAP_SHARED,
+        PROT_WRITE, USER_MMAP_BASE, USER_MMAP_TOP,
     };
 
     
@@ -1576,10 +1577,10 @@ pub fn mmap_current(
         Some(perm) => perm,
         None => return -EINVAL,
     };
-    if flags & MAP_FIXED != 0 {
-        return -EINVAL;
-    }
-    let known_flags = MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS;
+    let fixed = flags & (MAP_FIXED | MAP_FIXED_NOREPLACE) != 0;
+    let noreplace = flags & MAP_FIXED_NOREPLACE != 0;
+    let known_flags = MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS
+        | MAP_FIXED | MAP_FIXED_NOREPLACE;
     if flags & !known_flags != 0 {
         return -EINVAL;
     }
@@ -1597,8 +1598,8 @@ pub fn mmap_current(
             return -EINVAL;
         }
     }
-    /* hint 不是命令：内核自己从 mmap_next / free list 挑地址。 */
-    let _ = addr;
+    /* 非固定地址时 addr 只是 hint，内核从 mmap_next / free list 自己挑；
+     * 固定地址分支把它当命令用。 */
 
     /* 取 FileRef 必须在拿 TASK_MANAGER 之前：current_file 自己要拿这把锁。 */
     let file = if anonymous {
@@ -1624,19 +1625,57 @@ pub fn mmap_current(
         Some(f)
     };
 
-    let (pid, start, end) = {
+    let (pid, start, end, did_overlap, err) = {
         let mut manager = lock_detect!(TASK_MANAGER);
         let pid = manager.current_pid();
 
-        let (start, end) = {
+        let (start, end, did_overlap) = {
             let process = manager.process_mut(pid);
 
-            match process.alloc_mmap_range(len) {
-                Some(range) => range,
-                None => return -ENOMEM,
+            if fixed {
+                /* 合法性校验必须在动 free list 之前。否则 NOREPLACE 冲突时
+                 * 把整段还回 free list，会把「仍被活映射占用的地址」当成
+                 * 空闲，后续 alloc_mmap_range 会把它再分配一次。 */
+                let Some(probe_end) =
+                    addr.checked_add(crate::mm::align_up(len, PAGE_SIZE)) else {
+                    return -EINVAL;
+                };
+                if addr == 0
+                    || addr % PAGE_SIZE != 0
+                    || addr < USER_MMAP_BASE
+                    || probe_end > USER_MMAP_TOP
+                {
+                    return -EINVAL;
+                }
+                if noreplace && process.mmap_overlaps(addr, probe_end) {
+                    return -EEXIST;
+                }
             }
+
+            let (start, end) = if fixed {
+                match process.alloc_mmap_range_at(addr, len) {
+                    Some(range) => range,
+                    None => return -EINVAL,
+                }
+            } else {
+                match process.alloc_mmap_range(len) {
+                    Some(range) => range,
+                    None => return -ENOMEM,
+                }
+            };
+
+            let overlap = fixed && process.mmap_overlaps(start, end);
+            if overlap {
+                /* 两套账按同一边界拆：页表侧拆 VMA 并释放被覆盖的页，
+                 * PCB 侧拆 MmapArea 记录。保留段的物理帧不动。 */
+                process.user_space.split_unmap(VirtAddr(start), VirtAddr(end));
+                process.split_mmap_areas(start, end);
+            }
+
+            (start, end, overlap)
         };
 
+        let mut err = 0isize;
         {
             let process = manager.process_mut(pid);
 
@@ -1651,7 +1690,9 @@ pub fn mmap_current(
             let end_vpn = VirtAddr(end).ceil();
 
             /* 逐页校验页表 + eager 读入。FrameTracker::new 会把物理页清零，
-             * 所以 read_at 读不满一页时(EOF)尾部天然是 0，符合 POSIX。 */
+             * 所以 read_at 读不满一页时(EOF)尾部天然是 0，符合 POSIX。
+             * 失败不在这里 return：覆盖路径已经解除过旧 PTE，必须走完锁外的
+             * tlb_shootdown_sync，否则别的核会拿陈旧 TLB 访问已释放的物理页。 */
             let mut file_off = offset;
             for vpn_id in start_vpn.0..end_vpn.0 {
                 let vpn = VirtPageNum(vpn_id);
@@ -1666,7 +1707,8 @@ pub fn mmap_current(
                     );
                     process.user_space.remove_area(VirtAddr(start), VirtAddr(end));
                     process.dealloc_mmap_range(start, end);
-                    return -ENOMEM;
+                    err = -ENOMEM;
+                    break;
                 };
 
                 if let Some(f) = file.as_ref() {
@@ -1675,47 +1717,51 @@ pub fn mmap_current(
                         log::error!("[mmap] read_at failed: off={:#x}", file_off);
                         process.user_space.remove_area(VirtAddr(start), VirtAddr(end));
                         process.dealloc_mmap_range(start, end);
-                        return -EIO;
+                        err = -EIO;
+                        break;
                     }
                 }
                 file_off = file_off.saturating_add(PAGE_SIZE);
             }
 
-            process.mmap_areas.push(crate::task::process::MmapArea {
-                start,
-                end,
-                prot,
-                flags,
-                offset,
-                length: len,
-                file: file.clone(),
-            });
+            if err == 0 {
+                process.mmap_areas.push(crate::task::process::MmapArea {
+                    start,
+                    end,
+                    prot,
+                    flags,
+                    offset,
+                    length: len,
+                    file: file.clone(),
+                });
+            }
         }
 
-        (pid, start, end)
+        (pid, start, end, did_overlap, err)
     }; // 关键：这里释放 TASK_MANAGER
 
-    /*
-     * mmap 是新增映射，先不要在持 TASK_MANAGER 时等远程 ACK。
-     * 调试阶段可以只做本核 flush，确认是否解决卡死。
-     */
-    crate::arch::flush_tlb();
+    if did_overlap {
+        /* 覆盖旧映射会解除别的核可能缓存的 PTE，必须广播 shootdown。
+         * 这里已在 TASK_MANAGER 锁外，与 munmap_current 的做法一致。 */
+        crate::arch::tlb_shootdown_sync();
+    } else {
+        /* 纯新增映射不碰旧 PTE，本核 flush 就够；持锁等远程 ACK 会卡死。 */
+        crate::arch::flush_tlb();
+    }
 
-    /*
-     * 如果本核 flush 后稳定，再考虑换成异步广播：
-     * crate::arch::tlb_shootdown_broadcast();
-     *
-     * 暂时不要在这里用 tlb_shootdown_sync()，先验证是否就是 ACK 等待卡死。
-     */
+    if err != 0 {
+        return err;
+    }
 
     log::info!(
-        "[mmap] pid={} len={} prot={:#x} flags={:#x} fd={} off={:#x} => {:#x}..{:#x}",
+        "[mmap] pid={} len={} prot={:#x} flags={:#x} fd={} off={:#x} overlap={} => {:#x}..{:#x}",
         pid,
         len,
         prot,
         flags,
         fd,
         offset,
+        did_overlap,
         start,
         end,
     );

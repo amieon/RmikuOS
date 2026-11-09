@@ -126,7 +126,7 @@ static void worker(void *raw) {
         char *regions[PAGES_PER_THREAD];
 
         for (int p = 0; p < pages; p++) {
-            regions[p] = (char *)mmap(PAGE_SIZE, PROT_READ | PROT_WRITE);
+            regions[p] = (char *)rk_anon_mmap(PAGE_SIZE, PROT_READ | PROT_WRITE);
 
             if ((isize)regions[p] < 0) {
                 thread_errors[id]++;
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
     }
 
     for (int r = 0; r < ROUNDS; r++) {
-        char *p = (char *)mmap(PAGE_SIZE, PROT_READ | PROT_WRITE);
+        char *p = (char *)rk_anon_mmap(PAGE_SIZE, PROT_READ | PROT_WRITE);
 
         if ((isize)p < 0) {
             puts("FAIL: main mmap failed\n");

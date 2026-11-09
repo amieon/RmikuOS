@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
         char *ptrs[N];
 
         for (int i = 0; i < N; i++) {
-            ptrs[i] = (char *)mmap(PAGE, PROT_READ | PROT_WRITE);
+            ptrs[i] = (char *)rk_anon_mmap(PAGE, PROT_READ | PROT_WRITE);
 
             if ((isize)ptrs[i] < 0) {
                 puts("FAIL: mmap returned -1\n");

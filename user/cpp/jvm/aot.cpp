@@ -351,7 +351,7 @@ bool aot_compile_method(Method* m, ClassFile* cf) {
     if (m->max_locals > 250 || m->max_stack > 250) return false;
 
     uint32_t cap = 16384;
-    uint8_t* page = (uint8_t*)mmap(cap, PROT_READ | PROT_WRITE | PROT_EXEC);
+    uint8_t* page = (uint8_t*)rk_anon_mmap(cap, PROT_READ | PROT_WRITE | PROT_EXEC);
     if ((isize)page < 0) return false;
 
     Emit e;

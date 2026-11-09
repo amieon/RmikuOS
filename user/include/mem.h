@@ -15,19 +15,17 @@ extern "C" {
 #define PROT_EXEC  4
 
 /* ---- 映射标志 ----
- * 数值照 Linux，和 kernel/src/task/process.rs 的 MAP_* 必须同步。
- * PROT_ 和 MAP_ 系列宏都放在这个头里：git 的 NO_MMAP 路径不 include <sys/mman.h>，
- * 但会经由 <stdlib.h> 拉到本头，所以这些宏得在这里可见。 */
-#define MAP_SHARED    0x01
-#define MAP_PRIVATE   0x02
-#define MAP_FIXED     0x10
-#define MAP_ANONYMOUS 0x20
+ * 数值照 Linux，和 kernel/src/task/process.rs 的 MAP_ 系同步。
+ * MAP_FIXED 覆盖已有映射；MAP_FIXED_NOREPLACE 撞上已有映射时返回 EEXIST。 */
+#define MAP_SHARED           0x01
+#define MAP_PRIVATE          0x02
+#define MAP_FIXED            0x10
+#define MAP_ANONYMOUS        0x20
+#define MAP_FIXED_NOREPLACE  0x100000
 #define MAP_ANON      MAP_ANONYMOUS
 #define MAP_FAILED    ((void *)-1)
 
-/* ---- mmap / munmap ---- 
- * addr 是 hint：不带 MAP_FIXED 时内核一律忽略，返回值才是真地址。
- */
+
 static inline void *mmap(void *addr, usize length, int prot, int flags,
                          int fd, off_t offset) {
     isize r = syscall6(SYS_MMAP,
