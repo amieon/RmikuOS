@@ -163,7 +163,7 @@ static inline char *strpbrk(const char *s, const char *accept) {
 }
 
 /* 只覆盖内核真会产生的那些（含 socket/进程），不追求与 glibc 全文一致。 */
-static inline char *strerror(int err) {
+static inline const char *strerror(int err) {
     switch (err) {
         case EPERM:            return "Operation not permitted";
         case ENOENT:           return "No such file or directory";
