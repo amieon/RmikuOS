@@ -2,6 +2,8 @@ use crate::task::{
     thread_create_current,
     thread_exit_current,
     thread_join_current,
+    futex_wait_current,
+    futex_wake_current,
 };
 
 
@@ -30,4 +32,12 @@ pub fn sys_set_thread_tickets(tid : usize, tickets: usize) -> isize {
 
 pub fn sys_get_thread_tickets(tid : usize) -> isize {
     crate::task::get_thread_tickets_current(tid)
+}
+
+pub fn sys_futex_wait(uaddr: usize, val: usize) -> isize {
+    futex_wait_current(uaddr, val as u32)
+}
+
+pub fn sys_futex_wake(uaddr: usize, max: usize) -> isize {
+    futex_wake_current(uaddr, max)
 }

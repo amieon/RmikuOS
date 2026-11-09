@@ -61,6 +61,8 @@ pub use manager_wrapper::{
     thread_create_current,
     thread_exit_current,
     thread_join_current,
+    futex_wait_current,
+    futex_wake_current,
     set_thread_tickets_current,
     set_process_tickets_current,
     set_my_tickets_current,

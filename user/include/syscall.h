@@ -139,16 +139,27 @@ extern "C" {
 #define SYS_GETITIMER                125 
 #define SYS_SETSID                   126
 #define SYS_GETRANDOM                127
-/* 网络组的续号：100-117 是 socket 全家，118-127 已被进程/信号/定时器占用，
- * 不重排既有号（ABI），getsockopt 只能挂末尾。 */
 #define SYS_NET_GETSOCKOPT           128
-/* 墙钟时间戳(epoch 微秒)。接在末尾，不重排 0-128 既有号。 */
 #define SYS_GET_EPOCH_US             129
+#define SYS_FUTEX_WAIT               130
+#define SYS_FUTEX_WAKE               131
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 
 isize syscall6(usize id, usize a0, usize a1, usize a2, usize a3, usize a4, usize a5);
+
+/* futex 原语。内核返 -errno 或实际唤醒数，这里故意不过 rk_sys_ret：
+ * pthread 层要自己识别 -EAGAIN（*uaddr 已经变了，不必睡）。
+ * uaddr 用 void* 是为了 volatile int / volatile unsigned 都能直接传，
+ * 不产生 incompatible pointer 警告；内核只读它 4 字节，必须 4 字节对齐。 */
+static inline isize rk_futex_wait(const volatile void *uaddr, unsigned val) {
+    return syscall3(SYS_FUTEX_WAIT, (usize)uaddr, (usize)val, 0);
+}
+
+static inline isize rk_futex_wake(const volatile void *uaddr, int n) {
+    return syscall3(SYS_FUTEX_WAKE, (usize)uaddr, (usize)(isize)n, 0);
+}
 #ifdef __cplusplus
 }
 #endif

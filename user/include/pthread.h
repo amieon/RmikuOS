@@ -31,6 +31,27 @@ extern "C" {
 #define RK_PTHREAD_NOW_US() ((isize)get_epoch_us())
 #endif
 
+/* 混合等待：前 K 轮纯 volatile 读自旋、零 syscall，超过才进慢路径。
+ * 理由：一次 SYS_YIELD / futex_wait 是完整的上下文切换往返（trap 保存
+ * 70+ 寄存器、两把全局锁、换页表、flush_tlb），而自旋只要 3~5 条指令。
+ * 高频短等（barrier）自旋必赢；秒级长等才该睡。K 用 sched_yield_bench
+ * 量出的 us/轮 校准，0 = 关闭自旋直接进慢路径。 */
+#ifndef RK_PTHREAD_SPIN_ROUNDS
+#define RK_PTHREAD_SPIN_ROUNDS 64
+#endif
+
+/* 真机默认走 futex 130/131；宿主差分测试没有这两个号，定义
+ * RK_PTHREAD_DISABLE_FUTEX 退回纯 yield 版。两版共用同一份结构体布局和
+ * wait/timedwait 实现，对拍结果才有意义。 */
+#ifdef RK_PTHREAD_DISABLE_FUTEX
+#define RK_PTHREAD_WAIT(addr, val) ((void)RK_PTHREAD_YIELD())
+#define RK_PTHREAD_WAKE(addr, n)   ((void)0)
+#else
+#define RK_PTHREAD_WAIT(addr, val) ((void)rk_futex_wait((addr), (unsigned)(val)))
+#define RK_PTHREAD_WAKE(addr, n)   ((void)rk_futex_wake((addr), (n)))
+#endif
+#define RK_PTHREAD_WAKE_ALL 0x7fffffff
+
 /*
  * 本版只提供「纯用户态能正确实现」的同步原语：
  *   mutex（含递归）/ cond / once / attr 空桩 / self / equal
@@ -73,9 +94,12 @@ typedef struct {
     volatile int owner;   /* 持有者 tid，-1 表示无人持有 */
     unsigned depth;
     int type;
+    /* 慢路径登记数。unlock 只在它 >0 时发 futex_wake，
+     * 否则无争用的 unlock 也会白付一次 syscall。 */
+    volatile int waiters;
 } pthread_mutex_t;
 
-#define PTHREAD_MUTEX_INITIALIZER {0, -1, 0, PTHREAD_MUTEX_DEFAULT}
+#define PTHREAD_MUTEX_INITIALIZER {0, -1, 0, PTHREAD_MUTEX_DEFAULT, 0}
 
 typedef struct {
     volatile unsigned seq;   /* signal/broadcast 时单调 +1，永不清零 */
@@ -110,6 +134,7 @@ static inline int pthread_mutex_init(
     m->owner  = -1;
     m->depth  = 0;
     m->type   = a ? a->type : PTHREAD_MUTEX_DEFAULT;
+    m->waiters = 0;
     __sync_synchronize();
     return 0;
 }
@@ -133,8 +158,16 @@ static inline int pthread_mutex_lock(pthread_mutex_t *m) {
         return EDEADLK;
     }
 
-    while (__sync_lock_test_and_set(&m->locked, 1)) {
-        RK_PTHREAD_YIELD();
+    /* 前 K 轮纯自旋：短争用根本不该进内核。先 volatile 读再 CAS，
+     * 自旋段不做原子写，避免多核对同一 cache line 反复 ping-pong。 */
+    unsigned spins = RK_PTHREAD_SPIN_ROUNDS;
+    for (;;) {
+        if (!m->locked && !__sync_lock_test_and_set(&m->locked, 1)) break;
+        if (spins) { spins--; continue; }
+
+        __sync_fetch_and_add(&m->waiters, 1);
+        RK_PTHREAD_WAIT(&m->locked, 1);
+        __sync_fetch_and_add(&m->waiters, -1);
     }
     __sync_synchronize();
     m->owner = me;
@@ -174,6 +207,10 @@ static inline int pthread_mutex_unlock(pthread_mutex_t *m) {
     m->owner = -1;               /* 必须先清，见 lock 的递归快路径 */
     __sync_synchronize();
     __sync_lock_release(&m->locked);
+    /* release 必须在读 waiters 之前：晚到的 waiter 进内核会读到 locked==0，
+     * 拿 -EAGAIN 立刻回来重试，不会睡在没人 wake 的队列上。
+     * 只叫醒 1 个 —— 锁本来也只能给一个，其余由后续 unlock 逐个唤醒。 */
+    if (m->waiters) RK_PTHREAD_WAKE(&m->locked, 1);
     return 0;
 }
 
@@ -189,6 +226,8 @@ static inline int pthread_mutex_timedlock(
         if (r == 0) return 0;
         if (r != EBUSY) return r;
         if (RK_PTHREAD_NOW_US() >= deadline) return ETIMEDOUT;
+        /* 这里必须留 YIELD 不能换 WAIT：futex_wait 第一版不带超时，
+         * 睡下去就没人按 deadline 叫醒了。 */
         RK_PTHREAD_YIELD();
     }
 }
@@ -215,17 +254,24 @@ static inline int _rk_cond_wait_until(
     if (unlock_rc != 0) return unlock_rc;
 
     int rc = 0;
+    unsigned spins = RK_PTHREAD_SPIN_ROUNDS;
     for (;;) {
-        spin_lock(&c->guard);
+        /* 纯 volatile 读：不抢 guard、不查时钟、零 syscall。seq 单调递增，
+         * 多转一轮没有正确性代价（POSIX 允许虚假唤醒）。 */
         unsigned now = c->seq;
-        spin_unlock(&c->guard);
-
         if (now != seq) break;
-        if (timed && RK_PTHREAD_NOW_US() >= deadline) {
-            rc = ETIMEDOUT;
-            break;
+        if (spins) { spins--; continue; }
+
+        if (timed) {
+            /* NOW_US() 本身是 SYS 129，必须等自旋段跑完再查，否则
+             * 「前 K 轮零 syscall」当场破功；代价是最多晚 K 轮发现超时。 */
+            if (RK_PTHREAD_NOW_US() >= deadline) { rc = ETIMEDOUT; break; }
+            RK_PTHREAD_YIELD();   /* timedwait 不能睡进无超时的 futex */
+        } else {
+            /* -EAGAIN = seq 已变，下一轮循环就退出；0 = 被定向唤醒。
+             * signal 先 seq++ 再 wake，内核读值与挂队列同锁，三个落点都不丢。 */
+            RK_PTHREAD_WAIT(&c->seq, seq);
         }
-        RK_PTHREAD_YIELD();
     }
 
     spin_lock(&c->guard);
@@ -269,14 +315,19 @@ static inline int pthread_cond_timedwait(
     return _rk_cond_wait_until(c, m, deadline, 1);
 }
 
-/* signal 用全局 seq 会唤醒所有 waiter（惊群）。POSIX 允许 signal 唤醒
- * 多于一个线程、也允许虚假唤醒，所以语义正确，只是多几次空转。
- * 要精确单唤醒得给每个 waiter 发 ticket，属于优化，不是正确性要求。 */
+/* seq 是全局单调计数器、没有 waiter 世代分组，所以 signal 和 broadcast
+ * 都唤醒全部：只 wake 1 个的话，其余已 block 的 waiter 记的是旧 seq，
+ * 等待意图会悬空（glibc 靠 G1/G2 两组队列才敢精确单唤醒）。
+ * POSIX 允许 signal 唤醒多于一个、也允许虚假唤醒，语义正确。
+ * waiters>0 才发 syscall；signal 方按约定持 m，wait 方在放 m 之前已登记，
+ * 所以 w==0 时确实没有需要叫醒的人。 */
 static inline int pthread_cond_signal(pthread_cond_t *c) {
     if (!c) return EINVAL;
     spin_lock(&c->guard);
     c->seq++;
+    unsigned w = c->waiters;
     spin_unlock(&c->guard);
+    if (w) RK_PTHREAD_WAKE(&c->seq, RK_PTHREAD_WAKE_ALL);
     return 0;
 }
 
@@ -303,7 +354,9 @@ static inline int pthread_once(pthread_once_t *o, void (*init)(void)) {
             __sync_synchronize();
             return 0;
         }
-        RK_PTHREAD_YIELD();              /* 别的线程正在 init，等它完成 */
+        /* 别的线程正在 init，等它完成。once 只在初始化窗口等一次，state
+         * 又没有 waiter 门控，保持 YIELD 比为此再铺一对 futex 更简单。 */
+        RK_PTHREAD_YIELD();
     }
 }
 

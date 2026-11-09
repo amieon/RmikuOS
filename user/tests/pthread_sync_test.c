@@ -83,6 +83,20 @@ static void once_worker(void *arg) {
     pthread_once(&o_once, once_fn);
 }
 
+/* futex 原语直测。f_word 是 4 字节对齐的全局，内核只读取一次做比较。 */
+static volatile unsigned f_word = 7;
+static volatile unsigned f_ready;
+static volatile int f_woken;
+
+static void futex_waiter(void *arg) {
+    (void)arg;
+    /* 值不匹配时立刻 -EAGAIN，被 wake 时返回 0；两种都靠 while 复查谓词。 */
+    while (f_ready == 0) {
+        (void)rk_futex_wait(&f_ready, 0);
+    }
+    f_woken = 1;
+}
+
 int main(void) {
     TEST_START("pthread_sync");
 
@@ -145,6 +159,24 @@ int main(void) {
     /* 6. self / equal */
     CHECK(pthread_equal(pthread_self(), pthread_self()), "pthread_self + pthread_equal 一致");
     CHECK_EQ(pthread_mutex_destroy(&m2), 0, "mutex_destroy 在已解锁时返回 0");
+
+    /* 7. futex 内核链路：值不匹配必须立刻返回，绝不能睡下去 */
+    CHECK_EQ((int)rk_futex_wait(&f_word, 8), -EAGAIN,
+             "futex_wait 值不匹配立即返回 -EAGAIN(不睡)");
+    CHECK_EQ((int)rk_futex_wait((const volatile void *)0, 0), -EINVAL,
+             "futex_wait 空地址返回 -EINVAL");
+    CHECK_EQ((int)rk_futex_wake(&f_word, 1), 0,
+             "futex_wake 无人等待返回 0");
+
+    /* 真睡一次再定向唤醒。三个时序都安全：waiter 未启动 / wake 落在
+     * 进内核之前(-EAGAIN) / 已 block(被 wake)。卡住就说明 wake 的 key 不对。 */
+    f_ready = 0;
+    f_woken = 0;
+    int ft = thread_create(futex_waiter, 0);
+    f_ready = 1;
+    rk_futex_wake(&f_ready, 1);
+    thread_join(ft, 0);
+    CHECK_EQ(f_woken, 1, "futex_wait 睡下后被 futex_wake 定向唤醒");
 
     TEST_END();
 }

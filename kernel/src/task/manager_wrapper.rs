@@ -358,6 +358,68 @@ pub fn suspend_current_and_run_next() -> isize {
     0
 }
 
+/// futex_wait(addr, val)：把「比较 *addr == val」和「挂进 (pid,addr) 等待队列」
+/// 合成同一步。两步必须在同一把 TASK_MANAGER 锁内 —— 拆开的话 signal 落在
+/// 中间就会永久丢唤醒。用户 VA 只读取一次，内核不改它。
+pub fn futex_wait_current(uaddr: usize, val: u32) -> isize {
+    use crate::syscall::errno::{EAGAIN, EFAULT, EINVAL};
+
+    if uaddr == 0 || uaddr % 4 != 0 {
+        return -EINVAL;
+    }
+
+    let current_tid = processor::current_tid();
+
+    let task_cx_ptr = {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        let pid = manager.current_pid();
+
+        /* 用户 VA 必须走页表翻译，不能直接解引用。 */
+        let Some(bytes) = manager.read_current_user_bytes(uaddr, 4) else {
+            return -EFAULT;
+        };
+        let cur = u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        if cur != val {
+            return -EAGAIN;
+        }
+
+        manager.block_thread(current_tid, BlockReason::Futex { pid, uaddr });
+        manager.thread_cx_ptr(current_tid)
+    };
+
+    let idle_cx_ptr = processor::idle_task_cx_ptr();
+
+    /* 和 sleep/join 一样锁外 __switch。trap 已经先 sepc += 4 再 handle_syscall，
+     * 醒来从 ecall 下一条继续，不会重跑本 syscall，直接返回 0 即可。 */
+    unsafe {
+        __switch(task_cx_ptr, idle_cx_ptr);
+    }
+
+    0
+}
+
+/// futex_wake(addr, n)：唤醒最多 n 个等在该 key 上的线程，返回实际受理数。
+pub fn futex_wake_current(uaddr: usize, max: usize) -> isize {
+    use crate::syscall::errno::EINVAL;
+
+    if uaddr == 0 || uaddr % 4 != 0 {
+        return -EINVAL;
+    }
+
+    let woke = {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        let pid = manager.current_pid();
+        manager.wake_threads_by_reason_up_to(BlockReason::Futex { pid, uaddr }, max)
+    };
+
+    /* IPI 必须在锁外发，照 wake_pipe_readers 的形状；持锁等远程 ACK 会卡死。 */
+    if woke > 0 {
+        ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
+    }
+
+    woke as isize
+}
+
 pub fn preempt_current_and_run_next() {
     let current_tid = match processor::current_tid_opt() {
         Some(tid) => tid,
@@ -1552,7 +1614,10 @@ pub fn mprotect_current(addr: usize, len: usize, prot: usize) -> isize {
     }
 }
 
-
+/// 六参 POSIX mmap。只做 eager 映射：文件映射在建映射时用 read_at
+/// 一次性把内容读进物理页，不做 lazy/缺页填页，也不做 COW。
+/// 不带固定地址标志时 addr 是 hint，一律忽略；带 MAP_FIXED 时 addr 是
+/// 必须满足的地址，重叠的旧映射被覆盖；MAP_FIXED_NOREPLACE 则重叠即 EEXIST。
 pub fn mmap_current(
     addr: usize,
     len: usize,
@@ -1569,7 +1634,7 @@ pub fn mmap_current(
         PROT_WRITE, USER_MMAP_BASE, USER_MMAP_TOP,
     };
 
-    
+    /* ---- 参数校验：内核统一返回 -errno，用户态 rk_sys_ret 翻成 -1+errno ---- */
     if len == 0 {
         return -EINVAL;
     }
@@ -2190,7 +2255,7 @@ pub fn block_current_on_pipe_write() -> isize {
 pub fn wake_pipe_readers() {
     {
         let mut manager = lock_detect!(TASK_MANAGER);
-        manager.wake_threads_by_reason(BlockReason::PipeRead);
+        manager.wake_all_threads_by_reason(BlockReason::PipeRead);
     }
     // 新增：唤醒了一组 pipe 读者
     ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);
@@ -2199,7 +2264,7 @@ pub fn wake_pipe_readers() {
 pub fn wake_pipe_writers() {
     {
         let mut manager = lock_detect!(TASK_MANAGER);
-        manager.wake_threads_by_reason(BlockReason::PipeWrite);
+        manager.wake_all_threads_by_reason(BlockReason::PipeWrite);
     }
     // 新增
     ipi::send_ipi_to_others(ipi::IpiKind::Reschedule, 0);

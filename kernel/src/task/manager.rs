@@ -1748,7 +1748,22 @@ impl TaskManager {
         0
     }
 
-    pub fn wake_threads_by_reason(&mut self, reason: BlockReason) -> isize {
+    
+    pub fn wake_all_threads_by_reason(&mut self, reason: BlockReason) -> isize {
+        self.wake_threads_by_reason_up_to(reason, usize::MAX);
+        0
+    }
+
+    /// 按 block_reason 精确匹配，最多唤醒 max_wake 个，返回「受理唤醒」的线程数。
+    pub fn wake_threads_by_reason_up_to(
+        &mut self,
+        reason: BlockReason,
+        max_wake: usize,
+    ) -> usize {
+        if max_wake == 0 {
+            return 0;
+        }
+
         let mut wake_list = Vec::new();
 
         for tid in 0..self.threads.len() {
@@ -1758,23 +1773,29 @@ impl TaskManager {
 
             if thread.status == ThreadStatus::Blocking && thread.block_reason == reason {
                 wake_list.push(tid);
+                if wake_list.len() >= max_wake {
+                    break;
+                }
             }
         }
 
+        let mut woke = 0;
         for tid in wake_list {
-            self.wake_blocked_thread(tid);
+            if self.wake_blocked_thread(tid) {
+                woke += 1;
+            }
         }
 
-        0
+        woke
     }
 
     pub fn release_file(&mut self, file: &crate::fs::file::FileRef) {
         match file.on_close_kind() {
             crate::fs::file::PipeCloseKind::WriterGone => {
-                self.wake_threads_by_reason(BlockReason::PipeRead);
+                self.wake_all_threads_by_reason(BlockReason::PipeRead);
             }
             crate::fs::file::PipeCloseKind::ReaderGone => {
-                self.wake_threads_by_reason(BlockReason::PipeWrite);
+                self.wake_all_threads_by_reason(BlockReason::PipeWrite);
             }
             crate::fs::file::PipeCloseKind::Nothing => {}
         }

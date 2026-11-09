@@ -34,6 +34,14 @@ pub enum BlockReason {
 
     PipeRead,
     PipeWrite,
+
+    /* futex 等待。key 必须带 pid：不同进程的同一个用户 VA 指向不同物理页，
+     * 只按 VA 匹配会跨进程误唤醒。第一版不做 PROCESS_SHARED，所以 (pid, uaddr)
+     * 就是唯一键；将来要共享锁得换成 translate(uaddr).ppn()。 */
+    Futex {
+        pid: Pid,
+        uaddr: usize,
+    },
 }
 pub const DEFAULT_THREAD_TICKETS: usize = 100;
 
@@ -41,11 +49,9 @@ pub struct ThreadControlBlock {
     
     pub tid: Tid,
     pub running_on: Option<usize>,
-
     /* 属主核仍在切出途中时收到了跨核唤醒：先记账不置 Ready，
      * 由属主核 run_tasks 的 back-from 补真正的唤醒。 */
     pub wake_pending: bool,
-    
     /* 同窗口内收到 SIGCONT：保持 Stopped 挂账，back-from 补恢复。 */
     pub cont_pending: bool,
     pub pid: Pid,

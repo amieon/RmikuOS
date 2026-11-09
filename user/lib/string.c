@@ -94,6 +94,18 @@ void __sync_lock_release(int *ptr) {
     *ptr = 0;
 }
 
+/* 链接时补符号；借已有的 amoswap 原子做极短临界区，不再写一套
+ * 架构相关汇编（riscv 的 amoadd / loongarch 的 amadd 各写一遍容易埋雷）。 */
+static int rk_atomic_guard;
+int __sync_fetch_and_add(int *ptr, int val) {
+    while (__sync_lock_test_and_set(&rk_atomic_guard, 1)) { }
+    int old = *ptr;
+    *ptr = old + val;
+    __sync_synchronize();
+    __sync_lock_release(&rk_atomic_guard);
+    return old;
+}
+
 /* isatty: 真的去问内核这个 fd 是不是终端。
  * 判据 = 字符设备 且 设备号是控制台 —— /dev/null 也是字符设备, 只看类型分不开。
  * 老实现是 "fd 在 0..2 就是终端" 的谎话, 后果: `cat x | git am` 里 fd0 是管道,

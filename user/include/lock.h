@@ -10,6 +10,7 @@ extern "C" {
 extern int __sync_lock_test_and_set(volatile int *ptr, int val);
 extern void __sync_synchronize(void);
 extern void __sync_lock_release(volatile int *ptr);
+extern int __sync_fetch_and_add(volatile int *ptr, int val);
 #endif
 
 typedef struct {
