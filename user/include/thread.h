@@ -70,6 +70,12 @@ static inline isize sys_thread_join_raw(int tid, int *exit_code) {
  */
 static inline void __thread_entry(void (*func)(void *), void *arg) {
     func(arg);
+    /* POSIX: 线程退出前跑 TSD destructor 轮次。这里用块内弱声明，
+     * 不把整个 pthread.h 拉进 thread.h 的包含链(thread.h 被 io.h 一类底层头用)。 */
+    {
+        extern void rk_tsd_run_destructors(void) __attribute__((weak));
+        if (rk_tsd_run_destructors) rk_tsd_run_destructors();
+    }
     sys_thread_exit_raw(0);
 
     for (;;) {}

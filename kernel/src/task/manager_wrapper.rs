@@ -420,6 +420,33 @@ pub fn futex_wake_current(uaddr: usize, max: usize) -> isize {
     woke as isize
 }
 
+
+pub fn tsd_get_current(key: usize) -> isize {
+    use crate::syscall::errno::EINVAL;
+
+    if key >= super::thread::TSD_KEYS_MAX {
+        return -EINVAL;
+    }
+
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let tid = processor::current_tid();
+    manager.thread_mut(tid).tsd[key] as isize
+}
+
+pub fn tsd_set_current(key: usize, value: usize) -> isize {
+    use crate::syscall::errno::EINVAL;
+
+    if key >= super::thread::TSD_KEYS_MAX {
+        return -EINVAL;
+    }
+
+    let mut manager = lock_detect!(TASK_MANAGER);
+    let tid = processor::current_tid();
+    manager.thread_mut(tid).tsd[key] = value;
+    0
+}
+
+
 pub fn preempt_current_and_run_next() {
     let current_tid = match processor::current_tid_opt() {
         Some(tid) => tid,
@@ -1614,10 +1641,7 @@ pub fn mprotect_current(addr: usize, len: usize, prot: usize) -> isize {
     }
 }
 
-/// 六参 POSIX mmap。只做 eager 映射：文件映射在建映射时用 read_at
-/// 一次性把内容读进物理页，不做 lazy/缺页填页，也不做 COW。
-/// 不带固定地址标志时 addr 是 hint，一律忽略；带 MAP_FIXED 时 addr 是
-/// 必须满足的地址，重叠的旧映射被覆盖；MAP_FIXED_NOREPLACE 则重叠即 EEXIST。
+
 pub fn mmap_current(
     addr: usize,
     len: usize,
@@ -1634,7 +1658,7 @@ pub fn mmap_current(
         PROT_WRITE, USER_MMAP_BASE, USER_MMAP_TOP,
     };
 
-    /* ---- 参数校验：内核统一返回 -errno，用户态 rk_sys_ret 翻成 -1+errno ---- */
+
     if len == 0 {
         return -EINVAL;
     }
@@ -2936,11 +2960,6 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
 }
 
 /// 按信号死亡退出，并（可选）标记 core dump。
-///
-/// `core` 只影响 `waitpid` 报出的 wait status bit7（`WCOREDUMP`）——
-/// 内核不写 core 文件（没有文件系统布局约定，也没有调试器来读它），
-/// 但这个位必须真的置上：否则 `WIFSIGNALED` 有了、`WCOREDUMP` 永远 0，
-/// 诊断工具会得出"段错误没有 core"的错误结论。
 pub fn exit_with_signal(sig: usize, core: bool) -> ! {
     {
         let pid = current_pid();
@@ -2963,8 +2982,7 @@ pub fn exit_with_signal(sig: usize, core: bool) -> ! {
 /// 离开 CPU 但不改变自己"不可运行"的身份。
 ///
 /// 和 `suspend_current_and_run_next()` 的唯一区别：不登记
-/// `pending_ready_tid`。那一步的意思正是"我随时可以再跑"（让 run_tasks
-/// 把我重新入队），而停止态要的正好相反 —— 只有 SIGCONT 能让我回来。
+/// `pending_ready_tid`
 fn switch_away_stopped() {
     let current_tid = processor::current_tid();
 
@@ -3000,9 +3018,6 @@ pub fn take_pending_stop_signal() -> Option<usize> {
 }
 
 /// 停住当前进程（默认动作 Stop 的实现）。
-///
-/// 也供终端驱动调用：交互程序阻塞在 `read(0)` 上时，Ctrl+Z 必须就地停住它，
-/// 见 `take_pending_stop_signal` 的注释。
 pub fn stop_current_process(sig: usize) {
     let pid = current_pid();
     let mut need_ipi = false;

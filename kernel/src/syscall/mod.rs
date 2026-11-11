@@ -139,6 +139,8 @@ pub const SYSCALL_NET_GETSOCKOPT: usize = 128;
 pub const SYSCALL_GET_EPOCH_US: usize = 129;
 pub const SYSCALL_FUTEX_WAIT: usize = 130;
 pub const SYSCALL_FUTEX_WAKE: usize = 131;
+pub const SYSCALL_TSD_GET: usize = 132;
+pub const SYSCALL_TSD_SET: usize = 133;
 
 
 
@@ -289,6 +291,8 @@ pub fn syscall(id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GET_EPOCH_US => process::sys_get_epoch_us(),
         SYSCALL_FUTEX_WAIT => thread::sys_futex_wait(args[0], args[1]),
         SYSCALL_FUTEX_WAKE => thread::sys_futex_wake(args[0], args[1]),
+        SYSCALL_TSD_GET => thread::sys_tsd_get(args[0]),
+        SYSCALL_TSD_SET => thread::sys_tsd_set(args[0], args[1]),
         _ => {
             log::warn!(
                 "[syscall] unsupported syscall id={} args=[{:#x}, {:#x}, {:#x}]",

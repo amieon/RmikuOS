@@ -16,6 +16,9 @@ FILE _stderr = {2, {0}, 0, 0, _F_WRITE | _F_UNBUF, -1};
  * 这里只作 weak 声明不定义 —— 纯 C 程序解析成 0 会跳过, 也避免同 TU
  * 的 weak 空实现被内联、把强定义架空。 */
 extern void __rk_run_cxa_dtors(void) __attribute__((weak));
+/* 主线程退出时跑 TSD destructor 轮次(lib/thread.c 提供强定义)。
+ * weak: 只链了部分 libc 的目标解析成 0 就跳过，不会因缺符号链接失败。 */
+extern void rk_tsd_run_destructors(void) __attribute__((weak));
 
 /* .fini_array 边界由 linker script 的 PROVIDE_HIDDEN 给出;
  * 没有条目时 start == end, 循环 0 次。 */
@@ -24,6 +27,7 @@ extern void (*__fini_array_end[])(void);
 
 void exit(int code) __attribute__((weak));
 void exit(int code) {
+    if (rk_tsd_run_destructors) rk_tsd_run_destructors();
     /* C++ 析构: 先逆序跑 __cxa_atexit 登记, 再逆序跑 .fini_array。
      * 放在 fflush 之前, 析构里的 printf 才会一起被冲出去。 */
     if (__rk_run_cxa_dtors) __rk_run_cxa_dtors();

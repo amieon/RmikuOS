@@ -72,8 +72,13 @@ pub struct ThreadControlBlock {
     pub sig_pending: u64,
     pub sig_blocked: u64,
 
+    pub tsd: [usize; TSD_KEYS_MAX],
+
     pub exit_code: i32,
 }
+
+/// 与 user/include/pthread.h 的 PTHREAD_KEYS_MAX 必须同步（POSIX 保证 >= 128）。
+pub const TSD_KEYS_MAX: usize = 128;
 
 impl ThreadControlBlock {
     pub fn new_main_thread(
@@ -112,6 +117,7 @@ impl ThreadControlBlock {
             sig_pending: 0,
 
             exit_code: 0,
+            tsd: [0; TSD_KEYS_MAX],
         }
     }
 
@@ -160,6 +166,7 @@ impl ThreadControlBlock {
             sig_pending: 0,
 
             exit_code: 0,
+            tsd: [0; TSD_KEYS_MAX],
         }
     }
 

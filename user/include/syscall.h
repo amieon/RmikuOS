@@ -143,6 +143,8 @@ extern "C" {
 #define SYS_GET_EPOCH_US             129
 #define SYS_FUTEX_WAIT               130
 #define SYS_FUTEX_WAKE               131
+#define SYS_TSD_GET                  132
+#define SYS_TSD_SET                  133
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);

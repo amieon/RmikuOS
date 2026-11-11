@@ -4,6 +4,8 @@ use crate::task::{
     thread_join_current,
     futex_wait_current,
     futex_wake_current,
+    tsd_get_current,
+    tsd_set_current,
 };
 
 
@@ -40,4 +42,13 @@ pub fn sys_futex_wait(uaddr: usize, val: usize) -> isize {
 
 pub fn sys_futex_wake(uaddr: usize, max: usize) -> isize {
     futex_wake_current(uaddr, max)
+}
+
+
+pub fn sys_tsd_get(key: usize) -> isize {
+    tsd_get_current(key)
+}
+
+pub fn sys_tsd_set(key: usize, value: usize) -> isize {
+    tsd_set_current(key, value)
 }

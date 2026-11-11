@@ -52,16 +52,6 @@ extern "C" {
 #endif
 #define RK_PTHREAD_WAKE_ALL 0x7fffffff
 
-/*
- * 本版只提供「纯用户态能正确实现」的同步原语：
- *   mutex（含递归）/ cond / once / attr 空桩 / self / equal
- * 不提供 pthread_create / exit / join / detach、TLS、rwlock、spin、barrier、
- * 
- * pthread_kill / pthread_sigmask 已在 signal.h，需要就一起 include。
- *
- * cond_wait 用「记 seq -> 放锁 -> yield 轮询 seq 变化」实现。功能正确，
- * 代价是等待期间忙等（每次让出 CPU），不是阻塞睡眠
- */
 
 /* ---- 类型与常量 ---- */
 typedef unsigned long pthread_t;
@@ -115,6 +105,31 @@ typedef struct {
 } pthread_once_t;
 
 #define PTHREAD_ONCE_INIT {0, {0}}
+
+
+typedef unsigned int pthread_key_t;
+
+#define PTHREAD_KEYS_MAX 128
+#define PTHREAD_DESTRUCTOR_ITERATIONS 4
+
+#ifndef RK_PTHREAD_TSD_GET
+#define RK_PTHREAD_TSD_GET(k) \
+    ((isize)syscall3(SYS_TSD_GET, (usize)(k), 0, 0))
+#endif
+#ifndef RK_PTHREAD_TSD_SET
+#define RK_PTHREAD_TSD_SET(k, v) \
+    ((isize)syscall3(SYS_TSD_SET, (usize)(k), (usize)(v), 0))
+#endif
+
+
+int  pthread_key_create(pthread_key_t *key, void (*destructor)(void *));
+int  pthread_setspecific(pthread_key_t key, const void *value);
+void *pthread_getspecific(pthread_key_t key);
+int  pthread_key_delete(pthread_key_t key);
+
+/* 非 POSIX 内部钩子：__thread_entry 与 exit() 在退出前调用，
+ * 跑 PTHREAD_DESTRUCTOR_ITERATIONS 轮 destructor。 */
+void rk_tsd_run_destructors(void);
 
 /* ---- self / equal ---- */
 static inline pthread_t pthread_self(void) {
