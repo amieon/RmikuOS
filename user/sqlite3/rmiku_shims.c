@@ -6,7 +6,7 @@
  *       isatty        → 标准流 fd 0/1/2 视为 tty（shell 据此决定交互模式）
  *       access        → 已移至 fs.h（内核 SYS_ACCESS：check_access + 真实 uid/gid）
  *       opendir/readdir/closedir → 基于 SYS_GETDENTS 的真实目录遍历
- *       errno         → 全局变量定义（errno.h 只声明 extern）
+ *       errno         → 已移除；errno.h 的宏指向每线程槽(lib/thread.c)
  *   - 无 syscall 支撑的做语义诚实的空实现：
  *       getpwuid      → 无 passwd 数据库, 返回 NULL（与 getenv 无值一致）
  *       symlink       → 无符号链接支持, ENOSYS（writefile() 的死路径, 恒不触发）
@@ -25,8 +25,7 @@
 #include "dirent.h"      /* → fs.h: struct dirent + DIR 声明 */
 #include "pwd.h"
 
-/* errno.h 只声明 extern, 这里给出唯一定义（lua.c 里那个是它自己 TU 的） */
-int errno = 0;
+/* errno 由 errno.h 的宏 + lib/thread.c 的每线程槽提供，不再需要全局定义。 */
 
 /* ----------------------------------------------------------------------------
  * strdup —— 真实实现（malloc + 拷贝）。shell.c 有 5 处调用（~ 展开、

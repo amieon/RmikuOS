@@ -64,9 +64,8 @@ void __rk_pure_virtual_fail(void) {
     for (;;) {}
 }
 
-/* errno: POSIX 全局错误码(errno.h 已声明, 这里提供定义)。
- * weak: lua.c 等移植代码自带强定义时优先, 否则用这个(TCC 等)。 */
-int errno __attribute__((weak)) = 0;
+/* errno 实体不再放这里: 已改成 errno.h 的宏 + lib/thread.c 的每线程槽。
+ * 全局 int 会被多线程互相覆盖(不崩、不报错、语义悄悄错)。 */
 
 /* gcc 内建原子 __sync_*: TCC 不支持这些内建 -> 需要真实符号。
  * RmikuOS 单核, 用原子指令实现即可(riscv64: amoswap.w.aq + fence; loongarch64: amswap_db.w + dbar)。

@@ -1,6 +1,22 @@
 #ifndef ERRNO_H
 #define ERRNO_H
-extern int errno;
+
+/* int 本体在用户态(__thread_entry 栈上, 见 lib/thread.c); 内核 TCB 的
+ * TSD 槽只存指向它的指针 */
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern int *rk_errno_slot(void);
+#ifdef __cplusplus
+}
+#endif
+/* MinGW 的 <stddef.h> 也塞了 #define errno (*_errno())，而 types.h 会
+ * include <stddef.h>：不先 undef 就是宏重定义、谁生效取决于包含顺序。
+ * 真机交叉工具链没这问题，显式 undef 保证以本文件为准。 */
+#ifdef errno
+#undef errno
+#endif
+#define errno (*rk_errno_slot())
 
 /* 完整 Linux errno 表（asm-generic 编号，1..133）。
  * 数值与 kernel/src/syscall/errno.rs 一一对应，改一边必须改另一边。

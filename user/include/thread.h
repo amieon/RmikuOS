@@ -69,6 +69,11 @@ static inline isize sys_thread_join_raw(int tid, int *exit_code) {
  * 然后由这里调用真正的线程函数。
  */
 static inline void __thread_entry(void (*func)(void *), void *arg) {
+    int tls_errno = 0;
+    {
+        extern void rk_tsd_bind_errno_slot(int *) __attribute__((weak));
+        if (rk_tsd_bind_errno_slot) rk_tsd_bind_errno_slot(&tls_errno);
+    }
     func(arg);
     /* POSIX: 线程退出前跑 TSD destructor 轮次。这里用块内弱声明，
      * 不把整个 pthread.h 拉进 thread.h 的包含链(thread.h 被 io.h 一类底层头用)。 */

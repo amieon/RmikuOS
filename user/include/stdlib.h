@@ -8,7 +8,7 @@
 #include "process.h"
 #include "string.h"
 #include "stdio.h"
-#include "env.h"      /* 真实 getenv/setenv: 基于 SYS_GETENV 系统调用 */
+#include "env.h"      
 #include "fs.h"       /* mkstemp/mkdtemp：POSIX 归 stdlib，实现在 fs.h */
 #include "errno.h"    /* strto* 的 EINVAL/ERANGE（io.h 已间接到，这里写明依赖） */
 
