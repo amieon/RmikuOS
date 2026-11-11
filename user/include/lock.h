@@ -54,6 +54,14 @@ static inline void mutex_lock(mutex_t *m) {
 static inline void mutex_unlock(mutex_t *m) {
     spin_unlock(m);
 }
+
+static inline isize rk_futex_wait(const volatile void *uaddr, unsigned val) {
+    return syscall3(SYS_FUTEX_WAIT, (usize)uaddr, (usize)val, 0);
+}
+
+static inline isize rk_futex_wake(const volatile void *uaddr, int n) {
+    return syscall3(SYS_FUTEX_WAKE, (usize)uaddr, (usize)(isize)n, 0);
+}
 #ifdef __cplusplus
 }
 #endif

@@ -72,6 +72,11 @@ pub struct ThreadControlBlock {
     pub sig_pending: u64,
     pub sig_blocked: u64,
 
+    pub detached: bool,
+
+    pub detach_stack_base: usize,
+    pub detach_stack_size: usize,
+
     pub tsd: [usize; TSD_KEYS_MAX],
 
     pub exit_code: i32,
@@ -117,6 +122,9 @@ impl ThreadControlBlock {
             sig_pending: 0,
 
             exit_code: 0,
+            detached: false,
+            detach_stack_base: 0,
+            detach_stack_size: 0,
             tsd: [0; TSD_KEYS_MAX],
         }
     }
@@ -166,6 +174,9 @@ impl ThreadControlBlock {
             sig_pending: 0,
 
             exit_code: 0,
+            detached: false,
+            detach_stack_base: 0,
+            detach_stack_size: 0,
             tsd: [0; TSD_KEYS_MAX],
         }
     }

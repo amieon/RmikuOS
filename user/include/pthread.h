@@ -121,6 +121,11 @@ typedef unsigned int pthread_key_t;
     ((isize)syscall3(SYS_TSD_SET, (usize)(k), (usize)(v), 0))
 #endif
 
+#ifndef RK_PTHREAD_DETACH
+#define RK_PTHREAD_DETACH(tid, base, size) \
+    ((isize)syscall3(SYS_THREAD_DETACH, (usize)(tid), (usize)(base), (usize)(size)))
+#endif
+
 
 int  pthread_key_create(pthread_key_t *key, void (*destructor)(void *));
 int  pthread_setspecific(pthread_key_t key, const void *value);
@@ -130,6 +135,8 @@ int  pthread_key_delete(pthread_key_t key);
 /* 非 POSIX 内部钩子：__thread_entry 与 exit() 在退出前调用，
  * 跑 PTHREAD_DESTRUCTOR_ITERATIONS 轮 destructor。 */
 void rk_tsd_run_destructors(void);
+
+int pthread_detach(pthread_t thread);
 
 /* ---- self / equal ---- */
 static inline pthread_t pthread_self(void) {

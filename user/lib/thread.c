@@ -41,6 +41,31 @@ int thread_stack_record_add(
     return -1;
 }
 
+/* peek：查记录但不摘。pthread_detach 必须先 peek 到 (base,size) 交给内核，
+ * syscall 成功后才 take；反过来先 take 再发 syscall，一旦失败记录就丢了，
+ * 这条线程既没人 join 也没人 unmap，64 KiB 栈永久泄漏。 */
+int thread_stack_record_peek(
+    int tid,
+    void **stack_base,
+    usize *stack_size
+) {
+    mutex_lock(&thread_stack_lock);
+
+    for (int i = 0; i < THREAD_MAX_RECORDS; i++) {
+        if (thread_stack_records[i].used &&
+            thread_stack_records[i].tid == tid) {
+            if (stack_base) *stack_base = thread_stack_records[i].stack_base;
+            if (stack_size) *stack_size = thread_stack_records[i].stack_size;
+
+            mutex_unlock(&thread_stack_lock);
+            return 0;
+        }
+    }
+
+    mutex_unlock(&thread_stack_lock);
+    return -1;
+}
+
 int thread_stack_record_take(
     int tid,
     void **stack_base,
@@ -67,6 +92,47 @@ int thread_stack_record_take(
     mutex_unlock(&thread_stack_lock);
     return -1;
 }
+
+/* 
+ * 分离态不是用户态一张表能做完的事：内核 reap_thread() 全仓只有
+ * thread_join_current() 一个调用点，没人 join 的线程 TCB 永远不回收；
+ * 而 64 KiB 用户栈也只有 thread_join() 会 munmap。所以内核侧要
+ * (1) TCB 打 detached 标志，(2) 在 run_tasks back-from 自动 reap，
+ * (3) 顺带把这里登记的 (base,size) 从进程地址空间 remove_area 掉。
+ *
+ * 退出线程自己不能 munmap 自己的栈 —— 它正踩在上面。这里由创建者
+ * (或任意知道 tid 的同进程线程) 把栈地址交给内核，是最短的路径。
+ *
+ * 允许「先退出、后 detach」：内核发现目标已 Zombie 且归属已释放时会
+ * 当场补 reap + unmap，不会留下永远没人回收的孤儿。
+ */
+int pthread_detach(pthread_t thread) {
+    int tid = (int)(usize)thread;
+
+    void *stack_base = 0;
+    usize stack_size = 0;
+    /* 没有记录 = 不是本库 thread_create() 建的线程(或已经摘过表)。
+     * 仍然发 syscall，只是传 0/0：内核只回收 TCB，不动栈。 */
+    int have_stack = (thread_stack_record_peek(tid, &stack_base, &stack_size) == 0);
+
+    isize r = RK_PTHREAD_DETACH(
+        tid,
+        have_stack ? (usize)stack_base : 0,
+        have_stack ? stack_size : 0
+    );
+    if (r < 0) return (int)(-r);   /* pthread_* 不设 errno，返正数错误码 */
+
+    /* 成功之后这段栈归内核管：reap 时它自己 remove_area。
+     * 这里只摘表，绝不 munmap —— joinable 路径才由 thread_join() munmap。 */
+    if (have_stack) {
+        void *base = 0;
+        usize size = 0;
+        thread_stack_record_take(tid, &base, &size);
+    }
+    return 0;
+}
+
+
 struct tsd_key {
     volatile int in_use;
     void (*destructor)(void *);
@@ -170,7 +236,7 @@ void rk_tsd_run_destructors(void) {
     }
 }
 
-/*
+/* 
  * exec 只换 trap_cx、不重建 TCB，新镜像里 once/key 表归零而 TCB 槽还留着
  * 旧指针。这里用 pthread_key_create 领号，它内部的「清当前线程该槽」
  * 会把领到的那一槽抹成 0，errno 因此读回 NULL 走 fallback，

@@ -221,8 +221,21 @@ pub fn run_tasks() -> ! {
                 }
 
                 if let Some(tid) = exited_tid {
+                    /* 先唤醒 joiner 再回收：wake_threads_joining 要用
+                     * try_thread(target_tid) 取 pid，reap 之后就没得取了。 */
                     if manager.wake_threads_joining(tid) {
                         need_ipi = true;
+                    }
+
+                    let detached = manager
+                        .try_thread(tid)
+                        .map(|t| t.detached)
+                        .unwrap_or(false);
+                    if detached {
+                        /* 用户栈已在 thread_exit_current() 里解除映射 —— 那里
+                         * 进程页表仍激活、与 munmap_current 同一上下文；这里
+                         * 已切到内核页表，只负责回收 TCB。 */
+                        manager.reap_thread(tid);
                     }
                 }
             }
@@ -1472,7 +1485,7 @@ pub fn thread_create_current(
 pub fn thread_exit_current(exit_code: i32) -> ! {
     let current_tid = processor::current_tid();
 
-    let task_cx_ptr = {
+    let (task_cx_ptr, need_shootdown) = {
         let mut manager = lock_detect!(TASK_MANAGER);
 
         let pid = manager.pid_of_tid(current_tid);
@@ -1502,8 +1515,23 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
 
         //manager.wake_threads_joining(current_tid);
 
-        manager.thread_cx_ptr(current_tid)
+        /* detached 线程的用户栈在这里解除映射：此刻进程页表仍然激活，
+         * 和 munmap_current() 是同一种上下文；切到 idle 之后(back-from)
+         * 已经换成内核页表了，那时再动用户页表是白白冒险。
+         * 退出线程自己不能 munmap 自己的栈(它正踩在上面)，只能由内核
+         * 在 __switch 之前代劳 —— 之后走的都是内核栈，不再回用户态。 */
+        let detached = manager.thread(current_tid).detached;
+        let need_shootdown = detached && manager.release_thread_stack(current_tid);
+
+        (manager.thread_cx_ptr(current_tid), need_shootdown)
     };
+
+    /* shootdown 要等其它 hart 的 ACK，必须放掉 TASK_MANAGER 锁之后再做，
+     * 持锁等 ACK 会把整个调度器卡死。这里仍在 syscall 上下文、中断是开的，
+     * 与 munmap_current() 的处理完全一致。 */
+    if need_shootdown {
+        crate::arch::tlb_shootdown_sync();
+    }
 
     let idle_cx_ptr = processor::idle_task_cx_ptr();
      
@@ -1538,6 +1566,12 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
 
                 if target.pid != current_pid {
                     return -1;
+                }
+                /* POSIX: join 一个 detached 线程是未定义行为，这里明确拒绝。
+                 * 不能让它睡到 Zombie：detached 线程 back-from 就 reap 了，
+                 * joiner 会永远等一个再也不会被唤醒的 tid。 */
+                if target.detached {
+                    return -crate::syscall::errno::EINVAL;
                 }
 
                 (target.status, target.exit_code, target.running_on)
@@ -1578,6 +1612,84 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
             __switch(task_cx_ptr, idle_cx_ptr);
         }
     }
+}
+
+
+pub fn thread_detach_current(
+    target_tid: Tid,
+    stack_base: usize,
+    stack_size: usize,
+) -> isize {
+    use crate::syscall::errno::{EINVAL, ESRCH};
+
+    if stack_base != 0 && stack_size == 0 {
+        return -EINVAL;
+    }
+
+    let current_tid = processor::current_tid();
+    let mut need_shootdown = false;
+
+    {
+        let mut manager = lock_detect!(TASK_MANAGER);
+        let current_pid = manager.pid_of_tid(current_tid);
+
+        /* 先把要判断的字段一次性拷出来，别把 &ThreadControlBlock 的借用
+         * 一路带到下面 thread_mut() / reap_thread() 的可变借用里。 */
+        let (target_pid, already_detached, status, running_on, deferred) =
+            match manager.try_thread(target_tid) {
+                Some(t) => (
+                    t.pid,
+                    t.detached,
+                    t.status,
+                    t.running_on,
+                    t.wake_pending || t.cont_pending,
+                ),
+                None => return -ESRCH,
+            };
+
+        /* 只允许 detach 本进程的线程；tid 是全局编号，跨进程 detach 会把
+         * 别人的 TCB 标成分离态。 */
+        if target_pid != current_pid {
+            return -ESRCH;
+        }
+        /* 重复 detach = 幂等。POSIX 把重复 detach 定为未定义行为，这里给
+         * 个确定的「成功且不重复回收」，比报错更好用。 */
+        if already_detached {
+            return 0;
+        }
+
+        /* 「先退出、后 detach」的补账：线程 exit 时还不是 detached，
+         * back-from 就不会回收它，TCB 和栈会一直挂着。 */
+        let already_exited = matches!(status, ThreadStatus::Zombie | ThreadStatus::Dead);
+        /* 归属已释放 + 无挂账 => back-from 已经走过或不会再处理，当场 reap。 */
+        let reap_now = already_exited && running_on.is_none() && !deferred;
+
+        {
+            let thread = manager.thread_mut(target_tid);
+            thread.detached = true;
+            thread.detach_stack_base = stack_base;
+            thread.detach_stack_size = stack_size;
+        }
+
+        if already_exited {
+            /* 这里同时堵住一个竞态窗口：exit 放锁之后、属主核 back-from
+             * 读到 detached 之前，另一线程才 detach。那次 exit 读到的还是
+             * joinable、没有解除栈映射，而 back-from 只 reap TCB —— 若不
+             * 在这里补一次 release，64 KiB 用户栈就永久留在地址空间里。
+             * exit 已释放过时 base/size 被清成 0/0，重复调用是空操作。 */
+            if manager.release_thread_stack(target_tid) {
+                need_shootdown = true;
+            }
+        }
+        if reap_now {
+            manager.reap_thread(target_tid);
+        }
+    }
+
+    if need_shootdown {
+        crate::arch::tlb_shootdown_sync();
+    }
+    0
 }
 
 
@@ -1658,7 +1770,7 @@ pub fn mmap_current(
         PROT_WRITE, USER_MMAP_BASE, USER_MMAP_TOP,
     };
 
-
+    
     if len == 0 {
         return -EINVAL;
     }
@@ -2960,6 +3072,11 @@ pub fn sigreturn_current(cx: &mut TrapContext) {
 }
 
 /// 按信号死亡退出，并（可选）标记 core dump。
+///
+/// `core` 只影响 `waitpid` 报出的 wait status bit7（`WCOREDUMP`）——
+/// 内核不写 core 文件（没有文件系统布局约定，也没有调试器来读它），
+/// 但这个位必须真的置上：否则 `WIFSIGNALED` 有了、`WCOREDUMP` 永远 0，
+/// 诊断工具会得出"段错误没有 core"的错误结论。
 pub fn exit_with_signal(sig: usize, core: bool) -> ! {
     {
         let pid = current_pid();

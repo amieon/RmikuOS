@@ -62,6 +62,20 @@ static inline isize sys_thread_join_raw(int tid, int *exit_code) {
     );
 }
 
+
+static inline isize sys_thread_detach_raw(
+    int tid,
+    usize stack_base,
+    usize stack_size
+) {
+    return syscall3(
+        SYS_THREAD_DETACH,
+        (usize)tid,
+        stack_base,
+        stack_size
+    );
+}
+
 /*
  * 用户态线程入口 trampoline。
  *
@@ -91,6 +105,14 @@ int thread_stack_record_add(
     int tid,
     void *stack_base,
     usize stack_size
+);
+
+/* peek 不摘表：pthread_detach 要先拿到栈地址交给内核登记，等 syscall
+ * 成功后再 take。若先 take 再发 syscall，失败时记录就丢了，join 也补不回来。 */
+int thread_stack_record_peek(
+    int tid,
+    void **stack_base,
+    usize *stack_size
 );
 
 int thread_stack_record_take(
@@ -140,6 +162,10 @@ static inline int thread_create(void (*func)(void *), void *arg) {
 }
 
 static inline void thread_exit(int code) {
+    {
+        extern void rk_tsd_run_destructors(void) __attribute__((weak));
+        if (rk_tsd_run_destructors) rk_tsd_run_destructors();
+    }
     sys_thread_exit_raw(code);
 
     for (;;) {}

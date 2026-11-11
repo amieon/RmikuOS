@@ -61,6 +61,7 @@ pub use manager_wrapper::{
     thread_create_current,
     thread_exit_current,
     thread_join_current,
+    thread_detach_current,
     futex_wait_current,
     futex_wake_current,
     tsd_get_current,

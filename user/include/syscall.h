@@ -145,23 +145,14 @@ extern "C" {
 #define SYS_FUTEX_WAKE               131
 #define SYS_TSD_GET                  132
 #define SYS_TSD_SET                  133
+#define SYS_THREAD_DETACH            134
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
 
 isize syscall6(usize id, usize a0, usize a1, usize a2, usize a3, usize a4, usize a5);
 
-/* futex 原语。内核返 -errno 或实际唤醒数，这里故意不过 rk_sys_ret：
- * pthread 层要自己识别 -EAGAIN（*uaddr 已经变了，不必睡）。
- * uaddr 用 void* 是为了 volatile int / volatile unsigned 都能直接传，
- * 不产生 incompatible pointer 警告；内核只读它 4 字节，必须 4 字节对齐。 */
-static inline isize rk_futex_wait(const volatile void *uaddr, unsigned val) {
-    return syscall3(SYS_FUTEX_WAIT, (usize)uaddr, (usize)val, 0);
-}
 
-static inline isize rk_futex_wake(const volatile void *uaddr, int n) {
-    return syscall3(SYS_FUTEX_WAKE, (usize)uaddr, (usize)(isize)n, 0);
-}
 #ifdef __cplusplus
 }
 #endif

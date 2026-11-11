@@ -1630,6 +1630,59 @@ pub fn wake_parent_waiting_for(&mut self, child_pid: Pid) -> bool {
     }
 
 
+    /// 释放 detached 线程的用户栈映射。只允许在线程已停止运行且归属已释放
+    /// 的上下文调用：run_tasks back-from，或 detach 一个已经退出的线程。
+    pub fn release_thread_stack(&mut self, tid: Tid) -> bool {
+        let (pid, base, size) = match self.try_thread(tid) {
+            Some(thread) => (
+                thread.pid,
+                thread.detach_stack_base,
+                thread.detach_stack_size,
+            ),
+            None => return false,
+        };
+
+        if base == 0 || size == 0 {
+            return false;
+        }
+
+        let start = crate::mm::align_down(base, PAGE_SIZE);
+        let Some(end) = start.checked_add(crate::mm::align_up(size, PAGE_SIZE)) else {
+            return false;
+        };
+
+        {
+            let Some(process) = self.try_process_mut(pid) else {
+                return false;
+            };
+            let Some(index) = process
+                .mmap_areas
+                .iter()
+                .position(|area| area.start == start && area.end == end)
+            else {
+                return false;
+            };
+            /* 线程栈一定是匿名映射。遇到文件映射说明登记错了，宁可不回收，
+             * 也不能把 file-backed 的页当匿名帧释放掉。 */
+            if process.mmap_areas[index].file.is_some() {
+                return false;
+            }
+            process.mmap_areas.remove(index);
+            if !process.user_space.remove_area(VirtAddr(start), VirtAddr(end)) {
+                return false;
+            }
+            process.dealloc_mmap_range(start, end);
+        }
+
+        /* 清成 0/0：back-from 与「detach 已退出的线程」两条路径可能先后看到
+         * 同一个 Zombie，第二次不能把同一段 VA 再 dealloc 一次。 */
+        if let Some(thread) = self.try_thread_mut(tid) {
+            thread.detach_stack_base = 0;
+            thread.detach_stack_size = 0;
+        }
+        true
+    }
+
     pub fn reap_thread(&mut self, tid: Tid) {
     {
         let Some(thread) = self.try_thread(tid) else {
@@ -1748,7 +1801,7 @@ impl TaskManager {
         0
     }
 
-    
+
     pub fn wake_all_threads_by_reason(&mut self, reason: BlockReason) -> isize {
         self.wake_threads_by_reason_up_to(reason, usize::MAX);
         0
