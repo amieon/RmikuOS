@@ -2,7 +2,7 @@
 
 [![CI/CD](https://github.com/amieon/RmikuOS/actions/workflows/ci.yml/badge.svg)](https://github.com/amieon/RmikuOS/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-RmikuOS 是一个从零实现的教学型操作系统内核,支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell,从真实 virtio 块设备加载 ext4 rootfs,并运行 **C / C++ / Rust / Java / Lua / Scheme** 六种语言的用户程序,内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式）,配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环,还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘）,并通过自研 TCP/IP 协议栈（含 DHCP 自动配置与租约续期、DNS 域名解析）向宿主机浏览器提供真实的 HTTP 服务。系统内还跑得动 **git 2.33.1 + OpenSSL 3.0 + curl 8.23.0**:HTTPS 带证书校验,`git clone https://` 全链路在 guest 内完成;同时补齐了完整 POSIX 信号模型、`pthread`/futex 线程同步与线程私有数据、C++ 全局构造析构、文件映射与亚秒墙钟。
+RmikuOS 是一个从零实现的教学型操作系统内核,支持 **RISC-V 64** 与 **LoongArch 64** 双架构。它可以在 QEMU 上启动用户态 shell,从真实 virtio 块设备加载 ext4 rootfs,并运行 **C / C++ / Rust / Java / Lua / Scheme** 六种语言的用户程序,内置 **TCC（Tiny C Compiler）** 可在系统内现场编译并运行 C 程序（AOT + JIT 双模式）,配备 **kilo 全屏编辑器**（ANSI 终端、语法高亮）——编辑、编译、运行完整闭环,还内置 **SQLite 3.50 交互式数据库**（自定义 VFS 落盘，数据可持久化到 FAT 磁盘）,并通过自研 TCP/IP 协议栈（含 DHCP 自动配置与租约续期、DNS 域名解析）向宿主机浏览器提供真实的 HTTP 服务。系统内还跑得动 **git 2.33.1 + OpenSSL 3.0 + curl 8.23.0**:HTTPS 带证书校验,`git clone https://` 全链路在 guest 内完成;同时补齐了完整 POSIX 信号模型、`pthread`/futex 线程同步与六个线程生命周期函数、线程私有数据 / 每线程 `errno` / cleanup handler、C++ 全局构造析构、文件映射与亚秒墙钟。
 
 RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而完整、能运行真实用户程序、能承载系统实验的教学型 OS。作为验证，独立项目 [VeryEasyGCN](https://github.com/amieon/VeryEasyGCN) 已通过 `stdcompat.h` 桥接层移植到 RmikuOS 上运行，并在真实 Cora 数据集上达到 **78.3%** 测试准确率。
 
@@ -31,7 +31,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 子系统       | 能力                                                         | 备注                                                         |
 | ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | 双架构       | RISC-V 64 + LoongArch 64,SMP 多核                            | virtio-mmio / virtio-pci                                     |
-| 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join`、futex、`pthread` 互斥锁 / 条件变量 / `once`、TSD + 每线程 `errno` | 进程级 fd table,线程共享地址空间;内核每 TCB 一行 `tsd[128]` 存槽 |
+| 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join`、futex、`pthread_create` / `exit` / `join` / `detach` / `self` / `equal`、互斥锁 / 条件变量 / `once` / cleanup handler、TSD + 每线程 `errno` | 进程级 fd table,线程共享地址空间;内核每 TCB 一行 `tsd[128]` 存槽 + 全宽 `retval`,detached 线程退出即自动回收 TCB 与用户栈 |
 | 信号         | 自定义 handler / `sigaction`、进程 + 线程两层 pending、信号屏蔽字、进程组投递、`SIGSTOP` / `SIGCONT`、`SIGPIPE`、`setitimer` / `alarm` | `waitpid` 按 `code<<8` / 低 7 位信号号编码;Ctrl+C 整条管线一起收 |
 | 虚拟内存     | buddy 帧分配器、多级页表、ELF 加载、`mmap`(匿名 + 文件映射,`MAP_FIXED` / `MAP_FIXED_NOREPLACE`) | 文件映射当前为 eager 读,lazy 调页见 Roadmap                  |
 | 文件系统     | VFS 多挂载:ext4 rootfs(只读) / 可写 ext4(rsext4 + JBD2 日志) / tmpfs / FAT32 | `openat` 家族 + `O_EXCL` + `umask` + `mkstemp`;数据盘 LABEL 身份识别 + 周期 writeback |
@@ -148,7 +148,7 @@ user/
 ├── lib/                    crt0 与 syscall_<arch>.S、cpp_runtime.cpp
 ├── src/                    C 系统程序 → /bin(ls / cat / echo / grep / head / wc / shell / nslookup)
 ├── tests/                  C / 单文件 Rust / 单文件 C++ 测试程序 → /tests
-├── samples/               单文件示例程序(108 个:88 C + 16 C++ + 3 Rust + 1 汇编)→ /samples,自动 glob
+├── samples/               单文件示例程序(110 个:90 C + 16 C++ + 3 Rust + 1 汇编)→ /samples,自动 glob
 ├── c/                      C 项目型构建目录(多文件工程 httpd、lua)→ /programs
 ├── cpp/                    C++ 项目型构建目录(装载期 AOT 的 JVM)→ /programs
 ├── gcn/                    C++ 图神经网络项目(GCN/GAT)→ /gcn
@@ -229,7 +229,7 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp / curl / git-remo
   * **多用户与可写系统状态**:`useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`;账户库采用 **defaults + overrides**(可写 `/var/etc/{passwd,group}` 优先,回退只读出厂 `/etc/{passwd,group}`,写入即 fsync)。身份类命令仅 root 可执   ,`passwd` 是唯一例外:非 root 只能改自己的,且必须先验证旧口令
 * **网络**:自研 TCP/IP 协议栈(Ethernet / ARP / IPv4 / UDP / TCP / DHCP / DNS / ICMP)、socket 100–117(`getsockopt` 续号 128)、通用 `poll()`(支持 socket / 管道 / 普通文件)、UDP `connect()` 与统一临时端口分配器(49152–65535)、DHCP T1/T2 租约续期、TCP listen backlog、用户态 httpd(宿主机浏览器访问)、DNS 客户端(压缩指针解析 + TTL 缓存,nslookup)、TFTP / NTP / wget(wget/ping/ntpdate 支持域名参数)、shell 命令替换 `$()` / 反引号、TCP Jacobson/Karn 自适应 RTO(100K 丢包实验提速 2.4–4.0×);非阻塞 `connect()` 立刻返 `-EINPROGRESS`、超时一律 `monotonic_us()` 计、超时不 close fd(留给调用方读 `SO_ERROR`);`send` 内核内按 MSS 切段并支持短写、`recv` 支持 `MSG_PEEK`、`setsockopt` 认 level(否则 OpenSSL 的 BIO_connect 会因 `TCP_NODELAY` 被拒而连不上)、socket 层裸 `-1` 全换 `-errno`
 * **信号**:从"位图 + 延迟投递"扩成完整 POSIX 子集——自定义 handler 直接改用户栈 + `sigaction`/`sigreturn`、进程与线程两层 `sig_pending` + 信号屏蔽字(`sigprocmask`/`sigpending`)、`kill(-pgid)` 组投递与 `tgkill`、作业控制 stopped 态(`SIGSTOP`/`SIGTSTP` 只认 `SIGCONT` 恢复)、`SIGPIPE`、`setitimer`/`getitimer`/`alarm`、阻塞读遇信号返 `EINTR`、`WCOREDUMP` 与 `siglongjmp`、进程组 / 会话(`setpgid`/`getpgid`/`setsid`);`waitpid` 的退出码编码把"信号死"与 `exit(139)` 分开
-* **线程同步与线程私有数据**:futex wait/wake(130/131)作原语,`pthread` 互斥锁 / 条件变量 / `pthread_once` 建立在它之上(无争用走用户态原子,争用不再自旋 yield);线程私有数据用 `pthread_key_create/delete/setspecific/getspecific` + destructor(最多 4 轮),`pthread_key_t` 是全局列号,每线程一行值存在内核 `TCB::tsd[128]`(132/133),线程数不需要预先知道;`errno` 改为 `#define errno (*rk_errno_slot())` 宏,可写左值、每线程一份,`int` 本体在用户态 `__thread_entry` 栈帧上,TSD 槽只存指向它的指针;`exec` 只换 `trap_cx` 不重建 TCB 的残留缝由 `key_create` 清当前槽挡住
+* **线程同步与线程私有数据**:futex wait/wake(130/131)作原语,`pthread` 互斥锁 / 条件变量 / `pthread_once` 建立在它之上(无争用走用户态原子,争用不再自旋 yield);线程私有数据用 `pthread_key_create/delete/setspecific/getspecific` + destructor(最多 4 轮),`pthread_key_t` 是全局列号,每线程一行值存在内核 `TCB::tsd[128]`,线程数不需要预先知道;`errno` 改为 `#define errno (*rk_errno_slot())` 宏,可写左值、每线程一份,`int` 本体在用户态 `__thread_entry` 栈帧上,TSD 槽只存指向它的指针;`exec` 只换 `trap_cx` 不重建 TCB 的残留缝由 `key_create` 清当前槽挡住;`pthread_detach` 把分离态标志和用户栈 `(base,size)` 记进 TCB,退出时内核在 syscall 上下文 `remove_area` 掉 64 KiB 栈、属主核 back-from 自动 `reap_thread`,`join(detached)` 返 `EINVAL`——原实现只有 `thread_join()` 会 munmap 栈,没人 join 就永久泄漏,所以这事只能内核做;"先退出、后 detach"与 exit/back-from 之间的竞态窗口都有补账;六个生命周期函数至此齐全:`pthread_create` 走独立 trampoline(`void *(*)(void*)`)收全宽返回值;线程退出值只有一份 `TCB::retval: usize`(进程退出码另在 `ProcessControlBlock::exit_code: i32`,供 `waitpid` / 信号编码),17 号不做截断、18 号一律回写 `sizeof(usize)` 字节,`thread_join(int*)` 在用户态自己窄化,零新增 syscall 号;`pthread_exit` 按 POSIX 顺序先跑 `pthread_cleanup_push/pop` 的每线程链表(链表头借 TSD 槽,节点在调用方栈帧,不必等 `tp` 归还)、再跑 TSD destructor;attr 的 `detachstate` / `stacksize` 真生效,`attr_init` 必须清零(否则栈上垃圾会让线程随机变 detached)
 * **系统时钟与随机数**:开机读 goldfish / LS7A RTC → `set_wall_clock`,读不到则由 `stamp::restore()` 从 `/var/lib/rtcstamp` 兜底,`login` 再 fork `ntpdate -b` 校时并回写 stamp;`hwclock -w/-s` 读写 stamp 且强制 fsync;`SYS_GET_EPOCH_US`(129) 一次读齐总微秒,`gettimeofday` / `clock_gettime(REALTIME)` 从它拆亚秒,`now_secs()` 委托同一个真源;virtio-rng → `/dev/urandom` + `getrandom` 系统调用
 * **虚拟内存 / C++ ABI**:六参 `mmap`(addr/len/prot/flags/fd/offset)支持匿名映射与 eager 文件映射、`MAP_FIXED` / `MAP_FIXED_NOREPLACE`、尾部水位与 VMA 释放 bug 修复;C++ 侧补齐 `.init_array`/`.fini_array` 遍历、`__cxa_atexit` / `__cxa_guard_acquire` / `__cxa_pure_virtual`,全局对象与函数内 static 能构造析构
 * **第三方生态 / HTTPS**:git 2.33.1(`/bin/git` + `git-remote-https`)、OpenSSL 3.0(`openssl` CLI + `libcrypto.a`/`libssl.a`)、curl 8.23.0(`/bin/curl` + `libcurl.a`)全部在 guest 内编译运行;HTTPS 带 CA 校验,本地 `git clone https://` 端到端跑通。为让自研 libc 能编这三件,补齐了 errno 1..133 表与 `rk_sys_ret`(`-errno` → `-1+errno`)、`F_GETFD`/`FD_CLOEXEC`、`getpwuid`、`getline`/`getdelim`/`sscanf`/`%.*s`、`strto*` 重建、`strtok` 家族、`<assert.h>` 零 include(否则 autoconf 全线判 no)、`isatty` 真查询、`setenv`/`putenv` 与 `environ` 回写、exec argv 上限 64/4096;TLS 侧 `openssl.cnf` 只留 `rsa_*` 验签,把 example.com 的握手验签从 ~7 s 压下来
@@ -237,7 +237,7 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp / curl / git-remo
 * **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、zlib 1.3.1(完整移植:deflate/inflate + `gzFile`,打包为 `libz.a`,宿主 `-lz` 与系统内 `tcc -lz` 都可用,是本地 git 的前置)、kilo 编辑器
 * **验证**:62 个 CI 回归测试源码 + 可写 ext4 崩溃一致性 CI 项(kill -9 → journal 回放 → `e2fsck -fn` 零错误)、HTTPS 带证书校验端到端、本地 git clone、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
 
-> 注:2026-11 增补的 pthread / TSD、errno 宏化、文件映射、C++ 构造析构与多核归属转移修复目前仍在工作树中,尚未跑完真机回归;上面描述的是实现状态,不是验证结论。
+> 注:2026-11 增补的 pthread / TSD、完整生命周期函数、cleanup handler、detach 自动回收、errno 宏化、文件映射、C++ 构造析构与多核归属转移修复目前仍在工作树中,尚未跑完真机回归;上面描述的是实现状态,不是验证结论。detach 与生命周期这两批只过了宿主语法 / 行为差分与 `cargo check`,真机要看 `111_pthread_detach_test`(尤其"tid 复用"那条)和 `112_pthread_lifecycle_test`(尤其"高 32 位非零的 void* retval 逐位相等"那条——它专抓任何把退出值截到 32 位的写法)。
 
 ---
 
@@ -269,8 +269,12 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp / curl / git-remo
 
 ### Threads / libc
 
+* 主线程 `pthread_exit()` 目前只让主线程进 Zombie:本内核没有"最后一个线程退出时终止进程"的语义,主线程应 `return` / `exit()`;`pthread_cancel` 与取消点未开,cleanup handler 只在 `pthread_exit` 路径触发
+* `pthread_attr_setstack` / guard page / schedpolicy / scope 仍是空桩:传给 create 的自定义栈不生效(创建路径一律自己 mmap,否则 join/detach 的栈记录表会认错 VA)
+* 生命周期真机回归:`112_pthread_lifecycle_test` 的高 32 位非零 retval、cleanup LIFO 与 TSD dtor 先后、attr detach 触发的"先退出后 detach"补账、多核下 join/exit 并发;宿主差分 harness 已覆盖链表顺序、错误码与全宽窄化,但 LLP64 宿主的项目 `usize`(= `unsigned long`)只有 4 字节,内核侧 `sizeof(usize)=8` 的回写只能真机验
 * 把 `tp` 寄存器归还用户态以支持真正的 `__thread` / TLS:目前两个架构都拿 `tp` 存 hart id,errno 每次访问要一次 `SYS_TSD_GET`,并且解锁不了第三方的 `thread_local`
-* `thread_exit()` 绕过 `__thread_entry`,errno 槽绑定与 TSD destructor 钩子不执行;主线程 `exit()` 的 weak 钩子也可能被 `runmain.o` 覆盖
+* `thread_exit()` 仍绕过 `__thread_entry` 的 errno 槽绑定(TSD destructor 已补上),这条路径 errno 落回全进程 fallback;主线程 `exit()` 的 weak 钩子也可能被 `runmain.o` 覆盖。`pthread_exit()` 不受影响——它从 `__pthread_entry` 已绑定好的栈帧内调用
+* detach 真机回归:`111_pthread_detach_test` 的 "tid 复用" 断言(内核真 reap 了 TCB 才能复用空槽)、多核下退出与 detach 并发窗口、栈 VA 是否被后续线程复用
 * `syscall/fs.rs` 仍有约 29 处裸 `-1`;socket send 的 SIGPIPE、`sigaltstack` / `SA_RESTART` / `tcsetpgrp` 未开
 * printf 的 `%+d` / `%.5d` / `%#08x`;`socketpair` 未开
 * loongarch64 上 curl / openssl 尚未跑过一次端到端;>1 MB HTTPS 响应、`net_backlog_test`、5× curl 稳定性循环待回归
