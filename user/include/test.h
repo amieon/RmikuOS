@@ -70,89 +70,94 @@ static const char *test_cur_name = "test";
     return 77; \
 } while (0)
 
-/* 比较宏全家桶:每个断言最多求值一次 actual/expect */
+/* 比较宏全家桶:每个断言最多求值一次 actual/expect
+ *
+ * 内部变量一律带 _rk_chk_ 前缀。宏里若用裸 a/e/l，调用方只要有个同名
+ * 局部变量就会在参数表达式里被捕获：CHECK_EQ(a, 5, ...) 展开成
+ * `long a = (long)(a);` —— 自引用未初始化值，不报错、不崩、断言结果随机；
+ * 传 &a 给结构体指针参数时更会把 8 字节 long* 当大结构体写入，直接踩栈。 */
 #define CHECK_EQ(actual, expect, msg) do { \
-    long a = (long)(actual); \
-    long e = (long)(expect); \
-    if (a == e) { \
+    long _rk_chk_a = (long)(actual); \
+    long _rk_chk_e = (long)(expect); \
+    if (_rk_chk_a == _rk_chk_e) { \
         test_pass_count++; \
         printf("[PASS] %s\n", msg); \
     } else { \
         test_fail_count++; \
-        printf("[FAIL] %s (期望 %d, 实际 %d)\n", msg, (int)e, (int)a); \
+        printf("[FAIL] %s (期望 %d, 实际 %d)\n", msg, (int)_rk_chk_e, (int)_rk_chk_a); \
     } \
 } while (0)
 
 #define CHECK_NE(actual, expect, msg) do { \
-    long a = (long)(actual); \
-    long e = (long)(expect); \
-    if (a != e) { \
+    long _rk_chk_a = (long)(actual); \
+    long _rk_chk_e = (long)(expect); \
+    if (_rk_chk_a != _rk_chk_e) { \
         test_pass_count++; \
         printf("[PASS] %s\n", msg); \
     } else { \
         test_fail_count++; \
-        printf("[FAIL] %s (不该等于 %d)\n", msg, (int)e); \
+        printf("[FAIL] %s (不该等于 %d)\n", msg, (int)_rk_chk_e); \
     } \
 } while (0)
 
 #define CHECK_LT(actual, limit, msg) do { \
-    long a = (long)(actual); \
-    long l = (long)(limit); \
-    if (a < l) { \
+    long _rk_chk_a = (long)(actual); \
+    long _rk_chk_l = (long)(limit); \
+    if (_rk_chk_a < _rk_chk_l) { \
         test_pass_count++; \
         printf("[PASS] %s\n", msg); \
     } else { \
         test_fail_count++; \
-        printf("[FAIL] %s (期望 < %d, 实际 %d)\n", msg, (int)l, (int)a); \
+        printf("[FAIL] %s (期望 < %d, 实际 %d)\n", msg, (int)_rk_chk_l, (int)_rk_chk_a); \
     } \
 } while (0)
 
 #define CHECK_LE(actual, limit, msg) do { \
-    long a = (long)(actual); \
-    long l = (long)(limit); \
-    if (a <= l) { \
+    long _rk_chk_a = (long)(actual); \
+    long _rk_chk_l = (long)(limit); \
+    if (_rk_chk_a <= _rk_chk_l) { \
         test_pass_count++; \
         printf("[PASS] %s\n", msg); \
     } else { \
         test_fail_count++; \
-        printf("[FAIL] %s (期望 <= %d, 实际 %d)\n", msg, (int)l, (int)a); \
+        printf("[FAIL] %s (期望 <= %d, 实际 %d)\n", msg, (int)_rk_chk_l, (int)_rk_chk_a); \
     } \
 } while (0)
 
 #define CHECK_GT(actual, limit, msg) do { \
-    long a = (long)(actual); \
-    long l = (long)(limit); \
-    if (a > l) { \
+    long _rk_chk_a = (long)(actual); \
+    long _rk_chk_l = (long)(limit); \
+    if (_rk_chk_a > _rk_chk_l) { \
         test_pass_count++; \
         printf("[PASS] %s\n", msg); \
     } else { \
         test_fail_count++; \
-        printf("[FAIL] %s (期望 > %d, 实际 %d)\n", msg, (int)l, (int)a); \
+        printf("[FAIL] %s (期望 > %d, 实际 %d)\n", msg, (int)_rk_chk_l, (int)_rk_chk_a); \
     } \
 } while (0)
 
 #define CHECK_GE(actual, limit, msg) do { \
-    long a = (long)(actual); \
-    long l = (long)(limit); \
-    if (a >= l) { \
+    long _rk_chk_a = (long)(actual); \
+    long _rk_chk_l = (long)(limit); \
+    if (_rk_chk_a >= _rk_chk_l) { \
         test_pass_count++; \
         printf("[PASS] %s\n", msg); \
     } else { \
         test_fail_count++; \
-        printf("[FAIL] %s (期望 >= %d, 实际 %d)\n", msg, (int)l, (int)a); \
+        printf("[FAIL] %s (期望 >= %d, 实际 %d)\n", msg, (int)_rk_chk_l, (int)_rk_chk_a); \
     } \
 } while (0)
 
 /* 字符串相等断言 */
 #define CHECK_STREQ(actual, expect, msg) do { \
-    const char *a = (actual); \
-    const char *e = (expect); \
-    if (a && e && strcmp(a, e) == 0) { \
+    const char *_rk_chk_a = (actual); \
+    const char *_rk_chk_e = (expect); \
+    if (_rk_chk_a && _rk_chk_e && strcmp(_rk_chk_a, _rk_chk_e) == 0) { \
         test_pass_count++; \
         printf("[PASS] %s\n", msg); \
     } else { \
         test_fail_count++; \
         printf("[FAIL] %s (期望 \"%s\", 实际 \"%s\")\n", \
-               msg, e ? e : "(null)", a ? a : "(null)"); \
+               msg, _rk_chk_e ? _rk_chk_e : "(null)", _rk_chk_a ? _rk_chk_a : "(null)"); \
     } \
 } while (0)
