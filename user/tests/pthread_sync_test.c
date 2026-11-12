@@ -1,5 +1,6 @@
 /* 用户态 pthread 同步原语回归：mutex / 递归锁 / cond / once / timedwait。
- * 线程仍用本 OS 的 thread_create(thread.h)，pthread.h 本版不提供 create/join。
+ * 线程仍用本 OS 的 thread_create(thread.h) 建，把变量收在同步原语上；
+ * pthread_create / exit / join 的完整生命周期回归见 pthread_lifecycle_test.c。
  * 宿主差分版见 target/pthread_diff_test.c（与 winpthreads 对拍）。 */
 #include "test.h"
 #include "pthread.h"
