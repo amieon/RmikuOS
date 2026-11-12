@@ -1416,7 +1416,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
                 }
                 thread.status = ThreadStatus::Zombie;
                 thread.block_reason = BlockReason::None;
-                thread.exit_code = exit_code;
+                thread.retval = exit_code as usize;
             } else if let Some(thread) = manager.try_thread_mut(tid) {
                 if matches!(
                     thread.status,
@@ -1426,7 +1426,7 @@ pub fn exit_current_and_run_next(exit_code: i32) -> ! {
                 }
                 thread.status = ThreadStatus::Dead;
                 thread.block_reason = BlockReason::None;
-                thread.exit_code = exit_code;
+                thread.retval = exit_code as usize;
             }
         }
         if runnable_dec > 0 {
@@ -1482,7 +1482,8 @@ pub fn thread_create_current(
     ret
 }
 
-pub fn thread_exit_current(exit_code: i32) -> ! {
+
+pub fn thread_exit_current(retval: usize) -> ! {
     let current_tid = processor::current_tid();
 
     let (task_cx_ptr, need_shootdown) = {
@@ -1491,10 +1492,10 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
         let pid = manager.pid_of_tid(current_tid);
 
         log::info!(
-            "[thread] exit: pid={} tid={} code={}",
+            "[thread] exit: pid={} tid={} retval={:#x}",
             pid,
             current_tid,
-            exit_code,
+            retval,
         );
 
         let was_runnable = {
@@ -1505,7 +1506,7 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
             );
             thread.status = ThreadStatus::Zombie;
             thread.block_reason = BlockReason::None;
-            thread.exit_code = exit_code;
+            thread.retval = retval;
             r
         };
         if was_runnable {
@@ -1546,11 +1547,14 @@ pub fn thread_exit_current(exit_code: i32) -> ! {
     panic!("zombie thread returned after thread_exit");
 }
 
-pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
+
+pub fn thread_join_current(target_tid: Tid, retval_ptr: usize) -> isize {
+    use crate::syscall::errno::{EDEADLK, EFAULT, EINVAL, ESRCH};
+
     let current_tid = processor::current_tid();
 
     if target_tid == current_tid {
-        return -1;
+        return -EDEADLK;
     }
 
     loop {
@@ -1561,24 +1565,24 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
 
             let target_state = {
                 let Some(target) = manager.try_thread(target_tid) else {
-                    return -1;
+                    return -ESRCH;
                 };
 
                 if target.pid != current_pid {
-                    return -1;
+                    return -ESRCH;
                 }
                 /* POSIX: join 一个 detached 线程是未定义行为，这里明确拒绝。
                  * 不能让它睡到 Zombie：detached 线程 back-from 就 reap 了，
                  * joiner 会永远等一个再也不会被唤醒的 tid。 */
                 if target.detached {
-                    return -crate::syscall::errno::EINVAL;
+                    return -EINVAL;
                 }
 
-                (target.status, target.exit_code, target.running_on)
+                (target.status, target.retval, target.running_on)
             };
 
             match target_state {
-                (ThreadStatus::Zombie | ThreadStatus::Dead, code, running_on) => {
+                (ThreadStatus::Zombie | ThreadStatus::Dead, retval, running_on) => {
                     if running_on.is_some() {
                         manager.block_thread(
                             current_tid,
@@ -1586,8 +1590,11 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
                         );
                         manager.thread_cx_ptr(current_tid)
                     } else {
-                        if manager.write_user_i32(current_pid, exit_code_ptr, code).is_none() {
-                            return -1;
+                        if manager
+                            .write_user_usize(current_pid, retval_ptr, retval)
+                            .is_none()
+                        {
+                            return -EFAULT;
                         }
 
                         manager.reap_thread(target_tid);
@@ -1614,7 +1621,13 @@ pub fn thread_join_current(target_tid: Tid, exit_code_ptr: usize) -> isize {
     }
 }
 
-
+/// POSIX `pthread_detach` 的内核侧（SYS_THREAD_DETACH = 134）。
+///
+/// `stack_base/stack_size` 是用户态 `thread_create()` 给线程 mmap 的匿名栈，
+/// 由调用方从线程栈记录表里查出来一并登记；传 0/0 表示调用方自己管栈，
+/// 内核只回收 TCB。栈不能由退出线程自己 munmap —— 它正跑在这块栈上。
+///
+/// 返回裸 -errno；用户态 pthread_detach 翻成正数错误码（pthread_* 全族不设 errno）。
 pub fn thread_detach_current(
     target_tid: Tid,
     stack_base: usize,

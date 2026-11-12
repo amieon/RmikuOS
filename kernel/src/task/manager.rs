@@ -511,7 +511,7 @@ impl TaskManager {
             );
             thread.status = ThreadStatus::Zombie;
             thread.block_reason = BlockReason::None;
-            thread.exit_code = exit_code;
+            thread.retval = exit_code as usize;
             r
         };
 
@@ -723,6 +723,16 @@ impl TaskManager {
     }
 
     pub fn write_user_i32(&self, pid: Pid, user_ptr: usize, value: i32) -> Option<()> {
+        if user_ptr == 0 {
+            return Some(());
+        }
+
+        let bytes = value.to_ne_bytes();
+        self.write_user_bytes_by_pid(pid, user_ptr, &bytes)?;
+        Some(())
+    }
+
+    pub fn write_user_usize(&self, pid: Pid, user_ptr: usize, value: usize) -> Option<()> {
         if user_ptr == 0 {
             return Some(());
         }
@@ -1131,7 +1141,7 @@ pub fn force_exit_stopped(&mut self, pid: Pid, code: i32, core: bool, term_sig: 
             }
             thread.status = ThreadStatus::Zombie;
             thread.block_reason = BlockReason::None;
-            thread.exit_code = code;
+            thread.retval = code as usize;
         }
     }
 

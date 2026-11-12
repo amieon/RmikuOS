@@ -20,13 +20,17 @@ pub fn sys_thread_create (
 }
 
 
-pub fn  sys_thread_exit(exit_code: i32) -> isize{
-    thread_exit_current(exit_code)
+
+pub fn  sys_thread_exit(retval: usize) -> isize{
+    thread_exit_current(retval)
 }
 
 
-pub fn sys_sthread_join(target_tid: crate::task::Tid, exit_code_ptr: usize) -> isize{
-    thread_join_current(target_tid, exit_code_ptr)
+pub fn sys_thread_join(
+    target_tid: crate::task::Tid,
+    retval_ptr: usize,
+) -> isize{
+    thread_join_current(target_tid, retval_ptr)
 }
 
 pub fn sys_thread_detach(

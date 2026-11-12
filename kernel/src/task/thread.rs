@@ -79,7 +79,7 @@ pub struct ThreadControlBlock {
 
     pub tsd: [usize; TSD_KEYS_MAX],
 
-    pub exit_code: i32,
+    pub retval: usize,
 }
 
 /// 与 user/include/pthread.h 的 PTHREAD_KEYS_MAX 必须同步（POSIX 保证 >= 128）。
@@ -121,7 +121,7 @@ impl ThreadControlBlock {
             sig_blocked: 0,
             sig_pending: 0,
 
-            exit_code: 0,
+            retval: 0,
             detached: false,
             detach_stack_base: 0,
             detach_stack_size: 0,
@@ -173,7 +173,7 @@ impl ThreadControlBlock {
             sig_blocked: 0,
             sig_pending: 0,
 
-            exit_code: 0,
+            retval: 0,
             detached: false,
             detach_stack_base: 0,
             detach_stack_size: 0,
