@@ -52,6 +52,19 @@ extern "C" {
 #endif
 #define RK_PTHREAD_WAKE_ALL 0x7fffffff
 
+/*
+ * 本版提供完整的六个线程生命周期函数（create / exit / join / detach /
+ * self / equal），外加 mutex（含递归）/ cond / once / TSD(pthread_key_*) /
+ * pthread_cleanup_push/pop 与 attr（detachstate、stacksize 生效）。
+ 
+ * 已知限制：主线程调 pthread_exit() 只让主线程进 Zombie，本内核没有
+ * 「最后一个线程退出时终止进程」的语义，进程会挂住。请让主线程
+ * return / exit()，pthread_exit 只用于 pthread_create 建出的线程。
+ * 仍不提供 rwlock / spin / barrier / cancel / sched_*；故意不定义它们，
+ * 让链接期报错好过给个静默失效的空桩。
+ * pthread_kill / pthread_sigmask 已在 signal.h，需要就一起 include。
+ *
+ */
 
 /* ---- 类型与常量 ---- */
 typedef unsigned long pthread_t;
@@ -62,6 +75,8 @@ typedef struct { int pshared; int clock_id; } pthread_condattr_t;
 
 #define PTHREAD_CREATE_JOINABLE 0
 #define PTHREAD_CREATE_DETACHED 1
+#define PTHREAD_STACK_MIN       (16 * 1024)
+#define PTHREAD_STACK_DEFAULT   (64 * 1024)
 #define PTHREAD_SCOPE_SYSTEM    0
 #define PTHREAD_SCOPE_PROCESS   1
 #define PTHREAD_INHERIT_SCHED   0
@@ -136,7 +151,50 @@ int  pthread_key_delete(pthread_key_t key);
  * 跑 PTHREAD_DESTRUCTOR_ITERATIONS 轮 destructor。 */
 void rk_tsd_run_destructors(void);
 
+/* 生命周期
+ * 四个函数都实现在 lib/thread.c（不是头里 static inline）：它们要动
+ * thread_stack_records 表，必须与那张表在同一个 TU，否则每个 TU 各得
+ * 一份表，join/detach 查不到记录就静默泄漏 64 KiB 栈。
+ * 返回 0 / EINVAL / ESRCH / EDEADLK / EAGAIN 等正数错误码，不设 errno
+ */
+int pthread_create(
+    pthread_t *thread,
+    const pthread_attr_t *attr,
+    void *(*start_routine)(void *),
+    void *arg
+);
+int pthread_join(pthread_t thread, void **retval);
+void pthread_exit(void *retval) __attribute__((noreturn));
 int pthread_detach(pthread_t thread);
+
+/* cleanup handlers
+ * POSIX 允许 push/pop 是宏，且必须成对出现在同一词法作用域（glibc 也
+ * 这么干）。节点在调用方栈上，链表头存在 TSD 槽里，所以不需要 __thread。
+ * pthread_exit() 按 LIFO 跑完所有尚未 pop 的 handler，再跑 TSD destructor。
+ * 宏里嵌套 do{...}while(0) 是为了让 push 与 pop 之间的语句自动落进
+ * 节点仍有效的作用域；不匹配配对会直接编译报错，不会静默错。 */
+struct rk_pthread_cleanup_node {
+    void (*routine)(void *);
+    void *arg;
+    struct rk_pthread_cleanup_node *prev;
+};
+
+void rk_pthread_cleanup_push(
+    struct rk_pthread_cleanup_node *node,
+    void (*routine)(void *),
+    void *arg
+);
+void rk_pthread_cleanup_pop(int execute);
+
+#define pthread_cleanup_push(routine, arg)                                 \
+    do {                                                                   \
+        struct rk_pthread_cleanup_node __rk_cleanup_node;                   \
+        rk_pthread_cleanup_push(&__rk_cleanup_node, (routine), (arg));       \
+        do {
+#define pthread_cleanup_pop(execute)                                       \
+        } while (0);                                                       \
+        rk_pthread_cleanup_pop(execute);                                    \
+    } while (0)
 
 /* ---- self / equal ---- */
 static inline pthread_t pthread_self(void) {
@@ -381,23 +439,36 @@ static inline int pthread_once(pthread_once_t *o, void (*init)(void)) {
         RK_PTHREAD_YIELD();
     }
 }
-
-/* ---- attr 空桩 ----
- * 除 settype/gettype 外全部只存不生效：本内核没有调度策略、guard page、
- * 进程间共享、robust 语义。返回 0 让移植代码能走完初始化流程。
- * settype 必须真存，sqlite3 的 init_recursive_mutex 靠它拿递归锁。 */
+/* attr 
+ * opaque[0] = detachstate, opaque[1] = stacksize(0 = 默认 64 KiB)。
+ * pthread_create 真的会读这两个字段，其余 guard page / 调度策略 / scope /
+ * 进程间共享 / robust 本内核没有对应机制，保持空桩，返回 0 让移植代码
+ * 能走完初始化流程。pthread_mutexattr_settype 也必须真存：sqlite3 的
+ * init_recursive_mutex 靠它拿递归锁。
+ *
+ * init 必须清零：attr 通常是调用方栈上的局部变量，不清零 create 读到的
+ * opaque[0] 是垃圾，会随机把线程变成 detached —— 不报错、不崩，只是
+ * join 偶发失败。这类"编译过、语义错"比直接编不过难查得多。 */
 static inline int pthread_attr_init(pthread_attr_t *a) {
     if (!a) return EINVAL;
+    for (unsigned i = 0; i < sizeof(a->opaque) / sizeof(a->opaque[0]); i++) {
+        a->opaque[i] = 0;
+    }
     return 0;
 }
 static inline int pthread_attr_destroy(pthread_attr_t *a) {
     (void)a; return 0;
 }
 static inline int pthread_attr_setdetachstate(pthread_attr_t *a, int v) {
-    (void)a; (void)v; return 0;
+    if (!a) return EINVAL;
+    if (v != PTHREAD_CREATE_JOINABLE && v != PTHREAD_CREATE_DETACHED) return EINVAL;
+    a->opaque[0] = (unsigned long)v;
+    return 0;
 }
 static inline int pthread_attr_getdetachstate(const pthread_attr_t *a, int *v) {
-    (void)a; if (v) *v = PTHREAD_CREATE_JOINABLE; return 0;
+    if (!a || !v) return EINVAL;
+    *v = (int)a->opaque[0];
+    return 0;
 }
 static inline int pthread_attr_setguardsize(pthread_attr_t *a, usize v) {
     (void)a; (void)v; return 0;
@@ -406,16 +477,23 @@ static inline int pthread_attr_getguardsize(const pthread_attr_t *a, usize *v) {
     (void)a; if (v) *v = 0; return 0;
 }
 static inline int pthread_attr_setstacksize(pthread_attr_t *a, usize v) {
-    (void)a; (void)v; return 0;
+    if (!a) return EINVAL;
+    if (v < PTHREAD_STACK_MIN) return EINVAL;
+    a->opaque[1] = (unsigned long)v;
+    return 0;
 }
 static inline int pthread_attr_getstacksize(const pthread_attr_t *a, usize *v) {
-    (void)a; if (v) *v = 64 * 1024; return 0;
+    if (!a || !v) return EINVAL;
+    *v = a->opaque[1] ? (usize)a->opaque[1] : (usize)PTHREAD_STACK_DEFAULT;
+    return 0;
 }
+/* 自定义栈仍未实现：thread_spawn_with_entry 一律自己 mmap，join/detach
+ * 也只认自己登记的那段 VA。传进来的 (p,n) 不生效，别拿它当已设置成功。 */
 static inline int pthread_attr_setstack(pthread_attr_t *a, void *p, usize n) {
     (void)a; (void)p; (void)n; return 0;
 }
 static inline int pthread_attr_getstack(const pthread_attr_t *a, void **p, usize *n) {
-    (void)a; if (p) *p = 0; if (n) *n = 64 * 1024; return 0;
+    (void)a; if (p) *p = 0; if (n) *n = PTHREAD_STACK_DEFAULT; return 0;
 }
 static inline int pthread_attr_setschedpolicy(pthread_attr_t *a, int v) {
     (void)a; (void)v; return 0;

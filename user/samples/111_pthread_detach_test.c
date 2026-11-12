@@ -1,8 +1,9 @@
 /* 111_pthread_detach_test.c —— pthread_detach 生命周期与自动回收回归
  *
- * 线程仍用 thread_create() 创建：pthread_create / exit / join 还没做，
- * 因为 void* 返回值过不了内核的 i32 exit_code。detach 对 thread_create
- * 建出来的线程同样有效，本测试就这么用。
+ * 本测试刻意继续用 thread_create() 建线程：detach 对两条创建路径
+ * (thread_create / pthread_create) 都有效，这里要把变量收在
+ * 「只有 detach、没有 join」上。pthread_create / exit / join 的
+ * 完整生命周期回归见 112_pthread_lifecycle_test.c。
  *
  * 覆盖：
  *   1. create 后 detach -> 线程照常跑完，join 被内核拒(-EINVAL)

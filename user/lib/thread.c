@@ -237,6 +237,66 @@ void rk_tsd_run_destructors(void) {
 }
 
 /* 
+ * POSIX 要求 cleanup handler 在 pthread_exit（以及将来的 cancel）时按
+ * LIFO 全部执行。节点在调用方栈帧上（push/pop 是宏，强制同一词法
+ * 作用域），链表头则每线程一份、存在 TSD 槽里 —— 不必等 tp 归还用户态，
+ * 也不依赖 __thread
+ */
+static pthread_once_t cleanup_once = PTHREAD_ONCE_INIT;
+static pthread_key_t  cleanup_key;
+static volatile int   cleanup_ready;
+
+static void cleanup_init_key(void) {
+    if (pthread_key_create(&cleanup_key, 0) == 0) cleanup_ready = 1;
+}
+
+static void cleanup_ensure(void) {
+    if (!cleanup_ready) pthread_once(&cleanup_once, cleanup_init_key);
+}
+
+static struct rk_pthread_cleanup_node *cleanup_head(void) {
+    cleanup_ensure();
+    if (!cleanup_ready) return 0;
+    return (struct rk_pthread_cleanup_node *)pthread_getspecific(cleanup_key);
+}
+
+static void cleanup_set_head(struct rk_pthread_cleanup_node *h) {
+    cleanup_ensure();
+    if (cleanup_ready) pthread_setspecific(cleanup_key, h);
+}
+
+void rk_pthread_cleanup_push(
+    struct rk_pthread_cleanup_node *node,
+    void (*routine)(void *),
+    void *arg
+) {
+    if (!node || !routine) return;
+    node->routine = routine;
+    node->arg = arg;
+    node->prev = cleanup_head();
+    cleanup_set_head(node);
+}
+
+void rk_pthread_cleanup_pop(int execute) {
+    struct rk_pthread_cleanup_node *h = cleanup_head();
+    if (!h) return;
+    /* 先摘链再调 routine：handler 里若又 push/pop，看到的是正确的上层链。 */
+    cleanup_set_head(h->prev);
+    if (execute) h->routine(h->arg);
+}
+
+/* pthread_exit 专用：链上尚未 pop 的 handler 全部按 LIFO 跑完。 */
+static void cleanup_run_all(void) {
+    struct rk_pthread_cleanup_node *h = cleanup_head();
+    while (h) {
+        struct rk_pthread_cleanup_node *prev = h->prev;
+        cleanup_set_head(prev);
+        h->routine(h->arg);
+        h = prev;
+    }
+}
+
+/* 
  * exec 只换 trap_cx、不重建 TCB，新镜像里 once/key 表归零而 TCB 槽还留着
  * 旧指针。这里用 pthread_key_create 领号，它内部的「清当前线程该槽」
  * 会把领到的那一槽抹成 0，errno 因此读回 NULL 走 fallback，
@@ -265,4 +325,70 @@ void rk_tsd_bind_errno_slot(int *slot) {
     if (!slot) return;
     pthread_once(&errno_once, errno_init_key);
     if (errno_ready) pthread_setspecific(errno_key, slot);
+}
+
+int pthread_create(
+    pthread_t *thread,
+    const pthread_attr_t *attr,
+    void *(*start_routine)(void *),
+    void *arg
+) {
+    if (!thread || !start_routine) return EINVAL;
+
+    usize stack_size = PTHREAD_STACK_DEFAULT;
+    int detached = 0;
+    if (attr) {
+        /* opaque[0] 由 attr_init 清零，setdetachstate 真写；opaque[1] 是
+         * setstacksize 写的值，0 表示用默认栈。不经过 init 的 attr 是
+         * 未定义用法，这里读到的就是调用方自己的垃圾。 */
+        if (attr->opaque[1]) stack_size = (usize)attr->opaque[1];
+        detached = (attr->opaque[0] == PTHREAD_CREATE_DETACHED);
+    }
+
+    /* 内核 release_thread_stack 按页圆整后比对 mmap_areas 的 (start,end)，
+     * 这里先自己向上对齐，避免 size 与内核登记的区间对不上、栈漏回收。 */
+    stack_size = (stack_size + 4095) & ~(usize)4095;
+    if (stack_size < PTHREAD_STACK_MIN) return EINVAL;
+
+    int tid = thread_spawn_with_entry(
+        (usize)__pthread_entry,
+        (usize)start_routine,
+        (usize)arg,
+        stack_size
+    );
+    if (tid < 0) return EAGAIN;
+
+    *thread = (pthread_t)(usize)tid;
+
+    /* attr 指定的分离态就是一次显式 detach。worker 有可能已经跑完退出，
+     * 内核 thread_detach_current 的「先退出、后 detach」补账会当场
+     * reap + 解除栈映射，不会留下孤儿 TCB / 64 KiB 栈。 */
+    if (detached) return pthread_detach(*thread);
+    return 0;
+}
+
+int pthread_join(pthread_t thread, void **retval) {
+    int tid = (int)(usize)thread;
+    if (tid == gettid()) return EDEADLK;
+
+    isize r = sys_thread_join_raw(tid, retval);
+    if (r < 0) return (int)(-r);   /* pthread_* 不设 errno，返正数错误码 */
+
+    /* 与 thread.h 的 thread_join() 同一套栈回收。join 成功后内核
+     * 已 reap TCB，用户态只负责 munmap 自己 mmap 的那段 VA；detached
+     * 线程会被内核直接拒掉，走不到这里，不存在重复释放。 */
+    void *base = 0;
+    usize size = 0;
+    if (thread_stack_record_take(tid, &base, &size) == 0 && base && size) {
+        munmap(base, size);
+    }
+    return 0;
+}
+
+__attribute__((noreturn)) void pthread_exit(void *retval) {
+    /* POSIX 规定的顺序：cleanup handler 先于 TSD destructor。 */
+    cleanup_run_all();
+    rk_tsd_run_destructors();
+    sys_thread_exit_raw((usize)retval);
+    for (;;) {}
 }
