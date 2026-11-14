@@ -284,32 +284,28 @@ pub fn sys_getdents(fd: usize, user_buf: usize, len: usize) -> isize {
 pub fn sys_chdir(path_ptr: usize, len: usize) -> isize {
     let path_bytes = match crate::task::read_current_user_bytes(path_ptr, len) {
         Some(bytes) => bytes,
-        None => return -1,
+        None => return -super::errno::EFAULT,
     };
 
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s.trim_matches('\0').trim(),
-        Err(_) => return -1,
+        Err(_) => return -super::errno::EINVAL,
     };
 
     let cwd = crate::task::current_cwd();
 
     let new_cwd = match crate::fs::normalize_path(&cwd, path) {
         Some(path) => path,
-        None => return -1,
+        None => return -super::errno::EINVAL,
     };
 
     let inode = match crate::fs::lookup(&new_cwd) {
         Some(inode) => inode,
-        None => {
-            log::warn!("[fs] chdir failed: no such dir {}", new_cwd);
-            return -1;
-        }
+        None => return -super::errno::ENOENT,
     };
 
     if !inode.is_dir() {
-        log::warn!("[fs] chdir failed: not dir {}", new_cwd);
-        return -1;
+        return -super::errno::ENOTDIR;
     }
 
     crate::task::set_current_cwd(new_cwd)
