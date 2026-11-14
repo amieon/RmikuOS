@@ -185,7 +185,7 @@ if [ -x "$ROOT/bin/git" ]; then
   done
 fi
 
-# https 的 helper 不在这段里，也不能照上面那样 cp /bin/git —— 它是另一个
+# https 的 helper 不在这段里，也**不能**照上面那样 cp /bin/git —— 它是另一个
 # 独立链接出来的程序（remote-curl.o + http.o + http-walker.o），由上面那个
 # *.elf 循环按 git-remote-https.elf 的名字铺进来。做成 git 的副本的症状是：
 # 有 https 配置，但 clone 时报 "not a git command" 或认不出协议。
@@ -397,24 +397,28 @@ done
 echo "rootfs content:"
 find "$ROOT" -maxdepth 3 -print | sort
 
-# 构建镜像(容量可通过 FS_SIZE_MB 覆盖;默认 96M——tests/samples/用户程序
-# 全量打进 rootfs 后 32M 已不够,loongarch64 ELF 更大更容易爆盘)
+# 构建镜像(容量可通过 FS_SIZE_MB 覆盖;默认 128M——tests/samples/用户程序
+# 全量打进 rootfs 后 32M、96M 都爆过盘,loongarch64 ELF 更大更容易撞上)
 rm -f "$IMG"
-FS_SIZE_MB="${FS_SIZE_MB:-96}"
+FS_SIZE_MB="${FS_SIZE_MB:-128}"
 
-# 容量预检。`mkfs.ext4 -d` 塞不下时报的是 "No space left on device"，
-# 完全看不出是"镜像给小了"还是"某个文件坏了"，而且它在几十行 find 输出之后
-# 才炸。这里先量一遍：超过 88% 提醒（ext4 自身还要吃元数据），真的塞不下就
-# 提前给出该调哪个变量。
+# 容量预检。`mkfs.ext4 -d` 塞不下时报的是
+#   "__populate_fs: 无法为 ext2 文件系统分配块 写入文件 xxx 时"
+# 那是 mke2fs 在**镜像内部**给文件分数据块失败,不是宿主机磁盘满,也不是 xxx
+# 这个文件坏了 —— 报错落在哪个文件上只取决于 -d 的 readdir 顺序。
+#
+# du -sm 只量文件内容(已按 4K 块对齐),镜像里 ext4 还要吃:5% root
+# reserve、journal、inode table / bitmap / 目录块、以及每个文件的尾块浪费。
+# 88M 内容塞 96M 镜像就是这么炸的:余量 8M,元数据要 10M 上下。
+# 按 25% 留余量并向上取整到 16M 档;不够就自动上调 —— 以前只在 ≥88%
+# 打印一句警告然后照样往下走,等于预检查出来了却不采取动作。
 ROOT_MB="$(du -sm "$ROOT" | cut -f1)"
-echo "rootfs 用量: ${ROOT_MB}M / ${FS_SIZE_MB}M"
-if [ "$ROOT_MB" -ge "$FS_SIZE_MB" ]; then
-  echo "✗ rootfs 内容 ${ROOT_MB}M 已经超过镜像容量 ${FS_SIZE_MB}M" >&2
-  echo "  调大: FS_SIZE_MB=$(( (ROOT_MB / 16 + 2) * 16 )) ./user/mkfs_ext4.sh $ARCH" >&2
-  exit 1
-elif [ "$((ROOT_MB * 100 / FS_SIZE_MB))" -ge 88 ]; then
-  echo "! rootfs 已用 ${ROOT_MB}M / ${FS_SIZE_MB}M（≥88%，ext4 元数据可能不够）" >&2
+NEED_MB=$(( (ROOT_MB * 125 / 100 / 16 + 1) * 16 ))
+if [ "$FS_SIZE_MB" -lt "$NEED_MB" ]; then
+  echo "! rootfs ${ROOT_MB}M: ${FS_SIZE_MB}M 装不下(ext4 元数据 + 预留),自动上调到 ${NEED_MB}M" >&2
+  FS_SIZE_MB="$NEED_MB"
 fi
+echo "rootfs 用量: ${ROOT_MB}M / ${FS_SIZE_MB}M"
 
 truncate -s "${FS_SIZE_MB}M" "$IMG"
 

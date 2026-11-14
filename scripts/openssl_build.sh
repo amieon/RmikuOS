@@ -102,7 +102,7 @@ esac
 # ---------------------------------------------------------------------------
 CNF_OPTS=(
   no-asm       # perlasm 要 perl 现场生成 .s；纯 C 的 BN 慢但正确
-  no-threads   # libc 只有 thread_create/join，没有 pthread ABI
+  no-threads   # libc 已有 pthread ABI，本库仍按无线程构建（开线程需先验多核调度）
   no-shared    # 没有动态链接，全部静态
   no-dso       # 内核无 dlopen
   no-module    # provider 默认靠 dlopen 加载，不关就会得到一张空的算法表（静默失败）
@@ -786,10 +786,13 @@ case "$STAGE" in
       echo "[openssl] 还没有 .a，make 会顺带编（首次会久一些；缺口扫描建议随后跑 lib 阶段）"
     fi
 
-    # libc 裸件照 git 那一套。只有 string.c 必须在场（errno 的唯一真定义 +
-    # memset/memcpy + isatty）；mem.c 提供堆状态（malloc_head / slab_freelist），
-    # 少了它就是 undefined reference —— libcrypto 处处 malloc，必然撞上。
-    echo "[openssl] 编 libc 裸件（crt0 / syscall / string / mem）"
+    # libc 裸件照 git 那一套。string.c: memset/memcpy/isatty；mem.c 提供堆状态
+    # （malloc_head / slab_freelist），libcrypto 处处 malloc，少了必撞。
+    # thread.c 必须带：errno.h 的 errno 是 (*rk_errno_slot())，实体定义只在
+    # lib/thread.c；apps/ 和 crypto/ 都写 errno，不带就是 undefined reference。
+    # 注意 lib 阶段的缺口扫描编的是**所有** user/lib/*.c，它会把 rk_errno_slot
+    # 算进「我方已提供」→ 扫描报 0 缺口，只有这里的链接行才算数。
+    echo "[openssl] 编 libc 裸件（crt0 / syscall / string / mem / thread）"
     "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/crt0_$ARCH.S"    -o "$BASE/_crt0.o"    || exit 1
     "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
@@ -798,9 +801,11 @@ case "$STAGE" in
       -I"$ROOT/user/include" -c "$ROOT/user/lib/string.c"        -o "$BASE/_string.o"  || exit 1
     "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
       -I"$ROOT/user/include" -c "$ROOT/user/lib/mem.c"           -o "$BASE/_mem.o"     || exit 1
+    "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O3 -ffreestanding -fno-builtin \
+      -I"$ROOT/user/include" -c "$ROOT/user/lib/thread.c"        -o "$BASE/_thread.o"  || exit 1
 
     LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"
-    LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o"
+    LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o $BASE/_thread.o"
     LINK_FLAGS="$LINK_FLAGS -T $ROOT/user/linker-$ARCH.ld"
     # __ctzdi2 要 libgcc，位置见下面的 EX_LIBS 覆盖说明
     # OpenSSL 的程序链接规则（unix-Makefile.tmpl 的 obj2bin）：
@@ -825,6 +830,19 @@ case "$STAGE" in
     if [ -s "$OBJ/apps/openssl" ]; then
       cp "$OBJ/apps/openssl" "$OUT/openssl.elf"
       echo "[openssl] ✓ openssl.elf $(wc -c <"$OUT/openssl.elf") bytes"
+      # 顺手把两个 .a 落到 $OUT。apps/openssl 是**静态链**上去的，能链出 elf 就
+      # 证明 $OBJ 里这两个 .a 一定存在；不落的话，$OUT/lib*.a 只有 `lib` 阶段写，
+      # 而 user/build.py 只跑 bin —— 干净树上 curl 会一直报
+      #   "[curl] ✗ 没有找到 OpenSSL 静态库（.../build/riscv64/openssl）"
+      # 而 openssl 自己还 cache hit（它只认 openssl.elf），于是死循环。
+      for a in libcrypto.a libssl.a; do
+        if [ -f "$OBJ/$a" ]; then
+          cp "$OBJ/$a" "$OUT/$a"
+          echo "[openssl] ✓ $a $(wc -c <"$OUT/$a") bytes（curl / git 的硬前置）"
+        else
+          echo "[openssl] ⚠ $OBJ/$a 不在，curl 与 git 的 https 都会失败"
+        fi
+      done
       echo "[openssl]   下一步在 guest 里先跑： openssl list -providers"
       echo "[openssl]   看不到 default 就别往下测了，任何算法都会说找不到"
     else

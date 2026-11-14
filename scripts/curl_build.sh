@@ -90,9 +90,10 @@ echo "[curl] OpenSSL: $SSL_OUT（libssl.a $(wc -c <"$SSL_OUT/libssl.a") B）"
 # 关掉的开关只有两类理由：**我们没有这个能力**，或者**它会引入我们测不了的分支**。
 #
 # 特别注意 --disable-threaded-resolver：
-#   curl 默认在"有线程"时把 DNS 丢给后台线程，那需要 pthread（我们只有
-#   thread_create/mutex_t，没有 pthread ABI）。关掉之后解析回到同步路径，
-#   **直接调用 getaddrinfo** —— 正是我们刚实现的那个。
+#   curl 默认在"有线程"时把 DNS 丢给后台线程。libc 现在已有完整 pthread
+#   ABI，但本库仍按无线程配置构建：多核调度尚未真机验证，DNS 解析路径也
+#   没按并发复核过。关掉之后解析回到同步路径，**直接调用 getaddrinfo**
+#   —— 正是我们实现的那个。
 #
 # 协议裁剪：只留 http/https。多留一个协议就多一组 .c、多一批系统调用面，
 # 而它们全都测不到（配额里没有 ftp 服务器）。--disable-* 的清单按 curl
@@ -197,13 +198,16 @@ ensure_configure() {
   mkdir -p "$BASE"
   echo "[curl] 源码树没有 configure（git 仓库只带 configure.ac），跑 autoreconf -fi 生成"
 
+  # perl 也在检查列里：autoreconf 本身就是 perl 脚本。装了 autoconf 却没 perl
+  # 时 `command -v autoreconf` 照样通过，然后跑起来才报 "perl: not found"，
+  # 报错点离病因隔着一层。
   local missing="" t
-  for t in autoreconf automake libtoolize; do
+  for t in autoreconf autoconf automake libtoolize perl; do
     command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
   done
   if [ -n "$missing" ]; then
     echo "  ✗ 缺 autotools:$missing"
-    echo "    装： sudo apt install autoconf automake libtool"
+    echo "    装： sudo apt install autoconf automake libtool perl"
     echo "    或者改用自带 configure 的 release tarball（不需要 autotools）："
     echo "      curl -LO https://curl.se/download/curl-8.23.0.tar.gz"
     echo "      rm -rf $SRC && mkdir -p $ROOT/user/curl"
@@ -614,21 +618,20 @@ overlay_curl_config() {
 /* ---------------------------------------------------------------------
  * 默认信任锚只走 hash-dir 目录，绝不给 bundle。
  *
- * lib/url.c 的 Curl_init_userdefined() 里，CURL_CA_BUNDLE 和 CURL_CA_PATH
- * 是**两个独立的 #if**（不是老版本那种"两个都空才填默认值"）：谁被定义，
- * 谁就写进 set->str[STRING_SSL_CAFILE / STRING_SSL_CAPATH]。
+ * lib/vtls/vtls_config.c 的 Curl_ssl_filter_config_tmp_init()（8.23 里注入点
+ * 已从 url.c 的 Curl_init_userdefined 搬到这里）对 CURL_CA_BUNDLE 和
+ * CURL_CA_PATH 是**两个独立的 #if**，谁被定义谁就写进 STRING_SSL_CAFILE /
+ * STRING_SSL_CAPATH，且**互不影响**。
  *
- * 一旦 CAFILE 有值，vtls/openssl.c 的 ossl_load_trust_anchors 就会
- *   X509_STORE_load_file(store, cafile) + X509_STORE_load_path(store, capath)
- * 把整份 bundle 塞进 X509_STORE，于是 time_appconnect 从 ~1.9s 涨到 ~7.4s。
- * 那几秒到底花在"逐张解析装载"（PEM→DER→d2i→add_cert）还是"建链时线性扫
- * store->objs"，**还没拆开测**，两说都站得住；能确定的只有总量随张数走。
- * 实测同一轮（k=1.99s）：
- *   默认（CAFILE/CAPATH 都空 → CURL_CA_FALLBACK 的 set_default_paths）
- *                                                     def = 7.49s
- *   --cacert first.pem --capath /etc/ssl/certs          one = 1.88s
- * 只给 CAPATH 时 store 里 0 张，X509_LOOKUP_hash_dir 按 issuer 的 subject
- * hash 直接开那 2~4 个文件（by_dir.c: lstat("<dir>/<hash>.0") 后加载）。
+ * 一旦 CAFILE 有值，ossl_load_trust_anchors 就会 X509_STORE_load_file 把整份
+ * bundle 塞进 X509_STORE，time_appconnect 从 ~1.9s 涨到 ~7.4s。只给 CAPATH
+ * 时 store 里 0 张，X509_LOOKUP_hash_dir 按 issuer 的 subject hash 直接开那
+ * 2~4 个文件（by_dir.c: lstat("<dir>/<hash>.0") 后加载）。
+ *
+ * 实测（同一宿主同轮，扣掉 `curl -k` 基线后的纯 CA 成本）：
+ *   --cacert cert.pem（145 张）          3.41s
+ *   --capath /etc/ssl/certs（145 个文件） 0.47~0.56s
+ * 拆分见 user/mkfs_ext4.sh。
  *
  * 一个**不能再拿来当证据**的对照：`-k` 时 ossl_populate_x509_store 在
  *   if(!conn_config->verifypeer) return CURLE_OK;
@@ -637,8 +640,16 @@ overlay_curl_config() {
  *
  * configure 的 --with-ca-path=/etc/ssl/certs：带 --with-ca-bundle 的那版配置
  * 里 curl_config.h 并没有 CURL_CA_PATH（两个默认值都空 → 掉进 CURL_CA_FALLBACK
- * → set_default_paths 把 OPENSSLDIR/cert.pem 整份装进来）；改成
- * --without-ca-bundle + --with-ca-path 之后 configure 自己写出了这一行。
+ * → set_default_paths 把 OPENSSLDIR/cert.pem 整份装进来，还连带扫一遍
+ * OPENSSLDIR/certs）；改成 --without-ca-bundle + --with-ca-path 之后 configure
+ * 自己写出了这一行。
+ *
+ * ⚠ 排查这类问题必须先确认**跑的是不是新二进制**。曾经 curl_config.h 已经是
+ * 新的（第 16 行 #define CURL_CA_PATH），但 user/build/<arch>/curl/curl.elf 还是
+ * --with-ca-bundle 那一版，于是运行期一直打 CAfile: /etc/ssl/cert.pem，所有
+ * 观测都指向旧行为，白查了好几轮。判据：`curl -v` 的 "SSL Trust Anchors:" 下面
+ * 有没有 CApath 那一行（注入只看 custom_capath，跟给不给 --cacert 无关）。
+ *
  * 下面这块 #ifndef 是兜底 —— 上游 m4 反复变，宏不能再丢第二次。
  *
  * /etc/ssl/certs 由 user/mkfs_ext4.sh 从 cert.pem 拆成 <subject-hash>.<n>。
@@ -679,6 +690,9 @@ configure_curl() {
   # 是 configure 的产物、不参与 autotools 的依赖检查。改了补丁却不重配，
   # 症状是"补丁写了、curl_config.h 里没有、行为一点没变"，且完全没有声音。
   # declare -f 拿到函数源码文本，改一个字哈希就变 → rm -rf $OBJ 重建。
+  # 注意包含在 heredoc 里的 C 注释：**纯文档改动同样触发重编**。这是有意为之
+  # —— curl_config.h 里那段注释是写给读它的人看的，它和代码一起被拷进去，就不该
+  # 允许两者不同步。代价是改注释要多等一次 reconfigure。
   local ovsig
   ovsig="$(declare -f overlay_curl_config | sha256sum | cut -d' ' -f1)"
   local sig
@@ -1003,16 +1017,19 @@ case "$STAGE" in
       build_libcurl || exit 1
     fi
 
-    # libc 裸件，和 openssl 的 bin 阶段完全同一套。
-    echo "[curl] 编 libc 裸件（crt0 / syscall / string / mem）"
-    for pair in "crt0_$ARCH.S:_crt0.o" "syscall_$ARCH.S:_syscall.o" "string.c:_string.o" "mem.c:_mem.o"; do
+    # libc 裸件，和 openssl 的 bin 阶段完全同一套。thread.c 必须带：errno.h
+    # 把 errno 展开成 (*rk_errno_slot())，实体定义只在 lib/thread.c；curl 的
+    # .o 全都引用它，不带就是 undefined reference。桩库只进 configure 的
+    # conftest、**绝不进这里的最终链接行**（记忆里的老规矩），别拿它抵账。
+    echo "[curl] 编 libc 裸件（crt0 / syscall / string / mem / thread）"
+    for pair in "crt0_$ARCH.S:_crt0.o" "syscall_$ARCH.S:_syscall.o" "string.c:_string.o" "mem.c:_mem.o" "thread.c:_thread.o"; do
       src_f="${pair%%:*}"; dst_f="${pair##*:}"
       "$CC" "${ARCHFLAGS[@]}" -std=gnu11 -O2 -ffreestanding -fno-builtin \
         -I"$ROOT/user/include" -c "$ROOT/user/lib/$src_f" -o "$BASE/$dst_f" || exit 1
     done
 
     LINK_FLAGS="-nostdlib -nostartfiles -static -no-pie -Wl,--build-id=none"
-    LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o"
+    LINK_FLAGS="$LINK_FLAGS $BASE/_crt0.o $BASE/_string.o $BASE/_mem.o $BASE/_syscall.o $BASE/_thread.o"
     LINK_FLAGS="$LINK_FLAGS -T $ROOT/user/linker-$ARCH.ld"
 
     # 只编 .o，不碰 curl 这个链接目标。

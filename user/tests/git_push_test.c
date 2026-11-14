@@ -51,6 +51,10 @@
  * warning: 只统计。push 的正常输出("To file://...", " * [new branch]")本来就
  * 走 stderr, 所以这里**不能**把"stderr 非空"当成失败, 只能抓关键字。 */
 static int  g_stderr_fatal = 0;
+/* 负向用例期间置 1: 那几条 fatal:/error: 是**故意**打出来的, 打印要带
+ * [预期] 前缀。否则尾部一屏 fatal 看着像测试挂了, 其实 38 条全过。
+ * 它同时是个好用的版本信号: 尾部没出现 [预期] 就说明跑的是旧二进制。 */
+static int  g_expect_fatal = 0;
 static int  g_stderr_warn_count = 0;
 static char g_stderr_first[400];
 static char g_stderr_cmd[80];
@@ -229,7 +233,8 @@ static int run_git(const char *const av[], int ac, char *out, usize outsz) {
     }
 
     if (strstr(g_stderr_buf, "fatal:") || strstr(g_stderr_buf, "error:")) {
-        printf("[git] stderr 有致命输出 (cmd=%s):\n%s\n",
+        printf("[git]%s stderr 有致命输出 (cmd=%s):\n%s\n",
+               g_expect_fatal ? " [预期]" : "",
                ac > 1 ? av[1] : "?", g_stderr_buf);
         if (!g_stderr_fatal) {
             g_stderr_fatal = 1;
@@ -242,13 +247,14 @@ static int run_git(const char *const av[], int ac, char *out, usize outsz) {
     if (strstr(g_stderr_buf, "warning:")) g_stderr_warn_count++;
 
     if (rc != 0) {
-        printf("[git] rc=%d cmd: %s %s %s\n", rc, av[0],
-               ac > 1 ? av[1] : "", ac > 2 ? av[2] : "");
+        printf("[git]%s rc=%d cmd: %s %s %s\n", g_expect_fatal ? " [预期]" : "",
+               rc, av[0], ac > 1 ? av[1] : "", ac > 2 ? av[2] : "");
         if (out && out[0]) printf("[git] stdout: %s\n", out);
         /* stderr 原文照打, 不只打"有致命输出"那种。
          * 上面那条只在含 fatal:/error: 时触发; 而"非 0 退出 + stderr 空"
          * 这种情况必须能看见 —— 不然只能靠猜是 fork 挂了还是 die 没退。 */
-        if (g_stderr_buf[0]) printf("[git] stderr:\n%s\n", g_stderr_buf);
+        if (g_stderr_buf[0]) printf("[git]%s stderr:\n%s\n",
+                                    g_expect_fatal ? " [预期]" : "", g_stderr_buf);
         else printf("[git] stderr: <空>\n");
     }
     return rc;
@@ -304,15 +310,29 @@ int main() {
     rm_tree(ROOT_DIR);
     CHECK_EQ(mkdir(ROOT_DIR, 0755), 0, "准备: mkdir " ROOT_DIR);
 
+    /* ---- 1.4 sys_chdir 错误码回归 ----
+     * 内核 sys_chdir 曾把五条失败路径全返裸 -1, 用户态 rk_sys_ret 翻成
+     * EPERM(1)。git init 的「先 chdir 探测、失败再 mkdir」只看 <0, 所以照样
+     * 能跑, 错误码却是错的 —— 典型的「功能通了、语义错了」。
+     * WARN 消不消失只是「内核换没换」的间接信号, 这条直接验 errno,
+     * 是那个修复唯一的硬验收。必须放在 mkdir 探针之前(探针会改 cwd)。 */
+    {
+        errno = 0;
+        int cr = chdir(ROOT_DIR "/no_such_dir");
+        int ce = errno;   /* 先存: printf 内部会改 errno */
+        if (!(cr == -1 && ce == ENOENT)) {
+            printf("       chdir rc=%d errno=%d (%s)\n", cr, ce, strerror(ce));
+        }
+        CHECK(cr == -1 && ce == ENOENT,
+              "chdir 不存在的目录报 ENOENT(不是 EPERM: sys_chdir 错误码回归)");
+    }
+
     /* ---- 1.5 mkdir 探针 ----
-     * `git init DIR`（走默认模板）死在这条链上：
-     *   path.c:902 safe_create_dir: mkdir(dir) < 0 -> perror(dir) -> exit(1)
-     * perror 原来从不打 errno，只吐字面量 "error"，所以只能看到
-     * "<dir>/.git/: error" 这七个字。这里自己把 errno 摊开。
-     *
-     * 五种写法一次跑完，直接分出问题属于哪一类：
-     *   绝对路径能不能建 / 尾斜杠有没有影响 / 相对路径行不行 / 嵌套一层行不行。
-     * 注意别以为这是 `--bare` 的锅 —— 上面矩阵里连非 bare 的 `init DIR` 也挂了。 */
+     * 历史用途:`git init DIR` 曾死在 safe_create_dir -> perror -> exit(1),
+     * perror 那时只吐字面量 "error", 所以这里自己把 errno 摊开。那条链已修,
+     * 现在五种 `init` 组合全部 rc=0, 探针留着是因为它便宜, 且能直接抓
+     * path 解析回归:绝对路径能不能建 / 尾斜杠有没有影响 / 相对路径行不行 /
+     * 嵌套一层行不行。它只 printf, 不参与 CHECK。 */
     {
         puts("[git] mkdir 探针:");
         rm_tree(ROOT_DIR "/probe");
@@ -338,11 +358,10 @@ int main() {
      * bare: push 的目标必须是裸仓库。往非裸仓库的当前分支推会被
      * receive.denyCurrentBranch 拒掉(这是 git 的保护, 不是 bug)。
      *
-     * 先跑参数矩阵再断言。起因: `git init --bare X` 报 rc=1 但 stderr 全空,
-     * 而 cmd_init_db 里每条失败路径都是 die/die_errno/usage(129),
-     * **没有一条是静默 return 1** —— 说明 rc=1 不是 init 自己返回的,
-     * 而是 git.c 的 cmd_main 兜底那句 `return 1`。一次把组合全跑掉,
-     * 直接二分出是 `-q` / `--bare` / `--template=` 哪一个, 比改一次跑一次快。 */
+     * 矩阵最初用于二分 `git init --bare X` 的 rc=1(现在已修, 全组 rc=0),
+     * 留作回归探针: -q / --bare / --template= 三种开关一次跑完, 哪个退化
+     * 一眼可见。注意非 bare 的 HEAD 在 <DIR>/.git/HEAD, 光查 <DIR>/HEAD
+     * 会把成功显示成"目录在, 但没 HEAD" —— 那是探针查错位置。 */
     {
         static const char *V[][8] = {
             { "git", "init",                 ROOT_DIR "/v1", 0 },
@@ -355,17 +374,21 @@ int main() {
             "init DIR", "init -q DIR", "init --bare DIR",
             "init -q --bare DIR", "init -q --bare --template= DIR",
         };
+        static const int BARE[] = { 0, 0, 1, 1, 1 };
         int n = (int)(sizeof(V) / sizeof(V[0])), i;
-        puts("[git] init 参数矩阵(每行: 命令 / 退出码 / 目标目录有没有 HEAD):");
+        puts("[git] init 参数矩阵(每行: 命令 / 退出码 / HEAD 是否落地):");
         for (i = 0; i < n; i++) {
             char o2[OUT_SZ], hpath[192];
             int ac = 0;
             struct stat t;
             while (ac < 8 && V[i][ac]) ac++;
             int rc = run_git(V[i], ac, o2, sizeof(o2));
-            snprintf(hpath, sizeof(hpath), "%s/HEAD", V[i][ac - 1]);
+            /* bare 的 HEAD 直接在 <DIR>/HEAD; 非 bare 在 <DIR>/.git/HEAD。 */
+            snprintf(hpath, sizeof(hpath), "%s/%sHEAD", V[i][ac - 1],
+                     BARE[i] ? "" : ".git/");
             printf("       %-34s rc=%-4d %s\n", TAG[i], rc,
-                   stat(hpath, &t) == 0 && S_ISREG(t.st_mode) ? "有 HEAD" :
+                   stat(hpath, &t) == 0 && S_ISREG(t.st_mode) ?
+                       (BARE[i] ? "有 HEAD" : "有 .git/HEAD") :
                    (stat(V[i][ac - 1], &t) == 0 ? "目录在, 但没 HEAD" : "目录都没有"));
         }
     }
@@ -564,13 +587,16 @@ int main() {
      * 故意脏 stderr，测完还原总闸的账本。 */
     {
         int saved_fatal = g_stderr_fatal;
+        int saved_expect = g_expect_fatal;
         g_stderr_fatal = 0;
+        g_expect_fatal = 1;
 
         const char *av[] = { "git", "--git-dir=" ROOT_DIR "/nonexistent",
                              "config", "a.b", "c" };
         CHECK_EQ(RUN_GIT(av, out, sizeof(out)), 128,
                  "die() 退出码 128(不是 0: 内核 wait status 编码回归)");
 
+        g_expect_fatal = saved_expect;
         g_stderr_fatal = saved_fatal;
     }
 
@@ -582,13 +608,16 @@ int main() {
      * 后者有可能是被别的原因连带弄挂的。 */
     {
         int saved_fatal = g_stderr_fatal;
+        int saved_expect = g_expect_fatal;
         g_stderr_fatal = 0;
+        g_expect_fatal = 1;
 
         const char *av[] = { "git", "push", REMOTE_URL, "refs/heads/nope:refs/heads/nope" };
         int rc = RUN_GIT(av, out, sizeof(out));
         CHECK(rc != 0, "推不存在的 refspec 返回非 0(失败没被吞)");
         CHECK(g_stderr_fatal, "推不存在的 refspec 在 stderr 上报了致命错误");
 
+        g_expect_fatal = saved_expect;
         g_stderr_fatal = saved_fatal;
     }
 

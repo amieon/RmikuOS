@@ -94,6 +94,12 @@ typedef struct { int pshared; int clock_id; } pthread_condattr_t;
 #define PTHREAD_MUTEX_ERRORCHECK  2
 #define PTHREAD_MUTEX_DEFAULT     PTHREAD_MUTEX_NORMAL
 
+/* ---- cancel 状态 ----
+ * 值与 glibc 一致(enum 0/1)。只给状态开关：取消请求方 pthread_cancel、
+ * 取消点 pthread_testcancel 与 PTHREAD_CANCELED 一律不定义，见文件头。 */
+#define PTHREAD_CANCEL_ENABLE     0
+#define PTHREAD_CANCEL_DISABLE   1
+
 typedef struct {
     volatile int locked;
     volatile int owner;   /* 持有者 tid，-1 表示无人持有 */
