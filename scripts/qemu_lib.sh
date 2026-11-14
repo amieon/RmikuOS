@@ -121,7 +121,7 @@ qemu_check_required_images() {
     fi
   done
   if [ "${missing}" -ne 0 ]; then
-    echo "[qemu]   先构建镜像: FS_SIZE_MB=96 bash user/mkfs_ext4.sh ${ARCH}" >&2
+    echo "[qemu]   先构建镜像: bash user/mkfs_ext4.sh ${ARCH}" >&2
     return 1
   fi
   if [ ! -f "${KERNEL_ELF}" ]; then
