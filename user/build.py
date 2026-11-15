@@ -9,6 +9,7 @@ import os
 import re
 import hashlib
 import json
+import struct
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -17,6 +18,7 @@ SRC_DIR = USER_DIR / "src"
 TESTS_DIR = USER_DIR / "tests"
 SAMPLES_DIR = USER_DIR / "samples"
 SCHED_DIR = USER_DIR / "sched"
+DL_DIR = USER_DIR / "dl"
 BUILD_DIR = USER_DIR / "build"
 INCLUDE_DIR = USER_DIR / "include"
 LIB_DIR = USER_DIR / "lib"
@@ -40,6 +42,8 @@ ARCH_CONFIG = {
         "runtime": LIB_DIR / "syscall_riscv64.S",
         "crt0": LIB_DIR / "crt0_riscv64.S",
         "rust_target": "riscv64gc-unknown-none-elf",
+        "ld_emu": "elf64lriscv",
+        "ld_machine": 243,
         "rust_link_args": [],
         "cflags": [
             "-march=rv64gc",
@@ -69,6 +73,8 @@ ARCH_CONFIG = {
         "crt0": LIB_DIR / "crt0_loongarch64.S",
         "runtime": LIB_DIR / "syscall_loongarch64.S",
         "rust_target": "loongarch64-unknown-none",
+        "ld_emu": "elf64loongarch",
+        "ld_machine": 258,
         "rust_link_args": ["-nostartfiles", "-nostdlib"],
         "cflags": [
             "-DUSER_ARCH_LOONGARCH64",
@@ -235,6 +241,352 @@ def collect_sources():
     return sources
 
 
+# ==================== .so 插件（mini loader 用） ====================
+
+# 校验用的 ELF64 常量，数值和 user/include/rk_elf.h 一一对应。
+_DT_NULL, _DT_NEEDED, _DT_PLTRELSZ, _DT_HASH = 0, 1, 2, 4
+_DT_STRTAB, _DT_SYMTAB, _DT_RELA, _DT_RELASZ = 5, 6, 7, 8
+_DT_RELAENT, _DT_STRSZ, _DT_SYMENT = 9, 10, 11
+_DT_INIT, _DT_FINI = 12, 13
+_DT_REL, _DT_RELSZ, _DT_RELENT, _DT_PLTREL, _DT_TEXTREL = 17, 18, 19, 20, 22
+_DT_JMPREL, _DT_INIT_ARRAY, _DT_FINI_ARRAY = 23, 25, 26
+_DT_INIT_ARRAYSZ, _DT_FINI_ARRAYSZ = 27, 28
+_DT_GNU_HASH, _DT_VERSYM = 0x6ffffef5, 0x6ffffff0
+_DT_VERDEF, _DT_VERNEED = 0x6ffffffc, 0x6ffffffe
+_DT_RELRSZ, _DT_RELR, _DT_RELRENT = 35, 36, 37
+
+# loader 的 rk_dl_kind_*() 只认这四种。别的类型真机会明确报
+# "unsupported relocation type"，这里提前挡住，省得烧一遍镜像。
+_SO_OK_RELOC = {0, 2, 3, 5}          # NONE / 64 / RELATIVE / JUMP_SLOT
+_SO_NEED_SYMS = (
+    "plugin_add", "plugin_call_host", "plugin_data_addr",
+    "plugin_data_value", "plugin_ctor_seen", "plugin_dtor_seen",
+    "plugin_name",
+)
+
+
+def _so_fail(path, why):
+    print(f"[dl] {path.name} 产物校验失败: {why}", file=sys.stderr)
+    sys.exit(1)
+
+
+def _elf_hash(name: str) -> int:
+    """SysV ELF hash，和 user/lib/dl.c 的 rk_dl_elf_hash 同一个算法。"""
+    h = 0
+    for c in name.encode():
+        h = (h << 4) + c
+        g = h & 0xf0000000
+        if g:
+            h ^= g >> 24
+        h &= ~g
+    return h
+
+
+def verify_shared_object(path: Path, arch: str, probe_contract=None):
+    """
+    纯 Python 复刻 user/lib/dl.c 的 dlopen 前置检查。
+
+    为什么要有这一层：mini loader 是用户态自己写的，链接器只要悄悄换一种
+    输出形态（.gnu.hash / DT_RELR / DT_NEEDED / 新重定位类型），编译照样通过、
+    .so 照样进镜像，真机 dlopen 才红。与其每次烧镜像排查，不如在构建期
+    用和 loader 完全相同的判据把不合格产物挡住。
+
+    probe_contract=None 时按文件名判断：只有 dlopen_plugin.so 才额外验
+    dlopen_test 依赖的构造/析构与符号解析探针；user/dl/ 里别的 .so 只过
+    通用能力检查。宿主自检脚本可以显式传 True 覆盖这段逻辑。
+    """
+    if probe_contract is None:
+        probe_contract = (path.stem == "dlopen_plugin")
+    b = path.read_bytes()
+    u16 = lambda o: struct.unpack_from("<H", b, o)[0]
+    u32 = lambda o: struct.unpack_from("<I", b, o)[0]
+    u64 = lambda o: struct.unpack_from("<Q", b, o)[0]
+    i64 = lambda o: struct.unpack_from("<q", b, o)[0]
+
+    if len(b) < 64 or b[:4] != b"\x7fELF" or b[4] != 2 or b[5] != 1 or b[6] != 1:
+        _so_fail(path, "不是小端 ELF64 / EV_CURRENT")
+    e_type, e_machine = u16(16), u16(18)
+    e_phoff, e_phentsize, e_phnum = u64(32), u16(54), u16(56)
+    want_machine = ARCH_CONFIG[arch]["ld_machine"]
+    if e_type != 3:
+        _so_fail(path, f"e_type={e_type}，loader 只接 ET_DYN(3)")
+    if e_machine != want_machine:
+        _so_fail(path, f"e_machine={e_machine}，本架构应为 {want_machine}")
+    if e_phnum == 0 or e_phentsize < 56 or \
+            e_phoff + e_phnum * e_phentsize > len(b):
+        _so_fail(path, "program header 表越界")
+
+    loads, dyn_ph, interp = [], None, False
+    for i in range(e_phnum):
+        p = e_phoff + i * e_phentsize
+        ptype, _flags = u32(p), u32(p + 4)
+        poff, pvaddr = u64(p + 8), u64(p + 16)
+        pfilesz, pmemsz = u64(p + 32), u64(p + 40)
+        if ptype == 3:
+            interp = True
+        elif ptype == 1:
+            if pfilesz > pmemsz or poff + pfilesz > len(b):
+                _so_fail(path, f"PT_LOAD[{i}] 越界 / filesz>memsz")
+            loads.append((pvaddr, poff, pfilesz, pmemsz))
+        elif ptype == 2:
+            dyn_ph = (pvaddr, poff, pfilesz, pmemsz)
+    if interp:
+        _so_fail(path, "有 PT_INTERP（那是主程序，不是 .so）")
+    if not loads:
+        _so_fail(path, "没有 PT_LOAD")
+    if dyn_ph is None or dyn_ph[0] == 0:
+        _so_fail(path, "缺 PT_DYNAMIC / 其 p_vaddr 为 0（loader 会当成缺失）")
+
+    def v2o(v, size=1):
+        """vaddr -> 文件偏移。loader 是按 p_vaddr 映射、按 p_offset 读文件。"""
+        for va, off, filesz, _mz in loads:
+            if va <= v and v + size <= va + filesz:
+                return off + (v - va)
+        return None
+
+    if v2o(dyn_ph[0], dyn_ph[3]) is None:
+        _so_fail(path, "PT_DYNAMIC 不在任何 PT_LOAD 的文件范围内")
+
+    tags = {}
+    dyn_off = dyn_ph[1]
+    for i in range(dyn_ph[2] // 16):
+        tag, val = i64(dyn_off + i * 16), u64(dyn_off + i * 16 + 8)
+        if tag == _DT_NULL:
+            break
+        tags.setdefault(tag, val)
+
+    # loader 显式拒绝的 tag：跳过一个就是「查不到符号」或静默算错地址。
+    forbidden = {
+        _DT_NEEDED: "DT_NEEDED（loader 不支持 .so 依赖另一个 .so）",
+        _DT_GNU_HASH: "DT_GNU_HASH（需要 --hash-style=sysv）",
+        _DT_REL: "DT_REL", _DT_RELSZ: "DT_RELSZ", _DT_RELENT: "DT_RELENT",
+        _DT_VERSYM: "DT_VERSYM", _DT_VERDEF: "DT_VERDEF",
+        _DT_VERNEED: "DT_VERNEED", _DT_TEXTREL: "DT_TEXTREL",
+        _DT_RELR: "DT_RELR", _DT_RELRSZ: "DT_RELRSZ",
+        _DT_RELRENT: "DT_RELRENT",
+    }
+    for tag, why in forbidden.items():
+        if tag in tags:
+            _so_fail(path, f"含 {why}")
+    for tag, name in ((_DT_HASH, "DT_HASH"), (_DT_SYMTAB, "DT_SYMTAB"),
+                      (_DT_STRTAB, "DT_STRTAB"), (_DT_STRSZ, "DT_STRSZ"),
+                      (_DT_SYMENT, "DT_SYMENT")):
+        if tag not in tags:
+            _so_fail(path, f"缺 {name}")
+    if tags[_DT_SYMENT] != 24:
+        _so_fail(path, f"DT_SYMENT={tags[_DT_SYMENT]}，应为 24")
+    if _DT_RELAENT in tags and tags[_DT_RELAENT] != 24:
+        _so_fail(path, f"DT_RELAENT={tags[_DT_RELAENT]}，应为 24")
+    if _DT_PLTREL in tags and tags[_DT_PLTREL] != _DT_RELA:
+        _so_fail(path, f"DT_PLTREL={tags[_DT_PLTREL]}，应为 DT_RELA(7)")
+
+    # DT_HASH 的 nchain 是 .dynsym 条目数的唯一来源（loader 的 nsyms）。
+    hash_off = v2o(tags[_DT_HASH], 8)
+    if hash_off is None:
+        _so_fail(path, "DT_HASH 不在 PT_LOAD 内")
+    nbucket, nchain = u32(hash_off), u32(hash_off + 4)
+    if not nbucket or not nchain:
+        _so_fail(path, "DT_HASH 的 nbucket/nchain 为 0")
+    hash_bytes = 8 + 4 * (nbucket + nchain)
+    if v2o(tags[_DT_HASH], hash_bytes) is None:
+        _so_fail(path, "DT_HASH 的 bucket/chain 越界")
+    sym_off = v2o(tags[_DT_SYMTAB], nchain * 24)
+    str_off = v2o(tags[_DT_STRTAB], tags[_DT_STRSZ])
+    if sym_off is None or str_off is None:
+        _so_fail(path, "DT_SYMTAB / DT_STRTAB 越界")
+
+    def sym_name(off):
+        n = u32(off)
+        if n >= tags[_DT_STRSZ]:
+            return ""
+        end = b.find(b"\0", str_off + n, str_off + tags[_DT_STRSZ])
+        return b[str_off + n: end if end >= 0 else str_off + tags[_DT_STRSZ]].decode(
+            "ascii", "replace")
+
+    # 区分符号归属：loader 的 rk_dl_resolve() 对 UNDEF 查全局表、对 ABS
+    # 直接取 st_value、对其它已定义符号算 bias+st_value。
+    # 0 = SHN_UNDEF, 0xfff1 = SHN_ABS（见 rk_elf.h）
+    def sym_shndx(idx):
+        return u16(sym_off + idx * 24 + 6) if idx < nchain else 0
+
+    # 重定位表：类型和符号下标都要在 loader 的能力范围内。
+    kinds = set()
+    needs_rebase = 0   # 依赖 load_bias 才能算对的地址（数据指针 / ctor 指针）
+    needs_global = 0   # 需要 loader 查 rk_dl_register 全局表的外部符号
+    for base, size_tag, label in ((_DT_RELA, _DT_RELASZ, "DT_RELA"),
+                                  (_DT_JMPREL, _DT_PLTRELSZ, "DT_JMPREL")):
+        size = tags.get(size_tag, 0)
+        if not size:
+            continue
+        if base not in tags or size % 24:
+            _so_fail(path, f"{label} 缺表地址 / 大小非 24 倍数")
+        r_off = v2o(tags[base], size)
+        if r_off is None:
+            _so_fail(path, f"{label} 表越界")
+        for j in range(size // 24):
+            info = u64(r_off + j * 24 + 8)
+            rtype, sym = info & 0xffffffff, info >> 32
+            if rtype not in _SO_OK_RELOC:
+                _so_fail(path, f"{label}[{j}] 重定位类型 {rtype} 不在 "
+                               f"loader 白名单 {sorted(_SO_OK_RELOC)} 内")
+            if sym >= nchain:
+                _so_fail(path, f"{label}[{j}] 符号下标 {sym} >= nchain {nchain}")
+            kinds.add(rtype)
+            if rtype == 3:
+                needs_rebase += 1
+            elif rtype in (2, 5) and sym:
+                # lld 可能把 .init_array 的函数指针保留成 64(指向已定义符号)，
+                # 也可能压成 RELATIVE；对 loader 两者都是「加 bias」。
+                shndx = sym_shndx(sym)
+                if shndx == 0:
+                    needs_global += 1
+                elif shndx != 0xfff1:
+                    needs_rebase += 1
+
+    # ---- 下面这些是 dlopen_test 的探针契约，只对那个插件生效 ----
+    # user/dl/ 以后加的别的 .so 不必导出 plugin_*，只过上面的通用能力检查。
+    if not probe_contract:
+        return True
+    if not needs_rebase:
+        _so_fail(path, f"没有任何依赖 load_bias 的重定位（实际类型 {sorted(kinds)}）；"
+                       ".init_array 的构造/析构指针与静态数据地址不会被搬正")
+    if not needs_global:
+        _so_fail(path, "没有指向 undefined 符号的 64/JUMP_SLOT 重定位；"
+                       "plugin_call_host 的宿主符号解析探针会失去意义")
+    # 构造/析构：dlopen_test 靠 .init_array / .fini_array 留痕。
+    has_init = _DT_INIT in tags or (_DT_INIT_ARRAY in tags and _DT_INIT_ARRAYSZ in tags)
+    has_fini = _DT_FINI in tags or (_DT_FINI_ARRAY in tags and _DT_FINI_ARRAYSZ in tags)
+    if not has_init or not has_fini:
+        _so_fail(path, "缺 DT_INIT(_ARRAY) / DT_FINI(_ARRAY)，构造析构跑不起来")
+
+    # 必需符号，且必须能从 SysV hash 链查到（loader 的 dlsym 走的就是这条链）。
+    bucket_off = hash_off + 8
+    chain_off = bucket_off + 4 * nbucket
+    found = set()
+    for i in range(nchain):
+        name = sym_name(sym_off + i * 24)
+        if not name or u16(sym_off + i * 24 + 6) == 0:  # SHN_UNDEF
+            continue
+        idx = u32(bucket_off + 4 * (_elf_hash(name) % nbucket))
+        guard = 0
+        while idx and idx < nchain and guard <= nchain:
+            if sym_name(sym_off + idx * 24) == name:
+                found.add(name)
+                break
+            idx = u32(chain_off + 4 * idx)
+            guard += 1
+    missing = [s for s in _SO_NEED_SYMS if s not in found]
+    if missing:
+        _so_fail(path, "dlsym 查不到导出符号: " + ", ".join(missing))
+    return True
+
+
+def _find_lld():
+    """返回可直接调用的 lld 命令行前缀；找不到返回 None。"""
+    exe = shutil.which("ld.lld")
+    if exe:
+        return [exe]
+    rustc = shutil.which("rustc")
+    if rustc:
+        try:
+            sysroot = subprocess.check_output(
+                [rustc, "--print", "sysroot"], text=True).strip()
+            for pat in ("lib/rustlib/*/bin/rust-lld",
+                        "lib/rustlib/*/bin/rust-lld.exe"):
+                hits = sorted(Path(sysroot).glob(pat))
+                if hits:
+                    # rust-lld 这个名字不在 lld 的 flavor 自动识别表里，
+                    # 必须显式 -flavor gnu 才会按 GNU ld 的参数解析。
+                    return [str(hits[0]), "-flavor", "gnu"]
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return None
+
+
+def build_shared_objects(arch: str):
+    """
+    把 user/dl/*.c 编成 ET_DYN 的 .so，产物 build/<arch>/dl/<stem>.so。
+
+    和主程序的差别只有编译选项：-fPIC 取代 -fno-pic -fno-pie -static -no-pie。
+    链接要商用 -shared + **--hash-style=sysv**：GNU ld 默认只产
+    .gnu.hash(DT_GNU_HASH)，mini loader 第一版只认 SysV .hash(DT_HASH)，
+    漏了不会编译失败，只会让真机 dlopen 明确报 "no DT_HASH"。
+
+    链接器不能写死 gcc 驱动：binutils 对 riscv*-elf / loongarch*-elf 这两个
+    **裸机** target 在 emulparams 里刻意不生成 shared/PIE 脚本，ld.bfd 一律
+    回 "-shared not supported"（2026-09 才有人提 patch 放开）。first_run.sh 装的
+    riscv64-unknown-elf-gcc 正是这种。上游给的替代是 hosted 的 *-linux ld 或
+    LLVM lld —— 本项目选 lld：Rust 工具链自带 rust-lld，不用额外装 apt 包。
+    流程是「先试 gcc，只有确认为这条报错才降级到 lld」，别的编译错误原样抛，
+    不许拿换链接器把真错误盖过去。
+
+    -nostdlib 保证不产生 DT_NEEDED（loader 不支持 .so 依赖另一个 .so）。
+    链完必跑 verify_shared_object()：产物形态不合格就 exit 1，别烧镜像才发现。
+
+    故意不进增量缓存：这里只有一两个小文件，每次全量编几毫秒；而它们会被
+    include/**/*.h 的改动影响，搭错缓存就是「改了头、旧 .so 还在跑」。
+    """
+    if not DL_DIR.exists():
+        return
+    cfg = ARCH_CONFIG[arch]
+    out_dir = BUILD_DIR / arch / "dl"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    common = [
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-stack-protector",
+        "-fPIC",
+        "-nostdlib",
+        "-nostartfiles",
+        "-I", str(INCLUDE_DIR),
+    ]
+    for src in sorted(DL_DIR.glob("*.c")):
+        obj = out_dir / f"{src.stem}.o"
+        so = out_dir / f"{src.stem}.so"
+        run([cfg["gcc"], *cfg["cflags"], *common, "-c", str(src), "-o", str(obj)])
+        # 先删旧产物：否则链接器失败时校验器会拿上次的 .so 验出 PASS，
+        # 把「这次没编出来」盖成「产物合格」。
+        so.unlink(missing_ok=True)
+        gnu_cmd = [
+            cfg["gcc"], *cfg["cflags"],
+            "-shared", "-fPIC", "-nostdlib", "-nostartfiles",
+            "-Wl,--hash-style=sysv", "-Wl,--build-id=none",
+            *cfg["ldflags"],
+            "-o", str(so), str(obj),
+        ]
+        probe = subprocess.run(gnu_cmd, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True)
+        linked_out = probe.stderr + probe.stdout
+        if probe.returncode == 0:
+            print("+", " ".join(gnu_cmd))
+        elif "shared not supported" in linked_out:
+            print(f"[user] GNU ld 不支持 -shared（裸机 {cfg['gcc']}），改用 LLVM lld")
+            lld = _find_lld()
+            if not lld:
+                print("[user] 找不到 ld.lld / rust-lld；装 lld 或确认 rustup 已装好",
+                      file=sys.stderr)
+                sys.exit(1)
+            run([*lld, "-m", cfg["ld_emu"], "-shared",
+                 "--hash-style=sysv", "--build-id=none", "--no-relax",
+                 "--pack-dyn-relocs=none",
+                 "-o", str(so), str(obj)])
+        else:
+            print("+", " ".join(gnu_cmd))
+            sys.stdout.write(probe.stdout)
+            sys.stderr.write(probe.stderr)
+            print("[user] .so 链接失败（不是 'shared not supported'，不降级）",
+                  file=sys.stderr)
+            sys.exit(probe.returncode or 1)
+        if not so.exists() or so.stat().st_size < 64:
+            print(f"[user] {so.name} 未生成或过小，链接器可能静默失败",
+                  file=sys.stderr)
+            sys.exit(1)
+        verify_shared_object(so, arch)
+        print(f"[user] built shared object: {so.name}, {so.stat().st_size} bytes "
+              f"(ELF 校验通过)")
+
+
 # ==================== 单文件编译（带缓存） ====================
 
 def build_one(arch: str, source: Path, app_id: int, category):
@@ -391,6 +743,20 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
             str(mem_obj),
         ])
 
+    dl_src = LIB_DIR / "dl.c"
+    dl_obj = out_dir / f"{app_id}_{stem}_dl.o"
+    has_dl = dl_src.exists()
+    if has_dl:
+        run([
+            cfg["gcc"],
+            *cfg["cflags"],
+            *common_flags,
+            "-c",
+            str(dl_src),
+            "-o",
+            str(dl_obj),
+        ])
+
     link_objects = []
     if source.suffix == ".c":
         link_objects.append(str(crt0_obj))
@@ -404,6 +770,8 @@ def _build_c_asm_real(arch, source, app_id, category, out_dir, stem, elf_path):
         link_objects.append(str(thread_obj))
     if has_mem:
         link_objects.append(str(mem_obj))
+    if has_dl:
+        link_objects.append(str(dl_obj))
 
     link_cmd = [
         cfg["gcc"],
@@ -498,7 +866,7 @@ def _build_cpp_real(arch, source, app_id, category, out_dir, stem, elf_path):
         link_cmd.append(str(thread_obj))
     if has_mem:
         link_cmd.append(str(mem_obj))
-    link_cmd.append("-lgcc")  
+    link_cmd.append("-lgcc")
     link_cmd.extend(["-o", str(elf)])
     run(link_cmd)
     data = elf.read_bytes()
@@ -851,10 +1219,18 @@ def build_zlib(arch: str):
     是为了这个系统里的 zlib 是**完整的** —— 以后写 gzip/gunzip 命令、
     给 httpd 加 gzip 编码都能直接用, 不会出现"以为有其实没有"的坑。
 
-    关键宏 -D__STDC_NO_ATOMICS__:
-      crc32.c 的 DYNAMIC_CRC_TABLE 用 C11 <stdatomic.h> 保护 once(),
-      而 RmikuOS 的 include 里没有 stdatomic.h(atomic_* 最终落到 __atomic_*
-      内建, TCC 也不支持)。定义后 zlib 走非原子实现 —— 单线程 git 下等价。
+    关于原子 / 多线程:
+      zutil.h 的 z_once() 整段包在 `#ifdef Z_ONCE` 里, 而 Z_ONCE 只在
+      crc32.c 的 DYNAMIC_CRC_TABLE 或 inftrees.c 的 BUILDFIXED/MAKEFIXED
+      下才 #define。我们两个宏都没传 —— CRC 表和 fixed Huffman 表都是
+      编译期静态常量, 多线程并发 inflate/deflate 天然安全。
+      所以**不再**喂 -D__STDC_NO_ATOMICS__: 旧注释说它"单线程下等价",
+      实际是空操作, 而且留着反而有害 —— 将来谁误开 DYNAMIC_CRC_TABLE,
+      zutil.h 会静默走非原子 test_and_set 那版(自带
+      `#warning zlib not thread-safe`), 在多线程 git 里变成真竞态。
+      去掉之后那种情况会直接 `#include <stdatomic.h>` 失败(我们没有这个头),
+      编译期就拦住, 不会静默给出一个不线程安全的库。
+      真要开动态表, 得先补 stdatomic.h 或把 z_once 换成 pthread_once。
 
     产物: build/<arch>/zlib/zlib_test.elf  ->  mkfs 拷到 /tests/zlib_test
     """
@@ -867,7 +1243,7 @@ def build_zlib(arch: str):
     out_dir = BUILD_DIR / arch / "zlib"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    zlib_cflags = ["-D__STDC_NO_ATOMICS__", "-Os"]
+    zlib_cflags = ["-Os"]
     common_flags = [
         "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
         "-fno-pic", "-fno-pie", "-nostdlib", "-nostartfiles", "-static",
@@ -1650,6 +2026,8 @@ def main():
 
     # zlib 必须先构建: build_one 链接时会 *zlib_libs(arch)
     build_zlib(args.arch)
+    # .so 插件产物给 mkfs 拷进 /usr/lib（不能进 /tests，run_all 会执行它）
+    build_shared_objects(args.arch)
 
     apps = []
     for app_id, (source, category) in enumerate(sources):
