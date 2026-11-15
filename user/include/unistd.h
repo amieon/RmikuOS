@@ -83,8 +83,8 @@ static inline int getpagesize(void) {
  * 只实现真正有意义的三个（编号与 glibc 一致，方便对照）：
  *   _SC_PAGESIZE         内核页大小（问 98 号，不写死）
  *   _SC_OPEN_MAX         进程 fd 上限（kernel/src/task/manager_wrapper.rs: MAX_FD_PER_PROCESS）
- *   _SC_NPROCESSORS_ONLN 内核没有暴露"在线 hart 数"的接口，保守返回 1
- *                       （调用方会据此少开线程，不会因此算错）
+ *   _SC_NPROCESSORS_ONLN 返回真正跑起来的 hart 数。
+ *                    
  * 其余一律 -1 + EINVAL，不返回瞎编的数字。 */
 #define _SC_OPEN_MAX          4
 #define _SC_PAGESIZE         30
@@ -98,7 +98,10 @@ static inline long sysconf(int name) {
     switch (name) {
     case _SC_PAGESIZE:         return (long)getpagesize();
     case _SC_OPEN_MAX:         return 1024;
-    case _SC_NPROCESSORS_ONLN: return 1;
+    case _SC_NPROCESSORS_ONLN: {
+        isize r = syscall3(SYS_GET_HART_COUNT, 0, 0, 0);
+        return (r > 0) ? (long)r : 1;
+    }
     default: errno = EINVAL;   return -1;
     }
 }

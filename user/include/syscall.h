@@ -146,6 +146,7 @@ extern "C" {
 #define SYS_TSD_GET                  132
 #define SYS_TSD_SET                  133
 #define SYS_THREAD_DETACH            134
+#define SYS_GET_HART_COUNT           135
 /* ---- 原始系统调用入口(由汇编提供) ---- */
 
 isize syscall3(usize id, usize a0, usize a1, usize a2);
