@@ -73,6 +73,16 @@ for f in user/build/${ARCH}/tests/*.elf; do
   cp "$f" "$ROOT/tests/$clean"
 done
 
+# mini loader 的 .so 插件 -> /usr/lib。
+if [ -d "user/build/${ARCH}/dl" ]; then
+  mkdir -p "$ROOT/usr/lib"
+  for f in user/build/${ARCH}/dl/*.so; do
+    [ -e "$f" ] || continue
+    cp "$f" "$ROOT/usr/lib/$(basename "$f")"
+    echo "  [dl] $(basename "$f") -> /usr/lib/$(basename "$f")"
+  done
+fi
+
 # 把 Rust 单文件/工作空间编译出来的程序放进 /programs
 for f in user/build/${ARCH}/programs/*.elf; do
   [ -e "$f" ] || continue
@@ -403,15 +413,6 @@ rm -f "$IMG"
 FS_SIZE_MB="${FS_SIZE_MB:-128}"
 
 # 容量预检。`mkfs.ext4 -d` 塞不下时报的是
-#   "__populate_fs: 无法为 ext2 文件系统分配块 写入文件 xxx 时"
-# 那是 mke2fs 在**镜像内部**给文件分数据块失败,不是宿主机磁盘满,也不是 xxx
-# 这个文件坏了 —— 报错落在哪个文件上只取决于 -d 的 readdir 顺序。
-#
-# du -sm 只量文件内容(已按 4K 块对齐),镜像里 ext4 还要吃:5% root
-# reserve、journal、inode table / bitmap / 目录块、以及每个文件的尾块浪费。
-# 88M 内容塞 96M 镜像就是这么炸的:余量 8M,元数据要 10M 上下。
-# 按 25% 留余量并向上取整到 16M 档;不够就自动上调 —— 以前只在 ≥88%
-# 打印一句警告然后照样往下走,等于预检查出来了却不采取动作。
 ROOT_MB="$(du -sm "$ROOT" | cut -f1)"
 NEED_MB=$(( (ROOT_MB * 125 / 100 / 16 + 1) * 16 ))
 if [ "$FS_SIZE_MB" -lt "$NEED_MB" ]; then

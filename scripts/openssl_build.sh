@@ -50,6 +50,8 @@ esac
 CC="${CC:-${PREFIX}gcc}"
 AR="${AR:-${PREFIX}ar}"
 NM="${NM:-${PREFIX}nm}"
+command -v "$NM" >/dev/null 2>&1 || NM=nm
+NM="${NM:-${PREFIX}nm}"
 RANLIB="${RANLIB:-${PREFIX}ranlib}"
 NPROC="$(nproc 2>/dev/null || echo 4)"
 
@@ -65,8 +67,8 @@ if [ ! -f "$SRC/Configure" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 版本自报。整条路线（no-threads → crypto/threads_none.c、provider 能不能静态链）
-# 都是照 3.0 设计的，所以先把它打出来；不是 3.0.x 只警告不拦，但风险要说清。
+# 版本自报。整条路线（threads_pthread.c / provider 能不能静态链）都是照 3.0
+# 设计的，所以先把它打出来；不是 3.0.x 只警告不拦，但风险要说清。
 # ---------------------------------------------------------------------------
 openssl_version() {
   local vf="$SRC/VERSION.dat" m n p
@@ -84,7 +86,7 @@ SRC_VER="$(openssl_version)"
 echo "[openssl] 源码版本 $SRC_VER（$SRC）"
 case "$SRC_VER" in
   3.0.*) : ;;
-  *) echo "[openssl] ! 不是 3.0.x。no-threads 在别的版本走的是另一套实现，"
+  *) echo "[openssl] ! 不是 3.0.x。threads_pthread.c 在别的版本可能改名/换实现，"
      echo "            且部分开关被改名/移除；真出问题优先换回 3.0："
      echo "            git clone --depth 1 -b openssl-3.0 ... user/openssl/src" ;;
 esac
@@ -102,12 +104,15 @@ esac
 # ---------------------------------------------------------------------------
 CNF_OPTS=(
   no-asm       # perlasm 要 perl 现场生成 .s；纯 C 的 BN 慢但正确
-  no-threads   # libc 已有 pthread ABI，本库仍按无线程构建（开线程需先验多核调度）
+  # 不再传 no-threads：libc 已有完整 pthread ABI（include/pthread.h + lib/thread.c），
+  # openssl 会走 crypto/threads_pthread.c 给全局表加真锁。这条路径第一次被编译，
+  # 正是拿来压多核调度/锁竞争的；配置阶段有硬校验，摘了没生效会直接 exit 1。
   no-shared    # 没有动态链接，全部静态
-  no-dso       # 内核无 dlopen
+  no-dso       # 用户态 mini loader 只认 SysV hash 的裸 .so，OpenSSL 的 DSO/provider 仍走不通
   no-module    # provider 默认靠 dlopen 加载，不关就会得到一张空的算法表（静默失败）
   no-engine    # engine 是 dlopen 的另一种形式
-  no-async     # async 要线程/fiber
+  no-async     # async_posix.h 要 ucontext.h / makecontext / swapcontext，我们没实现；
+               # 跟有没有线程无关，别因为开了 threads 就顺手摘掉
   no-tests     # 测试要 perl 驱动 + 几千个证书，跑不了
   no-legacy    # 少编一批老旧算法，省体积
   no-comp      # SSL 层压缩，要额外维护 zlib 绑定
@@ -126,7 +131,7 @@ CNF_OPTS+=(--with-rand-seed=devrandom)
 
 # 这几个被 Configure 拒掉就不是"少个开关"的问题，而是源码形态不对（或版本不对），
 # 直接停 —— 自动裁剪只用来兜住可选开关，不能拿来蒙混过关。
-CRITICAL_OPTS=(no-asm no-threads no-shared no-dso no-module)
+CRITICAL_OPTS=(no-asm no-shared no-dso no-module)
 
 # -I 顺序要紧：user/include 必须在工具链 sysroot 之前，否则 `#include <stdlib.h>`
 # 会命中 newlib/glibc 的声明，malloc 变成 extern 引用 → 链接到它们那套堆 → 跨库
@@ -429,7 +434,8 @@ configure_openssl() {
       return 1
     fi
 
-    # 关键开关被拒 = 源码形态不对，停在这里比剔掉后编出一堆 pthread_* 引用强
+    # 关键开关被拒 = 源码形态不对（版本变了 / Configure 不认），直接停；
+    # 自动裁剪只用于可选开关，不能拿来把 no-shared / no-dso 蒙混过去。
     for why in "${mine[@]}"; do
       if printf '%s\n' "${CRITICAL_OPTS[@]}" | grep -qx "$why"; then
         echo "[openssl] ✗ 关键开关 $why 不被这份源码接受（版本 $SRC_VER）"
@@ -469,10 +475,40 @@ configure_openssl() {
   # 开关自检：Configure 收下参数 ≠ 它真写进了 config。configuration.h 是编译器
   # 唯一看到的事实，所以"我传了 no-async"和"代码里还有 async 分支"这种矛盾，
   # 只能拿这张表判。之前靠翻源码 guard 猜，纯属浪费轮次。
-  local nos
+  #
+  # 线程是反过来的：这次**不传** no-threads，也要确认 OPENSSL_THREADS 真被定义。
+  # 否则 crypto/threads_none.c 顶上，CRYPTO_THREAD_lock_new 全变空桩 —— 编得过、
+  # 跑起来也不报错，只是压根没有锁，拿它压多核等于空转。这句必须 exit。
+  local nos cfg
   nos="$(grep -oE 'define OPENSSL_NO_[A-Z0-9_]+' "$OBJ/include/openssl/configuration.h" 2>/dev/null \
          | sed 's/define OPENSSL_NO_//' | sort | tr '\n' ' ')"
   echo "[openssl]   OPENSSL_NO_*（真正生效的）: ${nos:-（一个都没有）}"
+  cfg="$OBJ/include/openssl/configuration.h"
+  if grep -qE '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_NO_THREADS([[:space:]]|$)' "$cfg" 2>/dev/null; then
+    echo "[openssl] ✗ configuration.h 里还有 OPENSSL_NO_THREADS —— 线程没开" >&2
+    echo "          别只看脚本里写了什么，查 Configure 日志与 CNF_OPTS" >&2
+    return 1
+  fi
+  if ! grep -qE '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_THREADS([[:space:]]|$)' "$cfg" 2>/dev/null; then
+    echo "[openssl] ✗ configuration.h 里没有 OPENSSL_THREADS —— threads_none.c 会顶上" >&2
+    return 1
+  fi
+  echo "[openssl]   ✓ OPENSSL_THREADS 已定义（走 threads_pthread.c 真锁路径）"
+
+  # 摘掉 no-threads 之后第一次被编译的不止 threads_pthread.c：
+  # include/internal/refcount.h:19 与 tsan_assist.h:52 在 OPENSSL_THREADS
+  # 下会 #include <stdatomic.h>（no-threads 时代这两段整段跳过）。它是 GCC
+  # 自带的编译器头、裸机 target 也带，但不同工具链不保证；缺了会在几十个
+  # .o 上刷同一条 fatal error，看着像 OpenSSL 源码坏了。这里一次问清。
+  if ! printf '#include <stdatomic.h>\nint main(void){return 0;}\n' \
+       | "$CC" $CFLAGS_STR -x c -fsyntax-only - 2>"$BASE/atomic_probe.log"; then
+    echo "[openssl] ✗ 工具链没有可用的 <stdatomic.h>（开 threads 后必需）" >&2
+    echo "          $BASE/atomic_probe.log 有原文。处置：给 CFLAGS_STR 加" >&2
+    echo "          -D__STDC_NO_ATOMICS__ —— refcount.h 会落回 GCC 的" >&2
+    echo "          __atomic_fetch_add 内建（仍是真原子），tsan_assist.h 跳过标注。" >&2
+    return 1
+  fi
+  echo "[openssl]   ✓ <stdatomic.h> 可用（refcount / tsan 走 C11 原子）"
 
   printf '%s\n' "$sig" > "$OBJ/.cfg.sha256"
   echo "[openssl]   日志 $BASE/configure.log"
@@ -492,7 +528,7 @@ configure_openssl() {
 # **覆盖 EX_LIBS 是白费的**（那个变量本来就是空的），这是上一版踩的坑：
 # 日志里 "Makefile 原值：读不到" 其实就是空值，误判成"读不到"。
 #
-# no-dso / no-threads 只关 DSO 与线程的**功能实现**，不改这个字符串，
+# no-dso 只关 DSO 的功能实现，不改这个字符串，
 # 所以只能自己清。清完 plain `make apps/openssl` 也能链（不依赖命令行覆盖）。
 # ---------------------------------------------------------------------------
 scrub_cnf_ex_libs() {
@@ -624,7 +660,7 @@ scan_undefined() {
     echo "      gettimeofday/clock_gettime → time.h 已有，可能只是没 include"
     echo "      open/read/write/lseek/stat → io.h / fs.h 已有"
     echo "      dlopen/dlsym/dlerror      → 不该出现，no-dso 应已剪掉"
-    echo "      pthread_*                 → 不该出现，no-threads 应已剪掉"
+    echo "      pthread_*                 → 应该出现：threads_pthread.c 已在编，_thread.o 提供实体"
   else
     echo
     echo "  ✓ 除了 lib/*.c|*.S 与 libgcc，没有别的外部依赖 —— 库阶段的 libc 面已经够用。"
@@ -759,6 +795,21 @@ case "$STAGE" in
         echo "        处置：在 user/include 下补同名头。用不到符号的补空壳并写清原因；"
         echo "        真要用的先在内核加 syscall 语义组 —— 别照抄 glibc 的结构体布局。"
       fi
+    fi
+    # ---- 线程实现硬校验 ---------------------------------------------------
+    # configuration.h 里有 OPENSSL_THREADS 只是"头里有宏"：Makefile 复用旧 .o 时，
+    # 归档里仍可能是 threads_none.c 的空桩，所有锁都是 no-op。
+    # pthread_key_create 是 crypto/threads_pthread.c 独占的外部引用（实体在
+    # user/lib/thread.c），全 openssl 源码树只有那一处；U 里出现它 = 真锁分支
+    # 确实编进去了。这条比 grep 归档成员名可靠：三个 threads_*.c 都会被编成 .o。
+    if [ -f "$OBJ/libcrypto.a" ]; then
+      if ! "$NM" -u "$OBJ/libcrypto.a" 2>/dev/null | grep -qw 'pthread_key_create'; then
+        echo "[openssl] ✗ libcrypto.a 没有引用 pthread_key_create —— 线程实现是空桩" >&2
+        echo "          crypto/threads_pthread.c 的 OPENSSL_THREADS 分支没编进去；" >&2
+        echo "          rm -rf $OBJ 全量重建（Makefile 不追 configuration.h 变化）" >&2
+        exit 1
+      fi
+      echo "[openssl] ✓ libcrypto.a 引用 pthread_key_create（threads_pthread.c 真锁路径）"
     fi
     echo
     echo "[openssl] 日志: $BASE/make_libs.log"

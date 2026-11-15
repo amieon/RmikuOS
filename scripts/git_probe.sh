@@ -30,13 +30,15 @@ case "$ARCH" in
     ARCHFLAGS=(-DUSER_ARCH_LOONGARCH64 -G0 -mno-relax)
     ;;
   *)
-    echo "用法: $0 <riscv64|loongarch64> [probe|lib]"
+    echo "用法: $0 <riscv64|loongarch64> [probe|lib|bin]"
     exit 2
     ;;
 esac
 
 CC="${CC:-${PREFIX}gcc}"
 AR="${AR:-${PREFIX}ar}"
+NM="${NM:-${PREFIX}nm}"
+command -v "$NM" >/dev/null 2>&1 || NM=nm
 
 # SHELL_PATH 必须同时是宿主和镜像上都能执行的路径，所以只能是 /bin/sh。
 SHELL_PATH="/bin/sh"
@@ -84,8 +86,13 @@ if [ "$WITH_CURL" = "auto" ]; then
 fi
 
 NOVARS=(
-  NO_MMAP NO_PTHREADS NO_OPENSSL NO_EXPAT NO_GETTEXT NO_ICONV
+  NO_MMAP NO_OPENSSL NO_EXPAT NO_GETTEXT NO_ICONV
   NO_TCLTK NO_PERL NO_PYTHON NO_NSEC NO_REGEX NO_MEMMEM NO_STRCASESTR
+  # 不设 NO_PTHREADS：libc 已有完整 pthread ABI（lib/thread.c + include/pthread.h），
+  # git 的 pack-objects / index-pack / grep 多线程正好拿来压多核调度。
+  # 摘掉它之后 online_cpus() 会走 sysconf(_SC_NPROCESSORS_ONLN) → 内核 135 号
+  # 返回真实 hart 数；那条链不通就等于白开，所以下面有符号表硬校验。
+  #
   # 这两个 git 自带 compat 实现，比往 libc 里塞更安全：
   #   strlcpy/strlcat（BSD 扩展）、strtoumax/strtoimax（C99）
   # setitimer 不设 NO_SETITIMER：内核已实现 ITIMER_REAL（syscall 124/125），
@@ -198,6 +205,34 @@ fi
 # 不用去猜"我到底跑的是不是改过的脚本"。
 echo "[git] -I: $ROOT/user/include | $ROOT/user/zlib | $SRC | $SRC/compat/regex"
 
+# ---- 线程开关硬校验 -----------------------------------------------------
+# 摘掉 NO_PTHREADS 之后最大的坑不是编译错误，是"编过了、语义还是单线程"：
+# Makefile 只按时间戳判依赖，旧的 .o 里全是 dummy_pthread_create，链接照样成功，
+# 跑起来 online_cpus() 恒 1、一个 worker 都不起。所以直接查符号表，两条都是硬证据：
+#   U pthread_create        → 真在调 lib/thread.c 的 pthread 实现（多线程分支）
+#   T dummy_pthread_create  → NO_PTHREADS 时代的旧 .o，必须不存在
+# 只写一句注释说"已开线程"不算数，校验失败就停。
+verify_git_threads() {
+  local a="$SRC/libgit.a"
+  [ -f "$a" ] || return 0
+  if ! command -v "$NM" >/dev/null 2>&1; then
+    echo "[git] ⚠ 找不到 nm，跳过符号校验（无法证明多线程真生效）" >&2
+    return 0
+  fi
+  if "$NM" "$a" 2>/dev/null | grep -qw 'dummy_pthread_create'; then
+    echo "[git] ✗ libgit.a 里还有 dummy_pthread_create —— NO_PTHREADS 没真的摘掉" >&2
+    echo "      Makefile 不感知命令行宏变化：make -C $SRC clean 后重编" >&2
+    return 1
+  fi
+  if ! "$NM" -u "$a" 2>/dev/null | grep -qw 'pthread_create'; then
+    echo "[git] ✗ libgit.a 没有引用 pthread_create —— 这是无线程构建" >&2
+    echo "      查 NOVARS / NOFLAGS 是否又混进了 NO_PTHREADS" >&2
+    return 1
+  fi
+  echo "[git] ✓ 线程生效：libgit.a 引用 pthread_create，无 dummy_pthread_create"
+  return 0
+}
+
 case "$STAGE" in
   probe)
     echo "[git] 探针编译（$ARCH）: wrapper.c strbuf.c hashmap.c"
@@ -220,10 +255,15 @@ case "$STAGE" in
     # NEEDS_LIBRT：config.mak.uname 的 Linux 分支会设它，Makefile 于是往 EXTLIBS 里加
     # `-lrt`。交叉工具链没有 librt → 最后链接才炸，而且报错信息离原因很远。
     # 我们的 clock_gettime 在头里，根本不需要它，直接置空覆盖掉。
+    # PTHREAD_LIBS 同理，且是摘掉 NO_PTHREADS 之后才出现的：Makefile:1838 的
+    # `ifndef NO_PTHREADS → EXTLIBS += $(PTHREAD_LIBS)` 默认给 -lpthread，
+    # 而 pthread_create/join 的实体在我们 lib/thread.c 编出的 _thread.o 里，
+    # 根本不需要 -lpthread。虽然 LIBS 被下面整体覆盖，命令行显式置空更保险：
+    # 万一只改了链接行没覆盖 LIBS，也不会得到 "cannot find -lpthread"。
     make -C "$SRC" -j"$(nproc 2>/dev/null || echo 4)" \
       CC="$CC" AR="$AR" \
       CFLAGS="${CFLAGS[*]}" \
-      NEEDS_LIBRT= \
+      NEEDS_LIBRT= PTHREAD_LIBS= \
       "${NOMAKE[@]}" \
       libgit.a 2>&1 | tee "$OUT/make_libgit.log" | tail -30
 
@@ -231,6 +271,7 @@ case "$STAGE" in
     echo "[git] 完整日志: $OUT/make_libgit.log"
     if [ -f "$SRC/libgit.a" ]; then
       echo "[git] ✓ libgit.a $(wc -c < "$SRC/libgit.a") bytes"
+      verify_git_threads || exit 1
     else
       echo "[git] ✗ 未产出 libgit.a，错误数: $(grep -c 'error:' "$OUT/make_libgit.log" 2>/dev/null || echo 0)"
     fi
@@ -279,6 +320,17 @@ case "$STAGE" in
       make -C "$SRC" clean >/dev/null 2>&1 || true
     fi
 
+    # ---- 上一轮 NO_PTHREADS 的 .o 不能留（和 NO_CURL 同一个坑） ----------
+    # thread-utils.c 在 NO_PTHREADS 下定义 dummy_pthread_create，摘掉后这个函数
+    # 整个消失。旧 .o 里还留着它 = 这份 libgit.a 是无线程时代编的；Makefile
+    # 只看时间戳，不重新编就得到一个"开关摘了但没生效"的 git。
+    if [ -f "$SRC/thread-utils.o" ] && \
+       command -v "$NM" >/dev/null 2>&1 && \
+       "$NM" "$SRC/thread-utils.o" 2>/dev/null | grep -qw 'dummy_pthread_create'; then
+      echo "[git] thread-utils.o 是 NO_PTHREADS 时代编的 → make clean 全量重编"
+      make -C "$SRC" clean >/dev/null 2>&1 || true
+    fi
+
     # ---- libc 头改了同样要清 .o -------------------------------------------
     # build.py 把 include/**/*.h 算进 shared_deps_hash，env.h 一变它会重跑
     # git 阶段；但那些 .o 落在**源码树**，Makefile 的依赖表里没有 libc 头，
@@ -297,7 +349,8 @@ case "$STAGE" in
     # string.c: memcpy/memset/isatty；mem.c: 堆状态（malloc_head / slab_freelist）。
     # thread.c 必须带：errno.h 把 errno 展开成 (*rk_errno_slot())，实体定义只在
     # lib/thread.c；git 满地 errno = 0，不带就是 undefined reference。
-    # pthread_create/join/key_* 也在同一个 .o，将来摘掉 NO_PTHREADS 不用再加。
+    # pthread_create/join/exit/key_*/setcancelstate 全在同一个 .o，
+    # NO_PTHREADS 摘掉后 git 的多线程分支直接靠它，不需要再加别的库。
     # strdup / getpwuid / getpwnam 现在都是头文件 inline，不再需要额外的 .o。
     echo "[git] 编 libc 裸件（crt0 / syscall / string / mem / thread）"
     "$CC" "${CFLAGS[@]}" -c "$ROOT/user/lib/crt0_$ARCH.S"    -o "$OUT/_crt0.o"    || exit 1
@@ -365,7 +418,7 @@ case "$STAGE" in
       CFLAGS="${CFLAGS[*]}" \
       LDFLAGS="$LINK_FLAGS" \
       LIBS="$LIBS_OVERRIDE" \
-      NEEDS_LIBRT= SHELL_PATH="$SHELL_PATH" \
+      NEEDS_LIBRT= PTHREAD_LIBS= SHELL_PATH="$SHELL_PATH" \
       "${MAKE_CURL[@]}" \
       "${NOMAKE[@]}" \
       git 2>&1 | tee "$OUT/make_git.log" | tail -40
@@ -373,6 +426,7 @@ case "$STAGE" in
     echo
     echo "[git] 完整日志: $OUT/make_git.log"
     if [ -s "$SRC/git" ]; then
+      verify_git_threads || exit 1
       cp "$SRC/git" "$OUT/git.elf"
       echo "[git] ✓ git.elf $(wc -c < "$OUT/git.elf") bytes"
     else
@@ -401,7 +455,7 @@ case "$STAGE" in
         CFLAGS="${CFLAGS[*]}" \
         LDFLAGS="$LINK_FLAGS" \
         LIBS="$LIBS_OVERRIDE" \
-        NEEDS_LIBRT= SHELL_PATH="$SHELL_PATH" \
+        NEEDS_LIBRT= PTHREAD_LIBS= SHELL_PATH="$SHELL_PATH" \
         "${MAKE_CURL[@]}" \
         "${NOMAKE[@]}" \
         git-remote-http 2>&1 | tee "$OUT/make_helper.log" | tail -20

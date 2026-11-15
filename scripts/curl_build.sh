@@ -89,11 +89,10 @@ echo "[curl] OpenSSL: $SSL_OUT（libssl.a $(wc -c <"$SSL_OUT/libssl.a") B）"
 # ---------------------------------------------------------------------------
 # 关掉的开关只有两类理由：**我们没有这个能力**，或者**它会引入我们测不了的分支**。
 #
-# 特别注意 --disable-threaded-resolver：
-#   curl 默认在"有线程"时把 DNS 丢给后台线程。libc 现在已有完整 pthread
-#   ABI，但本库仍按无线程配置构建：多核调度尚未真机验证，DNS 解析路径也
-#   没按并发复核过。关掉之后解析回到同步路径，**直接调用 getaddrinfo**
-#   —— 正是我们实现的那个。
+# threaded resolver 现在**显式打开**：libc 已有完整 pthread ABI，curl 的
+# vdns/asyn-thrdd.c 会起后台线程跑 getaddrinfo，正好拿它压多核调度与锁竞争。
+# 开关摘了就得真生效，配置头与 libcurl.a 两处都要过硬校验，否则直接 exit 1。
+# getaddrinfo 仍是我们 netdb.h 里那个真实现，只是从同步路径挪到工作线程里。
 #
 # 协议裁剪：只留 http/https。多留一个协议就多一组 .c、多一批系统调用面，
 # 而它们全都测不到（配额里没有 ftp 服务器）。--disable-* 的清单按 curl
@@ -116,7 +115,9 @@ FEATURE_OPTS=(
   # 这个名字是**下划线**：m4/curl-confopts.m4:37 是
   #   AC_ARG_ENABLE(threaded_resolver,
   # 写成连字符 threaded-resolver 会被当成未知选项。
-  --disable-threaded_resolver
+  # 显式 --enable 而不是只删 --disable：autoconf 对未知选项只发 WARNING 不报错，
+  # 写进命令行才能进 cfg_sig，改了会强制重跑 configure。
+  --enable-threaded_resolver
   --disable-ipv6
   --disable-unix-sockets
   --disable-manual
@@ -175,6 +176,18 @@ CONFIGURE_CACHE=(
   ac_cv_func_peekfunction=no
   ac_cv_func_inet_pton=yes
   ac_cv_func_inet_ntop=yes
+  # ---- threaded resolver 的三道探测，全部显式说 yes ----
+  # configure 依次跑 AC_CHECK_HEADER(pthread.h) → AC_CHECK_FUNC(pthread_create)
+  # → AC_CHECK_LIB(pthread, pthread_create)。在 -nostdlib + 桩库下，
+  # pthread_create 的实体只在 user/lib/thread.c（进最终链接行的 _thread.o），
+  # conftest 的桩库里没有它；而 -lpthread 交叉工具链根本没有。
+  # 判成 no 时 configure 会 as_fn_error "Threaded resolver enabled but no thread
+  # library found"，或者更糟：退回同步解析却一声不吭。
+  # 这不是谎报能力：_thread.o 确实提供 pthread_create/join/key_*，
+  # 且 lib 阶段还会用 nm 校验 libcurl.a 真引用了它。
+  ac_cv_header_pthread_h=yes
+  ac_cv_func_pthread_create=yes
+  ac_cv_lib_pthread_pthread_create=yes
 )
 
 # ---------------------------------------------------------------------------
@@ -785,6 +798,7 @@ dump_config() {
   echo
   echo "[curl] configure 的结论（只列会影响网络路径的）"
   local keys="HAVE_GETADDRINFO HAVE_GETADDRINFO_THREADSAFE
+              USE_RESOLV_THREADED HAVE_THREADS_POSIX
               HAVE_FCNTL HAVE_FCNTL_H HAVE_FCNTL_O_NONBLOCK
               HAVE_UNISTD_H HAVE_POLL HAVE_SYS_SELECT_H HAVE_SYS_POLL_H
               HAVE_POLL_H HAVE_NETDB_H USE_IPV6
@@ -824,6 +838,21 @@ dump_config() {
   done
 
   # 这两条是硬红线，不满足就别浪费时间编了。
+  # 线程解析器是第三条：开关从 --disable 改成 --enable 之后，最危险的失败不是
+  # 编译错，而是 configure 判 "no thread library found" 后悄悄退回同步解析 ——
+  # 二进制照样出来，跑起来也正常，只是压根没起线程。配置头和 summary 二选一即通过
+  # （不同版本的 autoheader 模板不一定把这两个宏都写进 curl_config.h）。
+  local thr_ok=0
+  grep -q '^#define USE_RESOLV_THREADED' "$OBJ/lib/curl_config.h" 2>/dev/null && thr_ok=1
+  grep -q 'resolver:.*POSIX threaded' "$BASE/configure.log" 2>/dev/null && thr_ok=1
+  if [ "$thr_ok" -ne 1 ]; then
+    echo
+    echo "[curl] ✗ 线程解析器没生效：USE_RESOLV_THREADED / HAVE_THREADS_POSIX 都不见"
+    echo "          在 $BASE/configure.log 里搜 'pthread_create' 与 'resolver:'，"
+    echo "          多半是 CONFIGURE_CACHE 里的 ac_cv_* 名字对不上这个 configure。"
+    echo "          这一轮直接停，不要拿一个同步 DNS 的 curl 去当多线程压测样本。"
+    exit 1
+  fi
   if ! grep -q '^#define HAVE_GETADDRINFO' "$OBJ/lib/curl_config.h" 2>/dev/null; then
     echo
     echo "[curl] ⚠ HAVE_GETADDRINFO 没定义。curl 会改走 gethostbyname_r，"
@@ -945,6 +974,17 @@ build_libcurl() {
     mkdir -p "$OUT"
     cp "$OBJ/lib/.libs/libcurl.a" "$OUT/libcurl.a"
     echo "[curl] ✓ libcurl.a $(wc -c <"$OUT/libcurl.a") bytes"
+    # 产物层硬校验：configure 说了 yes 不等于线程代码真编进来了。
+    # USE_RESOLV_THREADED 下 asyn-thrdd.c 走 curl_threads.c 的 Curl_thread_create，
+    # 后者调 pthread_create（实体在 user/lib/thread.c，最终链接行的 _thread.o）。
+    # libcurl.a 的 U 里没它 = Makefile 复用了旧 .o 或宏没落到编译单元，
+    # --enable-threaded_resolver 就成了只写在命令行里的一句话。
+    if ! "$NM" -u "$OUT/libcurl.a" 2>/dev/null | grep -qw 'pthread_create'; then
+      echo "[curl] ✗ libcurl.a 没有引用 pthread_create —— threaded resolver 没编进去" >&2
+      echo "          rm -rf $OBJ 全量重配重编（Makefile 不追 curl_config.h 变化）" >&2
+      return 1
+    fi
+    echo "[curl] ✓ libcurl.a 引用 pthread_create（asyn-thrdd.c 线程解析路径）"
     scan_undefined
     return 0
   fi
