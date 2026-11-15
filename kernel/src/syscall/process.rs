@@ -52,6 +52,12 @@ pub fn sys_getpagesize() -> isize {
     crate::mm::config::PAGE_SIZE as isize
 }
 
+
+pub fn sys_get_hart_count() -> isize {
+    let n = crate::online_harts();
+    (if n == 0 { 1 } else { n }) as isize
+}
+
 pub fn sys_set_process_tickets(tid : usize, tickets: usize) -> isize {
     crate::task::set_process_tickets_current(tid, tickets)
 }

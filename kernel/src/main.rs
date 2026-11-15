@@ -25,6 +25,11 @@ use crate::sync::*;
 
 static MASTER_READY: AtomicBool = AtomicBool::new(false);
 static PRIMARY_HART: AtomicUsize = AtomicUsize::new(!0);
+static ONLINE_HARTS: AtomicUsize = AtomicUsize::new(0);
+
+pub fn online_harts() -> usize {
+    ONLINE_HARTS.load(Ordering::SeqCst)
+}
 
 pub struct HartLocal {
     id: AtomicUsize,
@@ -91,6 +96,7 @@ pub extern "C" fn rust_main(id: usize) -> ! {
     }
 
     HART_LOCALS[id].id.store(id, Ordering::Relaxed);
+    ONLINE_HARTS.fetch_add(1, Ordering::SeqCst);
 
     #[cfg(target_arch = "loongarch64")]
     let is_primary = {
