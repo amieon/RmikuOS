@@ -31,9 +31,10 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 子系统       | 能力                                                         | 备注                                                         |
 | ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | 双架构       | RISC-V 64 + LoongArch 64,SMP 多核                            | virtio-mmio / virtio-pci                                     |
-| 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join`、futex、`pthread_create` / `exit` / `join` / `detach` / `self` / `equal`、互斥锁 / 条件变量 / `once` / cleanup handler、TSD + 每线程 `errno` | 进程级 fd table,线程共享地址空间;内核每 TCB 一行 `tsd[128]` 存槽 + 全宽 `retval`,detached 线程退出即自动回收 TCB 与用户栈 |
+| 进程与线程   | `fork` / `exec` / `waitpid`、`thread_create` / `thread_exit` / `thread_join`、futex、`pthread_create` / `exit` / `join` / `detach` / `self` / `equal`、互斥锁 / 条件变量 / `once` / cleanup handler、TSD + 每线程 `errno`、cancel 状态开关(无请求方)、`sysconf(_SC_NPROCESSORS_ONLN)` 真值 | 进程级 fd table,线程共享地址空间;内核每 TCB 一行 `tsd[128]` 存槽 + 全宽 `retval`,detached 线程退出即自动回收 TCB 与用户栈;在线 hart 数走 syscall 读 `rust_main` 的 per-hart 计数,不拿编译期 `MAX_HARTS` 顶替 |
 | 信号         | 自定义 handler / `sigaction`、进程 + 线程两层 pending、信号屏蔽字、进程组投递、`SIGSTOP` / `SIGCONT`、`SIGPIPE`、`setitimer` / `alarm` | `waitpid` 按 `code<<8` / 低 7 位信号号编码;Ctrl+C 整条管线一起收 |
 | 虚拟内存     | buddy 帧分配器、多级页表、ELF 加载、`mmap`(匿名 + 文件映射,`MAP_FIXED` / `MAP_FIXED_NOREPLACE`) | 文件映射当前为 eager 读,lazy 调页见 Roadmap                  |
+| 动态加载     | 用户态 mini ELF loader:`dlopen` / `dlsym` / `dlclose` / `dlerror`,加载真 `-shared` 产出的 ET_DYN `.so` | `user/lib/dl.c` 全用户态,零新增 syscall、零内核改动;SysV `.hash` + RELATIVE/64/JUMP_SLOT 双架构重定位 + `.init_array`/`.fini_array` + 引用计数;`.so` 由 GNU ld 或 LLVM lld 产出,构建期有 ELF 形态校验 |
 | 文件系统     | VFS 多挂载:ext4 rootfs(只读) / 可写 ext4(rsext4 + JBD2 日志) / tmpfs / FAT32 | `openat` 家族 + `O_EXCL` + `umask` + `mkstemp`;数据盘 LABEL 身份识别 + 周期 writeback |
 | 用户与组     | `useradd` / `groupadd` / `usermod` / `passwd` / `su` / `id`(身份类仅 root) | 账户库 defaults + overrides:可写 `/var/etc/{passwd,group}` 覆盖只读出厂 `/etc/{passwd,group}` |
 | 调度器       | stride + alpha-scaled + AIMD / SPSA-AdamW 自适应             | 内置调度实验框架(exp00–exp05 + exp10,见 docs)                 |
@@ -42,7 +43,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | 用户程序     | C / C++ / Rust / Java(JVM + 装载期 AOT)/ Lua 5.4 / Scheme,以及 git / openssl / curl | syscall ABI 语言无关;C++ 全局对象构造析构走 `.init_array`    |
 | 系统内工具链 | TCC 0.9.28(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、zlib 1.3.1(完整移植,`libz.a`:宿主 `-lz` / 系统内 `tcc -lz`)、kilo 编辑器、git 2.33.1 + OpenSSL 3.0 + curl 8.23.0(HTTPS) | `user/build.py` 统一构建三方件,用 libc ABI 哈希决定全量重编;编辑-编译-运行闭环 |
 | 应用验证     | VeryEasyGCN(78.3% 准确率)、RmikuRay(定点光线追踪)、GCN/GAT   |                                                              |
-| 回归测试     | `user/tests/` 下 62 个测试源码(55 C + 7 C++),`run_all` 一键批执行 | 双重门禁:构建期"源码 → ELF"、运行期"ELF → PASS/SKIP"         |
+| 回归测试     | `user/tests/` 下 69 个测试源码(62 C + 7 C++),`run_all` 一键批执行 | 双重门禁:构建期"源码 → ELF"、运行期"ELF → PASS/SKIP"         |
 
 ---
 
@@ -54,7 +55,7 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 | ---------------------------------------------- | ------------------------------------------------------------ |
 | [docs/shell.md](docs/shell.md)                 | Shell 词法 / 管道 / 重定向 / 环境变量 / `$?` 展开,TCC 自托管工具链,kilo 编辑器 |
 | [docs/filesystem.md](docs/filesystem.md)       | VFS 与 fd table,ext4 / tmpfs / FAT32,文件系统调用,virtio 块设备;`openat` 家族与 dirfd 的路径字符串取舍,`O_EXCL` / umask / `mkstemp` 的创建语义 |
-| [docs/network.md](docs/network.md)             | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / DNS / ICMP / NTP),socket + `poll()` ,UDP connect,DHCP T1/T2,listen backlog,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
+| [docs/network.md](docs/network.md)             | 自研协议栈(ARP / IPv4 / TCP / UDP / DHCP / DNS / ICMP / NTP),socket 100–117(`getsockopt` 续号 128)+ `poll()` ,UDP connect,DHCP T1/T2,listen backlog,httpd,wget;TCP RTO / CUBIC / Go-Back-N 三组网络实验 |
 | [docs/user-programs.md](docs/user-programs.md) | C 分层库 / C++ `stdcompat.h` 桥接 / Rust `ulib` / 自研 JVM / Lua 5.4 / Scheme,堆分配器与裸运行时数学库 |
 | [docs/scheduler.md](docs/scheduler.md)         | stride 与 alpha-scaled 调度机制,调度统计接口,SMP 与计时注意事项 |
 | [docs/experiments/](docs/experiments/)         | 调度实验框架(schedlab)+ 7 篇完整实验报告:EDF 基线 / α 机制 / Edge Deadline / AIMD / 动态负载 / 相位 / SPSA-AdamW |
@@ -67,14 +68,14 @@ RmikuOS 的目标不是停留在 `Hello, world`，而是逐步构建一个小而
 GitHub Actions 手动触发验证双架构(可选架构,打 `v` 标签另触发 release 任务):
 
 ```text
-双架构交叉编译 -> rootfs 制作 -> QEMU 启动 -> 自动登录 -> 62 个测试源码全量回归 -> 检查汇总 -> shutdown 关机
+双架构交叉编译 -> rootfs 制作 -> QEMU 启动 -> 自动登录 -> 69 个测试源码全量回归 -> 检查汇总 -> shutdown 关机
                                             \-> 可写 ext4 崩溃一致性测试(kill -9 + journal 回放 + e2fsck)
 ```
 
 * 流水线文件:`.github/workflows/ci.yml`;冒烟脚本 `scripts/smoke_test.sh`,崩溃一致性脚本 `scripts/crash_consistency_test.sh`
 * 触发方式:仓库 **Actions** 页 → 左侧 **CI/CD** → 右侧 **Run workflow**,选择 `riscv64` / `loongarch64` / `both`
-* 构建产物(内核 ELF + rootfs + FAT 镜像)自动缓存,二次运行大幅提速;rootfs 镜像默认 96 MiB(`FS_SIZE_MB` 可覆盖),`user/build.py` 以 libc ABI 哈希(`include/**/*.h` + `lib/*.{c,cpp,S}` + crt0 / ldscript)作缓存键——任一头变动,用户程序与 git / openssl / curl 全部重编,避免新旧 `.o` 混链
-* 回归测试:进系统后 `run_all` 一键执行 `user/tests/` 下的 62 个测试源码(55 C + 7 C++;断言库 `user/include/test.h`,覆盖进程/线程/同步/信号/内存/文件系统/管道/syscall/at 家族/权限与 umask/临时文件/SQLite 落盘/zlib 压缩回环/数学库/printf/setjmp/C++ 容器与全局构造/语言运行时/时钟/RNG/git),任一失败即流水线红;`run_all` 只扫 `/tests`,未编译出的测试不会静默少跑——构建期 `scripts/check_test_coverage.sh` 逐个核对"源码 → ELF",运行期 `scripts/verify_runall.sh` 逐个核对"ELF → PASS/SKIP"
+* 构建产物(内核 ELF + rootfs + FAT 镜像)自动缓存,二次运行大幅提速;rootfs 镜像默认 128 MiB、且按 rootfs 实际用量自动上调(`FS_SIZE_MB` 可指定下限),`user/build.py` 以 libc ABI 哈希(`include/**/*.h` + `lib/*.{c,cpp,S}` + crt0 / ldscript)作缓存键——任一头变动,用户程序与 git / openssl / curl 全部重编,避免新旧 `.o` 混链
+* 回归测试:进系统后 `run_all` 一键执行 `user/tests/` 下的 69 个测试源码(62 C + 7 C++;断言库 `user/include/test.h`,覆盖进程/线程/同步/pthread 生命周期与 TSD/每线程 errno/cancel 状态保存恢复/detach 自动回收/ELF 动态加载与重定位/信号/内存/文件系统/管道/syscall/at 家族/权限与 umask/临时文件/SQLite 落盘/zlib 压缩回环/数学库/printf/setjmp/C++ 容器与全局构造/语言运行时/时钟/RNG/git),任一失败即流水线红;`run_all` 只扫 `/tests`,未编译出的测试不会静默少跑——构建期 `scripts/check_test_coverage.sh` 逐个核对"源码 → ELF",运行期 `scripts/verify_runall.sh` 逐个核对"ELF → PASS/SKIP"
 * 崩溃一致性测试:`bigwrite` 写大文件到一半时 `kill -9` QEMU 模拟掉电,再用同一块数据盘重启,断言 journal 自动回放、`/home` 重新绑定成功、已 sync 数据仍在,最后用宿主机 `e2fsck -fn` 校验磁盘结构干净——把"JBD2 真的在工作"从一次性手工实验变成每次触发都验证的事实(测试用 `/tmp` 下的临时数据盘,不碰 `target/data-*.img`)
 * 打 `v` 开头的标签(如 `v1.0`)时,自动构建双架构 release 产物并上传 GitHub Release
 
@@ -91,6 +92,8 @@ docker run -it --rm -v $(pwd):/work -p 8080:8080 rmikuos-dev
 
 > 构建默认使用本地 cross-tools/ 目录中的 loongarch64 工具链。
 > 没有的话,先从 loong64/cross-tools releases(https://github.com/loong64/cross-tools/releases)下载 x86_64 宿主版,解压后将 loongarch64-unknown-linux-gnu 里的内容移至 ./cross-tools。
+>
+> `user/dl/*.so` 需要能产出 `-shared` 的链接器:`riscv64-unknown-elf` 的裸机 GNU ld 不支持(见下),`build.py` 会自动改用 Rust 工具链自带的 `rust-lld`(或 PATH 里的 `ld.lld`),无需额外装包。
 
 ### 无 Docker
 
@@ -145,10 +148,11 @@ user/
 ├── rootfs/                 rootfs 目录模板(etc/motd, home, share, tmp, fat ...)
 ├── include/                C/C++ 用户库(分层头文件,types/syscall/flag/io/process/fs/mem/lock/thread/sched/ipc/net/string/fmt/env + user.h 汇总)
 │   └── my/                 C++ 桥接层与裸运行时库(stdcompat.h / cmath.h / vector.h ...)
-├── lib/                    crt0 与 syscall_<arch>.S、cpp_runtime.cpp
+├── lib/                    crt0 与 syscall_<arch>.S、cpp_runtime.cpp、dl.c(mini ELF loader)
 ├── src/                    C 系统程序 → /bin(ls / cat / echo / grep / head / wc / shell / nslookup)
-├── tests/                  C / 单文件 Rust / 单文件 C++ 测试程序 → /tests
-├── samples/               单文件示例程序(110 个:90 C + 16 C++ + 3 Rust + 1 汇编)→ /samples,自动 glob
+├── dl/                     .so 插件源码 → build/<arch>/dl/*.so → **/usr/lib**(不放 /tests,run_all 会执行目录里每个文件)
+├── tests/                  单文件 C / C++ 回归测试(69 个:62 C + 7 C++,断言库 include/test.h)→ /tests,run_all 批执行
+├── samples/               单文件示例程序(105 个:85 C + 16 C++ + 3 Rust + 1 汇编)→ /samples,自动 glob
 ├── c/                      C 项目型构建目录(多文件工程 httpd、lua)→ /programs
 ├── cpp/                    C++ 项目型构建目录(装载期 AOT 的 JVM)→ /programs
 ├── gcn/                    C++ 图神经网络项目(GCN/GAT)→ /gcn
@@ -232,12 +236,12 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp / curl / git-remo
 * **线程同步与线程私有数据**:futex wait/wake(130/131)作原语,`pthread` 互斥锁 / 条件变量 / `pthread_once` 建立在它之上(无争用走用户态原子,争用不再自旋 yield);线程私有数据用 `pthread_key_create/delete/setspecific/getspecific` + destructor(最多 4 轮),`pthread_key_t` 是全局列号,每线程一行值存在内核 `TCB::tsd[128]`,线程数不需要预先知道;`errno` 改为 `#define errno (*rk_errno_slot())` 宏,可写左值、每线程一份,`int` 本体在用户态 `__thread_entry` 栈帧上,TSD 槽只存指向它的指针;`exec` 只换 `trap_cx` 不重建 TCB 的残留缝由 `key_create` 清当前槽挡住;`pthread_detach` 把分离态标志和用户栈 `(base,size)` 记进 TCB,退出时内核在 syscall 上下文 `remove_area` 掉 64 KiB 栈、属主核 back-from 自动 `reap_thread`,`join(detached)` 返 `EINVAL`——原实现只有 `thread_join()` 会 munmap 栈,没人 join 就永久泄漏,所以这事只能内核做;"先退出、后 detach"与 exit/back-from 之间的竞态窗口都有补账;六个生命周期函数至此齐全:`pthread_create` 走独立 trampoline(`void *(*)(void*)`)收全宽返回值;线程退出值只有一份 `TCB::retval: usize`(进程退出码另在 `ProcessControlBlock::exit_code: i32`,供 `waitpid` / 信号编码),17 号不做截断、18 号一律回写 `sizeof(usize)` 字节,`thread_join(int*)` 在用户态自己窄化,零新增 syscall 号;`pthread_exit` 按 POSIX 顺序先跑 `pthread_cleanup_push/pop` 的每线程链表(链表头借 TSD 槽,节点在调用方栈帧,不必等 `tp` 归还)、再跑 TSD destructor;attr 的 `detachstate` / `stacksize` 真生效,`attr_init` 必须清零(否则栈上垃圾会让线程随机变 detached)
 * **系统时钟与随机数**:开机读 goldfish / LS7A RTC → `set_wall_clock`,读不到则由 `stamp::restore()` 从 `/var/lib/rtcstamp` 兜底,`login` 再 fork `ntpdate -b` 校时并回写 stamp;`hwclock -w/-s` 读写 stamp 且强制 fsync;`SYS_GET_EPOCH_US`(129) 一次读齐总微秒,`gettimeofday` / `clock_gettime(REALTIME)` 从它拆亚秒,`now_secs()` 委托同一个真源;virtio-rng → `/dev/urandom` + `getrandom` 系统调用
 * **虚拟内存 / C++ ABI**:六参 `mmap`(addr/len/prot/flags/fd/offset)支持匿名映射与 eager 文件映射、`MAP_FIXED` / `MAP_FIXED_NOREPLACE`、尾部水位与 VMA 释放 bug 修复;C++ 侧补齐 `.init_array`/`.fini_array` 遍历、`__cxa_atexit` / `__cxa_guard_acquire` / `__cxa_pure_virtual`,全局对象与函数内 static 能构造析构
-* **第三方生态 / HTTPS**:git 2.33.1(`/bin/git` + `git-remote-https`)、OpenSSL 3.0(`openssl` CLI + `libcrypto.a`/`libssl.a`)、curl 8.23.0(`/bin/curl` + `libcurl.a`)全部在 guest 内编译运行;HTTPS 带 CA 校验,本地 `git clone https://` 端到端跑通。为让自研 libc 能编这三件,补齐了 errno 1..133 表与 `rk_sys_ret`(`-errno` → `-1+errno`)、`F_GETFD`/`FD_CLOEXEC`、`getpwuid`、`getline`/`getdelim`/`sscanf`/`%.*s`、`strto*` 重建、`strtok` 家族、`<assert.h>` 零 include(否则 autoconf 全线判 no)、`isatty` 真查询、`setenv`/`putenv` 与 `environ` 回写、exec argv 上限 64/4096;TLS 侧 `openssl.cnf` 只留 `rsa_*` 验签,把 example.com 的握手验签从 ~7 s 压下来
+* **第三方生态 / HTTPS**:git 2.33.1(`/bin/git` + `git-remote-https`)、OpenSSL 3.0(`openssl` CLI + `libcrypto.a`/`libssl.a`)、curl 8.23.0(`/bin/curl` + `libcurl.a`)全部在 guest 内编译运行;HTTPS 带 CA 校验,本地 `git clone https://` 端到端跑通。为让自研 libc 能编这三件,补齐了 errno 1..133 表与 `rk_sys_ret`(`-errno` → `-1+errno`)、`F_GETFD`/`FD_CLOEXEC`、`getpwuid`、`getline`/`getdelim`/`sscanf`/`%.*s`、`strto*` 重建、`strtok` 家族、`<assert.h>` 零 include(否则 autoconf 全线判 no)、`isatty` 真查询、`setenv`/`putenv` 与 `environ` 回写、exec argv 上限 64/4096;TLS 侧 `openssl.cnf` 只留 `rsa_*` 验签,把 example.com 的握手验签从 ~7 s 压下来。三件现在全部按多线程构建:git 摘掉 `NO_PTHREADS`(`pack-objects` / `index-pack` / `grep` 起真 worker)、OpenSSL 摘掉 `no-threads`(走 `crypto/threads_pthread.c` 真锁,只保留 `no-async` 因为缺 `ucontext`)、curl 显式 `--enable-threaded_resolver`(`vdns/asyn-thrdd.c` 起后台解析线程);并行度来自 `sysconf(_SC_NPROCESSORS_ONLN)` → 内核 135 号返回的真实在线 hart 数。三条构建脚本各自带符号表/配置头硬校验,开关没真生效就 `exit 1`,不允许"注释说开了、二进制还是单线程"
 * **多核调度**:修复 `block_thread` 在切出前清 `running_on` 造成的"归属转移双跑"——8 核下别人唤醒 + prepare 同一线程会让 `task_cx` 两核同写,表现为 AcqRel panic / trap fatal / `SIGSEGV sepc=0x2`;现由属主核保留归属到 back-from,唤醒方见归属未释放就挂 `wake_pending`/`cont_pending` 推迟补账
 * **语言与工具链**:C 分层库 + Rust `ulib` + C++ `stdcompat.h` 桥接 + 自研 JVM(装载期 AOT,双架构后端)+ Lua 5.4 零改动 + Scheme;系统内 TCC(AOT + JIT)、SQLite 3.50(自定义 VFS 落盘)、zlib 1.3.1(完整移植:deflate/inflate + `gzFile`,打包为 `libz.a`,宿主 `-lz` 与系统内 `tcc -lz` 都可用,是本地 git 的前置)、kilo 编辑器
-* **验证**:62 个 CI 回归测试源码 + 可写 ext4 崩溃一致性 CI 项(kill -9 → journal 回放 → `e2fsck -fn` 零错误)、HTTPS 带证书校验端到端、本地 git clone、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
+* **验证**:69 个 CI 回归测试源码 + 可写 ext4 崩溃一致性 CI 项(kill -9 → journal 回放 → `e2fsck -fn` 零错误)、HTTPS 带证书校验端到端、本地 git clone、VeryEasyGCN 78.3%、RmikuRay 定点光追、GCN/GAT gradcheck 1e-8 级 PASS
 
-> 注:2026-11 增补的 pthread / TSD、完整生命周期函数、cleanup handler、detach 自动回收、errno 宏化、文件映射、C++ 构造析构与多核归属转移修复目前仍在工作树中,尚未跑完真机回归;上面描述的是实现状态,不是验证结论。detach 与生命周期这两批只过了宿主语法 / 行为差分与 `cargo check`,真机要看 `111_pthread_detach_test`(尤其"tid 复用"那条)和 `112_pthread_lifecycle_test`(尤其"高 32 位非零的 void* retval 逐位相等"那条——它专抓任何把退出值截到 32 位的写法)。
+> 注:2026-11 增补的 pthread / TSD、完整生命周期函数、cleanup handler、detach 自动回收、errno 宏化、文件映射、C++ 构造析构与多核归属转移修复目前仍在工作树中,尚未跑完真机回归;上面描述的是实现状态,不是验证结论。原来放在 `samples/` 的 108–112 五个演示程序已按 `test.h` 格式迁进 `user/tests/`,由 `run_all` 自动批跑(不再是手工运行的 sample)。detach 与生命周期这两批只过了宿主语法 / 行为差分与 `cargo check`,真机要看 `pthread_detach_test`(尤其"tid 复用"那条)、`pthread_lifecycle_test`(尤其"高 32 位非零的 void* retval 逐位相等"那条——它专抓任何把退出值截到 32 位的写法)和 `pthread_cancel_state_test`(尤其"A 的 DISABLE 没串到 B"那条——它专抓把 cancel 状态写成全进程一份的写法)。mini loader 同样只过了宿主差分(双架构各 28 条,含逐字节核对 RELATIVE/R_64/JUMP_SLOT 写进 GOT 的值),真机要看 `dlopen_test`:`.init_array` 构造/析构、JUMP_SLOT 真的跳到主程序、引用计数归零后才解映射。三大件的多线程开关同样**只在宿主侧验过**(脚本语法、硬校验逻辑、`cargo check`、用户态全量语法、sysconf 行为差分),真机一次没跑:这三件本身就是压测多核调度最合适的负载,要跑的是 `git -c pack.threads=8 repack -ad` / 并发 `curl` DNS / 8 核下反复 `run_all`,而不是只看构建脚本有没有打勾。
 
 ---
 
@@ -267,14 +271,23 @@ User Programs (httpd / wget / nslookup / ping / ntpdate / tftp / curl / git-remo
 * 更丰富的动态负载模式(多阶段、随机突变)
 * schedlab 复跑确认 `already running on hart` panic 已关掉;8 核无重定向 clone 多轮压测
 
+### mini ELF loader
+
+* `.so` 的链接器不写死 `gcc -shared`:binutils 对 `riscv*-elf` / `loongarch*-elf` 裸机 target 在 emulparams 里刻意不生成 shared/PIE 脚本,`ld.bfd` 直接报 `-shared not supported`(2026-09 才有上游 patch 放开)。`build.py` 先试 gcc,只有确认是这条报错才降级到 LLVM lld,别的编译错误原样抛;链完用纯 Python 复刻 `dl.c` 的判据校验 ET_DYN / `DT_HASH` / 禁用 tag / 重定位白名单,不合格 `exit 1`,不把「编过了但 loader 吃不下」的产物放进镜像
+* `user/lib/dl.c` 第一版边界:只认 SysV `DT_HASH`(`.so` 必须 `--hash-style=sysv`;gcc 驱动写 `-Wl,--hash-style=sysv`,lld 直接写 `--hash-style=sysv`)、`DT_RELA`/`DT_JMPREL` 里的 NONE/RELATIVE/64/JUMP_SLOT;不支持 `DT_NEEDED`、`DT_GNU_HASH`、符号版本、COPY/IRELATIVE/TLS 重定位、`dladdr`/`dlvsym`/`RTLD_NEXT`;整段映射为 RWX,没做 W^X 分段与 RELRO;`RTLD_LAZY` 按 `RTLD_NOW` 一次全解析。上述每种缺失都会**明确报错**,不静默跳过
+* 头故意叫 `rk_dlfcn.h` 而不是 `dlfcn.h`:尚未实现完整的 POSIX dlfcn(缺 `dladdr` / `Dl_info`),而 `-I user/include` 排在系统头前面,占住标准名会让 OpenSSL `dso_dlfcn.c` / curl configure 截胡到残缺版。补齐后再改名
+* 未定义符号只能来自 `user/lib/dl.c` 内置的那张 libc 表或 `rk_dl_register()` 显式登记:主程序是 `-static -no-pie`,进程读不到自己 ELF 的 `.dynsym`,这是「用户态 loader」而非「内核动态链接」的固有边界
+* 构造函数在 loader 的自旋锁内执行,构造函数里不能再 `dlopen`(会自锁);`dlclose` 的 `munmap` 放在锁外
+
 ### Threads / libc
 
-* 主线程 `pthread_exit()` 目前只让主线程进 Zombie:本内核没有"最后一个线程退出时终止进程"的语义,主线程应 `return` / `exit()`;`pthread_cancel` 与取消点未开,cleanup handler 只在 `pthread_exit` 路径触发
+* git / OpenSSL / curl 的多线程构建真机未验证:三份脚本的硬校验只保证"开关真生效",不保证 8 核下 `pthread` 锁 / futex / 内核归属转移能扛住并发。判据看 `git repack` 的 worker 数与是否出现 `pack has N unresolved deltas` / AcqRel panic / `already running on hart`;`openssl` 开了线程后第一次会编译 `threads_pthread.c`(`<stdatomic.h>` 已加预检)、`curl` 的 `getaddrinfo` 会在工作线程里调内核 DNS,这两条是新路径
+* 主线程 `pthread_exit()` 目前只让主线程进 Zombie:本内核没有"最后一个线程退出时终止进程"的语义,主线程应 `return` / `exit()`;取消只实现了 `pthread_setcancelstate` 的状态保存/恢复(状态真存在每线程 TSD 槽),请求方 `pthread_cancel` / 取消点 `pthread_testcancel` / `PTHREAD_CANCELED` 一律不定义,pending 恒空——需要真取消的程序会链接期报错而不是静默挂住;cleanup handler 只在 `pthread_exit` 路径触发
 * `pthread_attr_setstack` / guard page / schedpolicy / scope 仍是空桩:传给 create 的自定义栈不生效(创建路径一律自己 mmap,否则 join/detach 的栈记录表会认错 VA)
-* 生命周期真机回归:`112_pthread_lifecycle_test` 的高 32 位非零 retval、cleanup LIFO 与 TSD dtor 先后、attr detach 触发的"先退出后 detach"补账、多核下 join/exit 并发;宿主差分 harness 已覆盖链表顺序、错误码与全宽窄化,但 LLP64 宿主的项目 `usize`(= `unsigned long`)只有 4 字节,内核侧 `sizeof(usize)=8` 的回写只能真机验
+* 生命周期真机回归:`pthread_lifecycle_test` 的高 32 位非零 retval、cleanup LIFO 与 TSD dtor 先后、attr detach 触发的"先退出后 detach"补账、多核下 join/exit 并发;宿主差分 harness 已覆盖链表顺序、错误码与全宽窄化,但 LLP64 宿主的项目 `usize`(= `unsigned long`)只有 4 字节,内核侧 `sizeof(usize)=8` 的回写只能真机验
 * 把 `tp` 寄存器归还用户态以支持真正的 `__thread` / TLS:目前两个架构都拿 `tp` 存 hart id,errno 每次访问要一次 `SYS_TSD_GET`,并且解锁不了第三方的 `thread_local`
 * `thread_exit()` 仍绕过 `__thread_entry` 的 errno 槽绑定(TSD destructor 已补上),这条路径 errno 落回全进程 fallback;主线程 `exit()` 的 weak 钩子也可能被 `runmain.o` 覆盖。`pthread_exit()` 不受影响——它从 `__pthread_entry` 已绑定好的栈帧内调用
-* detach 真机回归:`111_pthread_detach_test` 的 "tid 复用" 断言(内核真 reap 了 TCB 才能复用空槽)、多核下退出与 detach 并发窗口、栈 VA 是否被后续线程复用
+* detach 真机回归:`pthread_detach_test` 的 "tid 复用" 断言(内核真 reap 了 TCB 才能复用空槽)、多核下退出与 detach 并发窗口、栈 VA 是否被后续线程复用
 * `syscall/fs.rs` 仍有约 29 处裸 `-1`;socket send 的 SIGPIPE、`sigaltstack` / `SA_RESTART` / `tcsetpgrp` 未开
 * printf 的 `%+d` / `%.5d` / `%#08x`;`socketpair` 未开
 * loongarch64 上 curl / openssl 尚未跑过一次端到端;>1 MB HTTPS 响应、`net_backlog_test`、5× curl 稳定性循环待回归
