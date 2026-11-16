@@ -59,6 +59,20 @@ check loongarch64-unknown-linux-gnu-gcc
 check loongarch64-unknown-linux-gnu-g++
 check mkfs.ext4
 check mkfs.fat
+# .so 插件必须用 LLVM lld 链接:GNU ld.bfd 对 riscv*-elf 裸机 target 一律拒
+# -shared(emulparams 不生成 shlib 脚本),rustup 自带 rust-lld,不用装 apt 包。
+_LLD_OK=0
+if command -v ld.lld >/dev/null; then
+    _LLD_OK=1
+elif command -v rustc >/dev/null && \
+     find "$(rustc --print sysroot)/lib/rustlib" -name 'rust-lld*' -print -quit 2>/dev/null | grep -q .; then
+    _LLD_OK=1
+fi
+if [ "$_LLD_OK" = 1 ]; then
+    echo "  ok  lld(.so 链接器)"
+else
+    echo "  !!  lld 缺失(装 lld 或确认 rustup 装全了)"; fail=1
+fi
 rustup target list --installed | grep -q riscv64gc-unknown-none-elf \
     && echo "  ok  rust target riscv64" || { echo "  !!  rust target riscv64"; fail=1; }
 rustup target list --installed | grep -q loongarch64-unknown-none \
