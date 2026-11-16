@@ -173,6 +173,8 @@ int pthread_join(pthread_t thread, void **retval);
 void pthread_exit(void *retval) __attribute__((noreturn));
 int pthread_detach(pthread_t thread);
 
+int pthread_setcancelstate(int state, int *oldstate);
+
 /* cleanup handlers
  * POSIX 允许 push/pop 是宏，且必须成对出现在同一词法作用域（glibc 也
  * 这么干）。节点在调用方栈上，链表头存在 TSD 槽里，所以不需要 __thread。

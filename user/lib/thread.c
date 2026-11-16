@@ -392,3 +392,40 @@ __attribute__((noreturn)) void pthread_exit(void *retval) {
     sys_thread_exit_raw((usize)retval);
     for (;;) {}
 }
+
+/* 
+ * POSIX 的 cancel 是协作式终止：请求方置 pending，目标线程在取消点自己退出。
+ * 本内核没有请求方（pthread_cancel / pthread_testcancel 一律不定义），所以
+ * pending 恒空、状态永不被受理 —— 但状态本身必须真存在且能读回：
+ * git 的 run-command.c:519 用它做 atfork 的「禁用 / 恢复」，先把旧值存进
+ * as->cs，fork 完再传回来。空桩返回 0 而不动 *oldstate，恢复时拿到的就是
+ * 栈上的未初始化值。
+ *
+ * 槽值用 state + 1 编码：TSD 的 0 表示「本线程从未设过」。
+ */
+static pthread_once_t cancel_once = PTHREAD_ONCE_INIT;
+static pthread_key_t  cancel_key;
+static volatile int   cancel_ready;
+
+static void cancel_init_key(void) {
+    if (pthread_key_create(&cancel_key, 0) == 0) cancel_ready = 1;
+}
+
+int pthread_setcancelstate(int state, int *oldstate) {
+    if (state != PTHREAD_CANCEL_ENABLE && state != PTHREAD_CANCEL_DISABLE)
+        return EINVAL;
+    if (!cancel_ready) {
+        pthread_once(&cancel_once, cancel_init_key);
+        if (!cancel_ready) return EAGAIN;   /* 128 个 key 全满 */
+    }
+
+    void *raw = pthread_getspecific(cancel_key);
+    int old = raw ? (int)(usize)raw - 1 : PTHREAD_CANCEL_ENABLE;
+
+    /* 先落地再回报旧状态：set 失败时 oldstate 不动，调用方不会拿着
+     * 一个「以为已经改了」的值去恢复。 */
+    int r = pthread_setspecific(cancel_key, (void *)(usize)(state + 1));
+    if (r != 0) return r;
+    if (oldstate) *oldstate = old;
+    return 0;
+}
