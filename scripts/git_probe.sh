@@ -233,6 +233,75 @@ verify_git_threads() {
   return 0
 }
 
+# ---- <pthread.h> 归属硬校验 -----------------------------------------------
+# 摘掉 NO_PTHREADS 之后 thread-utils.h:5 第一次 #include <pthread.h>。
+# 只要 user/include/pthread.h 没同步到构建树，编译器就会退到工具链那份
+# （riscv64-unknown-elf 的 newlib）：它有 PTHREAD_CANCEL_DISABLE，却没有
+# pthread_setcancelstate 声明 → GCC 14 的 implicit-function-declaration 是
+# error，报在 run-command.c:519。更麻烦的是 pthread_mutex_t / pthread_t 也
+# 换成 newlib 布局，和 lib/thread.c 里的实现不是一套 ABI —— 就算补个
+# extern 声明让它编过，也是"编过了、语义错"的并发 bug。
+#
+# 所以不补声明、不生成兼容头，直接在编译前把头的归属钉死：探针同时验证
+# cancel state 原型、PTHREAD_CANCEL_DISABLE、以及我们的 mutex 独有字段。
+# ---------------------------------------------------------------------------
+check_pthread_header() {
+  local p="$OUT/_pthread_header_probe.c" e="$OUT/_pthread_header_probe.err" hdr
+  local want="$ROOT/user/include/pthread.h" n s miss
+  cat >"$p" <<'EOF'
+#include <pthread.h>
+int rk_pthread_header_probe(void)
+{
+    pthread_mutex_t m;
+    int old = 0;
+    m.waiters = 0;   /* 我们 pthread_mutex_t 的独有字段；工具链那份没有 */
+    return pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old) + m.waiters;
+}
+EOF
+  if "$CC" "${CFLAGS[@]}" -H -Werror=implicit-function-declaration \
+       -fsyntax-only "$p" 2>"$e"; then
+    echo "[git] ✓ pthread.h 来自 user/include（cancel state + mutex 布局一致）"
+    return 0
+  fi
+  echo "[git] ✗ <pthread.h> 探针失败：cancel state 原型 / PTHREAD_CANCEL_DISABLE / mutex.waiters 未全部满足" >&2
+  grep -E 'error:|fatal error:' "$e" | head -6 | sed 's/^/         /' >&2
+  hdr="$(grep -m1 'pthread\.h$' "$e" | sed 's/^\.*[[:space:]]*//')"
+  if [ -z "$hdr" ]; then
+    echo "       无法从 -H 输出解析命中路径，完整输出: $e" >&2
+    return 1
+  fi
+  echo "       实际命中: $hdr" >&2
+  # 失败只有两种可能，不能混着说。上一版一律报"没同步到构建树"，而实测命中的
+  # 就是 user/include/pthread.h 时会把方向指错 —— 文件在，只是内容旧。
+  #   A. 命中本项目那份但内容旧 -> 只差把文件更新过去（rebuild 不会更新它）
+  #   B. 命中工具链 newlib 那份 -> 布局与 lib/thread.c 不一致，得改 -I 顺序
+  if [ -f "$want" ] && [ "$hdr" -ef "$want" ]; then
+    n="$(wc -l <"$hdr" 2>/dev/null | tr -d ' ')"
+    s="$( { sha256sum "$hdr" 2>/dev/null || shasum -a 256 "$hdr" 2>/dev/null; } | cut -c1-16)"
+    miss=""
+    grep -q 'pthread_setcancelstate' "$hdr" || miss="$miss setcancelstate"
+    grep -q 'PTHREAD_CANCEL_DISABLE' "$hdr" || miss="$miss CANCEL_DISABLE"
+    grep -q 'waiters;'               "$hdr" || miss="$miss mutex.waiters"
+    echo "       实测内容: ${n} 行${s:+ sha256:$s}" >&2
+    echo "       缺失特征:${miss:- 无（三者都在，失败原因见上面 error）}" >&2
+    echo "       → 路径没错，是这份文件本身旧了：rebuild 不会更新它。" >&2
+    echo "         user/include/pthread.h 是 untracked，不随 git pull / patch 走;把当前" >&2
+    echo "         版本覆盖过来即可。通常还要一并带上 errno.h / thread.h 与" >&2
+    echo "         lib/thread.c 的改动 —— 它们虽是 tracked，但本地改动没 commit 同样传不过去。" >&2
+  else
+    echo "       → 命中的不是本项目头，而是工具链自带那份（newlib）。它的" >&2
+    echo "         pthread_mutex_t 布局与本项目 lib/thread.c 不是一套，不能直接编；" >&2
+    echo "         要让 -I $ROOT/user/include 排最前、真正命中本项目这份。" >&2
+  fi
+  echo "       别用 -Wno-implicit-function-declaration 或补 extern 声明糊过去：" >&2
+  echo "       类型布局不一致会变成不报错、不崩、只是偶发错的并发行为。" >&2
+  return 1
+}
+
+if [ "$STAGE" = "probe" ] || [ "$STAGE" = "lib" ] || [ "$STAGE" = "bin" ]; then
+  check_pthread_header || exit 1
+fi
+
 case "$STAGE" in
   probe)
     echo "[git] 探针编译（$ARCH）: wrapper.c strbuf.c hashmap.c"

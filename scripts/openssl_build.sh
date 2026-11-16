@@ -338,6 +338,7 @@ configure_openssl() {
   sig="$(printf '%s\n' "$SRC_VER" "$ARCH_CFG" "${CNF_OPTS[@]}" "$CFLAGS_STR" "$CC" "$hdr_sig" | sha256sum | cut -d' ' -f1)"
   if [ -f "$OBJ/.cfg.sha256" ] && [ "$(cat "$OBJ/.cfg.sha256")" = "$sig" ]; then
     ensure_generated || return 1      # 生成头可能被 distclean/手删过
+    prepare_makefile || return 1     # 缓存命中也要清 -pthread（Makefile 是上次生成的）
     return 0
   fi
 
@@ -514,7 +515,7 @@ configure_openssl() {
   echo "[openssl]   日志 $BASE/configure.log"
 
   ensure_generated || return 1
-  scrub_cnf_ex_libs
+  prepare_makefile || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -538,6 +539,48 @@ scrub_cnf_ex_libs() {
   [ -n "$old" ] || return 0
   sed -i 's/^CNF_EX_LIBS=.*/CNF_EX_LIBS=/' "$mk"
   echo "[openssl]   CNF_EX_LIBS: \"$old\" → 清空（目标机没有 libdl/libpthread/libz）"
+}
+
+# ---------------------------------------------------------------------------
+# 摘掉 no-threads 之后 Configure 的 threads() 会把 -pthread 写进 CNF_CFLAGS
+# （Configure:2952 的 helper：disabled{threads} 为假时把参数原样 add 进去）。
+# 裸机 riscv64-unknown-elf-gcc 不认它：
+#   error: unrecognized command-line option '-pthread'; did you mean '-fpthread'?
+# 报在 apps/lib/*.o 的**编译行**上，lib 阶段编 libcrypto.a 时同样挂 → 两个 .a
+# 不落盘 → curl 因缺 libssl.a 提前 exit、git 因缺 libcurl.a 降级 NO_CURL。
+# 三个失败是这一条传下去的，别分头查三个日志。
+#
+# -pthread 在 hosted target 上只做两件事：定义 _REENTRANT、链接 -lpthread。
+# 我们一样都不需要：OPENSSL_THREADS 由 configuration.h 定义（上面有硬校验），
+# pthread_* 的实体在 user/lib/thread.c 编出的 _thread.o，静态链接行里带着。
+# 所以直接删，别换成 gcc 提示的 -fpthread —— 那是 MIPS ABI 开关，含义无关。
+#
+# 只改 Makefile，不碰 configdata.pm：Makefile 有
+#   Makefile: configdata.pm ...  的规则，动 configdata.pm 会让 make 重新生成
+#   Makefile，-pthread 又回来了。sed -i Makefile 反而把它的 mtime 推到最新，
+#   正好压住这条规则。
+# ---------------------------------------------------------------------------
+scrub_pthread_flags() {
+  local mk="$OBJ/Makefile"
+  [ -f "$mk" ] || return 0
+  # 不能要求 -pthread 前面是空白：Makefile 里最常见的是 CNF_CFLAGS=-pthread ...，
+  # 前一个字符是 '='。只约束后面是空白/行尾，既覆盖 = 也覆盖普通空格分隔，
+  # 又不会误伤 -pthreadfoo 之类的名字。
+  if grep -qE -- '-l?pthread([[:space:]]|$)' "$mk"; then
+    sed -i -E 's/-l?pthread([[:space:]]|$)/\1/g' "$mk"
+    echo "[openssl]   Makefile 的 -pthread/-lpthread 已清除（裸机 gcc 不认；实体在 lib/thread.c）"
+  fi
+  if grep -qE -- '-l?pthread([[:space:]]|$)' "$mk"; then
+    echo "[openssl] ✗ Makefile 仍含 -pthread/-lpthread，清不干净就别往下跑" >&2
+    return 1
+  fi
+  return 0
+}
+
+# Configure 命中缓存时 Makefile 是上次生成的，也得清一遍；幂等，两处都调。
+prepare_makefile() {
+  scrub_cnf_ex_libs || return 1
+  scrub_pthread_flags || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -868,7 +911,7 @@ case "$STAGE" in
     #    静态库只向后找定义），gcc 驱动自带的那份同样在最前面。
     BIN_EX_LIBS="-lgcc"
     old_ex="$(sed -n 's/^CNF_EX_LIBS=//p' "$OBJ/Makefile" 2>/dev/null | head -1 | sed 's/^ *//; s/ *$//')"
-    scrub_cnf_ex_libs
+    prepare_makefile || exit 1
 
     rm -f "$OBJ/apps/openssl"
     echo "[openssl] make apps/openssl（-j$NPROC）"

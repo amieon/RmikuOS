@@ -995,6 +995,83 @@ build_libcurl() {
 }
 
 # ---------------------------------------------------------------------------
+# <pthread.h> 归属硬校验（与 scripts/git_probe.sh 的 check_pthread_header 同款，
+# 改一处必须改两处；故意不抽成第三个脚本 —— 那又是一个 untracked 文件，
+# git pull / patch 带不过去，正是下面要防的毛病）。
+#
+# --enable-threaded_resolver 打开之后，lib/vdns/asyn-thrdd.c 第一次 include
+# <pthread.h> 并调 pthread_create。-I user/include 排最前，本该命中我们那份；
+# 但 user/include/pthread.h 在仓库里是 untracked，构建树没同步时命中的是工具链
+# newlib 那份：没有 pthread_create 声明，pthread_mutex_t 布局也和 lib/thread.c
+# 不是一套。症状是一堆 implicit declaration，看着像「curl 缺一堆 libc 函数」，
+# 其实只是同一个头没到位。
+#
+# 不补 extern、不生成兼容头：那会把「编不过」换成「编过了、ABI 错」，在 8 核
+# 并发下表现为偶发错、不崩、不报错，比编译错难查得多。
+#
+# 判据只取 curl 真实引用的东西：asyn-thrdd.c / curl_threads.c 用到
+# create/join/detach/equal/self + mutex/cond，**一处都没引用
+# pthread_setcancelstate**（grep 全树 0 次）。所以这里不验 cancel state ——
+# 验超了会把本来编得过的 curl 拦下来（真实踩过：pthread.h 里有
+# PTHREAD_CANCEL_DISABLE 宏、没有 setcancelstate 声明时，curl 完全没问题，
+# 只有 git 的 run-command.c:519 需要它）。
+# ---------------------------------------------------------------------------
+check_pthread_header() {
+  mkdir -p "$BASE"
+  local p="$BASE/_pthread_header_probe.c" e="$BASE/_pthread_header_probe.err" hdr
+  local want="$ROOT/user/include/pthread.h" n s miss
+  cat >"$p" <<'EOF'
+#include <pthread.h>
+int rk_pthread_header_probe(void)
+{
+    pthread_mutex_t m;
+    m.waiters = 0;   /* 我们 pthread_mutex_t 的独有字段；工具链那份没有 */
+    return pthread_create(0, 0, 0, 0) + m.waiters;
+}
+EOF
+  if "$CC" $CFLAGS_STR $CPPFLAGS_STR -H -Werror=implicit-function-declaration \
+       -fsyntax-only "$p" 2>"$e"; then
+    echo "[curl] ✓ pthread.h 来自 user/include（pthread_create + mutex 布局一致）"
+    return 0
+  fi
+  echo "[curl] ✗ <pthread.h> 探针失败：pthread_create / mutex.waiters 未同时满足" >&2
+  grep -E 'error:|fatal error:' "$e" | head -6 | sed 's/^/         /' >&2
+  hdr="$(grep -m1 'pthread\.h$' "$e" | sed 's/^\.*[[:space:]]*//')"
+  if [ -z "$hdr" ]; then
+    echo "       无法从 -H 输出解析命中路径，完整输出: $e" >&2
+    return 1
+  fi
+  echo "       实际命中: $hdr" >&2
+  # 与 scripts/git_probe.sh 同款：失败只有两种可能，别混着说。
+  #   A. 命中本项目那份但内容旧 -> 只差把文件更新过去（rebuild 不会更新它）
+  #   B. 命中工具链 newlib 那份 -> 布局与 lib/thread.c 不一致，得改 -I 顺序
+  if [ -f "$want" ] && [ "$hdr" -ef "$want" ]; then
+    n="$(wc -l <"$hdr" 2>/dev/null | tr -d ' ')"
+    s="$( { sha256sum "$hdr" 2>/dev/null || shasum -a 256 "$hdr" 2>/dev/null; } | cut -c1-16)"
+    miss=""
+    grep -q 'pthread_create' "$hdr" || miss="$miss pthread_create"
+    grep -q 'waiters;'       "$hdr" || miss="$miss mutex.waiters"
+    echo "       实测内容: ${n} 行${s:+ sha256:$s}" >&2
+    echo "       缺失特征:${miss:- 无（两者都在，失败原因见上面 error）}" >&2
+    echo "       → 路径没错，是这份文件本身旧了：rebuild 不会更新它。" >&2
+    echo "         user/include/pthread.h 是 untracked，不随 git pull / patch 走;把当前" >&2
+    echo "         版本覆盖过来即可。通常还要一并带上 errno.h / thread.h 与" >&2
+    echo "         lib/thread.c 的改动 —— 它们虽是 tracked，但本地改动没 commit 同样传不过去。" >&2
+  else
+    echo "       → 命中的不是本项目头，而是工具链自带那份（newlib）。它的" >&2
+    echo "         pthread_mutex_t 布局与本项目 lib/thread.c 不是一套，不能直接编；" >&2
+    echo "         要让 -I $ROOT/user/include 排最前、真正命中本项目这份。" >&2
+  fi
+  echo "       别用 -Wno-implicit-function-declaration 或补 extern 声明糊过去：" >&2
+  echo "       类型布局不一致会变成不报错、不崩、只是偶发错的并发行为。" >&2
+  return 1
+}
+
+if [ "$STAGE" != "check" ]; then
+  check_pthread_header || exit 1
+fi
+
+# ---------------------------------------------------------------------------
 case "$STAGE" in
   probe)
     configure_curl || exit 1

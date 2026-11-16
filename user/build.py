@@ -10,6 +10,7 @@ import re
 import hashlib
 import json
 import struct
+import time
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,6 +43,7 @@ ARCH_CONFIG = {
         "runtime": LIB_DIR / "syscall_riscv64.S",
         "crt0": LIB_DIR / "crt0_riscv64.S",
         "rust_target": "riscv64gc-unknown-none-elf",
+        # .so 链接交给 LLVM lld：-m 的 emulation 名 + 产物 e_machine 校验值
         "ld_emu": "elf64lriscv",
         "ld_machine": 243,
         "rust_link_args": [],
@@ -1400,6 +1402,53 @@ def zlib_libs(arch: str):
 #      变了就 rm -rf 自己的 obj 目录整份重建。
 # 上层跳过只省时间，正确性由下层保底。
 
+def _external_failure_digest(out_dir: Path, since: float, limit: int = 18) -> None:
+    """把外部库失败的第一现场从 *.log 里归并出来，直接跟在 ✗ 后面。
+
+    build.py 的摘要只报「没编出来」+ 一个固定日志路径，可脚本其实可能挂在
+    configure / 编 .o / 链接的任意一段，各自的日志名不同（curl 挂在 make_src
+    时 link.log 压根不存在）。以前要用户再跑一条 grep 才能看见真错误，来回
+    一轮。这里只扫本轮新写过的日志，按句子去重后打印，不改动构建语义。
+
+    注意别拿旧日志充数：cmake/make 失败时未必会重写 link.log，上次那一行
+    undefined reference 会精准地把人带到错的方向去，所以 mtime 门槛是硬的。
+    """
+    pat = re.compile(
+        r"error:|fatal error:|undefined reference|unrecognized command-line option|"
+        r"Error \d+|No rule to make target|cannot find|✗|No such file")
+    logs = [p for p in out_dir.glob("*.log")
+            if p.is_file() and p.stat().st_mtime >= since - 2]
+    if not logs:
+        print(f"[user]   本轮没有新写的 *.log（脚本在写日志前就退出了，"
+              f"单独重跑一次看 stdout/stderr）")
+        return
+    logs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    seen: dict[str, list] = {}
+    for p in logs[:8]:
+        try:
+            lines = p.read_text(errors="replace").splitlines()
+        except OSError:
+            continue
+        for ln in lines:
+            if not pat.search(ln):
+                continue
+            s = re.sub(r"^.*?:\d+:\d+:\s*", "", ln)
+            s = re.sub(r"^.*?: (?:fatal )?error:\s*", "", s)
+            s = re.sub(r"^.*undefined reference to ", "undefined reference to ", s)
+            s = s.strip()
+            if not s:
+                continue
+            key = s[:160]
+            seen.setdefault(key, [0, p.name])
+            seen[key][0] += 1
+    if not seen:
+        return
+    print(f"[user]   本轮日志第一现场（按出现次数归并，最多 {limit} 条）:")
+    for msg, (cnt, src) in sorted(seen.items(), key=lambda kv: -kv[1][0])[:limit]:
+        tag = f"×{cnt} " if cnt > 1 else "   "
+        print(f"[user]     {tag}{msg[:180]}  [{src}]")
+
+
 def _external_lib(arch: str, name: str, marker: str, script_name: str,
                   elf_name: str, log_name: str, deps=(), also=(),
                   stages=("bin",)) -> str:
@@ -1463,11 +1512,17 @@ def _external_lib(arch: str, name: str, marker: str, script_name: str,
     # RMIKU_LIBC_ABI 让脚本内部的签名与这里认同一份 ABI，免得两套算法各算各的
     env = os.environ.copy()
     env["RMIKU_LIBC_ABI"] = abi
+    t0 = time.time()
 
     for st in stages[:-1]:
         # 中间阶段不看返回码，但也不吞输出 —— 缺口扫描、缺头告警都在它的 stdout 里。
         print(f"[user] {name}: 调用 scripts/{script_name} {arch} {st}")
-        subprocess.run(["bash", str(script), arch, st], cwd=str(ROOT), env=env)
+        mid = subprocess.run(["bash", str(script), arch, st], cwd=str(ROOT), env=env)
+        if mid.returncode != 0:
+            print(f"[user] {name}: ⚠ 中间阶段 {st} 退出码 {mid.returncode}（不终止，"
+                  f"但这通常就是后面 {last} 失败的真正根因）", file=sys.stderr)
+            print(f"[user] {name}:   查 {out_dir} 下 {st} 阶段的 *.log，"
+                  f"或单独跑 bash scripts/{script_name} {arch} {st}", file=sys.stderr)
 
     print(f"[user] {name}: 调用 scripts/{script_name} {arch} {last}")
     proc = subprocess.run(["bash", str(script), arch, last], cwd=str(ROOT), env=env)
@@ -1484,6 +1539,7 @@ def _external_lib(arch: str, name: str, marker: str, script_name: str,
         if len(stages) > 1:
             print(f"[user] {name}:   完整阶段: {', '.join(stages)}"
                   f"（前几个阶段的输出在上面，日志各自的 *.log）")
+        _external_failure_digest(out_dir, t0)
         arch_cache = get_arch_cache(arch)
         arch_cache.setdefault("external", {}).pop(name, None)
         put_arch_cache(arch, arch_cache)
