@@ -100,6 +100,14 @@ NOVARS=(
   # setenv/unsetenv 同理不设：env.h 已有 POSIX 三参/单参版本
   # （以前同名函数是五参长度版，签名不 POSIX，才不得不关掉用 git 自带实现）。
   NO_STRLCPY NO_STRTOUMAX
+  # 内核与 libc 都没有 AF_UNIX：socket() 只认 IPv4 的 SOCK_STREAM/SOCK_DGRAM，
+  # 更没有 socketpair(2) 这个系统调用。git 的
+  # compat/simple-ipc/ipc-unix-socket.c:820 直接调 socketpair(AF_UNIX, SOCK_STREAM, 0, sv)
+  # 于是隐式声明、编不过（摘掉 NO_PTHREADS 之后 simple-ipc 才被 Makefile:1718 带进来）。
+  # 这不是把报错移到别处：v2.33.1 里 Simple IPC 唯一的消费者是
+  # t/helper/test-simple-ipc.c（测试辅助，不随 make git 构建），关掉零功能损失。
+  # 等内核真有了 AF_UNIX，把这一行删掉即可。
+  NO_UNIX_SOCKETS
 )
 # NO_CURL 单独一行：它同时决定 CFLAGS 的 -I、链接行的三个 .a、以及要不要编
 # git-remote-http。散在数组里最容易"只摘了一半"，然后得到链接错误。
@@ -213,23 +221,52 @@ echo "[git] -I: $ROOT/user/include | $ROOT/user/zlib | $SRC | $SRC/compat/regex"
 #   T dummy_pthread_create  → NO_PTHREADS 时代的旧 .o，必须不存在
 # 只写一句注释说"已开线程"不算数，校验失败就停。
 verify_git_threads() {
-  local a="$SRC/libgit.a"
+  local a="$SRC/libgit.a" undef all ncre njoin ndummy nline
   [ -f "$a" ] || return 0
   if ! command -v "$NM" >/dev/null 2>&1; then
     echo "[git] ⚠ 找不到 nm，跳过符号校验（无法证明多线程真生效）" >&2
     return 0
   fi
-  if "$NM" "$a" 2>/dev/null | grep -qw 'dummy_pthread_create'; then
+  # 下面四种失败必须分开报，别合并成一句"没有引用 pthread_create"：
+  #   a) nm 跑不起来 / 不认这个归档   b) nm 认了但一个符号都没读出来
+  #   c) dummy_pthread_create 还在     d) 两样都没有（真·无线程对象）
+  # 合并的代价真踩过：17:47 那次 libgit.a 里 pthread_create 明明在，
+  # 校验却报"这是无线程构建"，把关的人直接去翻 NO_PTHREADS，方向全错。
+  if ! undef="$("$NM" -u "$a" 2>"$OUT/_nm_undef.err")"; then
+    echo "[git] ✗ nm 读不了 libgit.a（不是线程问题）：$NM -u $a 执行失败" >&2
+    sed -n '1,3p' "$OUT/_nm_undef.err" 2>/dev/null | sed 's/^/         /' >&2
+    echo "       先确认 nm/ar 是不是同一套工具链，以及这次 make 真的产出过 .a" >&2
+    return 1
+  fi
+  nline=$(printf '%s\n' "$undef" | grep -c . || true)
+  # 只用「一行未定义符号都没有」判空：**不要**拿行数当"归档完整"的证据。
+  # 试过按 `< 2 行` 判，单个对象、外部引用少的正常归档会被误判成空归档 ——
+  # 那就是把"符号本来就少"当成"没写符号表"，又一次张冠李戴。
+  if [ "${nline:-0}" -eq 0 ]; then
+    echo "[git] ✗ nm -u 从 libgit.a 一行未定义符号都没读出来" >&2
+    echo "       要么归档是空的（ar 没写进成员），要么对象里没有外部引用 —— 都不是多线程构建" >&2
+    echo "       看 make_libgit.log 里的 ar 行，必要时 make -C $SRC clean 后重编" >&2
+    return 1
+  fi
+  all="$("$NM" "$a" 2>/dev/null || true)"
+  ncre=$(printf '%s\n' "$undef" | grep -cw 'pthread_create' || true)
+  njoin=$(printf '%s\n' "$undef" | grep -cw 'pthread_join' || true)
+  ndummy=$(printf '%s\n' "$all" | grep -cw 'dummy_pthread_create' || true)
+  echo "[git]    符号实测: pthread_create $ncre / pthread_join $njoin / dummy_pthread_create $ndummy" >&2
+  if [ "${ndummy:-0}" != "0" ]; then
     echo "[git] ✗ libgit.a 里还有 dummy_pthread_create —— NO_PTHREADS 没真的摘掉" >&2
     echo "      Makefile 不感知命令行宏变化：make -C $SRC clean 后重编" >&2
     return 1
   fi
-  if ! "$NM" -u "$a" 2>/dev/null | grep -qw 'pthread_create'; then
-    echo "[git] ✗ libgit.a 没有引用 pthread_create —— 这是无线程构建" >&2
-    echo "      查 NOVARS / NOFLAGS 是否又混进了 NO_PTHREADS" >&2
+  if [ "${ncre:-0}" = "0" ]; then
+    echo "[git] ✗ libgit.a 既没有 pthread_create 也没有 dummy_pthread_create" >&2
+    echo "      = run-command.o 里那两段分支都没进二进制，八成是没重编或用旧归档" >&2
+    echo "      先看这两个再动 NOVARS：
+             $NM -u $SRC/run-command.o | grep pthread
+             grep -c 'CC ' $OUT/make_libgit.log" >&2
     return 1
   fi
-  echo "[git] ✓ 线程生效：libgit.a 引用 pthread_create，无 dummy_pthread_create"
+  echo "[git] ✓ 线程生效：libgit.a 引用 pthread_create×$ncre，无 dummy_pthread_create"
   return 0
 }
 
@@ -397,6 +434,19 @@ case "$STAGE" in
        command -v "$NM" >/dev/null 2>&1 && \
        "$NM" "$SRC/thread-utils.o" 2>/dev/null | grep -qw 'dummy_pthread_create'; then
       echo "[git] thread-utils.o 是 NO_PTHREADS 时代编的 → make clean 全量重编"
+      make -C "$SRC" clean >/dev/null 2>&1 || true
+    fi
+
+    # ---- 上一轮「有 AF_UNIX」的 .o 也不能留 ------------------------------
+    # NO_UNIX_SOCKETS 一开，unix-socket.o / unix-stream-server.o 就从 LIB_OBJS
+    # 里消失，builtin/credential-cache*.c 也改走 #ifndef 的另一支。但 Makefile
+    # 只按时间戳判依赖、不认命令行宏：旧 credential-cache.o 里还留着对
+    # unix_stream_connect 的引用，而提供它的 .o 已经不参与归档 → 链接期
+    # `undefined reference to unix_stream_connect`，看着像「git 少了文件」。
+    if [ -f "$SRC/builtin/credential-cache.o" ] && \
+       command -v "$NM" >/dev/null 2>&1 && \
+       "$NM" -u "$SRC/builtin/credential-cache.o" 2>/dev/null | grep -qw 'unix_stream_connect'; then
+      echo "[git] credential-cache.o 是带 AF_UNIX 时代编的 → make clean 全量重编"
       make -C "$SRC" clean >/dev/null 2>&1 || true
     fi
 
