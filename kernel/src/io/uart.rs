@@ -197,6 +197,15 @@ pub fn getchar_raw() -> u8 {
 }
 
 
+/// FIFO 里有没有待读字节——只看 LSR 的 Data Ready 位，不消费。
+///
+/// poll(2) 需要这个：`try_getchar_raw` 会真的把字节取走，
+/// 拿它当探测就等于替用户把输入吃掉。
+pub fn has_pending_char() -> bool {
+    let uart = crate::mm::kernel_phys_to_virt(crate::arch::UART_PADDR) as *mut u8;
+    unsafe { core::ptr::read_volatile(uart.add(5)) & 0x01 != 0 }
+}
+
 /// 读一个待处理按键；没有就返回 None，绝不阻塞。
 pub fn try_getchar_raw() -> Option<u8> {
     let uart = crate::mm::kernel_phys_to_virt(crate::arch::UART_PADDR) as *mut u8;
