@@ -106,6 +106,32 @@ impl File for PipeReadEnd {
             let _ = crate::task::sleep_current_and_run_next(1);
         }
     }
+
+    fn read_nonblock(&self, buf: &mut [u8]) -> isize {
+        if buf.is_empty() {
+            return 0;
+        }
+
+        let mut pipe = self.inner.lock();
+        if pipe.len == 0 {
+            if pipe.writer_count <= 0 {
+                return super::EOF;
+            }
+            return -crate::syscall::errno::EAGAIN;
+        }
+
+        let mut count = 0;
+        while count < buf.len() && pipe.len > 0 {
+            buf[count] = pipe.buf[pipe.head];
+            pipe.head = (pipe.head + 1) % PIPE_BUF_SIZE;
+            pipe.len -= 1;
+            count += 1;
+        }
+        drop(pipe);
+        wake_pipe_writers();
+        count as isize
+    }
+
     fn write(&self, _buf: &[u8]) -> isize {
         -1
     }
