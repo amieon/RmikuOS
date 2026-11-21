@@ -14,6 +14,14 @@ impl File for Stdin {
         false
     }
 
+    fn poll_ready(&self, events: i16) -> i16 {
+        if events & super::file::POLLIN != 0 && crate::io::uart::has_pending_char() {
+            super::file::POLLIN
+        } else {
+            0
+        }
+    }
+
     fn stat(&self) -> Stat {
         Stat::new(STAT_TYPE_CHAR, 0, 0o666, 0, 0).with_dev(DEV_CONSOLE)
     }
@@ -120,7 +128,9 @@ impl File for Stdin {
             None => {
                 /* 只在取键落空时收包，理由同阻塞读：别让网卡锁挡住键盘 */
                 crate::drivers::net::maybe_poll();
-                0
+                /* 没键可读必须是 -EAGAIN，不能是 0 —— 0 在 read(2) 里是 EOF，
+                 * O_NONBLOCK 读终端的程序会把"暂时没输入"当成"用户挂了"。 */
+                -crate::syscall::errno::EAGAIN
             }
         }
     }
@@ -137,6 +147,15 @@ impl File for Stdout {
 
     fn writable(&self) -> bool {
         true
+    }
+
+    /// 串口永远能再写一个字节，POLLOUT 恒就绪。
+    fn poll_ready(&self, events: i16) -> i16 {
+        if events & super::file::POLLOUT != 0 {
+            super::file::POLLOUT
+        } else {
+            0
+        }
     }
 
     fn read(&self, _buf: &mut [u8]) -> isize {
